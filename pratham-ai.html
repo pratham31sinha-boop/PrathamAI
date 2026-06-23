@@ -60,14 +60,15 @@
   .connect-panel-inner input, .connect-panel-inner textarea { width:100%; padding:10px; border:1px solid var(--border); border-radius:7px; font-size:13px; margin-bottom:8px; background:var(--panel); color:var(--text); }
   .connect-panel-inner button{ width:100%; padding:10px; background:var(--accent); border:none; border-radius:7px; color:#fff; font-size:13px; font-weight:600; cursor:pointer; min-height: 44px; }
 
-  /* True Flexbox Mobile Fix for perfect scrolling */
-  .main{ flex:1; display:flex; flex-direction:column; min-width:0; height: 100dvh; background: var(--bg); }
+  /* FIX: Strict Flexbox Layout to completely separate chat text and input bar */
+  .main{ flex:1; display:flex; flex-direction:column; min-width:0; height: 100dvh; background: var(--bg); overflow: hidden; }
+  
   .topbar{ flex-shrink:0; display:flex; align-items:center; justify-content: space-between; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--panel); min-height: 56px; }
   .topbar-left { display: flex; align-items: center; gap: 12px; }
   .menu-btn, .admin-toggle-btn { background:none; border:1px solid var(--border); border-radius:7px; height:36px; cursor:pointer; font-size:14px; color:var(--text); padding: 0 12px; display: flex; align-items: center; justify-content: center; }
 
-  .chat-scroll{ flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center; width: 100%; -webkit-overflow-scrolling: touch; }
-  .chat-col{ width:100%; max-width:760px; padding:24px 16px 40px; display:flex; flex-direction:column; gap:20px; }
+  .chat-scroll{ flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center; width: 100%; padding-bottom: 20px; -webkit-overflow-scrolling: touch; }
+  .chat-col{ width:100%; max-width:760px; padding:24px 16px 0; display:flex; flex-direction:column; gap:20px; }
   
   .empty-state{ margin:auto; text-align:center; color:var(--text-dim); padding:40px 16px; }
   .empty-state h1{ font-family:'Source Serif 4', serif; font-weight:600; font-size:24px; color:var(--text); margin:0 0 10px; }
@@ -78,7 +79,6 @@
   .msg-row.user{justify-content:flex-end;}
   .msg{ max-width:90%; padding:14px 18px; border-radius:16px; font-size:15px; line-height:1.6; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; position: relative; }
   
-  /* FIXED MARKDOWN FORMATTING (Spacing & Headings) */
   .msg h1, .msg h2, .msg h3, .msg h4 { margin: 1.2em 0 0.5em 0; font-weight: 700; color: #111; line-height: 1.3; display: block; }
   .msg h1:first-child, .msg h2:first-child, .msg h3:first-child { margin-top: 0; }
   .msg p { margin: 0 0 1em 0; display: block; }
@@ -90,7 +90,6 @@
   .msg th, .msg td { border: 1px solid var(--border); padding: 10px; text-align: left; min-width: 120px; }
   .msg th { background-color: var(--sidebar); font-weight: 600; }
 
-  /* CODIC STRUCTURE & COPY BUTTON FIX */
   .msg code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13.5px; }
   .msg pre { background: #282c34; color: #abb2bf; padding: 40px 16px 16px; border-radius: 10px; overflow-x: auto; margin: 1.2em 0; position: relative; -webkit-overflow-scrolling: touch; }
   .msg pre code { background: transparent; padding: 0; color: inherit; font-size: 13.5px; }
@@ -99,7 +98,7 @@
 
   .msg-row.user .msg{ background:var(--bubble-user); border-bottom-right-radius:4px; }
   .msg-row.model .msg{ background:var(--bubble-model); border:1px solid var(--border); border-bottom-left-radius:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-  .msg-row.system { display: none; } /* Hide backend router logs */
+  .msg-row.system { display: none; } 
   
   .feedback-bar { display: flex; gap: 8px; padding-left: 12px; margin-top: -2px; }
   .feedback-btn { background: none; border: none; cursor: pointer; font-size: 14px; opacity: 0.35; padding: 4px; min-width: 32px; min-height: 32px; transition: opacity 0.2s, transform 0.1s; }
@@ -109,10 +108,9 @@
   .streaming-cursor::after { content: "┃"; animation: textCaretBlink 0.75s step-end infinite; font-weight: 700; color: var(--accent); margin-left: 2px; }
   @keyframes textCaretBlink { 50% { opacity: 0; } }
 
-  /* Input Composer Flex Fix */
-  .composer-wrap{ flex-shrink: 0; display:flex; flex-direction:column; align-items:center; padding:12px 16px 20px; background: var(--bg); border-top: 1px solid var(--border); }
+  /* FIX: Strict block for input area, no more absolute positioning overlaps */
+  .composer-wrap{ flex-shrink: 0; display:flex; flex-direction:column; align-items:center; width: 100%; padding:12px 16px 20px; background: var(--bg); border-top: 1px solid var(--border); z-index: 30; }
   
-  /* Upload Attachment Preview Pop-up */
   #attachmentPreview { display: none; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 12px 12px 0 0; margin-bottom: -1px; width: 100%; max-width: 760px; border: 1px solid var(--border); border-bottom: none; z-index: 10; }
   .attachment-preview-inner { display: flex; justify-content: space-between; align-items: center; }
   .attachment-preview-inner button { background: none; border: none; font-size: 14px; cursor: pointer; color: var(--accent); font-weight: bold; }
@@ -253,10 +251,9 @@
 
   if(apiUrl) document.getElementById('endpointInput').value = apiUrl;
 
-  // Markdown & Syntax Highlighting Setup
   if (typeof marked !== 'undefined') { 
     marked.setOptions({ 
-      breaks: true, // Fixes newline parsing
+      breaks: true,
       gfm: true,
       highlight: function(code, lang) {
         const language = hljs.getLanguage(lang) ? lang : 'plaintext';
@@ -265,7 +262,6 @@
     }); 
   }
 
-  // Inject Copy Buttons into Code Blocks
   function addCopyButtons(element) {
     element.querySelectorAll('pre').forEach(pre => {
       if (pre.querySelector('.copy-btn')) return;
@@ -327,7 +323,6 @@
 
   function getHeaders() { const h = { 'Content-Type': 'application/json' }; if(idToken) h['Authorization'] = `Bearer ${idToken}`; return h; }
   
-  // FIX: Token Expiry / 401 Handler
   async function makeRequest(url, options = {}, timeoutMs = 60000) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -403,7 +398,7 @@
 
   function addMessage(role, text, messageId = null, feedbackRating = null) {
     const currentEmpty = chatCol.querySelector('.empty-state'); if (currentEmpty) currentEmpty.remove();
-    if (role === 'system') return; // Hide internal routing logs from user
+    if (role === 'system') return; 
     
     const container = document.createElement('div'); container.className = 'msg-container';
     const row = document.createElement('div'); row.className = `msg-row ${role}`;
@@ -447,7 +442,6 @@
     input.value = ''; input.style.height = 'auto';
     const currentEmpty = chatCol.querySelector('.empty-state'); if (currentEmpty) currentEmpty.remove();
 
-    // If file was attached, append its context tag to the visible message
     if (pendingFileContext) {
       text = text ? `${text}\n\n[Attached File: ${pendingFileContext}]` : `[Attached File: ${pendingFileContext}]`;
       clearAttachment();
@@ -489,16 +483,15 @@
             activeConvoId = parseInt(line.split(":")[1]);
             await syncConversations();
           } else if (line.startsWith("PROVIDER:")) {
-             // Silently route, hiding backend architecture from user
+             // Intentionally ignored to hide backend architecture
           } else if (line !== "") {
             assistantChunkAccumulator += line;
-            textBubbleNode.textContent = assistantChunkAccumulator; // Safe rendering during stream
+            textBubbleNode.textContent = assistantChunkAccumulator;
             scrollWrap.scrollTop = scrollWrap.scrollHeight;
           }
         }
       }
 
-      // Safe Markdown + Code Parsing after stream concludes
       const finalizedHtml = typeof marked !== 'undefined' ? marked.parse(assistantChunkAccumulator) : assistantChunkAccumulator;
       textBubbleNode.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(finalizedHtml) : finalizedHtml;
       addCopyButtons(textBubbleNode);
@@ -513,7 +506,6 @@
     busy = false; sendBtn.disabled = false;
   }
 
-  // --- FILE ATTACHMENT POPUP LOGIC ---
   function clearAttachment() {
     pendingFileContext = null;
     document.getElementById('attachmentPreview').style.display = 'none';
@@ -524,7 +516,7 @@
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0]; 
     if (!file) return;
-    if (!activeConvoId) { alert("Please send a hello message to start the conversation before attaching a file."); return; }
+    if (!activeConvoId) { alert("Please send a message to start the conversation before attaching a file."); return; }
     
     document.getElementById('attachmentPreview').style.display = 'block';
     document.getElementById('attachmentName').innerText = `📎 Uploading: ${file.name}…`;
@@ -546,8 +538,6 @@
     try {
       const resStats = await makeRequest(`${apiUrl}/admin/stats`); const stats = await resStats.json();
       document.getElementById('adminStats').innerHTML = `<div class="stat-card"><h3>Active Users</h3><div>${stats.total_users}</div></div><div class="stat-card"><h3>Conversations</h3><div>${stats.total_conversations}</div></div><div class="stat-card"><h3>Avg Latency</h3><div>${stats.system_mean_latency_ms}ms</div></div><div class="stat-card"><h3>Tokens Processed</h3><div>${stats.aggregate_token_pipeline_throughput}</div></div>`;
-      const resHealth = await makeRequest(`${apiUrl}/providers/health`); const healthData = await resHealth.json();
-      document.getElementById('adminProviderHealthTable').innerHTML = healthData.map(p => `<tr><td><strong>${p.id}</strong></td><td>${p.name}</td><td><span class="status-badge ${p.is_online ? 'online' : 'offline'}">${p.is_online ? 'ONLINE' : 'OFFLINE'}</span></td><td>${p.last_success_at || 'Never'}</td><td>${p.error_count}</td></tr>`).join('');
     } catch(e){}
   }
 
