@@ -108,14 +108,16 @@
   .connect-panel-inner input, .connect-panel-inner textarea { width:100%; padding:10px; border:1px solid var(--border); border-radius:7px; font-size:13px; margin-bottom:8px; background:var(--panel); color:var(--text); }
   .connect-panel-inner button{ width:100%; padding:10px; background:var(--accent); border:none; border-radius:7px; color:#fff; font-size:13px; font-weight:600; cursor:pointer; min-height: 44px; }
 
-  .main{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    min-width:0;
+  /* Fix: Lock down the main view to prevent browser viewport stretching */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
     position: relative;
-    height: 100%;
+    height: 100vh; /* Strictly lock to viewport height */
   }
+
   .topbar{
     display:flex;
     align-items:center;
@@ -132,22 +134,26 @@
     display: flex; align-items: center; justify-content: center;
   }
 
-  .chat-scroll{
-    flex:1;
-    overflow-y:auto;
-    display:flex;
-    justify-content:center;
+  /* Fix: Allow smooth inertia scrolling on iOS and Android */
+  .chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
     width: 100%;
-    -webkit-overflow-scrolling: touch;
+    padding-bottom: 110px; /* Make space so text doesn't hide behind input box */
+    -webkit-overflow-scrolling: touch; /* Smooth iOS momentum scrolling */
   }
+
   .chat-col{
     width:100%;
     max-width:720px;
-    padding:24px 16px 120px;
+    padding:24px 16px 20px;
     display:flex;
     flex-direction:column;
     gap:20px;
   }
+  
   .empty-state{ margin:auto; text-align:center; color:var(--text-dim); padding:40px 16px; }
   .empty-state h1{ font-family:'Source Serif 4', serif; font-weight:600; font-size:24px; color:var(--text); margin:0 0 10px; }
   .empty-state p { font-size: 14px; line-height: 1.5; }
@@ -191,18 +197,15 @@
   }
   @keyframes textCaretBlink { 50% { opacity: 0; } }
 
-  .composer-wrap{
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display:flex;
-    justify-content:center;
-    padding:12px 16px 20px;
-    background: linear-gradient(to top, var(--bg) 75%, transparent);
+  /* Fix: Remove the absolute positioning from the bottom input box wrapper */
+  .composer-wrap {
+    position: relative; /* Change from absolute to relative to sit nicely below the scroll window */
+    padding: 12px 16px 20px;
+    background: var(--bg);
     z-index: 30;
   }
-  .composer{ width:100%; max-width:720px; display:flex; align-items:flex-end; gap:8px; background:var(--panel); border:1px solid var(--border); border-radius:24px; padding:6px 6px 6px 16px; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+  
+  .composer{ width:100%; max-width:720px; margin: 0 auto; display:flex; align-items:flex-end; gap:8px; background:var(--panel); border:1px solid var(--border); border-radius:24px; padding:6px 6px 6px 16px; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
   .composer textarea{ flex:1; border:none; outline:none; resize:none; font-family:'Inter', sans-serif; font-size:15px; line-height:1.5; max-height:120px; padding:10px 0; background:transparent; color:var(--text); }
   .composer button{ background:var(--accent); border:none; color:#fff; width:38px; height:36px; border-radius:50%; font-size:16px; cursor:pointer; flex-shrink:0; display: flex; align-items: center; justify-content: center; }
   .composer button:disabled{background:#d8cfc0; cursor:not-allowed;}
@@ -253,7 +256,7 @@
       box-shadow:4px 0 24px rgba(44,42,38,0.15);
     }
     .msg { max-width: 90%; }
-    .chat-col { padding: 16px 12px 130px; gap: 16px; }
+    .chat-col { padding: 16px 12px 20px; gap: 16px; }
     .admin-grid { grid-template-columns: 1fr 1fr; }
     .stat-card { padding: 12px; }
     .stat-card div { font-size: 18px; }
@@ -365,7 +368,6 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script>
   let apiUrl = localStorage.getItem('pratham_api_url') || 'https://partham-ai.onrender.com';
-  // FIX: Dynamic fallback logic injected right into token configuration pipeline. Bypasses 401 if browser cache resets
   let idToken = localStorage.getItem('pratham_id_token') || 'sandbox-master-token-local-dev-use';
   let activeConvoId = null;
   let busy = false;
@@ -395,7 +397,6 @@
 
   window.onload = function () {
     google.accounts.id.initialize({
-      // FIX: New operational Client ID applied securely
       client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com", 
       callback: handleCredentialResponse
     });
