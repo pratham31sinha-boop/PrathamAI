@@ -530,7 +530,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script>
-  let apiUrl = localStorage.getItem('pratham_api_url') || '';
+  let apiUrl = localStorage.getItem('pratham_api_url') || 'https://partham-ai.onrender.com';
   let idToken = localStorage.getItem('pratham_id_token') || '';
   let activeConvoId = null;
   let busy = false;
@@ -541,7 +541,7 @@
 
   window.onload = function () {
     google.accounts.id.initialize({
-      client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com", 
+      client_id: "499563330675-gf94q09n31c4kgggm3bcp08o8i0mtmg8.apps.googleusercontent.com", 
       callback: handleCredentialResponse
     });
     renderGoogleButton();
