@@ -27,22 +27,25 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
   html, body { height: 100dvh; background: var(--bg-main); color: var(--text-main); font-family: 'Inter', sans-serif; overflow: hidden; display: flex; }
 
+  /* Global Dark Theme Custom Scrollbars to eliminate clunky browser default bars */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-main); }
+  ::-webkit-scrollbar-thumb { background: #2d2d2d; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d3d3d; }
+
   /* Left Navigation Sidebar Layout */
   .sidebar { width: 260px; flex-shrink: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 16px 12px; z-index: 40; position: relative; transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+  .sidebar::-webkit-scrollbar-track { background: var(--bg-sidebar); }
   
   .brand-header { display: flex; align-items: center; gap: 8px; font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 500; color: var(--text-main); margin-bottom: 20px; padding: 4px 8px; }
   .brand-logo { color: var(--accent-orange); font-size: 22px; }
 
-  /* Sleeker New Chat Button styling */
   .new-chat-btn { display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 16px; border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px; width: 100%; transition: background 0.2s, border-color 0.2s, transform 0.1s; }
   .new-chat-btn:hover { background: var(--bg-input); border-color: #444; }
   .new-chat-btn:active { transform: scale(0.98); }
   .shortcut-badge { font-size: 11px; color: var(--text-dim); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-family: monospace; }
 
   .convo-list { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
-  .convo-list::-webkit-scrollbar { width: 4px; }
-  .convo-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-  
   .convo-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 14px 8px 6px; font-weight: 700; }
   .convo-item { padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; }
   .convo-item:hover { background: rgba(255,255,255,0.03); color: var(--text-main); }
@@ -68,29 +71,29 @@
   .menu-item:hover { background: rgba(255,255,255,0.04); color: var(--text-main); }
   .menu-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
 
-  /* Expanded Desktop Workspace Framework */
-  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background: var(--bg-main); position: relative; }
+  /* Main Area Frame Layout */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background: var(--bg-main); position: relative; align-items: center; }
   
-  .topbar { flex-shrink: 0; display: flex; align-items: center; padding: 0 24px; min-height: 56px; border-bottom: 1px solid transparent; }
-  .menu-toggle-btn { background: none; border: none; font-size: 20px; color: var(--text-secondary); cursor: pointer; display: none; margin-right: 12px; }
+  .topbar { width: 100%; flex-shrink: 0; display: flex; align-items: center; padding: 0 24px; min-height: 48px; border-bottom: 1px solid transparent; }
+  .menu-toggle-btn { background: none; border: none; font-size: 20px; color: var(--text-secondary); cursor: pointer; display: none; margin-top: 12px; }
   .menu-toggle-btn:hover { color: var(--text-main); }
 
-  /* Container Core Scroll Window - Expanded on PC */
+  /* Expanded Workspace Canvas Context Viewport */
   .chat-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; width: 100%; -webkit-overflow-scrolling: touch; }
-  .chat-col { width: 100%; max-width: 840px; padding: 40px 24px 20px; display: flex; flex-direction: column; gap: 32px; }
+  .chat-col { width: 100%; max-width: 1150px; padding: 20px 32px; display: flex; flex-direction: column; gap: 32px; flex: 1; }
 
-  /* Premium Centralized Welcome Dashboard Layout */
-  .welcome-state { margin: auto; text-align: center; width: 100%; max-width: 680px; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .welcome-title { font-family: 'Source Serif 4', serif; font-size: 34px; font-weight: 400; color: var(--text-main); margin-bottom: 32px; letter-spacing: -0.02em; }
+  /* Centralized Presentation Layout - No strict width limits to prevent look of vacant space */
+  .welcome-state { margin: auto; text-align: center; width: 100%; max-width: 900px; padding: 40px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .welcome-title { font-family: 'Source Serif 4', serif; font-size: 38px; font-weight: 400; color: var(--text-main); margin-bottom: 36px; letter-spacing: -0.02em; }
   
-  /* Modern Dashboard Action Suggestion Grid */
-  .suggestion-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; margin-top: 10px; }
-  .suggestion-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: left; cursor: pointer; transition: background 0.2s, border-color 0.2s, transform 0.1s; display: flex; flex-direction: column; gap: 8px; }
-  .suggestion-card:hover { background: var(--bg-input); border-color: #444; transform: translateY(-1px); }
+  /* Widescreen Multi-Column Dynamic Action Suggestion Grid */
+  .suggestion-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 100%; margin-top: 10px; }
+  .suggestion-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px; text-align: left; cursor: pointer; transition: background 0.2s, border-color 0.2s, transform 0.1s; display: flex; flex-direction: column; gap: 8px; justify-content: space-between; min-height: 120px; }
+  .suggestion-card:hover { background: var(--bg-input); border-color: #444; transform: translateY(-2px); }
   .suggestion-card:active { transform: translateY(0); }
   .suggestion-icon { font-size: 18px; color: var(--accent-orange); }
-  .suggestion-text { font-size: 13.5px; font-weight: 500; color: var(--text-main); }
-  .suggestion-sub { font-size: 12px; color: var(--text-dim); }
+  .suggestion-text { font-size: 14px; font-weight: 500; color: var(--text-main); }
+  .suggestion-sub { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 
   /* Conversational Chat Row Containers */
   .msg-container { display: flex; flex-direction: column; width: 100%; animation: textReveal 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -102,9 +105,9 @@
   .msg-row { display: flex; width: 100%; }
   .msg-row.user { justify-content: flex-end; }
   .msg { width: 100%; font-size: 15.5px; line-height: 1.65; color: var(--text-main); word-wrap: break-word; }
-  .msg-row.user .msg { max-width: 85%; background: var(--bubble-user); padding: 12px 18px; border-radius: 18px; }
+  .msg-row.user .msg { max-width: 80%; background: var(--bubble-user); padding: 12px 18px; border-radius: 18px; }
 
-  /* Typographic Markdown Elements Styles */
+  /* Typographic Markdown Rendering Layouts */
   .msg h1, .msg h2, .msg h3 { margin: 1.4em 0 0.6em; font-weight: 600; color: var(--text-main); line-height: 1.3; }
   .msg p { margin-bottom: 1em; }
   .msg p:last-child { margin-bottom: 0; }
@@ -117,20 +120,19 @@
   .msg pre { background: #1e1e24; border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; }
   .msg pre code { background: transparent; padding: 0; color: #abb2bf; }
 
-  /* Status Loading States Indicator Setup */
+  /* Status Loading States */
   .thinking-state { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); padding: 4px 0; }
   .streaming-cursor::after { content: "▋"; animation: flashCursor 0.8s step-end infinite; color: var(--accent-orange); margin-left: 2px; }
   @keyframes flashCursor { 50% { opacity: 0; } }
 
-  /* Premium Expanded Prompt Terminal Block - Dynamic max-width matching container spacing */
-  .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 24px 32px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 30%); z-index: 30; }
-  .composer-container { width: 100%; max-width: 840px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 24px; padding: 14px 18px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); position: relative; transition: border-color 0.2s, box-shadow 0.2s; }
+  /* Expanded Fluid Prompt Terminal Action Center Component */
+  .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 32px 32px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 30%); z-index: 30; }
+  .composer-container { width: 100%; max-width: 1086px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 24px; padding: 14px 18px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); position: relative; transition: border-color 0.2s, box-shadow 0.2s; }
   .composer-container:focus-within { border-color: #444; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
   
   .composer-container textarea { width: 100%; border: none; outline: none; resize: none; font-family: inherit; font-size: 15.5px; line-height: 1.5; max-height: 240px; background: transparent; color: var(--text-main); padding-bottom: 48px; }
   .composer-container textarea::placeholder { color: var(--text-dim); }
 
-  /* Control Sub Bar Controls Placement Layout */
   .composer-actions-bar { position: absolute; bottom: 12px; left: 16px; right: 16px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
   .composer-left-tools { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
   .composer-right-tools { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
@@ -165,16 +167,19 @@
   .backdrop-shield { position: fixed; inset: 0; background: var(--overlay-color); z-index: 35; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
   .backdrop-shield.active { opacity: 1; pointer-events: auto; }
 
-  /* Device Responsive Media Breaks Handling Layout Rules */
+  /* Device Responsive Adapters for Phones */
+  @media (max-width: 1000px) {
+    .suggestion-grid { grid-template-columns: repeat(2, 1fr); }
+  }
   @media (max-width: 760px) {
     .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); width: 270px; }
     .sidebar.open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.4); }
     .menu-toggle-btn { display: block; }
     .composer-wrap { padding: 0 12px 16px; }
-    .chat-col { padding: 24px 12px 16px; }
+    .chat-col { padding: 16px 12px; gap: 20px; }
     .msg-row.user .msg { max-width: 90%; }
     .suggestion-grid { grid-template-columns: 1fr; gap: 8px; }
-    .welcome-title { font-size: 28px; margin-bottom: 20px; }
+    .welcome-title { font-size: 28px; margin-bottom: 24px; }
   }
 </style>
 </head>
@@ -304,7 +309,7 @@
     }); 
   }
 
-  // Base Responsive Mobile Sidebar Mechanics
+  // Base Responsive Mobile Sidebar Mechanics Control Layout Wireframe Setup
   document.getElementById('menuBtn').addEventListener('click', (e) => { 
     e.stopPropagation(); 
     sidebar.classList.contains('open') ? closeSidebar() : openSidebar(); 
@@ -325,14 +330,14 @@
     }
   });
 
-  // Settings Modals Framework Handlers
+  // Base Settings Modals Framework Layout Control Handlers Wireframes
   const settingsModal = document.getElementById('settingsModal');
-  document.getElementById('menuSettingsBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
+  document.getElementById('menuSettingsBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.open = true; settingsModal.classList.add('open'); });
   document.getElementById('menuProfileBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
   document.getElementById('closeSettingsModal').addEventListener('click', () => settingsModal.classList.remove('open'));
   document.getElementById('menuLogoutBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); triggerSignOut(); });
 
-  // Elastic multi-line input textarea formatting configuration
+  // Elastic multi-line input textarea formatting configuration rules
   input.addEventListener('input', () => {
     input.style.height = 'auto';
     input.style.height = Math.min(input.scrollHeight, 240) + 'px';
@@ -345,7 +350,7 @@
     } 
   });
 
-  // Hotkey mapping shortcut listener (CMD+K or CTRL+K) for triggering clean sheets
+  // Hotkey mapping shortcut listener (CMD+K or CTRL+K) for clean sessions
   window.addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
@@ -353,7 +358,6 @@
     }
   });
 
-  // Suggestion Injection Engine Strategy
   function selectSuggestionPrompt(promptValue) {
     if (busy) return;
     input.value = promptValue;
@@ -364,7 +368,7 @@
   const fileInput = document.getElementById('fileInput');
   document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
 
-  // Initialization Hook Sequence
+  // Initialization Hook Configuration System Loading Check Sequences
   window.onload = function () {
     google.accounts.id.initialize({
       client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com", 
@@ -426,7 +430,7 @@
     input.placeholder = "Sign in to send a message...";
   }
 
-  // Enhanced New Chat Presentation Dashboard Block
+  // Expanded Widescreen Dashboard Panel
   function renderNewChatState() {
     chatCol.innerHTML = `
       <div class="welcome-state">
@@ -557,7 +561,7 @@
     return bubble;
   }
 
-  // Core Real-Time Server-Sent Events (SSE) Stream Processing Engine
+  // Core Real-Time Server-Sent Events (SSE) Stream Matrix Processing Engine
   async function handleSend() {
     let text = input.value.trim();
     if (!text || busy) return;
@@ -650,7 +654,7 @@
               throw new Error(parsed.text);
             }
           } catch (e) {
-            // Buffer parsing catches fragment split errors cleanly
+            // Processing safety catching split segments across chunk intervals
           }
         }
       }
