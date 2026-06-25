@@ -5,213 +5,206 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
 <title>Pratham AI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <style>
-  :root{
-    --bg:#f6f3ec;
-    --sidebar:#efe9dc;
-    --panel:#ffffff;
-    --border:#e3ddcc;
-    --text:#2c2a26;
-    --text-dim:#8a8478;
-    --accent:#c2613f;
-    --accent-soft:#e8d3c8;
-    --bubble-user:#efe6d8;
-    --bubble-model:#ffffff;
-    --overlay: rgba(44, 42, 38, 0.4);
-  }
-  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
-  html,body{height:100dvh; margin:0; padding:0; overflow:hidden;}
-  body{
-    font-family:'Inter', sans-serif;
-    background:var(--bg);
-    color:var(--text);
-    display:flex;
+  :root {
+    --bg-main: #191919;
+    --bg-sidebar: #121212;
+    --bg-panel: #222222;
+    --bg-input: #262626;
+    --border-color: #2d2d2d;
+    --text-main: #e3e3e3;
+    --text-secondary: #b4b4b4;
+    --text-dim: #757575;
+    --accent-orange: #cc6239;
+    --accent-orange-soft: rgba(204, 98, 57, 0.15);
+    --bubble-user: #2b2b2a;
+    --bubble-model: transparent;
+    --overlay-color: rgba(0, 0, 0, 0.6);
   }
 
-  .sidebar-backdrop { position: fixed; inset: 0; background: var(--overlay); z-index: 35; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
-  .sidebar-backdrop.active { opacity: 1; pointer-events: auto; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+  html, body { height: 100dvh; background: var(--bg-main); color: var(--text-main); font-family: 'Inter', sans-serif; overflow: hidden; display: flex; }
 
-  .sidebar{ width:260px; flex-shrink:0; background:var(--sidebar); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:14px; z-index: 40; transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); position: relative; }
+  /* Left Navigation Sidebar Layout */
+  .sidebar { width: 260px; flex-shrink: 0; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 16px 12px; z-index: 40; position: relative; transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
   
-  .new-chat{ display:flex; align-items:center; justify-content: space-between; gap:8px; background:var(--panel); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; margin-bottom:14px; width: 100%; transition: background 0.2s; }
-  .new-chat:hover{background:var(--accent-soft);}
-  
-  .search-box { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; background: var(--bg); font-size: 13px; color: var(--text); outline: none; }
-  .search-box:focus { border-color: var(--accent); }
+  .brand-header { display: flex; align-items: center; gap: 8px; font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 500; color: var(--text-main); margin-bottom: 20px; padding: 4px 8px; }
+  .brand-logo { color: var(--accent-orange); font-size: 22px; }
 
-  .convo-list{flex:1; overflow-y:auto; padding-bottom: 10px; margin: 0 -6px; padding: 0 6px;}
-  .convo-list::-webkit-scrollbar { width: 6px; }
-  .convo-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
-  .convo-label{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); padding:12px 8px 6px; font-weight: 600; }
-  .convo-item{ padding:10px 12px; border-radius:8px; font-size:13.5px; color:var(--text); cursor:pointer; margin-bottom:2px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
-  .convo-item:hover { background:rgba(0,0,0,0.04); }
-  .convo-item.active { background:var(--panel); font-weight:500; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .new-chat-btn { display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 14px; border-radius: 24px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px; width: 100%; transition: background 0.2s, border-color 0.2s; }
+  .new-chat-btn:hover { background: var(--bg-input); border-color: var(--text-dim); }
+
+  .convo-list { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+  .convo-list::-webkit-scrollbar { width: 4px; }
+  .convo-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+  
+  .convo-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 14px 8px 6px; font-weight: 700; }
+  .convo-item { padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; }
+  .convo-item:hover { background: rgba(255,255,255,0.03); color: var(--text-main); }
+  .convo-item.active { background: var(--bg-panel); color: var(--text-main); font-weight: 500; }
   .convo-title-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .delete-convo-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; display: none; padding: 2px; }
   .convo-item:hover .delete-convo-btn { display: block; }
-  .delete-convo-btn:hover { color: #c54141; }
-  
-  .sidebar-footer{ margin-top: auto; padding-top: 10px; }
-  .user-profile-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border-radius: 8px; border: none; background: transparent; cursor: pointer; text-align: left; transition: background 0.2s; }
-  .user-profile-btn:hover { background: rgba(0,0,0,0.04); }
-  .user-profile-btn img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+  .delete-convo-btn:hover { color: #e55353; }
+
+  /* Profile Account Tray at Bottom */
+  .sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color); position: relative; }
+  .user-profile-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 20px; border: none; background: transparent; cursor: pointer; text-align: left; transition: background 0.2s; }
+  .user-profile-btn:hover { background: rgba(255,255,255,0.04); }
+  .user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-orange); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; text-transform: uppercase; }
   .user-info { flex: 1; min-width: 0; }
-  .user-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .plan-badge { font-size: 11px; color: var(--text-dim); font-weight: 500; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px;}
+  .user-name { font-size: 13.5px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plan-badge { font-size: 11px; color: var(--text-dim); }
 
-  .profile-menu { position: absolute; bottom: 65px; left: 14px; right: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,0.08); display: none; flex-direction: column; z-index: 100; overflow: hidden; opacity: 0; transform: translateY(10px); transition: all 0.2s ease; }
-  .profile-menu.open { display: flex; opacity: 1; transform: translateY(0); }
-  .menu-item { padding: 12px 16px; font-size: 13.5px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 10px; background: none; border: none; text-align: left; width: 100%; }
-  .menu-item:hover { background: var(--accent-soft); color: var(--accent); }
-  .menu-divider { height: 1px; background: var(--border); margin: 2px 0; }
+  /* Floating Popover Container Context Menu */
+  .profile-menu { position: absolute; bottom: 60px; left: 0; right: 0; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.4); display: none; flex-direction: column; z-index: 100; overflow: hidden; }
+  .profile-menu.open { display: flex; }
+  .menu-item { padding: 12px 14px; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 10px; background: none; border: none; text-align: left; width: 100%; transition: background 0.2s, color 0.2s; }
+  .menu-item:hover { background: rgba(255,255,255,0.04); color: var(--text-main); }
+  .menu-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
 
-  .main{ flex:1; display:flex; flex-direction:column; min-width:0; height: 100dvh; background: var(--bg); overflow: hidden; }
+  /* Viewport Workspace Base Frame Layout */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background: var(--bg-main); position: relative; }
   
-  .topbar{ flex-shrink:0; display:flex; align-items:center; justify-content: space-between; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--bg); min-height: 56px; }
-  .topbar-left { display: flex; align-items: center; gap: 12px; }
-  .menu-btn { background:none; border:none; border-radius:6px; height:36px; width: 36px; cursor:pointer; font-size:18px; color:var(--text); display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-  .menu-btn:hover { background: rgba(0,0,0,0.05); }
-  .model-selector { font-size: 15px; font-weight: 600; color: var(--text); padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
-  .model-selector:hover { background: rgba(0,0,0,0.05); }
+  .topbar { flex-shrink: 0; display: flex; align-items: center; padding: 0 20px; min-height: 56px; border-bottom: 1px solid transparent; }
+  .menu-toggle-btn { background: none; border: none; font-size: 20px; color: var(--text-secondary); cursor: pointer; display: none; margin-right: 12px; }
+  .menu-toggle-btn:hover { color: var(--text-main); }
 
-  .chat-scroll{ flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center; width: 100%; padding-bottom: 20px; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
-  .chat-col{ width:100%; max-width:760px; padding:24px 16px 0; display:flex; flex-direction:column; gap:24px; }
-  
-  .welcome-state { margin: auto; text-align: center; max-width: 400px; padding: 40px 20px; animation: modalFade 0.4s ease; }
-  .welcome-state h1 { font-family: 'Source Serif 4', serif; font-size: 28px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
-  .welcome-state p { font-size: 15px; line-height: 1.6; color: var(--text-dim); margin-bottom: 30px; }
+  /* Container Core Scroll Window */
+  .chat-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; width: 100%; -webkit-overflow-scrolling: touch; }
+  .chat-col { width: 100%; max-width: 720px; padding: 40px 24px 20px; display: flex; flex-direction: column; gap: 32px; }
 
-  .msg-container { display: flex; flex-direction: column; gap: 4px; width: 100%; animation: slideUp 0.3s ease; }
-  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  /* Centralized Minimal Welcome Interface Dashboard */
+  .welcome-state { margin: auto; text-align: center; max-width: 520px; padding: 60px 20px; display: flex; flex-direction: column; align-items: center; }
+  .welcome-title { font-family: 'Source Serif 4', serif; font-size: 32px; font-weight: 400; color: var(--text-main); margin-bottom: 24px; letter-spacing: -0.02em; }
   
-  .msg-row{display:flex; width: 100%;}
-  .msg-row.user{justify-content:flex-end;}
-  .msg{ max-width:85%; padding:14px 18px; border-radius:18px; font-size:15px; line-height:1.6; white-space: normal; word-wrap: break-word; position: relative; }
+  /* Conversational Chat Row Containers */
+  .msg-container { display: flex; flex-direction: column; width: 100%; animation: textReveal 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+  @keyframes textReveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
   
-  .msg h1, .msg h2, .msg h3 { margin: 1.2em 0 0.5em 0; font-weight: 600; color: #111; line-height: 1.3; }
-  .msg h1:first-child, .msg h2:first-child, .msg h3:first-child { margin-top: 0; }
-  .msg p { margin: 0 0 1em 0; }
+  .msg-sender-label { font-size: 12px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .msg-sender-label.user { justify-content: flex-end; color: var(--text-secondary); }
+  
+  .msg-row { display: flex; width: 100%; }
+  .msg-row.user { justify-content: flex-end; }
+  .msg { width: 100%; font-size: 15.5px; line-height: 1.65; color: var(--text-main); word-wrap: break-word; }
+  .msg-row.user .msg { max-width: 85%; background: var(--bubble-user); padding: 12px 18px; border-radius: 18px; }
+
+  /* High End Typographic Markdown Elements Rendering Styles */
+  .msg h1, .msg h2, .msg h3 { margin: 1.4em 0 0.6em; font-weight: 600; color: var(--text-main); line-height: 1.3; }
+  .msg p { margin-bottom: 1em; }
   .msg p:last-child { margin-bottom: 0; }
-  .msg ul, .msg ol { margin: 0 0 1em 0; padding-left: 20px; }
-  .msg table { display: block; border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 14px; overflow-x: auto; }
-  .msg th, .msg td { border: 1px solid var(--border); padding: 10px; text-align: left; }
-  .msg th { background-color: var(--bg); font-weight: 600; }
-  .msg code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13.5px; }
-  .msg pre { background: #282c34; color: #abb2bf; padding: 40px 16px 16px; border-radius: 10px; overflow-x: auto; margin: 1.2em 0; position: relative; }
-  .msg pre code { background: transparent; padding: 0; color: inherit; }
-  
-  .copy-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
-  .copy-btn:hover { background: rgba(255,255,255,0.25); }
+  .msg ul, .msg ol { margin-bottom: 1em; padding-left: 24px; }
+  .msg li { margin-bottom: 0.4em; }
+  .msg table { display: block; border-collapse: collapse; width: 100%; margin: 1.5em 0; font-size: 14.5px; overflow-x: auto; }
+  .msg th, .msg td { border: 1px solid var(--border-color); padding: 10px 14px; text-align: left; }
+  .msg th { background: var(--bg-panel); font-weight: 600; color: var(--text-main); }
+  .msg code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 14px; color: #f28b50; }
+  .msg pre { background: #1e1e24; border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; }
+  .msg pre code { background: transparent; padding: 0; color: #abb2bf; }
 
-  .msg-row.user .msg{ background:var(--bubble-user); border-bottom-right-radius:4px; }
-  .msg-row.model .msg{ background:var(--bubble-model); border:1px solid var(--border); border-bottom-left-radius:4px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-  
-  .thinking-state { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); font-weight: 500; padding: 10px 0; }
-  .dot-flashing { position: relative; width: 6px; height: 6px; border-radius: 5px; background-color: var(--accent); animation: dot-flashing 1s infinite linear alternate; animation-delay: 0.5s; }
-  .dot-flashing::before, .dot-flashing::after { content: ''; display: inline-block; position: absolute; top: 0; width: 6px; height: 6px; border-radius: 5px; background-color: var(--accent); animation: dot-flashing 1s infinite alternate; }
-  .dot-flashing::before { left: -10px; animation-delay: 0s; }
-  .dot-flashing::after { left: 10px; animation-delay: 1s; }
-  @keyframes dot-flashing { 0% { background-color: var(--accent); } 50%, 100% { background-color: rgba(194, 97, 63, 0.2); } }
+  /* Status Loading States Indicator Setup */
+  .thinking-state { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); padding: 4px 0; }
+  .streaming-cursor::after { content: "▋"; animation: flashCursor 0.8s step-end infinite; color: var(--accent-orange); margin-left: 2px; }
+  @keyframes flashCursor { 50% { opacity: 0; } }
 
-  .streaming-cursor::after { content: "▋"; animation: cursorBlink 0.8s step-end infinite; color: var(--accent); margin-left: 4px; font-size: 14px; }
-  @keyframes cursorBlink { 50% { opacity: 0; } }
-
-  .composer-wrap{ flex-shrink: 0; display:flex; flex-direction:column; align-items:center; width: 100%; padding:0 16px 24px; background: linear-gradient(180deg, transparent, var(--bg) 20%); z-index: 30; }
-  .composer{ width:100%; max-width:760px; margin: 0 auto; display:flex; align-items:flex-end; gap:8px; background:var(--panel); border:1px solid var(--border); border-radius:24px; padding:10px 10px 10px 16px; box-shadow:0 4px 16px rgba(0,0,0,0.05); position: relative; transition: border-color 0.2s; }
-  .composer:focus-within { border-color: var(--text-dim); }
-  .composer textarea{ flex:1; border:none; outline:none; resize:none; font-family:'Inter', sans-serif; font-size:15px; line-height:1.5; max-height:200px; padding:8px 0; background:transparent; color:var(--text); }
-  .composer textarea::placeholder { color: #a19b8f; }
+  /* Premium Multi-Tier Action Central Input Terminal Block */
+  .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 24px 32px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 30%); z-index: 30; }
+  .composer-container { width: 100%; max-width: 720px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 20px; padding: 12px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); position: relative; transition: border-color 0.2s, box-shadow 0.2s; }
+  .composer-container:focus-within { border-color: #444; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
   
-  .attach-btn{ background:none; border:none; color:var(--text-dim); width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer; flex-shrink:0; display: flex; align-items: center; justify-content: center; transition: background 0.2s; margin-bottom: 4px; }
-  .attach-btn:hover{background:rgba(0,0,0,0.05); color:var(--text);}
-  
-  .send-btn{ background:var(--text); border:none; color:var(--bg); width:32px; height:32px; border-radius:50%; font-size:16px; cursor:pointer; flex-shrink:0; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-bottom: 4px; }
-  .send-btn:disabled{ background: var(--border); color: var(--text-dim); cursor:not-allowed; }
-  .send-btn:not(:disabled):hover { background: var(--accent); }
+  .composer-container textarea { width: 100%; border: none; outline: none; resize: none; font-family: inherit; font-size: 15.5px; line-height: 1.5; max-height: 220px; background: transparent; color: var(--text-main); padding-bottom: 44px; }
+  .composer-container textarea::placeholder { color: var(--text-dim); }
 
-  .modal-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 100; display: none; align-items: center; justify-content: center; padding: 16px; }
+  /* Core Control Sub Bar Controls Placement Layout */
+  .composer-actions-bar { position: absolute; bottom: 10px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  .composer-left-tools { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+  .composer-right-tools { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+
+  .tool-pill-btn { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; color: var(--text-secondary); font-size: 13px; font-weight: 500; padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s, color 0.2s; }
+  .tool-pill-btn:hover { background: var(--bg-input); color: var(--text-main); }
+  
+  .send-action-btn { background: #e3e3e3; border: none; color: #111; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.1s; }
+  .send-action-btn:disabled { background: #2d2d2d; color: var(--text-dim); cursor: not-allowed; transform: none; }
+  .send-action-btn:not(:disabled):hover { background: #fff; transform: scale(1.04); }
+
+  /* Unified Overlay Modal Structuring System */
+  .modal-overlay { position: fixed; inset: 0; background: var(--overlay-color); z-index: 100; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
   .modal-overlay.open { display: flex; }
-  .modal-card { background: var(--panel); border: 1px solid var(--border); width: 100%; max-width: 680px; border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 85dvh; animation: modalFade 0.2s ease; }
-  @keyframes modalFade { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-  .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-  .modal-header h2 { margin: 0; font-size: 18px; font-weight: 600; }
-  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-dim); }
-  .modal-body { flex: 1; overflow-y: auto; display: flex; }
+  .modal-frame { background: var(--bg-panel); border: 1px solid var(--border-color); width: 100%; max-width: 600px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; overflow: hidden; animation: modalPop 0.2s ease-out; }
+  @keyframes modalPop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
   
-  .settings-tabs { width: 180px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--border); padding: 16px; background: rgba(0,0,0,0.01); }
-  .settings-tab-btn { background: none; border: none; padding: 10px 12px; text-align: left; font-size: 14px; border-radius: 8px; cursor: pointer; color: var(--text); font-weight: 500; transition: background 0.2s; }
-  .settings-tab-btn:hover { background: rgba(0,0,0,0.04); }
-  .settings-tab-btn.active { background: rgba(0,0,0,0.06); font-weight: 600; }
+  .modal-topbar { padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+  .modal-topbar h3 { font-size: 17px; font-weight: 600; }
+  .modal-dismiss-btn { background: none; border: none; font-size: 20px; color: var(--text-dim); cursor: pointer; transition: color 0.2s; }
+  .modal-dismiss-btn:hover { color: var(--text-main); }
   
-  .settings-content-panel { flex: 1; display: none; flex-direction: column; gap: 20px; padding: 24px; }
-  .settings-content-panel.active { display: flex; }
-  .setting-group { border-bottom: 1px solid var(--border); padding-bottom: 20px; }
-  .setting-group:last-child { border-bottom: none; }
-  .setting-row-inline { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
-  .setting-row-inline label { font-size: 14px; font-weight: 500; }
-  .setting-desc { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .modal-content-panel { padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; max-height: 70dvh; }
+  .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
+  .setting-info label { font-size: 14.5px; font-weight: 500; display: block; margin-bottom: 2px; }
+  .setting-subtext { font-size: 12.5px; color: var(--text-dim); }
   
-  .danger-btn { background: #c54141; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13.5px; font-weight: 500; transition: background 0.2s; }
-  .danger-btn:hover { background: #a83535; }
-  .secondary-btn { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13.5px; font-weight: 500; }
+  .form-select-control { background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); padding: 8px 12px; font-size: 14px; outline: none; }
+  .action-danger-btn { background: #b53d3d; border: none; color: white; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; text-align: center; }
+  .action-danger-btn:hover { background: #963232; }
 
-  @media (max-width: 760px){
-    .sidebar{ position:fixed; inset:0 auto 0 0; margin-left:0; transform: translateX(-100%); width: 280px; }
-    .sidebar.open{ transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.1); }
-    .msg { max-width: 95%; }
-    .chat-col { padding: 16px 12px 20px; }
-    .modal-body { flex-direction: column; }
-    .settings-tabs { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; padding: 12px; }
-    .settings-tab-btn { white-space: nowrap; }
-    .profile-menu { bottom: 70px; }
+  .backdrop-shield { position: fixed; inset: 0; background: var(--overlay-color); z-index: 35; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .backdrop-shield.active { opacity: 1; pointer-events: auto; }
+
+  /* Device Responsive Media Breaks Handling Layout Rules */
+  @media (max-width: 760px) {
+    .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); width: 270px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.4); }
+    .menu-toggle-btn { display: block; }
+    .composer-wrap { padding: 0 12px 16px; }
+    .chat-col { padding: 24px 12px 16px; }
+    .msg-row.user .msg { max-width: 90%; }
   }
 </style>
 </head>
 <body>
 
-  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="backdrop-shield" id="sidebarBackdrop"></div>
 
   <div class="sidebar" id="sidebar">
-    <button class="new-chat" id="newChatBtn">
+    <div class="brand-header">
+      <span class="brand-logo">✦</span>
       <span>Pratham AI</span>
-      <span style="font-size: 18px;">📝</span>
-    </button>
+    </div>
     
-    <input type="text" class="search-box" id="chatSearchInput" placeholder="Search...">
+    <button class="new-chat-btn" id="newChatBtn">
+      <span>New chat</span>
+      <span style="font-size: 14px; color: var(--text-dim);">⌘K</span>
+    </button>
     
     <div class="convo-list" id="convoList"></div>
     
     <div class="sidebar-footer">
-      <div id="googleSignInContainer" style="display:none; padding: 0 4px;"></div>
+      <div id="googleSignInContainer" style="display:none; padding: 8px 0;"></div>
       
       <button class="user-profile-btn" id="profileToggleBtn" style="display:none;">
-        <img id="userAvatar" src="" alt="Avatar">
+        <div class="user-avatar" id="userAvatarText">U</div>
         <div class="user-info">
           <div id="profileName" class="user-name">Guest</div>
           <div id="profilePlan" class="plan-badge">Free Plan</div>
         </div>
+        <span style="font-size: 12px; color: var(--text-dim);">▲</span>
       </button>
 
       <div class="profile-menu" id="profileMenu">
         <button class="menu-item" id="menuProfileBtn">👤 Profile & Account</button>
         <button class="menu-item" id="menuSettingsBtn">⚙️ Settings</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="menuAdminBtn" style="display:none;">🛡️ Admin Dashboard</button>
-        <button class="menu-item" onclick="alert('Help center coming soon.')">❓ Help & FAQ</button>
-        <div class="menu-divider"></div>
-        <button class="menu-item" id="menuLogoutBtn" style="color: #c54141;">🚪 Log out</button>
+        <button class="menu-item" id="menuLogoutBtn" style="color: var(--accent-orange);">🚪 Log out</button>
       </div>
     </div>
   </div>
 
   <div class="main">
     <div class="topbar">
-      <div class="topbar-left">
-        <button class="menu-btn" id="menuBtn">☰</button>
-        <div class="model-selector" id="activeModelLabel">Pratham AI <span style="font-size: 12px; color: var(--text-dim); margin-left: 4px;">▼</span></div>
-      </div>
+      <button class="menu-toggle-btn" id="menuBtn">☰</button>
     </div>
 
     <div class="chat-scroll" id="chatScrollContainer">
@@ -219,107 +212,51 @@
     </div>
 
     <div class="composer-wrap">
-      <div class="composer">
-        <button class="attach-btn" id="attachBtn" title="Attach file">📎</button>
-        <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf" style="display:none;" >
-        <textarea id="input" rows="1" placeholder="Message Pratham AI..." autocomplete="off"></textarea>
-        <button class="send-btn" id="sendBtn" aria-label="Send" disabled>↑</button>
+      <div class="composer-container">
+        <textarea id="input" rows="1" placeholder="How can Pratham AI help you today?" autocomplete="off"></textarea>
+        
+        <div class="composer-actions-bar">
+          <div class="composer-left-tools">
+            <button class="tool-pill-btn" id="attachBtn" title="Attach context documentation">
+              <span>📎</span><span style="font-size: 12px;">Attach</span>
+            </button>
+            <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf" style="display:none;">
+            
+            <button class="tool-pill-btn" id="engineDisplayIndicator" style="pointer-events: none;">
+              <span style="color: var(--accent-orange);">●</span> <span id="activeModelPillName" style="font-size: 12px;">Pratham AI</span>
+            </button>
+          </div>
+          
+          <div class="composer-right-tools">
+            <button class="send-action-btn" id="sendBtn" aria-label="Transmit message payload" disabled>↑</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="modal-overlay" id="settingsModal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2>Settings</h2>
+    <div class="modal-frame">
+      <div class="modal-topbar">
+        <h3>Settings & Account</h3>
         <button class="modal-close" id="closeSettingsModal">✕</button>
       </div>
-      <div class="modal-body">
-        <div class="settings-tabs">
-          <button class="settings-tab-btn active" data-tab="tab-general">General</button>
-          <button class="settings-tab-btn" data-tab="tab-account">Account</button>
-          <button class="settings-tab-btn" data-tab="tab-chat">Chat</button>
-          <button class="settings-tab-btn" data-tab="tab-privacy">Privacy</button>
-          <button class="settings-tab-btn" data-tab="tab-system">System</button>
-        </div>
-        
-        <div class="settings-content-panel active" id="tab-general">
-          <div class="setting-group">
-            <div class="setting-row-inline">
-              <div>
-                <label>Theme</label>
-                <div class="setting-desc">Pratham AI Classic Theme</div>
-              </div>
-              <select disabled style="padding: 6px; border-radius: 6px;"><option>System</option></select>
-            </div>
-            <div class="setting-row-inline">
-              <label>Language</label>
-              <select style="padding: 6px; border-radius: 6px; border: 1px solid var(--border);"><option>Auto-detect</option><option>English</option></select>
-            </div>
+      <div class="modal-content-panel">
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Email Address</label>
+            <div class="setting-subtext" id="settingsEmailField">Not Signed In</div>
           </div>
         </div>
-        
-        <div class="settings-content-panel" id="tab-account">
-          <div class="setting-group">
-            <div class="setting-row-inline">
-              <label>Email Address</label>
-              <div id="settingsEmailField" style="font-size:14px; color:var(--text-dim);">Not Signed In</div>
-            </div>
-            <div class="setting-row-inline">
-              <label>Account Type</label>
-              <div style="font-size:14px;">Standard Free</div>
-            </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <label>Interface Language</label>
+            <div class="setting-subtext">Adjust workspace system configuration values</div>
           </div>
+          <select class="form-select-control"><option>English (US)</option></select>
         </div>
-
-        <div class="settings-content-panel" id="tab-chat">
-          <div class="setting-group">
-            <div class="setting-row-inline">
-              <div>
-                <label>Auto-scroll to bottom</label>
-                <div class="setting-desc">Keep view on newest messages during generation</div>
-              </div>
-              <input type="checkbox" checked>
-            </div>
-            <div class="setting-row-inline">
-              <div>
-                <label>Stream Responses</label>
-                <div class="setting-desc">Show text as it is generated</div>
-              </div>
-              <input type="checkbox" checked>
-            </div>
-            <div style="margin-top: 16px;">
-              <button class="secondary-btn" id="clearAllChatsBtn">Clear all conversations</button>
-            </div>
-          </div>
-        </div>
-        
-        <div class="settings-content-panel" id="tab-privacy">
-          <div class="setting-group">
-            <div style="margin-bottom: 16px;">
-              <label style="font-size:14px; font-weight:500; display:block; margin-bottom:8px;">Data Controls</label>
-              <div class="setting-desc" style="margin-bottom:12px;">Delete all your cloud synced conversation data permanently.</div>
-              <button class="danger-btn" onclick="alert('Data deletion request queued.')">Delete Account Data</button>
-            </div>
-            <div>
-              <button class="secondary-btn" onclick="triggerSignOut()">Sign out of all devices</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-content-panel" id="tab-system">
-          <div class="setting-group">
-            <div class="setting-row-inline">
-              <label>Backend API Status</label>
-              <div style="color: #5d8a5a; font-weight: 600; font-size: 13px;">● Connected</div>
-            </div>
-            <div class="setting-row-inline">
-              <label>App Version</label>
-              <div class="setting-desc">v2.4.1-prod</div>
-            </div>
-          </div>
-        </div>
-
+        <div class="menu-divider"></div>
+        <button class="action-danger-btn" id="clearAllChatsBtn">Delete All Cloud Conversation History Data</button>
       </div>
     </div>
   </div>
@@ -330,6 +267,7 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 
 <script>
+  // Core System Variables Setup mapping directly with back-end pipeline routing paths
   let apiUrl = 'https://web-production-503208.up.railway.app';
   let idToken = localStorage.getItem('pratham_id_token') || null;
   let activeConvoId = localStorage.getItem('pratham_active_convo_id') ? parseInt(localStorage.getItem('pratham_active_convo_id')) : null;
@@ -353,6 +291,7 @@
     }); 
   }
 
+  // Base Responsive Mobile Sidebar Mechanics Control Layout Wireframe Setup
   document.getElementById('menuBtn').addEventListener('click', (e) => { 
     e.stopPropagation(); 
     sidebar.classList.contains('open') ? closeSidebar() : openSidebar(); 
@@ -362,6 +301,7 @@
   function closeSidebar() { sidebar.classList.remove('open'); backdrop.classList.remove('active'); }
   function openSidebar() { sidebar.classList.add('open'); backdrop.classList.add('active'); }
 
+  // Context profile settings toggle
   profileToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     profileMenu.classList.toggle('open');
@@ -372,23 +312,17 @@
     }
   });
 
-  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.settings-content-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById(btn.dataset.tab).classList.add('active');
-    });
-  });
+  // Base Settings Modals Framework Layout Control Handlers Wireframes
   const settingsModal = document.getElementById('settingsModal');
   document.getElementById('menuSettingsBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
-  document.getElementById('menuProfileBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); document.querySelector('[data-tab="tab-account"]').click(); settingsModal.classList.add('open'); });
+  document.getElementById('menuProfileBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
   document.getElementById('closeSettingsModal').addEventListener('click', () => settingsModal.classList.remove('open'));
   document.getElementById('menuLogoutBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); triggerSignOut(); });
 
+  // Elastic multi-line input textarea formatting configuration rules
   input.addEventListener('input', () => {
     input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+    input.style.height = Math.min(input.scrollHeight, 220) + 'px';
     sendBtn.disabled = input.value.trim().length === 0;
   });
   input.addEventListener('keydown', e => { 
@@ -398,6 +332,11 @@
     } 
   });
 
+  // Attach Document Integration Mock Handler
+  const fileInput = document.getElementById('fileInput');
+  document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
+
+  // Initialization Hook Configuration System Loading Check Sequences
   window.onload = function () {
     google.accounts.id.initialize({
       client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com", 
@@ -423,13 +362,13 @@
       document.getElementById('googleSignInContainer').style.display = 'none';
       document.getElementById('profileToggleBtn').style.display = 'flex';
       
-      document.getElementById('userAvatar').src = payload.picture || '';
+      const userFirstLetter = (payload.name || 'U').charAt(0);
+      document.getElementById('userAvatarText').textContent = userFirstLetter;
       document.getElementById('profileName').textContent = payload.name || 'User';
       document.getElementById('settingsEmailField').textContent = payload.email || 'Connected';
       
       if(activeConvoId) { loadConversation(activeConvoId); } else { renderNewChatState(); }
       await syncConversations();
-      await checkAdminPrivileges();
     } catch(e) { triggerSignOut(); }
   }
 
@@ -439,7 +378,6 @@
     localStorage.removeItem('pratham_id_token');
     localStorage.removeItem('pratham_active_convo_id');
     document.getElementById('profileToggleBtn').style.display = 'none';
-    document.getElementById('menuAdminBtn').style.display = 'none';
     document.getElementById('convoList').innerHTML = '';
     document.getElementById('settingsEmailField').innerText = "Not Signed In";
     renderLoggedOutState();
@@ -448,8 +386,8 @@
   function renderLoggedOutState() {
     chatCol.innerHTML = `
       <div class="welcome-state">
-        <h1>Welcome to Pratham AI</h1>
-        <p>Sign in with Google to access your conversations, cloud sync, AI chat history, file uploads, and personalized settings.</p>
+        <h1 class="welcome-title">Welcome to Pratham AI</h1>
+        <p style="color: var(--text-secondary); font-size: 15px; margin-bottom: 24px; line-height: 1.6;">Sign in to save your conversation histories, access advanced large language models, cloud sync settings, and upload context data files.</p>
         <div id="googleSignInContainerMain" style="display:flex; justify-content:center;"></div>
       </div>
     `;
@@ -461,23 +399,14 @@
   }
 
   function renderNewChatState() {
-    chatCol.innerHTML = `<div class="welcome-state"><h1>How can I help you today?</h1></div>`;
+    chatCol.innerHTML = `
+      <div class="welcome-state">
+        <h1 class="welcome-title">How can I help you today?</h1>
+      </div>
+    `;
     input.disabled = false;
-    input.placeholder = "Message Pratham AI...";
-    document.getElementById('activeModelLabel').innerHTML = `Pratham AI <span style="font-size: 12px; color: var(--text-dim); margin-left: 4px;">▼</span>`;
-  }
-
-  async function checkAdminPrivileges() {
-    try {
-      const res = await fetch(`${apiUrl}/user/role`, { headers: { 'Authorization': `Bearer ${idToken}` }});
-      if(res.ok) {
-        const data = await res.json();
-        if (data.role === 'admin') {
-          document.getElementById('menuAdminBtn').style.display = 'block';
-          document.getElementById('profilePlan').textContent = "Admin";
-        }
-      }
-    } catch(e){}
+    input.placeholder = "How can Pratham AI help you today?";
+    document.getElementById('activeModelPillName').textContent = "Pratham AI";
   }
 
   async function syncConversations() {
@@ -485,50 +414,44 @@
     try {
       const res = await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${idToken}` }});
       const data = await res.json();
-      groupAndDisplayConversations(data);
+      displayConversationsList(data);
     } catch(e){}
   }
 
-  function groupAndDisplayConversations(conversations) {
+  function displayConversationsList(conversations) {
     const list = document.getElementById('convoList');
     list.innerHTML = '';
     if(conversations.length === 0) return;
 
-    const now = new Date();
-    const groups = { "Today": [], "Yesterday": [], "Previous 7 Days": [], "Previous 30 Days": [], "Older": [] };
+    const label = document.createElement('div'); 
+    label.className = 'convo-label'; 
+    label.textContent = 'Recent Chats'; 
+    list.appendChild(label);
 
     conversations.forEach(c => {
-      const cDate = new Date((c.updated_at || c.created_at).replace(" ", "T") + "Z"); 
-      const diffTime = Math.abs(now - cDate);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays <= 1) groups["Today"].push(c);
-      else if (diffDays <= 2) groups["Yesterday"].push(c);
-      else if (diffDays <= 7) groups["Previous 7 Days"].push(c);
-      else if (diffDays <= 30) groups["Previous 30 Days"].push(c);
-      else groups["Older"].push(c);
-    });
-
-    Object.keys(groups).forEach(gName => {
-      if(groups[gName].length === 0) return;
-      const label = document.createElement('div'); label.className = 'convo-label'; label.textContent = gName; list.appendChild(label);
-      groups[gName].forEach(c => {
-        const item = document.createElement('div'); item.className = `convo-item ${c.id === activeConvoId ? 'active' : ''}`;
-        const spanText = document.createElement('span'); spanText.className = 'convo-title-text'; spanText.textContent = c.title || `Chat`;
-        item.appendChild(spanText);
-        
-        const delBtn = document.createElement('button'); delBtn.className = 'delete-convo-btn'; delBtn.innerHTML = '✕';
-        delBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          if(confirm("Delete this conversation?")) {
-            await fetch(`${apiUrl}/conversations/${c.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${idToken}` }});
-            if(activeConvoId === c.id) { activeConvoId = null; localStorage.removeItem('pratham_active_convo_id'); renderNewChatState(); }
-            syncConversations();
-          }
-        });
-        item.appendChild(delBtn);
-        spanText.addEventListener('click', () => { loadConversation(c.id); if(window.innerWidth <= 760) closeSidebar(); }); 
-        list.appendChild(item);
+      const item = document.createElement('div'); 
+      item.className = `convo-item ${c.id === activeConvoId ? 'active' : ''}`;
+      
+      const spanText = document.createElement('span'); 
+      spanText.className = 'convo-title-text'; 
+      spanText.textContent = c.title || `Chat History Record`;
+      item.appendChild(spanText);
+      
+      const delBtn = document.createElement('button'); 
+      delBtn.className = 'delete-convo-btn'; 
+      delBtn.innerHTML = '✕';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if(confirm("Permanently erase this conversation history record?")) {
+          await fetch(`${apiUrl}/conversations/${c.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${idToken}` }});
+          if(activeConvoId === c.id) { activeConvoId = null; localStorage.removeItem('pratham_active_convo_id'); renderNewChatState(); }
+          syncConversations();
+        }
       });
+      item.appendChild(delBtn);
+      
+      spanText.addEventListener('click', () => { loadConversation(c.id); if(window.innerWidth <= 760) closeSidebar(); }); 
+      list.appendChild(item);
     });
   }
 
@@ -548,19 +471,24 @@
       const res = await fetch(`${apiUrl}/conversations/${id}/messages`, { headers: { 'Authorization': `Bearer ${idToken}` }});
       const data = await res.json();
       data.forEach(m => {
-        addMessage(m.role === 'assistant' ? 'model' : 'user', m.content);
-        if (m.role === 'assistant' && m.provider) {
-          document.getElementById('activeModelLabel').innerHTML = `${m.provider} <span style="font-size: 12px; color: var(--text-dim); margin-left: 4px;">▼</span>`;
-        }
+        addMessage(m.role === 'assistant' ? 'model' : 'user', m.content, m.provider);
       });
       syncConversations();
-      setTimeout(() => { document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight; }, 100);
+      setTimeout(() => { document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight; }, 60);
     } catch(e){}
   }
 
-  function addMessage(role, text) {
+  function addMessage(role, text, providerName = null) {
     const currentEmpty = chatCol.querySelector('.welcome-state'); if (currentEmpty) currentEmpty.remove();
+    
     const container = document.createElement('div'); container.className = 'msg-container';
+    
+    // Header tracking configuration label names setup maps inside the bubble panel
+    const senderLabel = document.createElement('div');
+    senderLabel.className = `msg-sender-label ${role === 'user' ? 'user' : 'model'}`;
+    senderLabel.textContent = role === 'user' ? 'You' : (providerName || 'Pratham AI');
+    container.appendChild(senderLabel);
+
     const row = document.createElement('div'); row.className = `msg-row ${role}`;
     const bubble = document.createElement('div'); bubble.className = 'msg';
     
@@ -569,10 +497,17 @@
     } else { 
       bubble.textContent = text; 
     }
+    
     row.appendChild(bubble); container.appendChild(row); chatCol.appendChild(container);
+    
+    if (role === 'model' && providerName) {
+      document.getElementById('activeModelPillName').textContent = providerName;
+    }
+    
     return bubble;
   }
 
+  // Core Real-Time Server-Sent Events (SSE) Stream Matrix Processing Engine Logic block
   async function handleSend() {
     let text = input.value.trim();
     if (!text || busy) return;
@@ -585,7 +520,13 @@
     document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
 
     const modelContainer = document.createElement('div'); modelContainer.className = 'msg-container';
-    modelContainer.innerHTML = `
+    
+    const streamingModelLabel = document.createElement('div');
+    streamingModelLabel.className = 'msg-sender-label model';
+    streamingModelLabel.textContent = 'Pratham AI';
+    modelContainer.appendChild(streamingModelLabel);
+
+    modelContainer.innerHTML += `
       <div class="msg-row model">
         <div class="msg" id="tempModelBubble">
           <div class="thinking-state">Thinking<div class="dot-flashing"></div></div>
@@ -634,7 +575,8 @@
               activeConvoId = parseInt(parsed.conversation_id);
               localStorage.setItem('pratham_active_convo_id', activeConvoId);
               if (parsed.provider) {
-                document.getElementById('activeModelLabel').innerHTML = `${parsed.provider} <span style="font-size: 12px; color: var(--text-dim); margin-left: 4px;">▼</span>`;
+                streamingModelLabel.textContent = parsed.provider;
+                document.getElementById('activeModelPillName').textContent = parsed.provider;
               }
               syncConversations();
             } 
@@ -643,7 +585,6 @@
                 textBubbleNode.innerHTML = ""; 
                 textBubbleNode.classList.add("streaming-cursor");
                 isFirstChunk = false;
-                console.log(`[Timing] TTFB: ${(performance.now() - startTime).toFixed(0)}ms`);
               }
               
               assistantChunkAccumulator += parsed.text;
@@ -659,17 +600,16 @@
               throw new Error(parsed.text);
             }
           } catch (e) {
-            // Skips incomplete parsing blocks across boundaries safely
+            // Skips segmented JSON boundary fragment frame errors gracefully
           }
         }
       }
 
       textBubbleNode.classList.remove('streaming-cursor');
-      console.log(`[Timing] Total: ${(performance.now() - startTime).toFixed(0)}ms`);
       
     } catch (err) {
       textBubbleNode.classList.remove('streaming-cursor');
-      textBubbleNode.innerHTML = `<span style="color:#c54141;">Error: ${err.message}. Please try again.</span>`;
+      textBubbleNode.innerHTML = `<span style="color:var(--accent-orange);">Error: ${err.message}. Please try again.</span>`;
       if(err.message === "Session Expired") triggerSignOut();
     }
 
