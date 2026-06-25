@@ -33,8 +33,11 @@
   .brand-header { display: flex; align-items: center; gap: 8px; font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 500; color: var(--text-main); margin-bottom: 20px; padding: 4px 8px; }
   .brand-logo { color: var(--accent-orange); font-size: 22px; }
 
-  .new-chat-btn { display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 14px; border-radius: 24px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px; width: 100%; transition: background 0.2s, border-color 0.2s; }
-  .new-chat-btn:hover { background: var(--bg-input); border-color: var(--text-dim); }
+  /* Sleeker New Chat Button styling */
+  .new-chat-btn { display: flex; align-items: center; justify-content: space-between; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 16px; border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px; width: 100%; transition: background 0.2s, border-color 0.2s, transform 0.1s; }
+  .new-chat-btn:hover { background: var(--bg-input); border-color: #444; }
+  .new-chat-btn:active { transform: scale(0.98); }
+  .shortcut-badge { font-size: 11px; color: var(--text-dim); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-family: monospace; }
 
   .convo-list { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
   .convo-list::-webkit-scrollbar { width: 4px; }
@@ -51,7 +54,7 @@
 
   /* Profile Account Tray at Bottom */
   .sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color); position: relative; }
-  .user-profile-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 20px; border: none; background: transparent; cursor: pointer; text-align: left; transition: background 0.2s; }
+  .user-profile-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 12px; border: none; background: transparent; cursor: pointer; text-align: left; transition: background 0.2s; }
   .user-profile-btn:hover { background: rgba(255,255,255,0.04); }
   .user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-orange); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; text-transform: uppercase; }
   .user-info { flex: 1; min-width: 0; }
@@ -65,26 +68,35 @@
   .menu-item:hover { background: rgba(255,255,255,0.04); color: var(--text-main); }
   .menu-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
 
-  /* Viewport Workspace Base Frame Layout */
+  /* Expanded Desktop Workspace Framework */
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background: var(--bg-main); position: relative; }
   
-  .topbar { flex-shrink: 0; display: flex; align-items: center; padding: 0 20px; min-height: 56px; border-bottom: 1px solid transparent; }
+  .topbar { flex-shrink: 0; display: flex; align-items: center; padding: 0 24px; min-height: 56px; border-bottom: 1px solid transparent; }
   .menu-toggle-btn { background: none; border: none; font-size: 20px; color: var(--text-secondary); cursor: pointer; display: none; margin-right: 12px; }
   .menu-toggle-btn:hover { color: var(--text-main); }
 
-  /* Container Core Scroll Window */
+  /* Container Core Scroll Window - Expanded on PC */
   .chat-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; width: 100%; -webkit-overflow-scrolling: touch; }
-  .chat-col { width: 100%; max-width: 720px; padding: 40px 24px 20px; display: flex; flex-direction: column; gap: 32px; }
+  .chat-col { width: 100%; max-width: 840px; padding: 40px 24px 20px; display: flex; flex-direction: column; gap: 32px; }
 
-  /* Centralized Minimal Welcome Interface Dashboard */
-  .welcome-state { margin: auto; text-align: center; max-width: 520px; padding: 60px 20px; display: flex; flex-direction: column; align-items: center; }
-  .welcome-title { font-family: 'Source Serif 4', serif; font-size: 32px; font-weight: 400; color: var(--text-main); margin-bottom: 24px; letter-spacing: -0.02em; }
+  /* Premium Centralized Welcome Dashboard Layout */
+  .welcome-state { margin: auto; text-align: center; width: 100%; max-width: 680px; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .welcome-title { font-family: 'Source Serif 4', serif; font-size: 34px; font-weight: 400; color: var(--text-main); margin-bottom: 32px; letter-spacing: -0.02em; }
   
+  /* Modern Dashboard Action Suggestion Grid */
+  .suggestion-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; margin-top: 10px; }
+  .suggestion-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: left; cursor: pointer; transition: background 0.2s, border-color 0.2s, transform 0.1s; display: flex; flex-direction: column; gap: 8px; }
+  .suggestion-card:hover { background: var(--bg-input); border-color: #444; transform: translateY(-1px); }
+  .suggestion-card:active { transform: translateY(0); }
+  .suggestion-icon { font-size: 18px; color: var(--accent-orange); }
+  .suggestion-text { font-size: 13.5px; font-weight: 500; color: var(--text-main); }
+  .suggestion-sub { font-size: 12px; color: var(--text-dim); }
+
   /* Conversational Chat Row Containers */
   .msg-container { display: flex; flex-direction: column; width: 100%; animation: textReveal 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
   @keyframes textReveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
   
-  .msg-sender-label { font-size: 12px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .msg-sender-label { font-size: 12px; font-weight: 600; color: var(--text-main); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
   .msg-sender-label.user { justify-content: flex-end; color: var(--text-secondary); }
   
   .msg-row { display: flex; width: 100%; }
@@ -92,7 +104,7 @@
   .msg { width: 100%; font-size: 15.5px; line-height: 1.65; color: var(--text-main); word-wrap: break-word; }
   .msg-row.user .msg { max-width: 85%; background: var(--bubble-user); padding: 12px 18px; border-radius: 18px; }
 
-  /* High End Typographic Markdown Elements Rendering Styles */
+  /* Typographic Markdown Elements Styles */
   .msg h1, .msg h2, .msg h3 { margin: 1.4em 0 0.6em; font-weight: 600; color: var(--text-main); line-height: 1.3; }
   .msg p { margin-bottom: 1em; }
   .msg p:last-child { margin-bottom: 0; }
@@ -110,20 +122,20 @@
   .streaming-cursor::after { content: "▋"; animation: flashCursor 0.8s step-end infinite; color: var(--accent-orange); margin-left: 2px; }
   @keyframes flashCursor { 50% { opacity: 0; } }
 
-  /* Premium Multi-Tier Action Central Input Terminal Block */
+  /* Premium Expanded Prompt Terminal Block - Dynamic max-width matching container spacing */
   .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 24px 32px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 30%); z-index: 30; }
-  .composer-container { width: 100%; max-width: 720px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 20px; padding: 12px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); position: relative; transition: border-color 0.2s, box-shadow 0.2s; }
-  .composer-container:focus-within { border-color: #444; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  .composer-container { width: 100%; max-width: 840px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 24px; padding: 14px 18px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); position: relative; transition: border-color 0.2s, box-shadow 0.2s; }
+  .composer-container:focus-within { border-color: #444; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
   
-  .composer-container textarea { width: 100%; border: none; outline: none; resize: none; font-family: inherit; font-size: 15.5px; line-height: 1.5; max-height: 220px; background: transparent; color: var(--text-main); padding-bottom: 44px; }
+  .composer-container textarea { width: 100%; border: none; outline: none; resize: none; font-family: inherit; font-size: 15.5px; line-height: 1.5; max-height: 240px; background: transparent; color: var(--text-main); padding-bottom: 48px; }
   .composer-container textarea::placeholder { color: var(--text-dim); }
 
-  /* Core Control Sub Bar Controls Placement Layout */
-  .composer-actions-bar { position: absolute; bottom: 10px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  /* Control Sub Bar Controls Placement Layout */
+  .composer-actions-bar { position: absolute; bottom: 12px; left: 16px; right: 16px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
   .composer-left-tools { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
   .composer-right-tools { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
 
-  .tool-pill-btn { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; color: var(--text-secondary); font-size: 13px; font-weight: 500; padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s, color 0.2s; }
+  .tool-pill-btn { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; color: var(--text-secondary); font-size: 13px; font-weight: 500; padding: 6px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s, color 0.2s; }
   .tool-pill-btn:hover { background: var(--bg-input); color: var(--text-main); }
   
   .send-action-btn { background: #e3e3e3; border: none; color: #111; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.1s; }
@@ -161,6 +173,8 @@
     .composer-wrap { padding: 0 12px 16px; }
     .chat-col { padding: 24px 12px 16px; }
     .msg-row.user .msg { max-width: 90%; }
+    .suggestion-grid { grid-template-columns: 1fr; gap: 8px; }
+    .welcome-title { font-size: 28px; margin-bottom: 20px; }
   }
 </style>
 </head>
@@ -176,7 +190,7 @@
     
     <button class="new-chat-btn" id="newChatBtn">
       <span>New chat</span>
-      <span style="font-size: 14px; color: var(--text-dim);">⌘K</span>
+      <span class="shortcut-badge">⌘K</span>
     </button>
     
     <div class="convo-list" id="convoList"></div>
@@ -267,7 +281,6 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 
 <script>
-  // Core System Variables Setup mapping directly with back-end pipeline routing paths
   let apiUrl = 'https://web-production-503208.up.railway.app';
   let idToken = localStorage.getItem('pratham_id_token') || null;
   let activeConvoId = localStorage.getItem('pratham_active_convo_id') ? parseInt(localStorage.getItem('pratham_active_convo_id')) : null;
@@ -291,7 +304,7 @@
     }); 
   }
 
-  // Base Responsive Mobile Sidebar Mechanics Control Layout Wireframe Setup
+  // Base Responsive Mobile Sidebar Mechanics
   document.getElementById('menuBtn').addEventListener('click', (e) => { 
     e.stopPropagation(); 
     sidebar.classList.contains('open') ? closeSidebar() : openSidebar(); 
@@ -312,17 +325,17 @@
     }
   });
 
-  // Base Settings Modals Framework Layout Control Handlers Wireframes
+  // Settings Modals Framework Handlers
   const settingsModal = document.getElementById('settingsModal');
   document.getElementById('menuSettingsBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
   document.getElementById('menuProfileBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
   document.getElementById('closeSettingsModal').addEventListener('click', () => settingsModal.classList.remove('open'));
   document.getElementById('menuLogoutBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); triggerSignOut(); });
 
-  // Elastic multi-line input textarea formatting configuration rules
+  // Elastic multi-line input textarea formatting configuration
   input.addEventListener('input', () => {
     input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 220) + 'px';
+    input.style.height = Math.min(input.scrollHeight, 240) + 'px';
     sendBtn.disabled = input.value.trim().length === 0;
   });
   input.addEventListener('keydown', e => { 
@@ -332,11 +345,26 @@
     } 
   });
 
-  // Attach Document Integration Mock Handler
+  // Hotkey mapping shortcut listener (CMD+K or CTRL+K) for triggering clean sheets
+  window.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('newChatBtn').click();
+    }
+  });
+
+  // Suggestion Injection Engine Strategy
+  function selectSuggestionPrompt(promptValue) {
+    if (busy) return;
+    input.value = promptValue;
+    input.focus();
+    input.dispatchEvent(new Event('input'));
+  }
+
   const fileInput = document.getElementById('fileInput');
   document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
 
-  // Initialization Hook Configuration System Loading Check Sequences
+  // Initialization Hook Sequence
   window.onload = function () {
     google.accounts.id.initialize({
       client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com", 
@@ -387,7 +415,7 @@
     chatCol.innerHTML = `
       <div class="welcome-state">
         <h1 class="welcome-title">Welcome to Pratham AI</h1>
-        <p style="color: var(--text-secondary); font-size: 15px; margin-bottom: 24px; line-height: 1.6;">Sign in to save your conversation histories, access advanced large language models, cloud sync settings, and upload context data files.</p>
+        <p style="color: var(--text-secondary); font-size: 15px; margin-bottom: 24px; line-height: 1.6;">Sign in to save your conversation histories, access advanced processing nodes, and upload context data files.</p>
         <div id="googleSignInContainerMain" style="display:flex; justify-content:center;"></div>
       </div>
     `;
@@ -398,10 +426,33 @@
     input.placeholder = "Sign in to send a message...";
   }
 
+  // Enhanced New Chat Presentation Dashboard Block
   function renderNewChatState() {
     chatCol.innerHTML = `
       <div class="welcome-state">
-        <h1 class="welcome-title">How can I help you today?</h1>
+        <h1 class="welcome-title">How can Pratham AI help you today?</h1>
+        <div class="suggestion-grid">
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Help me write a concise summary of an executive report')">
+            <span class="suggestion-icon">📝</span>
+            <span class="suggestion-text">Summarize text</span>
+            <span class="suggestion-sub">Condense articles or long paragraphs</span>
+          </div>
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Write a clean JavaScript function to sort an object list by key')">
+            <span class="suggestion-icon">💻</span>
+            <span class="suggestion-text">Code or refactor</span>
+            <span class="suggestion-sub">Debug algorithms or build architecture</span>
+          </div>
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Brainstorm 5 unique startup project ideas combining AI and sustainability')">
+            <span class="suggestion-icon">💡</span>
+            <span class="suggestion-text">Brainstorm concepts</span>
+            <span class="suggestion-sub">Generate ideas or outline workflows</span>
+          </div>
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Draft a polite professional email requesting a timeline extension')">
+            <span class="suggestion-icon">✉️</span>
+            <span class="suggestion-text">Draft messaging</span>
+            <span class="suggestion-sub">Polishing letters or communication templates</span>
+          </div>
+        </div>
       </div>
     `;
     input.disabled = false;
@@ -483,7 +534,6 @@
     
     const container = document.createElement('div'); container.className = 'msg-container';
     
-    // Header tracking configuration label names setup maps inside the bubble panel
     const senderLabel = document.createElement('div');
     senderLabel.className = `msg-sender-label ${role === 'user' ? 'user' : 'model'}`;
     senderLabel.textContent = role === 'user' ? 'You' : (providerName || 'Pratham AI');
@@ -507,7 +557,7 @@
     return bubble;
   }
 
-  // Core Real-Time Server-Sent Events (SSE) Stream Matrix Processing Engine Logic block
+  // Core Real-Time Server-Sent Events (SSE) Stream Processing Engine
   async function handleSend() {
     let text = input.value.trim();
     if (!text || busy) return;
@@ -600,7 +650,7 @@
               throw new Error(parsed.text);
             }
           } catch (e) {
-            // Skips segmented JSON boundary fragment frame errors gracefully
+            // Buffer parsing catches fragment split errors cleanly
           }
         }
       }
