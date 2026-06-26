@@ -74,7 +74,7 @@
   .menu-item:hover { background: rgba(255,255,255,0.02); color: var(--text-main); }
   .menu-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
 
-  /* Main View Container Layout Port Workspace - Expands fluidly across remaining PC viewport width */
+  /* Main View Container Layout Port Workspace */
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background: var(--bg-main); position: relative; align-items: center; width: 100%; }
   
   /* Topbar Top Navigation Lane Panel */
@@ -82,11 +82,11 @@
   .menu-toggle-btn { background: none; border: none; font-size: 22px; color: var(--text-secondary); cursor: pointer; display: none; }
   .menu-toggle-btn:hover { color: var(--text-main); }
 
-  /* Continuous Workspace Viewport Container - Expanded on PC to eliminate vacant side gaps */
+  /* Continuous Workspace Viewport Container */
   .chat-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; width: 100%; -webkit-overflow-scrolling: touch; }
   .chat-col { width: 100%; max-width: 100%; padding: 20px 40px; display: flex; flex-direction: column; gap: 36px; flex: 1; }
 
-  /* Centralized Presentation Layout - Spans widescreen panels elegantly */
+  /* Centralized Presentation Layout */
   .welcome-state { margin: auto; text-align: center; width: 100%; max-width: 1200px; padding: 40px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .welcome-title { font-family: 'Source Serif 4', serif; font-size: 38px; font-weight: 400; color: var(--text-main); margin-bottom: 36px; letter-spacing: -0.01em; }
   
@@ -99,7 +99,7 @@
   .suggestion-text { font-size: 14.5px; font-weight: 500; color: var(--text-main); }
   .suggestion-sub { font-size: 12.5px; color: var(--text-dim); line-height: 1.4; }
 
-  /* Message Stream Blocks Rendering Structures - Balanced center alignment comfort lane */
+  /* Message Stream Blocks Rendering Structures */
   .msg-container { display: flex; flex-direction: column; width: 100%; max-width: 1250px; margin: 0 auto; animation: textReveal 0.2s ease-out; }
   @keyframes textReveal { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
   
@@ -137,7 +137,7 @@
   .streaming-cursor::after { content: "▋"; animation: flashCursor 0.8s step-end infinite; color: var(--accent-color); margin-left: 2px; }
   @keyframes flashCursor { 50% { opacity: 0; } }
 
-  /* Expanded Input Terminal Container - Formatted to 1200px Max-Width Standard for Widescreen Layouts */
+  /* Expanded Input Terminal Container */
   .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 40px 32px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 35%); z-index: 30; }
   .composer-container { width: 100%; max-width: 1200px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 28px; padding: 16px 22px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); position: relative; transition: border-color 0.2s, box-shadow 0.2s; }
   .composer-container:focus-within { border-color: var(--text-dim); box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
@@ -176,13 +176,12 @@
   .action-danger-btn { background: #c94a4a; border: none; color: white; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; text-align: center; }
   .action-danger-btn:hover { background: #b03f3f; }
 
-  /* Backdrop Overlay Shield for Mobile/Tablet context panel triggers */
+  /* Backdrop Overlay Shield */
   .backdrop-shield { position: fixed; inset: 0; background: var(--overlay-color); z-index: 35; display: none; opacity: 0; transition: opacity 0.2s ease; }
   .backdrop-shield.active { display: block; opacity: 1; }
 
   /* HIGH FIDELITY ADAPTIVE RESPONSIVE LAYOUT BREAKPOINTS */
   @media (max-width: 1024px) {
-    /* TABLET WORKSPACE ADAPTER STYLE CONFORMS */
     .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); width: 280px; box-shadow: none; }
     .sidebar.open { transform: translateX(0); box-shadow: 8px 0 24px rgba(0,0,0,0.04); }
     .menu-toggle-btn { display: block; }
@@ -195,7 +194,6 @@
   }
 
   @media (max-width: 760px) {
-    /* MOBILE WORKSPACE ADAPTER STYLE CONFORMS */
     .sidebar { width: 270px; }
     .topbar { padding: 0 16px; min-height: 48px; }
     .menu-toggle-btn { display: block; margin-top: 4px; }
@@ -211,6 +209,13 @@
     .welcome-title { font-size: 26px; margin-bottom: 20px; padding: 0 8px; }
   }
 </style>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Pratham AI - Premium AI Assistant">
+
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/png" href="/icon-192.png">
 </head>
 <body>
 
@@ -683,6 +688,16 @@
   }
 
   sendBtn.addEventListener('click', handleSend);
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('Service Worker Registered'))
+      .catch(err => console.log(err));
+  });
+}
 </script>
 </body>
 </html>
