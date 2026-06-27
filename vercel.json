@@ -2,7 +2,11 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/pratham-ai.html"
+      "destination": "/index.html"
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "destination": "/.well-known/assetlinks.json"
     }
   ]
 }
