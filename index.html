@@ -128,7 +128,7 @@
   .action-danger-btn:hover { background: #b03f3f; }
   .backdrop-shield { position: fixed; inset: 0; background: var(--overlay-color); z-index: 35; display: none; opacity: 0; transition: opacity 0.2s ease; }
   .backdrop-shield.active { display: block; opacity: 1; }
-  /* VIDEO INDICATOR STYLE */
+  /* ADDED: VIDEO INDICATOR STYLE */
   #ai-indicator-wrapper { display: none; justify-content: flex-start; padding-left: 8px; margin-bottom: 10px; }
   #ai-status-indicator { border-radius: 50%; pointer-events: none; }
   @media (max-width: 1024px) {
@@ -256,6 +256,11 @@
   let idToken = localStorage.getItem('pratham_id_token') || null;
   let activeConvoId = localStorage.getItem('pratham_active_convo_id') ? parseInt(localStorage.getItem('pratham_active_convo_id')) : null;
   let busy = false;
+  
+  // VIDEO CONTROLLER INITIALIZATION
+  const indicator = document.getElementById('ai-status-indicator');
+  const indicatorWrapper = document.getElementById('ai-indicator-wrapper');
+
   const sidebar = document.getElementById('sidebar');
   const backdrop = document.getElementById('sidebarBackdrop');
   const chatCol = document.getElementById('chatCol');
@@ -263,10 +268,6 @@
   const sendBtn = document.getElementById('sendBtn');
   const profileToggleBtn = document.getElementById('profileToggleBtn');
   const profileMenu = document.getElementById('profileMenu');
-  
-  // VIDEO CONTROLLER
-  const indicator = document.getElementById('ai-status-indicator');
-  const indicatorWrapper = document.getElementById('ai-indicator-wrapper');
 
   if (typeof marked !== 'undefined') { 
     marked.setOptions({ breaks: true, gfm: true, highlight: function(code, lang) { const language = hljs.getLanguage(lang) ? lang : 'plaintext'; return hljs.highlight(code, { language }).value; } }); 
@@ -291,7 +292,7 @@
     busy = true; sendBtn.disabled = true;
     input.value = ''; input.style.height = 'auto';
     
-    // START ANIMATION
+    // TRIGGER ANIMATION
     indicatorWrapper.style.display = 'flex';
     indicator.src = '/assets/intro_anim.webm';
     indicator.loop = false;
