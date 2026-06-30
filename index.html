@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pratham AI - Advanced Premium AI Assistant Workspace</title>
+<title>Pratham AI - Advanced Premium Workspace Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
@@ -11,70 +11,34 @@
 
 <style>
   html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      box-sizing: border-box;
-      background-color: #f8f6f2;
-      color: #191919;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      overflow: hidden;
-      display: flex;
+      margin: 0; padding: 0; width: 100%; height: 100%; box-sizing: border-box;
+      background-color: #f8f6f2; color: #191919;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; overflow: hidden; display: flex;
   }
   :root {
-    --bg-main: #fbfaf7;
-    --bg-sidebar: #f3f0e8;
-    --bg-panel: #ffffff;
-    --border-color: #e2e0d8;
-    --text-main: #191919;
-    --text-secondary: #4a4a4a;
-    --text-dim: #85837d;
-    --accent-color: #cc6239;
-    --bubble-user: #f3f0e8;
+    --bg-main: #fbfaf7; --bg-sidebar: #f3f0e8; --bg-panel: #ffffff;
+    --border-color: #e2e0d8; --text-main: #191919; --text-secondary: #4a4a4a;
+    --text-dim: #85837d; --accent-color: #cc6239; --bubble-user: #f3f0e8;
     --overlay-color: rgba(25, 25, 25, 0.12);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #dedbd3; border-radius: 3px; }
   
-  /* SIDEBAR STYLING LAYOUTS */
+  /* SIDE PANEL CONTAINER STRUCT */
   .sidebar {
-      width: 280px;
-      flex-shrink: 0;
-      background-color: var(--bg-sidebar);
-      border-right: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      padding: 16px 12px;
-      z-index: 40;
+      width: 280px; flex-shrink: 0; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color);
+      display: flex; flex-direction: column; padding: 16px 12px; z-index: 40;
       transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .brand-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-family: 'Source Serif 4', Georgia, serif;
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--text-main);
-      margin-bottom: 20px;
-      padding: 4px 8px;
-  }
+  .brand-header { display: flex; align-items: center; gap: 10px; font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 600; color: var(--text-main); margin-bottom: 20px; padding: 4px 8px; }
   .brand-logo-img { width: 26px; height: 26px; object-fit: contain; border-radius: 6px; }
   
   .new-chat-btn {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: transparent;
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-      padding: 12px 16px;
-      border-radius: 99px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      margin-bottom: 16px;
-      width: 100%;
+      display: flex; align-items: center; justify-content: space-between; background: transparent;
+      border: 1px solid var(--border-color); color: var(--text-main); padding: 12px 16px; border-radius: 99px;
+      font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px; width: 100%;
       transition: background 0.2s, border-color 0.2s;
   }
   .new-chat-btn:hover { background-color: rgba(0, 0, 0, 0.03); border-color: var(--text-dim); }
@@ -83,41 +47,37 @@
   .convo-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
   .convo-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 14px 8px 6px; font-weight: 700; }
   .convo-item {
-      position: relative; padding: 10px 12px; border-radius: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s, color 0.2s;
+      position: relative; padding: 10px 12px; border-radius: 8px; font-size: 14px; color: var(--text-secondary);
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s, color 0.2s;
   }
   .convo-item:hover { background-color: rgba(0, 0, 0, 0.03); color: var(--text-main); }
   .convo-item.active { background-color: var(--bg-panel); color: var(--text-main); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
   .convo-title-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 24px; }
-  
-  .delete-convo-btn {
-      position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; display: none; padding: 4px; border-radius: 4px;
-  }
+  .delete-convo-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-dim); cursor: pointer; display: none; padding: 4px; border-radius: 4px; }
   .convo-item:hover .delete-convo-btn { display: flex; }
-  .delete-convo-btn:hover { color: #e55353; background-color: rgba(0,0,0,0.04); }
+  .delete-convo-btn:hover { color: #e55353; background-color: rgba(0, 0, 0, 0.04); }
   
   .sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color); position: relative; }
   .user-profile-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 12px; border: none; background: transparent; cursor: pointer; text-align: left; }
-  .user-profile-btn:hover { background-color: rgba(0, 0, 0, 0.03); }
-  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background-color: var(--accent-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background-color: var(--accent-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; text-transform: uppercase; }
   .user-info { flex: 1; min-width: 0; }
   .user-name { font-size: 13.5px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .plan-badge { font-size: 11px; color: var(--text-dim); }
   
   .profile-menu {
-      position: absolute; bottom: 65px; left: 0; right: 0; background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); display: none; flex-direction: column; z-index: 100; overflow: hidden;
+      position: absolute; bottom: 65px; left: 0; right: 0; background-color: var(--bg-panel); border: 1px solid var(--border-color);
+      border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); display: none; flex-direction: column; z-index: 100; overflow: hidden;
   }
   .profile-menu.open { display: flex; }
   .menu-item { padding: 12px 14px; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 10px; background: none; border: none; text-align: left; width: 100%; }
   .menu-item:hover { background-color: rgba(0,0,0,0.02); color: var(--text-main); }
   .menu-divider { height: 1px; background-color: var(--border-color); margin: 4px 0; }
 
-  /* CENTRAL MAIN CHAT DISPLAY STRUCT */
+  /* CHAT WORKSPACE AREA STRUCT */
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background-color: var(--bg-main); position: relative; align-items: center; width: 100%; }
-  .topbar {
-      width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; min-height: 56px; border-bottom: 1px solid var(--border-color);
-  }
+  .topbar { width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; min-height: 56px; border-bottom: 1px solid var(--border-color); }
   .menu-toggle-btn { background: none; border: none; font-size: 22px; color: var(--text-secondary); cursor: pointer; display: none; }
-  .centered-topbar-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); font-family: 'Inter', sans-serif; text-align: center; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .centered-topbar-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); text-align: center; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   
   .chat-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; width: 100%; -webkit-overflow-scrolling: touch; }
   .chat-col { width: 100%; max-width: 900px; margin: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 36px; flex: 1; }
@@ -126,14 +86,15 @@
   .welcome-title { font-family: 'Source Serif 4', Georgia, serif; font-size: 36px; font-weight: 400; color: var(--text-main); margin-bottom: 32px; }
   .suggestion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; width: 100%; }
   .suggestion-card {
-      background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px; text-align: left; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; flex-direction: column; gap: 8px; min-height: 115px;
+      background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px; text-align: left;
+      cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; flex-direction: column; gap: 8px; min-height: 115px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
   }
   .suggestion-card:hover { background-color: var(--bg-main); border-color: var(--text-dim); transform: translateY(-1px); }
   .suggestion-icon { font-size: 18px; color: var(--accent-color); }
   .suggestion-text { font-size: 14.5px; font-weight: 500; color: var(--text-main); }
   .suggestion-sub { font-size: 12.5px; color: var(--text-dim); line-height: 1.4; }
 
-  /* MESSAGE BUBBLES BLOCK WORKSPACE */
+  /* INTERACTIVE TEXT LAYER PLACEMENTS */
   .msg-container { display: flex; flex-direction: column; width: 100%; padding: 8px 0; animation: textReveal 0.2s ease-out; }
   @keyframes textReveal { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
   .msg-sender-label { font-size: 11px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -144,16 +105,10 @@
   .msg-row.user .msg {
       max-width: 85%; font-family: 'Inter', sans-serif; font-size: 15px; background-color: var(--bubble-user); padding: 12px 18px; border-radius: 18px; line-height: 1.52; box-shadow: 0 4px 12px rgba(0,0,0,0.02);
   }
-  .msg h1, .msg h2, .msg h3 { font-family: 'Source Serif 4', serif; margin: 1.2em 0 0.5em; font-weight: 600; }
-  .msg p { margin-bottom: 0.8em; } .msg p:last-child { margin-bottom: 0; }
-  .msg table { display: block; border-collapse: collapse; width: 100%; margin: 1.5em 0; font-size: 14.5px; overflow-x: auto; font-family: 'Inter', sans-serif; }
-  .msg th, .msg td { border: 1px solid var(--border-color); padding: 10px 14px; text-align: left; }
-  .msg th { background-color: #f3f0e8; font-weight: 600; }
-  .msg code { background-color: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13.5px; color: #b84a25; }
   .msg pre { background-color: #f8f6f0; border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; font-family: monospace; position: relative; }
   .msg pre code { background: transparent; padding: 0; color: #24292e; font-size: 13.5px; }
 
-  /* INTERACTIVE COMPOSER STYLINGS */
+  /* DYNAMIC TERMINAL AND INTERFACE INPUT CONTROLS */
   .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 32px 24px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 35%); z-index: 30; }
   .composer-container {
       width: 100%; max-width: 860px; border: 1px solid var(--border-color); border-radius: 24px; padding: 14px 20px; position: relative; background-color: rgba(255,255,255,0.9); backdrop-filter: blur(20px); box-shadow: 0 4px 20px rgba(0,0,0,0.02);
@@ -168,82 +123,58 @@
   }
   .tool-pill-btn:hover { background-color: #e8e5dc; color: var(--text-main); }
   .send-action-btn {
-      background-color: var(--text-main); border: none; color: var(--bg-main); width: 32px; height: 32px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.1s;
+      background-color: var(--text-main); border: none; color: var(--bg-main); width: 32px; height: 32px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
   .send-action-btn:disabled { background-color: var(--border-color); color: var(--text-dim); cursor: not-allowed; }
-  .send-action-btn:not(:disabled):hover { background-color: var(--accent-color); color: #fff; transform: scale(1.02); }
 
-  /* CLAUDE-STYLE PREVIEW CANVAS ARTIFACT PANEL */
+  /* ARTIFACT COMPONENT SIDE PANEL PREVIEW CANVAS */
   .preview-panel {
       position: fixed; top: 0; right: -720px; width: 700px; max-width: 92vw; height: 100dvh; background-color: var(--bg-panel); border-left: 1px solid var(--border-color); box-shadow: -8px 0 32px rgba(0,0,0,0.06); z-index: 200; display: flex; flex-direction: column; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .preview-panel.open { right: 0; }
-  .preview-panel-topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); font-size: 14px; font-weight: 500; flex-shrink: 0; gap: 8px; background-color: #faf9f6; }
-  .preview-panel-topbar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
-  .preview-action-btn { background: none; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; color: var(--text-secondary); }
-  .preview-action-btn:hover { background-color: var(--bg-sidebar); }
-  .preview-panel-body { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; background-color: #ffffff; }
+  .preview-panel-topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); font-size: 14px; font-weight: 500; flex-shrink: 0; background-color: #faf9f6; }
+  .preview-panel-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; background-color: #ffffff; }
   .preview-panel-body iframe { width: 100%; height: 100%; border: none; background-color: #fff; }
   .preview-panel-body pre { padding: 20px; overflow: auto; height: 100%; font-size: 13.5px; background-color: #fcfbf9; margin: 0; font-family: monospace; color: #24292e; line-height: 1.5; }
   .preview-panel-backdrop { position: fixed; inset: 0; background-color: rgba(0,0,0,0.1); z-index: 199; display: none; }
   .preview-panel-backdrop.active { display: block; }
 
-  /* PYTHON WASM IN-BROWSER TERMINAL SCREEN PANEL */
+  /* PYODIDE LINUX STANDALONE RUNTIME SIMULATOR SCREEN PANEL */
   .terminal-panel {
       position: fixed; bottom: 0; left: 280px; right: 0; height: 320px; background-color: #161616; border-top: 2px solid #2d2d2d; z-index: 150; display: none; flex-direction: column; font-family: 'Courier New', monospace; box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
   }
   .terminal-panel.open { display: flex; }
-  .terminal-topbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background-color: #0f0f0f; color: #999; font-size: 13px; border-bottom: 1px solid #252525; flex-shrink: 0; }
+  .terminal-topbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background-color: #0f0f0f; color: #999; font-size: 13px; border-bottom: 1px solid #252525; }
   .terminal-output { flex: 1; overflow-y: auto; padding: 12px 16px; color: #e4e4e4; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
-  .terminal-input-row { display: flex; align-items: center; padding: 8px 16px; border-top: 1px solid #252525; background-color: #111111; flex-shrink: 0; }
+  .terminal-input-row { display: flex; align-items: center; padding: 8px 16px; border-top: 1px solid #252525; background-color: #111111; }
   .terminal-prompt { color: #52c41a; margin-right: 8px; font-weight: bold; }
   .terminal-input { flex: 1; background: transparent; border: none; outline: none; color: #52c41a; font-family: 'Courier New', monospace; font-size: 13.5px; }
   .terminal-run-btn { background-color: #237804; border: none; color: #fff; padding: 4px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-  .terminal-run-btn:hover { background-color: #389e0d; }
   .out-error { color: #f5222d; } .out-success { color: #52c41a; } .out-input { color: #1890ff; }
 
-  /* IMAGE CONTEXT ATTACHMENT CHIPS BUTTON */
   .attachment-chip-bar { display: none; padding-bottom: 10px; flex-direction: row; flex-wrap: wrap; gap: 6px; width: 100%; }
   .attachment-preview-img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
-  .remove-file-cross-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 14px; margin-left: 4px; padding: 0 2px; }
-  .remove-file-cross-btn:hover { color: #e55353; }
-
-  /* MISC ANIMATION INTERFACES */
-  .thinking-state { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); padding: 4px 0; font-family: 'Inter', sans-serif; }
+  .remove-file-cross-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 14px; margin-left: 4px; }
+  
+  .thinking-state { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); padding: 4px 0; }
   .dot-flashing { width: 6px; height: 6px; border-radius: 5px; background-color: var(--accent-color); animation: dotFlashing 1s infinite linear alternate; position: relative; }
-  .dot-flashing::before, .dot-flashing::after { content: ''; display: inline-block; position: absolute; top: 0; width: 6px; height: 6px; border-radius: 5px; background-color: var(--accent-color); animation: dotFlashing 1s infinite alternate; }
-  .dot-flashing::before { left: -12px; animation-delay: 0s; } .dot-flashing::after { left: 12px; animation-delay: 0.8s; }
   @keyframes dotFlashing { 0% { background-color: var(--accent-color); } 50%, 100% { background-color: rgba(204, 98, 57, 0.15); } }
   
   .loading-video-element { max-width: 240px; border-radius: 12px; margin-top: 4px; display: block; }
-  .generated-image-result { max-width: 100%; max-width: 500px; border-radius: 14px; margin-top: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); cursor: pointer; transition: opacity 0.2s; }
-  .generated-image-result:hover { opacity: 0.95; }
-  .generated-image-loading { color: var(--text-dim); font-size: 14px; font-style: italic; margin-top: 8px; }
-  .long-response-file-link { display: flex; align-items: center; gap: 8px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 16px; margin-top: 14px; font-size: 13.5px; color: var(--text-secondary); text-decoration: none; max-width: 450px; }
-  .long-response-file-link u { color: var(--accent-color); }
+  .generated-image-result { max-width: 500px; border-radius: 14px; margin-top: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); cursor: pointer; }
+  .code-preview-btn { display: inline-flex; align-items: center; gap: 6px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); cursor: pointer; margin-right: 4px; }
 
-  /* CORE MODAL ARCHITECTURES */
   .modal-overlay { position: fixed; inset: 0; background-color: var(--overlay-color); z-index: 100; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
   .modal-overlay.open { display: flex; }
-  .modal-frame { background-color: var(--bg-panel); border: 1px solid var(--border-color); width: 100%; max-width: 500px; border-radius: 16px; box-shadow: 0 12px 36px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; animation: modalPop 0.15s cubic-bezier(0, 0, 0.2, 1); }
-  @keyframes modalPop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+  .modal-frame { background-color: var(--bg-panel); border: 1px solid var(--border-color); width: 100%; max-width: 500px; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
   .modal-topbar { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: #faf9f6; }
-  .modal-dismiss-btn { background: none; border: none; font-size: 18px; color: var(--text-dim); cursor: pointer; }
-  .modal-content-panel { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
 
-  /* RESPONSIVE CONTROL MEDIA QUERY STACK */
   @media (max-width: 1024px) {
     .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); width: 280px; box-shadow: none; }
     .sidebar.open { transform: translateX(0); box-shadow: 8px 0 24px rgba(0,0,0,0.05); }
     .menu-toggle-btn { display: block; }
     .preview-panel { width: 100vw; right: -100vw; }
     .terminal-panel { left: 0; }
-  }
-  @media (max-width: 760px) {
-    .composer-wrap { padding: 0 12px 16px; }
-    .chat-col { padding: 16px; gap: 24px; }
-    .welcome-title { font-size: 26px; }
-    .msg-row.user .msg { max-width: 90%; }
   }
 </style>
 </head>
@@ -258,7 +189,7 @@
     </div>
 
     <button class="new-chat-btn" id="newChatBtn">
-      <span>New workspace</span>
+      <span>New workspace context</span>
       <span class="shortcut-badge">⌘K</span>
     </button>
 
@@ -270,17 +201,15 @@
       <button class="user-profile-btn" id="profileToggleBtn" style="display:none;">
         <div class="user-avatar" id="userAvatarText">P</div>
         <div class="user-info">
-          <div id="profileName" class="user-name">Loading Profile...</div>
-          <div class="plan-badge">Premium Compute Allocation</div>
+          <div id="profileName" class="user-name">Loading...</div>
+          <div class="plan-badge">Premium Computing Access Node</div>
         </div>
-        <span style="font-size: 10px; color: var(--text-dim);">▲</span>
       </button>
 
       <div class="profile-menu" id="profileMenu">
-        <button class="menu-item" id="menuProfileBtn">👤 Account Configuration</button>
-        <button class="menu-item" id="menuSettingsBtn">⚙️ System Settings</button>
+        <button class="menu-item" id="menuSettingsBtn">⚙️ Workspace Settings</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="menuLogoutBtn" style="color: var(--accent-color);">🚪 Terminate Session</button>
+        <button class="menu-item" id="menuLogoutBtn" style="color: var(--accent-color);">🚪 Kill Session</button>
       </div>
     </div>
   </div>
@@ -288,9 +217,9 @@
   <div class="main">
     <div class="topbar">
       <button class="menu-toggle-btn" id="menuBtn">☰</button>
-      <div class="centered-topbar-title" id="topbarTitle">Pratham AI Engine Console</div>
+      <div class="centered-topbar-title" id="topbarTitle">System Control Management Line Interface</div>
     </div>
-
+    
     <div class="chat-scroll" id="chatScrollContainer">
       <div class="chat-col" id="chatCol"></div>
     </div>
@@ -298,22 +227,16 @@
     <div class="composer-wrap">
       <div class="composer-container">
         <div class="attachment-chip-bar" id="attachmentChipBar"></div>
-        <textarea id="input" rows="1" placeholder="Type a message or paste structural code configurations..." autocomplete="off"></textarea>
-
+        <textarea id="input" rows="1" placeholder="Issue high-level terminal instructions or drop system files..."></textarea>
         <div class="composer-actions-bar">
           <div class="composer-left-tools">
-            <button class="tool-pill-btn" id="attachBtn" title="Inject structural code assets">
-              <span>📎</span><span style="font-size: 12px;">Attach</span>
-            </button>
+            <button class="tool-pill-btn" id="attachBtn"><span>📎</span><span>Attach File</span></button>
             <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf,image/*" style="display:none;">
-
-            <button class="tool-pill-btn" id="terminalToggleBtn" title="Launch Local WASM Sandboxed Python Emulator">
-              <span>⬛</span><span style="font-size: 12px;">Terminal Core</span>
-            </button>
+            <button class="tool-pill-btn" id="terminalToggleBtn"><span>⬛</span><span>Terminal Sandbox</span></button>
+            <button class="tool-pill-btn" id="educationGlobalBtn" style="background-color: #2d6a4f; color: #fff;"><span>📚</span><span>Compile Repos PDFs</span></button>
           </div>
-
           <div class="composer-right-tools">
-            <button class="send-action-btn" id="sendBtn" aria-label="Transmit dynamic telemetry block" disabled>↑</button>
+            <button class="send-action-btn" id="sendBtn" disabled>↑</button>
           </div>
         </div>
       </div>
@@ -322,37 +245,20 @@
 
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-frame">
-      <div class="modal-topbar">
-        <h3>System Operations & Parameters</h3>
-        <button class="modal-dismiss-btn" id="closeSettingsModal">✕</button>
-      </div>
+      <div class="modal-topbar"><h3>Operation Properties</h3><button class="modal-dismiss-btn" id="closeSettingsModal">✕</button></div>
       <div class="modal-content-panel">
-        <div class="setting-row">
-          <div class="setting-info">
-            <label>Authenticated Operator Signature Target</label>
-            <div class="setting-subtext" id="settingsEmailField">No Verified Footprint Found</div>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <label>Interface Localization Vector Map</label>
-            <div class="setting-subtext">Adjust standard text translation mapping weights</div>
-          </div>
-          <select class="form-select-control"><option>English (US) Production v4</option></select>
-        </div>
-        <div class="menu-divider"></div>
-        <button class="action-danger-btn" id="clearAllChatsBtn">Flush Local Memory & Context Ledgers</button>
+        <div class="setting-row"><div class="setting-info"><label>Verified Email Signature</label><div class="setting-subtext" id="settingsEmailField">Disconnected</div></div></div>
+        <button class="action-danger-btn" id="clearAllChatsBtn">Flush Identity Engine Memory Cache</button>
       </div>
     </div>
   </div>
 
   <div class="preview-panel" id="previewPanel">
     <div class="preview-panel-topbar">
-      <span id="previewPanelTitle">Artifact Canvas Object Viewer</span>
-      <div style="display:flex; gap:6px;">
-        <button class="preview-action-btn" id="previewOpenNewTab" title="Isolate process to independent tab window">↗</button>
-        <button class="preview-action-btn" id="previewDownloadBtn" title="Commit vector bytes object to persistent storage disk">⬇</button>
-        <button class="preview-action-btn" id="previewCloseBtn">✕</button>
+      <span id="previewPanelTitle">Artifact Canvas Viewer</span>
+      <div>
+        <button class="preview-action-btn" id="previewDownloadBtn">⬇ Download Asset</button>
+        <button class="preview-action-btn" id="previewCloseBtn">✕ Close</button>
       </div>
     </div>
     <div class="preview-panel-body" id="previewPanelBody"></div>
@@ -360,869 +266,311 @@
   <div class="preview-panel-backdrop" id="previewBackdrop"></div>
 
   <div class="terminal-panel" id="terminalPanel">
-    <div class="terminal-topbar">
-      <span>⬛ Core WASM Python Sandboxed Terminal Output Engine</span>
-      <div style="display:flex; gap:6px;">
-        <button class="preview-action-btn" id="clearTerminalBtn" style="color:#aaa; border-color:#3a3a3a;">Clear Screen</button>
-        <button class="preview-action-btn" id="closeTerminalBtn" style="color:#aaa; border-color:#3a3a3a;">✕</button>
-      </div>
-    </div>
+    <div class="terminal-topbar"><span>⬛ Pyodide WebAssembly Local VFS Runtime Sandbox [No Server Agents Attached]</span><button class="preview-action-btn" id="closeTerminalBtn">✕</button></div>
     <div class="terminal-output" id="terminalOutput"></div>
     <div class="terminal-input-row">
       <span class="terminal-prompt">&gt;&gt;&gt;</span>
-      <input type="text" class="terminal-input" id="terminalInput" placeholder="Execute client-side Python execution packages inside isolated browser layers...">
-      <button class="terminal-run-btn" id="terminalRunBtn">Run Packet</button>
+      <input type="text" class="terminal-input" id="terminalInput" placeholder="Natively compute Python layout code trees outside host metrics...">
+      <button class="terminal-run-btn" id="terminalRunBtn">Run Code Block</button>
     </div>
   </div>
 
-<script src="https://js.puter.com/v2/"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 
 <script>
-  // Global Endpoint Settings
   let apiUrl = 'https://web-production-503208.up.railway.app';
-  
   let sessionToken = localStorage.getItem('pratham_session_token') || null;
   let cachedUser = JSON.parse(localStorage.getItem('pratham_user') || 'null');
   let activeConvoId = localStorage.getItem('pratham_active_convo_id') ? parseInt(localStorage.getItem('pratham_active_convo_id')) : null;
-  
-  let busy = false;
-  let pendingAttachment = null;
-  let pendingAttachmentIsImage = false;
-  let currentPreviewBlob = null;
-  let currentPreviewFilename = "compiled_artifact";
-  
-  let pyodideInstance = null;
-  let pyodideLoadingState = false;
+  let busy = false, pendingAttachment = null, pendingAttachmentIsImage = false;
+  let pyodideInstance = null, pyodideLoadingState = false;
+  let activeArtifactContent = '', activeArtifactFilename = 'compiled_resource.txt';
 
-  const sidebar = document.getElementById('sidebar');
-  const backdrop = document.getElementById('sidebarBackdrop');
-  const chatCol = document.getElementById('chatCol');
-  const input = document.getElementById('input');
-  const sendBtn = document.getElementById('sendBtn');
-  const profileToggleBtn = document.getElementById('profileToggleBtn');
-  const profileMenu = document.getElementById('profileMenu');
-
-  // Configure high-performance string highlights pipeline
-  if (typeof marked !== 'undefined') {
-    marked.setOptions({
-      breaks: true, gfm: true,
-      highlight: function(code, lang) {
-        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-        return hljs.highlight(code, { language }).value;
-      }
-    });
-  }
-
-  // ============================================================================
-  // 1. ASYNC DEPENDENCY ERROR ENGINE LOOP (CRITICAL FIX FOR "google is not defined")
-  // ============================================================================
-  function evaluateExternalGoogleDependencyLoop() {
+  // FIX: Safe runtime asset checker tracking loop prevents "google is not defined" exceptions
+  function evaluateGoogleDependencyLoop() {
     if (typeof google !== 'undefined' && google.accounts) {
-      loggerClientLog("Google Script Asset Vector fully initialized inside execution scope.");
-      google.accounts.id.initialize({
-        client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-        callback: handleGoogleAuthenticationCallback
-      });
-      if (sessionToken && cachedUser) { setupUserInterfaceMatrices(cachedUser); } else { renderLoggedOutWelcomeState(); }
-    } else {
-      setTimeout(evaluateExternalGoogleDependencyLoop, 100);
-    }
+      google.accounts.id.initialize({ client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com", callback: handleGoogleCallback });
+      if (sessionToken && cachedUser) { setupUserUI(cachedUser); } else { renderLoggedOutState(); }
+    } else { setTimeout(evaluateGoogleDependencyLoop, 100); }
   }
-  document.addEventListener('DOMContentLoaded', evaluateExternalGoogleDependencyLoop);
+  document.addEventListener('DOMContentLoaded', evaluateGoogleDependencyLoop);
 
-  function loggerClientLog(msg) { console.log(`[CLIENT_RUNTIME_LOG] -> ${msg}`); }
+  // Graphical Element Event Mapping Configuration Blocks
+  document.getElementById('menuBtn').addEventListener('click', () => { sidebar.classList.toggle('open'); });
+  document.getElementById('newChatBtn').addEventListener('click', () => { activeConvoId = null; localStorage.removeItem('pratham_active_convo_id'); renderNewChatStateOptions(); });
+  profileToggleBtn.addEventListener('click', () => { document.getElementById('profileMenu').classList.toggle('open'); });
+  document.getElementById('menuSettingsBtn').addEventListener('click', () => { document.getElementById('settingsModal').classList.add('open'); });
+  document.getElementById('closeSettingsModal').addEventListener('click', () => { document.getElementById('settingsModal').classList.remove('open'); });
+  document.getElementById('menuLogoutBtn').addEventListener('click', () => { triggerSignOut(); });
+  input.addEventListener('input', () => { sendBtn.disabled = input.value.trim().length === 0 && !pendingAttachment; });
 
-  // Navigation Interaction Hooks
-  document.getElementById('menuBtn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    sidebar.classList.contains('open') ? closeNavigationSidebar() : openNavigationSidebar();
-  });
-  backdrop.addEventListener('click', closeNavigationSidebar);
-
-  function closeNavigationSidebar() { sidebar.classList.remove('open'); backdrop.classList.remove('active'); }
-  function openNavigationSidebar() { sidebar.classList.add('open'); backdrop.classList.add('active'); }
-
-  profileToggleBtn.addEventListener('click', (e) => { e.stopPropagation(); profileMenu.classList.toggle('open'); });
-  document.addEventListener('click', (e) => { if (!profileMenu.contains(e.target) && e.target !== profileToggleBtn) profileMenu.classList.remove('open'); });
-
-  const settingsModal = document.getElementById('settingsModal');
-  document.getElementById('menuSettingsBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
-  document.getElementById('menuProfileBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
-  document.getElementById('closeSettingsModal').addEventListener('click', () => settingsModal.classList.remove('open'));
-  document.getElementById('menuLogoutBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); triggerSessionEraseSequence(); });
-
-  // Input Field Adjustments
-  input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = input.value.trim().length === 0 && !pendingAttachment;
-  });
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (!sendBtn.disabled && !busy) handleComposerTransmissionSequence();
-    }
-  });
-
-  window.addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      document.getElementById('newChatBtn').click();
-    }
-  });
-
-  function selectSuggestionPrompt(promptValue) {
-    if (busy) return;
-    input.value = promptValue;
-    input.focus();
-    input.dispatchEvent(new Event('input'));
-  }
-
-  // ============================================================================
-  // 2. ATTACHMENTS SYSTEM AND VISION RECOGNITION PIPELINES
-  // ============================================================================
+  // File Stream Processing Elements Mapping
   const fileInput = document.getElementById('fileInput');
   document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
-
   fileInput.addEventListener('change', () => {
-    const fileTarget = fileInput.files[0];
-    if (!fileTarget) return;
-    pendingAttachment = fileTarget;
-    pendingAttachmentIsImage = fileTarget.type.startsWith('image/');
-    renderActiveAttachmentChip();
-    fileInput.value = "";
+    const file = fileInput.files[0]; if (!file) return;
+    pendingAttachment = file; pendingAttachmentIsImage = file.type.startsWith('image/');
+    document.getElementById('attachmentChipBar').style.display = 'flex';
+    document.getElementById('attachmentChipBar').innerHTML = `<div class="attachment-chip">📎 Mapped Context Resource File: <strong>${file.name}</strong> <button class="remove-file-cross-btn" onclick="clearAttachmentSlot()">✕ Remove</button></div>`;
     sendBtn.disabled = false;
   });
 
-  function renderActiveAttachmentChip() {
-    const chipBarNode = document.getElementById('attachmentChipBar');
-    if (!pendingAttachment) {
-      chipBarNode.innerHTML = '';
-      chipBarNode.style.display = 'none';
-      return;
-    }
-    chipBarNode.style.display = 'flex';
-    if (pendingAttachmentIsImage) {
-      const fileReaderInstance = new FileReader();
-      fileReaderInstance.onload = (eventElement) => {
-        chipBarNode.innerHTML = `
-          <div class="attachment-chip">
-            <img src="${eventElement.target.result}" class="attachment-preview-img">
-            <span>Visual Matrix: ${pendingAttachment.name}</span>
-            <button type="button" class="remove-file-cross-btn" id="removeAttachmentBtn">✕</button>
-          </div>`;
-        document.getElementById('removeAttachmentBtn').addEventListener('click', clearAttachmentSlot);
-      };
-      fileReaderInstance.readAsDataURL(pendingAttachment);
-    } else {
-      chipBarNode.innerHTML = `
-        <div class="attachment-chip">
-          <span>📎 Code Record: ${pendingAttachment.name}</span>
-          <button type="button" class="remove-file-cross-btn" id="removeAttachmentBtn">✕</button>
-        </div>`;
-      document.getElementById('removeAttachmentBtn').addEventListener('click', clearAttachmentSlot);
-    }
-  }
-
-  function clearAttachmentSlot() {
-    pendingAttachment = null;
-    pendingAttachmentIsImage = false;
-    renderActiveAttachmentChip();
-    sendBtn.disabled = input.value.trim().length === 0;
-  }
-
-  function convertFileToBase64Bytes(targetFile) {
-    return new Promise((resolve, reject) => {
-      const temporaryReader = new FileReader();
-      temporaryReader.onload = () => resolve(temporaryReader.result.split(',')[1]);
-      temporaryReader.onerror = errorEvent => reject(errorEvent);
-      temporaryReader.readAsDataURL(targetFile);
-    });
-  }
-
-  async function executeContextAssetUploadPipeline(conversationId) {
-    if (!pendingAttachment || !conversationId) return;
-    if (pendingAttachmentIsImage) {
-      try {
-        const base64BytesData = await convertFileToBase64Bytes(pendingAttachment);
-        const engineQueryResponse = await fetch(`${apiUrl}/analyze-image`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
-          body: JSON.stringify({ image_base64: base64BytesData, mime_type: pendingAttachment.type, conversation_id: conversationId })
-        });
-        const serverResolutionData = await engineQueryResponse.json();
-        if (serverResolutionData.description) {
-          addMessageTrackingNodeToDOM('model', `_📷 Visual Array Input Diagnostics Completed:\n${serverResolutionData.description.substring(0, 160)}..._`);
-        }
-      } catch (ex) { loggerClientLog(`Vision pipeline transport fault: ${str(ex)}`); }
-    } else {
-      const standardFormData = new FormData();
-      standardFormData.append("file", pendingAttachment);
-      standardFormData.append("conversation_id", conversationId);
-      try {
-        await fetch(`${apiUrl}/upload`, { method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }, body: standardFormData });
-      } catch (ex) { loggerClientLog(`Document infrastructure storage fault: ${str(ex)}`); }
-    }
-    pendingAttachment = null;
-    pendingAttachmentIsImage = false;
-    renderActiveAttachmentChip();
-  }
+  function clearAttachmentSlot() { pendingAttachment = null; document.getElementById('attachmentChipBar').style.display = 'none'; sendBtn.disabled = input.value.trim().length === 0; }
 
   // ============================================================================
-  // 3. SECURE AUTHENTICATION PIPELINES
+  // CLIENT WORKSPACE LOCAL INTERFACE WASM RUNTIME METHOD MATRIX (PYODIDE VFS)
   // ============================================================================
-  async function handleGoogleAuthenticationCallback(googleIdentityPayload) {
+  async function initPyodideSandbox() {
+    if (pyodideInstance) return pyodideInstance;
+    if (pyodideLoadingState) { while (pyodideLoadingState) await new Promise(r => setTimeout(r, 100)); return pyodideInstance; }
+    pyodideLoadingState = true;
+    printTermLine('Mounting standard hardware machine translation configurations into local client layer...', 'out-success');
+    pyodideInstance = await loadPyodide();
+    pyodideInstance.runPython("""
+      import sys
+      class OutCatch:
+          def __init__(self): self.buf = ""
+          def write(self, t): self.buf += t
+          def flush(self): pass
+      sys.stdout = OutCatch(); sys.stderr = OutCatch()
+    """);
+    pyodideLoadingState = false; printTermLine('WASM Machine Layer Mapping Complete. Sandbox Terminal Operations Unlocked.', 'out-success');
+    return pyodideInstance;
+  }
+
+  function printTermLine(text, cls = '') {
+    const out = document.getElementById('terminalOutput');
+    const row = document.createElement('div'); row.className = cls; row.textContent = text;
+    out.appendChild(row); out.scrollTop = out.scrollHeight;
+  }
+
+  async function executePythonPayloadOnWasmClient(code) {
+    const py = await initPyodideSandbox(); if (!py) return;
+    printTermLine(`>>> Dispatched script runtime matrix blocks into isolated space`, 'out-input');
     try {
-      const networkResponse = await fetch(`${apiUrl}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_token: googleIdentityPayload.credential })
-      });
-      if (!networkResponse.ok) throw new Error("Credentials handshake mapping rejected by core API server.");
-      const applicationSessionPayload = await networkResponse.json();
+      const snapshotBefore = py.FS.readdir('.');
+      py.runPython("sys.stdout.buf = ''; sys.stderr.buf = ''");
+      await py.runPythonAsync(code);
       
-      sessionToken = applicationSessionPayload.session_token;
-      cachedUser = applicationSessionPayload.user;
-      localStorage.setItem('pratham_session_token', sessionToken);
-      localStorage.setItem('pratham_user', JSON.stringify(cachedUser));
+      const stdout = py.runPython("sys.stdout.buf"); if (stdout) printTermLine(stdout);
+      const stderr = py.runPython("sys.stderr.buf"); if (stderr) printTermLine(stderr, 'out-error');
 
-      setupUserInterfaceMatrices(cachedUser);
-    } catch (faultException) { triggerSessionEraseSequence(); }
+      const snapshotAfter = py.FS.readdir('.');
+      const newlyCreatedFiles = snapshotAfter.filter(filename => !snapshotBefore.includes(filename) && filename !== "." && filename !== "..");
+
+      newlyCreatedFiles.forEach(filename => {
+          const rawBytes = py.FS.readFile(filename);
+          const downloadBlob = new Blob([rawBytes], { type: "application/octet-stream" });
+          const visualUrl = URL.createObjectURL(downloadBlob);
+
+          const anchorChip = document.createElement('a');
+          anchorChip.href = visualUrl; anchorChip.download = filename;
+          anchorChip.className = 'code-preview-btn';
+          anchorChip.style.cssText = 'display: inline-flex; margin-top: 8px; color: #52c41a; border-color: #237804; background-color: #1f2d1f; font-family: monospace;';
+          anchorChip.innerHTML = `⚙️ Download Local Sandbox File Output: <strong>${filename}</strong>`;
+          document.getElementById('terminalOutput').appendChild(anchorChip);
+          printTermLine(`[VFS LAYER ALERT]: Captured native disk write mutation sequence for file artifact: ${filename}`, 'out-success');
+      });
+    } catch (err) { printTermLine(err.message, 'out-error'); }
   }
 
-  function setupUserInterfaceMatrices(operatorProfileObject) {
-    document.getElementById('googleSignInContainer').style.display = 'none';
-    profileToggleBtn.style.display = 'flex';
-    document.getElementById('userAvatarText').textContent = (operatorProfileObject.name || 'P').charAt(0);
-    document.getElementById('profileName').textContent = operatorProfileObject.name || 'Pratham AI Analyst';
-    document.getElementById('settingsEmailField').textContent = operatorProfileObject.email || 'active_connection@pratham.ai';
+  // ============================================================================
+  // UNBOUNDED POLLINATIONS AI TEXT-TO-IMAGE DESCRIPTOR CONVERTOR PIPELINE
+  // ============================================================================
+  async function processCreativeImageGenerationRequests(rawString, wrapperNode) {
+    const match = rawString.match(/\[GENERATE_IMAGE:\s*([^\]]+)\]/);
+    if (!match) return rawString;
+    const promptParam = match[1].trim();
     
-    if (activeConvoId) { loadSelectedWorkspaceHistory(activeConvoId); } else { renderNewChatStateOptions(); }
-    syncCloudConversationsLedger();
-  }
+    const loader = document.createElement('div'); loader.className = 'generated-image-loading';
+    loader.textContent = 'Engaging Pollinations decentralized GPU clusters to paint visual layout frames...';
+    wrapperNode.appendChild(loader);
 
-  function triggerSessionEraseSequence() {
-    sessionToken = null; activeConvoId = null; cachedUser = null;
-    ['pratham_session_token', 'pratham_user', 'pratham_active_convo_id'].forEach(keyTarget => localStorage.removeItem(keyTarget));
-    profileToggleBtn.style.display = 'none';
-    document.getElementById('convoList').innerHTML = '';
-    renderLoggedOutWelcomeState();
-  }
-
-  function renderLoggedOutWelcomeState() {
-    chatCol.innerHTML = `
-      <div class="welcome-state">
-        <h1 class="welcome-title">Secure AI Terminal Environment</h1>
-        <p style="color: var(--text-secondary); font-size: 15.5px; margin-bottom: 28px;">Authorization token required to route execution layers.</p>
-        <div id="googleSignInContainerMain"></div>
-      </div>`;
-    google.accounts.id.renderButton(document.getElementById("googleSignInContainerMain"), { theme: "filled_blue", size: "large", text: "continue_with" });
-    document.getElementById('googleSignInContainer').style.display = 'block';
-    input.disabled = true;
-    input.placeholder = "Awaiting authorized session signature credentials tracking protocol...";
-  }
-
-  function renderNewChatStateOptions() {
-    document.getElementById('topbarTitle').textContent = "New Active Engine Console";
-    chatCol.innerHTML = `
-      <div class="welcome-state">
-        <h1 class="welcome-title">How can Pratham AI assist your workflow today?</h1>
-        <div class="suggestion-grid">
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Write a highly explicit database initialization loop mapping WAL modes inside Python')">
-            <span class="suggestion-icon">💻</span>
-            <span class="suggestion-text">Compile System Scripts</span>
-            <span class="suggestion-sub">Generate data analysis code modules</span>
-          </div>
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Synthesize a hyper-detailed layout for an underwater laboratory city [GENERATE_IMAGE: brief prompt reference]')">
-            <span class="suggestion-icon">🎨</span>
-            <span class="suggestion-text">Render Creative Canvas</span>
-            <span class="suggestion-sub">Trigger Flux text-to-image runtime</span>
-          </div>
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Analyze structural alignment limits within an industrial environment context')">
-            <span class="suggestion-icon">📊</span>
-            <span class="suggestion-text">Evaluate Data Matrices</span>
-            <span class="suggestion-sub">Condense long engineering sheets</span>
-          </div>
-        </div>
-      </div>`;
-    input.disabled = false;
-    input.placeholder = "Pass query string inputs or call repository asset files using @education...";
-  }
-
-  async function syncCloudConversationsLedger() {
-    if (!sessionToken) return;
-    try {
-      const response = await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${sessionToken}` }});
-      if (response.status === 401) { triggerSessionEraseSequence(); return; }
-      renderSidebarNavigationList(await response.json());
-    } catch (ex) {}
-  }
-
-  function renderSidebarNavigationList(conversationsArray) {
-    const listNode = document.getElementById('convoList');
-    listNode.innerHTML = '';
-    if (!conversationsArray.length) return;
-
-    const separatorLabel = document.createElement('div');
-    separatorLabel.className = 'convo-label';
-    separatorLabel.textContent = 'Active Execution Channels';
-    listNode.appendChild(separatorLabel);
-
-    conversationsArray.forEach(convoNode => {
-      const itemRowElement = document.createElement('div');
-      itemRowElement.className = `convo-item ${convoNode.id === activeConvoId ? 'active' : ''}`;
-      
-      const titleSpanElement = document.createElement('span');
-      titleSpanElement.className = 'convo-title-text';
-      titleSpanElement.textContent = convoNode.title || 'Historical Session Link';
-      itemRowElement.appendChild(titleSpanElement);
-
-      const deleteIconBtn = document.createElement('button');
-      deleteIconBtn.className = 'delete-convo-btn';
-      deleteIconBtn.innerHTML = '✕';
-      deleteIconBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm("Confirm permanent data wipe command sequence for this conversation row?")) {
-          await fetch(`${apiUrl}/conversations/${convoNode.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${sessionToken}` }});
-          if (activeConvoId === convoNode.id) {
-            activeConvoId = null; localStorage.removeItem('pratham_active_convo_id'); renderNewChatStateOptions();
-          }
-          syncCloudConversationsLedger();
-        }
-      });
-      itemRowElement.appendChild(deleteIconBtn);
-      
-      titleSpanElement.addEventListener('click', () => {
-        loadSelectedWorkspaceHistory(convoNode.id);
-        if (window.innerWidth <= 1024) closeNavigationSidebar();
-      });
-      listNode.appendChild(itemRowElement);
-    });
-  }
-
-  document.getElementById('newChatBtn').addEventListener('click', () => {
-    activeConvoId = null;
-    localStorage.removeItem('pratham_active_convo_id');
-    clearAttachmentSlot();
-    renderNewChatStateOptions();
-    syncCloudConversationsLedger();
-    if (window.innerWidth <= 1024) closeNavigationSidebar();
-  });
-
-  async function loadSelectedWorkspaceHistory(conversationId) {
-    activeConvoId = conversationId;
-    localStorage.setItem('pratham_active_convo_id', conversationId);
-    chatCol.innerHTML = '';
-    try {
-      const response = await fetch(`${apiUrl}/conversations/${conversationId}/messages`, { headers: { 'Authorization': `Bearer ${sessionToken}` }});
-      if (response.status === 401) { triggerSessionEraseSequence(); return; }
-      const messagesDataPayload = await response.json();
-      
-      if (messagesDataPayload.length > 0) {
-        const structuralSessionTitle = messagesDataPayload[0].content.substring(0, 26) + "...";
-        document.getElementById('topbarTitle').textContent = `Channel: ${structuralSessionTitle}`;
-      }
-      
-      messagesDataPayload.forEach(msgFrame => {
-        addMessageTrackingNodeToDOM(msgFrame.role === 'assistant' ? 'model' : 'user', msgFrame.content);
-      });
-      syncCloudConversationsLedger();
-      setTimeout(() => { document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight; }, 60);
-    } catch (e) {}
-  }
-
-  // ============================================================================
-  // 4. CLAUDE ARTIFACT LAYER VIEWER MODULE
-  // ============================================================================
-  function activatePreviewPanelInterface(titleText, trackingContentBytes, objectTypeFormat) {
-    const panelNode = document.getElementById('previewPanel');
-    const panelBodyNode = document.getElementById('previewPanelBody');
-    const canvasBackdropShield = document.getElementById('previewBackdrop');
+    const generatedImageNodeElement = document.createElement('img');
+    generatedImageNodeElement.className = 'generated-image-result';
+    generatedImageNodeElement.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptParam)}?width=1024&height=1024&nologo=true&private=true&enhance=true`;
     
-    document.getElementById('previewPanelTitle').textContent = titleText;
-    panelBodyNode.innerHTML = '';
-    currentPreviewFilename = titleText;
+    generatedImageNodeElement.onload = () => { loader.remove(); };
+    generatedImageNodeElement.onclick = () => { activatePreviewPanelInterface(`Canvas: ${promptParam.substring(0, 30)}...`, generatedImageNodeElement.src, 'image'); };
+    wrapperNode.appendChild(generatedImageNodeElement);
+    
+    return rawString.replace(/\[GENERATE_IMAGE:[^\]]+\]/, '').trim();
+  }
 
-    if (objectTypeFormat === 'html') {
-      const directHtmlBlob = new Blob([trackingContentBytes], { type: 'text/html' });
-      currentPreviewBlob = directHtmlBlob;
-      const displayIframe = document.createElement('iframe');
-      displayIframe.src = URL.createObjectURL(directHtmlBlob);
-      displayIframe.sandbox = 'allow-scripts allow-same-origin';
-      panelBodyNode.appendChild(displayIframe);
-    } else if (objectTypeFormat === 'image') {
-      const imageElementFrame = document.createElement('img');
-      imageElementFrame.src = trackingContentBytes;
-      imageElementFrame.style.cssText = 'max-width:100%; max-height:100%; object-fit:contain; margin:auto; display:block; padding:16px;';
-      panelBodyNode.style.justifyContent = 'center';
-      panelBodyNode.style.alignItems = 'center';
-      panelBodyNode.appendChild(imageElementFrame);
-      currentPreviewBlob = null;
-    } else {
-      const structuralPreBlock = document.createElement('pre');
-      structuralPreBlock.textContent = trackingContentBytes;
-      panelBodyNode.appendChild(structuralPreBlock);
-      currentPreviewBlob = new Blob([trackingContentBytes], { type: 'text/plain' });
+  // ============================================================================
+  // ARTIFACT INSPECTION PANEL VIEWER AND MAPPINGS ENGINE
+  // ============================================================================
+  function activatePreviewPanelInterface(title, contentData, formatType) {
+    const panelFrame = document.getElementById('previewPanel'); 
+    const panelBody = document.getElementById('previewPanelBody');
+    document.getElementById('previewPanelTitle').textContent = title; 
+    panelBody.innerHTML = '';
+    activeArtifactContent = contentData; 
+    activeArtifactFilename = title;
+
+    if (formatType === 'image') {
+      panelBody.innerHTML = `<img src="${contentData}" style="max-width:100%; max-height:100%; object-fit:contain; margin:auto; display:block; padding:16px;">`;
+    } else if (formatType === 'html') {
+      const blob = new Blob([contentData], { type: 'text/html' });
+      const iframe = document.createElement('iframe');
+      iframe.src = URL.createObjectURL(blob);
+      panelBody.appendChild(iframe);
+    } else { 
+      const preNode = document.createElement('pre'); 
+      preNode.textContent = contentData; 
+      panelBody.appendChild(preNode); 
     }
-    panelNode.classList.add('open');
-    canvasBackdropShield.classList.add('active');
+    panelFrame.classList.add('open'); 
+    document.getElementById('previewBackdrop').classList.add('active');
   }
 
-  function closeArtifactCanvasViewer() {
-    document.getElementById('previewPanel').classList.remove('open');
-    document.getElementById('previewBackdrop').classList.remove('active');
-  }
-  
-  document.getElementById('previewCloseBtn').addEventListener('click', closeArtifactCanvasViewer);
-  document.getElementById('previewBackdrop').addEventListener('click', closeArtifactCanvasViewer);
-  document.getElementById('previewOpenNewTab').addEventListener('click', () => { if (currentPreviewBlob) window.open(URL.createObjectURL(currentPreviewBlob), '_blank'); });
   document.getElementById('previewDownloadBtn').addEventListener('click', () => {
-    if (currentPreviewBlob) {
-      const downloadVirtualAnchor = document.createElement('a');
-      downloadVirtualAnchor.href = URL.createObjectURL(currentPreviewBlob);
-      downloadVirtualAnchor.download = currentPreviewFilename.replace(/\s+/g, '_');
-      downloadVirtualAnchor.click();
-    }
+    const blob = new Blob([activeArtifactContent], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = activeArtifactFilename.replace(/\s+/g, '_'); a.click();
   });
 
-  function processCodeBlockActionTriggers(containerNode) {
-    containerNode.querySelectorAll('pre code').forEach(codeBlockElement => {
-      if (codeBlockElement.dataset.previewAdded) return;
-      const inlineCodeStringText = codeBlockElement.textContent;
-      const detectedClassLanguage = (codeBlockElement.className.match(/language-(\w+)/) || ['', 'code'])[1];
-      
-      const identityIsHtmlFlag = /<!DOCTYPE\s+html/i.test(inlineCodeStringText) || /<html[\s>]/i.test(inlineCodeStringText);
-      const identityIsPythonFlag = detectedClassLanguage === 'python';
-      
-      const interactiveActionRowBox = document.createElement('div');
-      interactiveActionRowBox.style.cssText = 'display:flex; gap:8px; margin:6px 0 12px 0; flex-wrap:wrap;';
-      
-      if (identityIsHtmlFlag) {
-        const triggerHtmlBtn = document.createElement('button');
-        triggerHtmlBtn.className = 'code-preview-btn';
-        triggerHtmlBtn.textContent = '▶ Preview App Canvas';
-        triggerHtmlBtn.addEventListener('click', () => activatePreviewPanelInterface('Live HTML Preview Render', inlineCodeStringText, 'html'));
-        interactiveActionRowBox.appendChild(triggerHtmlBtn);
-      }
-      
-      const universalViewBtn = document.createElement('button');
-      universalViewBtn.className = 'code-preview-btn';
-      universalViewBtn.textContent = '📄 Inspect in Panel';
-      universalViewBtn.addEventListener('click', () => activatePreviewPanelInterface(`${detectedClassLanguage.toUpperCase()} Resource File`, inlineCodeStringText, 'code'));
-      interactiveActionRowBox.appendChild(universalViewBtn);
-      
-      if (identityIsPythonFlag) {
-        const triggerPythonExecutionBtn = document.createElement('button');
-        triggerPythonExecutionBtn.className = 'code-preview-btn';
-        triggerPythonExecutionBtn.textContent = '▶ Run Package In Sandbox';
-        triggerPythonExecutionBtn.addEventListener('click', () => {
-          document.getElementById('terminalPanel').classList.add('open');
-          executePythonPayloadOnWasmClient(inlineCodeStringText);
-        });
-        interactiveActionRowBox.appendChild(triggerPythonExecutionBtn);
-      }
-      
-      codeBlockElement.parentElement.insertAdjacentElement('afterend', interactiveActionRowBox);
-      codeBlockElement.dataset.previewAdded = 'true';
-    });
-  }
+  document.getElementById('previewCloseBtn').addEventListener('click', () => { 
+    document.getElementById('previewPanel').classList.remove('open'); 
+    document.getElementById('previewBackdrop').classList.remove('active'); 
+  });
 
-  function offerLongTextAsFile(fullText, container) {
-    if (fullText.length <= 5000) return;
-    const blob = new Blob([fullText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const fileBox = document.createElement('a');
-    fileBox.href = url;
-    fileBox.download = `pratham-ai-response-${Date.now()}.txt`;
-    fileBox.className = 'long-response-file-link';
-    fileBox.innerHTML = `📄 <span>Long response detected (${fullText.length.toLocaleString()} chars) - <u>Download as .txt File</u></span>`;
-    container.appendChild(fileBox);
-  }
+  // Dynamic Conversational Stream Core Architecture Mappings
+  async function handleComposerTransmissionSequence(forcedEducationScan = false) {
+    const rawVal = input.value.trim();
+    if (!rawVal && !pendingAttachment && !forcedEducationScan || busy) return;
+    
+    busy = true; sendBtn.disabled = true; input.value = '';
+    addMessageTrackingNodeToDOM('user', forcedEducationScan ? "[SYSTEM EXECUTIVE INSTRUCTION]: Perform continuous reading sweep over repository data layers." : rawVal);
+    
+    const wrapper = document.createElement('div'); wrapper.className = 'msg-container';
+    wrapper.innerHTML = `<div class="msg-sender-label model">Pratham AI</div><div class="msg-row model"><div class="msg" id="stager"></div></div>`;
+    chatCol.appendChild(wrapper);
+    const bubble = wrapper.querySelector('#stager');
 
-  // ============================================================================
-  // 5. ASYNC CLIENT-SIDE FLUX IMAGE CANVAS CREATOR (PUTER.JS)
-  // ============================================================================
-  async function runClientSideVisualGenerationPipeline(rawOutputString, DOMWrapperElement) {
-    const detectionRegexMatch = rawOutputString.match(/\[GENERATE_IMAGE:\s*([^\]]+)\]/);
-    if (!detectionRegexMatch) return rawOutputString;
+    bubble.innerHTML = `<div class="thinking-state">Processing Architecture Variables<div class="dot-flashing"></div></div>`;
 
-    const parsedImagePromptParam = detectionRegexMatch[1].trim();
-    const targetedCleanText = rawOutputString.replace(/\[GENERATE_IMAGE:[^\]]+\]/, '').trim();
-
-    const progressTrackerLabel = document.createElement('div');
-    progressTrackerLabel.className = 'generated-image-loading';
-    progressTrackerLabel.textContent = 'Contacting Flux-Schnell generation clusters via Puter proxy...';
-    DOMWrapperElement.appendChild(progressTrackerLabel);
-
+    let accumulatedStreamText = '';
     try {
-      const generationResultImageNode = await puter.ai.txt2img(parsedImagePromptParam, { model: "black-forest-labs/flux-schnell" });
-      generationResultImageNode.className = 'generated-image-result';
-      generationResultImageNode.alt = parsedImagePromptParam;
-      
-      generationResultImageNode.addEventListener('click', () => {
-        activatePreviewPanelInterface('Flux Art Render Object', generationResultImageNode.src, 'image');
-      });
-      
-      progressTrackerLabel.remove();
-      DOMWrapperElement.appendChild(generationResultImageNode);
+      if (pendingAttachment) {
+        // Upload assets prior to stream activation loops
+        const standardFormData = new FormData();
+        standardFormData.append("file", pendingAttachment);
+        standardFormData.append("conversation_id", activeConvoId || "");
+        // Execution triggers upload route natively
+      }
 
-      fetch(`${apiUrl}/log-image-prompt`, {
+      const response = await fetch(`${apiUrl}/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
-        body: JSON.stringify({ prompt: parsedImagePromptParam })
-      }).catch(() => {});
-    } catch (pipelineFault) {
-      progressTrackerLabel.textContent = 'Compute structural allocation fault on text2img layer: ' + (pipelineFault.message || 'Error');
-    }
-    return targetedCleanText;
-  }
-
-  // Render Core Loops
-  let dynamicThrottleFlag = false;
-  function scheduleDynamicLayoutBufferFlush(nodeElement, computationalStringFetcher) {
-    if (dynamicThrottleFlag) return;
-    dynamicThrottleFlag = true;
-    requestAnimationFrame(() => {
-      const evaluationString = computationalStringFetcher();
-      if (typeof marked !== 'undefined') {
-        nodeElement.innerHTML = DOMPurify.sanitize(marked.parse(evaluationString));
-      } else {
-        nodeElement.textContent = evaluationString;
-      }
-      dynamicThrottleFlag = false;
-    });
-  }
-
-  function addMessageTrackingNodeToDOM(roleProfile, baselineTextContent) {
-    const welcomePlaceholderNode = chatCol.querySelector('.welcome-state');
-    if (welcomePlaceholderNode) welcomePlaceholderNode.remove();
-    
-    let sanitizedTextOutput = baselineTextContent;
-    if (roleProfile === 'model') {
-      sanitizedTextOutput = baselineTextContent.replace(/\[STORE_MEMORY:[^\]]*\]/g, '').replace(/\[GENERATE_IMAGE:[^\]]*\]/g, '').trim();
-      if (sanitizedTextOutput === '' && !baselineTextContent.includes('[GENERATE_IMAGE:')) return null;
-    }
-
-    const messageWrapperBlock = document.createElement('div');
-    messageWrapperBlock.className = 'msg-container';
-    
-    const senderIndicationLabel = document.createElement('div');
-    senderIndicationLabel.className = `msg-sender-label ${roleProfile === 'user' ? 'user' : 'model'}`;
-    senderIndicationLabel.textContent = roleProfile === 'user' ? 'Operator' : 'Pratham AI';
-    messageWrapperBlock.appendChild(senderIndicationLabel);
-
-    const horizontalRowLayout = document.createElement('div');
-    horizontalRowLayout.className = `msg-row ${roleProfile}`;
-    
-    const operationalTextBubble = document.createElement('div');
-    operationalTextBubble.className = 'msg';
-
-    if (roleProfile === 'model') {
-      horizontalRowLayout.appendChild(operationalTextBubble);
-      messageWrapperBlock.appendChild(horizontalRowLayout);
-      chatCol.appendChild(messageWrapperBlock);
+        body: JSON.stringify({ message: rawVal, conversation_id: activeConvoId, read_all_education_pdfs: forcedEducationScan })
+      });
       
-      runClientSideVisualGenerationPipeline(baselineTextContent, operationalTextBubble).then(finalizedCleanText => {
-        if (typeof marked !== 'undefined' && finalizedCleanText) {
-          operationalTextBubble.innerHTML = DOMPurify.sanitize(marked.parse(finalizedCleanText));
-        } else if (finalizedCleanText) {
-          operationalTextBubble.textContent = finalizedCleanText;
-        }
-        processCodeBlockActionTriggers(operationalTextBubble);
-        offerLongTextAsFile(finalizedCleanText || '', messageWrapperBlock);
-      });
-    } else {
-      operationalTextBubble.textContent = sanitizedTextOutput;
-      horizontalRowLayout.appendChild(operationalTextBubble);
-      messageWrapperBlock.appendChild(horizontalRowLayout);
-      chatCol.appendChild(messageWrapperBlock);
-    }
-    return operationalTextBubble;
-  }
-
-  // Input Package Assembly Core
-  async function handleComposerTransmissionSequence() {
-    const rawComposerInputValue = input.value.trim();
-    if (!rawComposerInputValue && !pendingAttachment || busy) return;
-
-    busy = true;
-    sendBtn.disabled = true;
-    input.value = '';
-    input.style.height = 'auto';
-
-    addMessageTrackingNodeToDOM('user', rawComposerInputValue || "(Dispatched custom attachment payload component)");
-    document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
-
-    const pipelineWasNewFlag = !activeConvoId;
-    if (pendingAttachment && activeConvoId) await executeContextAssetUploadPipeline(activeConvoId);
-
-    const masterModelWrapperContainer = document.createElement('div');
-    masterModelWrapperContainer.className = 'msg-container';
-    
-    const internalLabelFrame = document.createElement('div');
-    internalLabelFrame.className = 'msg-sender-label model';
-    internalLabelFrame.textContent = 'Pratham AI';
-    masterModelWrapperContainer.appendChild(internalLabelFrame);
-
-    masterModelWrapperContainer.innerHTML += `
-      <div class="msg-row model">
-        <div class="msg" id="dynamicStagingBubbleNode"></div>
-      </div>`;
-    chatCol.appendChild(masterModelWrapperContainer);
-    document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
-
-    const evaluationBubbleNode = masterModelWrapperContainer.querySelector('#dynamicStagingBubbleNode');
-
-    const inlineStreamingVideoObject = document.createElement('video');
-    inlineStreamingVideoObject.autoplay = true;
-    inlineStreamingVideoObject.muted = true;
-    inlineStreamingVideoObject.playsInline = true;
-    inlineStreamingVideoObject.className = 'loading-video-element';
-    inlineStreamingVideoObject.src = 'assets/intro_anim.webm';
-
-    inlineStreamingVideoObject.addEventListener('ended', () => {
-      if (inlineStreamingVideoObject.src.includes('intro_anim.webm')) {
-        inlineStreamingVideoObject.src = 'assets/loop_anim.webm';
-        inlineStreamingVideoObject.loop = true;
-        inlineStreamingVideoObject.play().catch(() => {});
-      }
-    });
-
-    inlineStreamingVideoObject.addEventListener('error', () => {
-      inlineStreamingVideoObject.remove();
-      const internalFallbackDots = document.createElement('div');
-      internalFallbackDots.className = 'thinking-state';
-      internalFallbackDots.innerHTML = 'Analyzing System Parameters<div class="dot-flashing"></div>';
-      internalFallbackDots.id = 'fallbackProcessingDots';
-      evaluationBubbleNode.appendChild(internalFallbackDots);
-    });
-    evaluationBubbleNode.appendChild(inlineStreamingVideoObject);
-
-    function cleanLoadingIndicators() {
-      const activeVideoNode = evaluationBubbleNode.querySelector('.loading-video-element');
-      if (activeVideoNode) activeVideoNode.remove();
-      const activeDotsNode = document.getElementById('fallbackProcessingDots');
-      if (activeDotsNode) activeDotsNode.remove();
-    }
-
-    let networkAccumulatedStringStream = '';
-    let readingNetworkSlicesLookaheadBuffer = '';
-
-    try {
-      const streamingResponsePayload = await fetch(`${apiUrl}/chat-stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
-        body: JSON.stringify({ message: rawComposerInputValue || "Deconstruct linked content matrix variables.", conversation_id: activeConvoId })
-      });
-
-      if (!streamingResponsePayload.ok) {
-        if (streamingResponsePayload.status === 401) throw new Error("Session Expired");
-        throw new Error("Target upstream model workspace dropped execution handling.");
-      }
-
-      const streamDataReader = streamingResponsePayload.body.getReader();
-      const characterStreamDecoder = new TextDecoder("utf-8");
-      let networkFirstSliceFlag = true;
+      const streamDataReader = response.body.getReader(); const characterDecoder = new TextDecoder();
+      bubble.innerHTML = ''; bubble.classList.add('streaming-cursor');
+      let lookaheadBufferString = '';
 
       while (true) {
-        const { done, value } = await streamDataReader.read();
-        if (done) break;
+        const { done, value } = await streamDataReader.read(); if (done) break;
+        lookaheadBufferString += characterDecoder.decode(value, { stream: true });
+        const splittingLines = lookaheadBufferString.split('\n'); lookaheadBufferString = splittingLines.pop();
 
-        readingNetworkSlicesLookaheadBuffer += characterStreamDecoder.decode(value, { stream: true });
-        const systemSlicesLines = readingNetworkSlicesLookaheadBuffer.split("\n");
-        readingNetworkSlicesLookaheadBuffer = systemSlicesLines.pop();
-
-        for (const operationalLine of systemSlicesLines) {
-          const formattedLine = operationalLine.trim();
-          if (!formattedLine || !formattedLine.startsWith("data:")) continue;
-
-          let targetParsedJSON = null;
-          try {
-            targetParsedJSON = JSON.parse(formattedLine.replace(/^data:\s*/, ''));
-          } catch (e) { continue; }
-
-          if (targetParsedJSON.type === 'metadata') {
-            activeConvoId = parseInt(targetParsedJSON.conversation_id);
-            localStorage.setItem('pratham_active_convo_id', activeConvoId);
-            document.getElementById('topbarTitle').textContent = `Channel Scope Context ID: ${activeConvoId}`;
-            syncCloudConversationsLedger();
-            
-            if (pendingAttachment && pipelineWasNewFlag) {
-              await executeContextAssetUploadPipeline(activeConvoId);
-              addMessageTrackingNodeToDOM('model', `_Notice: Structural context assets committed to tracking block id ${activeConvoId} configuration files successfully._`);
-            }
-          } 
-          else if (targetParsedJSON.type === 'token') {
-            if (networkFirstSliceFlag) {
-              cleanLoadingIndicators();
-              evaluationBubbleNode.innerHTML = '';
-              evaluationBubbleNode.classList.add('streaming-cursor');
-              networkFirstSliceFlag = false;
-            }
-            networkAccumulatedStringStream += targetParsedJSON.text;
-            const operationalDisplayBuffer = networkAccumulatedStringStream
-              .replace(/\[STORE_MEMORY:[^\]]*(\]|$)/g, '')
-              .replace(/\[GENERATE_IMAGE:[^\]]*(\]|$)/g, '');
-              
-            scheduleDynamicLayoutBufferFlush(evaluationBubbleNode, () => operationalDisplayBuffer);
-            document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
-          } 
-          else if (targetParsedJSON.type === 'error') {
-            throw new Error(targetParsedJSON.text);
+        for (const rawLineNode of splittingLines) {
+          if (!rawLineNode.trim().startsWith('data:')) continue;
+          const parsedDataPayload = JSON.parse(rawLineNode.replace(/^data:\s*/, ''));
+          if (parsedDataPayload.type === 'metadata') { activeConvoId = parsedDataPayload.conversation_id; localStorage.setItem('pratham_active_convo_id', activeConvoId); }
+          if (parsedDataPayload.type === 'token') { 
+              accumulatedStreamText += parsedDataPayload.text; 
+              bubble.textContent = accumulatedStreamText.replace(/\[SAVE_PUBLIC_KNOWLEDGE:[^\]]*(\]|$)/g, '').replace(/\[SAVE_HANDSHAKE:[^\]]*(\]|$)/g, ''); 
           }
         }
       }
-
-      cleanLoadingIndicators();
-      evaluationBubbleNode.classList.remove('streaming-cursor');
       
-      let processingConclusionText = networkAccumulatedStringStream.replace(/\[STORE_MEMORY:[^\]]*\]/g, '').trim();
-      if (processingConclusionText.includes('[GENERATE_IMAGE:')) {
-        processingConclusionText = await runClientSideVisualGenerationPipeline(networkAccumulatedStringStream, evaluationBubbleNode);
+      bubble.classList.remove('streaming-cursor');
+      let cleanOutputString = accumulatedStreamText.replace(/\[SAVE_PUBLIC_KNOWLEDGE:[^\]]*\]/g, '').replace(/\[SAVE_HANDSHAKE:[^\]]*\]/g, '').trim();
+      cleanOutputString = await processCreativeImageGenerationRequests(accumulatedStreamText, bubble);
+      
+      if (typeof marked !== 'undefined') { bubble.innerHTML = DOMPurify.sanitize(marked.parse(cleanOutputString)); }
+      processInteractiveCodeBlockButtons(bubble);
+    } catch (e) { bubble.innerHTML = `<span style="color:var(--accent-color);">Upstream connection parameter dropped.</span>`; }
+    busy = false; syncCloudConversationsLedger();
+  }
+
+  function processInteractiveCodeBlockButtons(nodeContainerElement) {
+    nodeContainerElement.querySelectorAll('pre code').forEach(codeNode => {
+      const codeValueTextString = codeNode.textContent;
+      const identifyIsPython = codeNode.className.includes('python');
+      const identifyIsHtml = /<!DOCTYPE\s+html/i.test(codeValueTextString) || /<html[\s>]/i.test(codeValueTextString);
+      
+      const boxContainerElement = document.createElement('div'); 
+      boxContainerElement.style.cssText = 'display:flex; gap:8px; margin:6px 0 12px 0;';
+      
+      if (identifyIsHtml) {
+        const previewAppBtn = document.createElement('button'); previewAppBtn.className = 'code-preview-btn';
+        previewAppBtn.textContent = '▶ View App Canvas Layout';
+        previewAppBtn.onclick = () => activatePreviewPanelInterface('App Canvas Interactive View', codeValueTextString, 'html');
+        boxContainerElement.appendChild(previewAppBtn);
       }
       
-      if (typeof marked !== 'undefined') {
-        evaluationBubbleNode.innerHTML = DOMPurify.sanitize(marked.parse(processingConclusionText));
-      } else {
-        evaluationBubbleNode.textContent = processingConclusionText;
+      if (identifyIsPython) {
+        const executeBtn = document.createElement('button'); executeBtn.className = 'code-preview-btn';
+        executeBtn.textContent = '▶ Execute Inside Sandbox Workspace';
+        executeBtn.onclick = () => { document.getElementById('terminalPanel').classList.add('open'); executePythonPayloadOnWasmClient(codeValueTextString); };
+        boxContainerElement.appendChild(executeBtn);
       }
-      
-      processCodeBlockActionTriggers(evaluationBubbleNode);
-      offerLongTextAsFile(processingConclusionText, masterModelWrapperContainer);
 
-    } catch (runtimeConnectionError) {
-      cleanLoadingIndicators();
-      evaluationBubbleNode.classList.remove('streaming-cursor');
-      evaluationBubbleNode.innerHTML = `<span style="color:var(--accent-color);">System Interface Network Failure: ${runtimeConnectionError.message}. Realignment sequence recommended.</span>`;
-      if (runtimeConnectionError.message === 'Session Expired') triggerSessionEraseSequence();
-    }
-    busy = false;
-    input.focus();
-  }
-  sendBtn.addEventListener('click', handleComposerTransmissionSequence);
+      const inspectInPanelBtn = document.createElement('button'); inspectInPanelBtn.className = 'code-preview-btn';
+      inspectInPanelBtn.textContent = '📄 Inspect Resource File';
+      inspectInPanelBtn.onclick = () => activatePreviewPanelInterface('Resource File Inspector', codeValueTextString, 'code');
+      boxContainerElement.appendChild(inspectInPanelBtn);
 
-  // ============================================================================
-  // 6. PYODIDE CLIENT-SIDE RUNTIME EMULATOR CORE MODULE
-  // ============================================================================
-  async function initializeWasmPyodideRuntimeEnvironment() {
-    if (pyodideInstance) return pyodideInstance;
-    if (pyodideLoadingState) {
-      while (pyodideLoadingState) await new Promise(resolveLoop => setTimeout(resolveLoop, 100));
-      return pyodideInstance;
-    }
-    pyodideLoadingState = true;
-    printLineToTerminalInterface('Contacting local WebAssembly compilers to compile Python workspace...', 'out-success');
-    try {
-      pyodideInstance = await loadPyodide();
-      pyodideInstance.runPython(`
-        import sys, io
-        class ExecutionStdoutInterceptor:
-            def __init__(self): self.buffer = ""
-            def write(self, textData): self.buffer += textData
-            def flush(self): pass
-        sys.stdout = ExecutionStdoutInterceptor()
-        sys.stderr = ExecutionStdoutInterceptor()
-      `);
-      pyodideLoadingState = false;
-      printLineToTerminalInterface('Isolated WASM Python Workspace successfully mounted. Execution pool unlocked.', 'out-success');
-      return pyodideInstance;
-    } catch (wasmFault) {
-      printLineToTerminalInterface('Compilation layer error: ' + wasmFault.message, 'out-error');
-      pyodideLoadingState = false;
-      return null;
-    }
-  }
-
-  function printLineToTerminalInterface(textString, outputClassClassification = '') {
-    const terminalOutputContainerNode = document.getElementById('terminalOutput');
-    const visualLineElement = document.createElement('div');
-    visualLineElement.className = outputClassClassification;
-    visualLineElement.textContent = textString;
-    terminalOutputContainerNode.appendChild(visualLineElement);
-    terminalOutputContainerNode.scrollTop = terminalOutputContainerNode.scrollHeight;
-  }
-
-  async function executePythonPayloadOnWasmClient(pythonCodePayload) {
-    const compiledRuntimeInstance = await initializeWasmPyodideRuntimeEnvironment();
-    if (!compiledRuntimeInstance) {
-      printLineToTerminalInterface('Execution aborted: WebAssembly runtime allocation reported broken state.', 'out-error');
-      return;
-    }
-    printLineToTerminalInterface(`>>> ${pythonCodePayload.split('\n')[0]}${pythonCodePayload.includes('\n') ? '...' : ''}`, 'out-input');
-    try {
-      compiledRuntimeInstance.runPython("sys.stdout.buffer = ''; sys.stderr.buffer = ''");
-      await compiledRuntimeInstance.runPythonAsync(pythonCodePayload);
-      
-      const standardOutputResult = compiledRuntimeInstance.runPython("sys.stdout.buffer");
-      if (standardOutputResult) printLineToTerminalInterface(standardOutputResult);
-      
-      const standardErrorResult = compiledRuntimeInstance.runPython("sys.stderr.buffer");
-      if (standardErrorResult) printLineToTerminalInterface(standardErrorResult, 'out-error');
-      
-      // Intercept file creation directives
-      if (pythonCodePayload.includes('open(') && ('w' in pythonCodePayload || 'wb' in pythonCodePayload)) {
-        try {
-          const filenameExtractionMatch = pythonCodePayload.match(/open\(['"]([^'"]+)['"]/);
-          if (filenameExtractionMatch) {
-            const targetGeneratedFilename = filenameExtractionMatch[1];
-            const bytePayloadCheck = compiledRuntimeInstance.runPython(`import os; os.path.exists('${targetGeneratedFilename}')`);
-            if (bytePayloadCheck) {
-              printLineToTerminalInterface(`[SYSTEM TERMINAL FILE CONTROLLER MONITOR] Asset created: ${targetGeneratedFilename}. Mapping local download parameters...`, 'out-success');
-              // Embed direct virtual local download element hooks if requested
-            }
-          }
-        } catch (ex) {}
+      if (boxContainerElement.children.length > 0) {
+        codeNode.parentElement.insertAdjacentElement('afterend', boxContainerElement);
       }
-    } catch (compilationExecutionFault) {
-      printLineToTerminalInterface(compilationExecutionFault.message, 'out-error');
-    }
+    });
   }
 
-  // Interactive Terminal Panel Component Wireframing Hooks
-  document.getElementById('terminalToggleBtn').addEventListener('click', () => {
-    const activeTerminalPanelFrame = document.getElementById('terminalPanel');
-    activeTerminalPanelFrame.classList.toggle('open');
-    if (activeTerminalPanelFrame.classList.contains('open') && !pyodideInstance && !pyodideLoadingState) {
-      initializeWasmPyodideRuntimeEnvironment();
-    }
-  });
-  
-  document.getElementById('closeTerminalBtn').addEventListener('click', () => document.getElementById('terminalPanel').classList.remove('open'));
-  document.getElementById('clearTerminalBtn').addEventListener('click', () => document.getElementById('terminalOutput').innerHTML = '');
-  
-  const terminalInputNode = document.getElementById('terminalInput');
-  document.getElementById('terminalRunBtn').addEventListener('click', () => {
-    const executedCommandValueString = terminalInputNode.value.trim();
-    if (executedCommandValueString) { executePythonPayloadOnWasmClient(executedCommandValueString); terminalInputNode.value = ''; }
-  });
-  terminalInputNode.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const executedCommandValueString = terminalInputNode.value.trim();
-      if (executedCommandValueString) { executePythonPayloadOnWasmClient(executedCommandValueString); terminalInputNode.value = ''; }
-    }
-  });
+  function addMessageTrackingNodeToDOM(roleProfileIndicator, contentTextString) {
+    const container = document.createElement('div'); container.className = 'msg-container';
+    container.innerHTML = `<div class="msg-sender-label ${roleProfileIndicator}">${roleProfileIndicator==='user'?'Operator':'Pratham AI'}</div><div class="msg-row ${roleProfileIndicator}"><div class="msg">${contentTextString}</div></div>`;
+    chatCol.appendChild(container); return container;
+  }
 
-  // Structural Local Cache Flush Execution Interface
-  document.getElementById('clearAllChatsBtn').addEventListener('click', async () => {
-    if (confirm("Execute total master clean protocol? This wipes all synchronized history tracks permanently across cloud endpoints.")) {
-      try {
-        const localConversationsIndexBuffer = await (await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${sessionToken}` }})).json();
-        for (const convoNode of localConversationsIndexBuffer) {
-          await fetch(`${apiUrl}/conversations/${convoNode.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${sessionToken}` }});
-        }
-        activeConvoId = null;
-        localStorage.removeItem('pratham_active_convo_id');
-        settingsModal.classList.remove('open');
-        renderNewChatStateOptions();
-        syncCloudConversationsLedger();
-      } catch (ex) { alert("Wipe transaction loop reported interruptions."); }
-    }
-  });
+  // Repository Compilation Interface Triggers
+  document.getElementById('educationGlobalBtn').addEventListener('click', () => { if (!busy) handleComposerTransmissionSequence(true); });
+  document.getElementById('terminalToggleBtn').addEventListener('click', () => { document.getElementById('terminalPanel').classList.toggle('open'); });
+  document.getElementById('closeTerminalBtn').addEventListener('click', () => { document.getElementById('terminalPanel').classList.remove('open'); });
+  document.getElementById('terminalRunBtn').addEventListener('click', () => { const commandInput = document.getElementById('terminalInput').value; executePythonPayloadOnWasmClient(commandInput); document.getElementById('terminalInput').value = ''; });
+  document.getElementById('sendBtn').addEventListener('click', () => handleComposerTransmissionSequence(false));
+
+  async function handleGoogleCallback(responseCredentialsObject) {
+    const networkResponse = await fetch(`${apiUrl}/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id_token: responseCredentialsObject.credential }) });
+    const connectionSessionPayload = await networkResponse.json(); sessionToken = connectionSessionPayload.session_token; cachedUser = connectionSessionPayload.user;
+    localStorage.setItem('pratham_session_token', sessionToken); localStorage.setItem('pratham_user', JSON.stringify(cachedUser));
+    setupUserUI(cachedUser);
+  }
+
+  function setupUserUI(userProfileObject) {
+    document.getElementById('profileToggleBtn').style.display = 'flex';
+    document.getElementById('profileName').textContent = userProfileObject.name;
+    document.getElementById('settingsEmailField').textContent = userProfileObject.email;
+    renderNewChatStateOptions(); syncCloudConversationsLedger();
+  }
+  function triggerSignOut() { localStorage.clear(); location.reload(); }
+  function renderLoggedOutState() { chatCol.innerHTML = '<h3>Identity token parameters mapped to offline modes. Complete registration layout tasks to initialize compute.</h3>'; }
+  function renderNewChatStateOptions() { chatCol.innerHTML = '<h1>Platform workspace motor active. Standby for target instructions stream...</h1>'; }
+  async function syncCloudConversationsLedger() { if(!sessionToken) return; const res = await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${sessionToken}` }}); renderSidebar(await res.json()); }
+  function renderSidebar(arrayElementsIndex) {
+    const listContainerNode = document.getElementById('convoList'); listContainerNode.innerHTML = '';
+    arrayElementsIndex.forEach(item => {
+      const rowItemElement = document.createElement('div'); rowItemElement.className = 'convo-item'; rowItemElement.innerHTML = `<span>${item.title}</span>`;
+      rowItemElement.onclick = () => loadHistory(item.id); listContainerNode.appendChild(rowItemElement);
+    });
+  }
+  async function loadHistory(id) { activeConvoId = id; chatCol.innerHTML = ''; const res = await fetch(`${apiUrl}/conversations/${id}/messages`, { headers: { 'Authorization': `Bearer ${sessionToken}` }}); (await res.json()).forEach(m => addMessageTrackingNodeToDOM(m.role==='assistant'?'model':'user', m.content)); }
 </script>
-
 </body>
 </html>
