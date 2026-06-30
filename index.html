@@ -3,69 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pratham AI - Premium Assistant Workspace Terminal</title>
+<title>Pratham AI - Advanced Premium AI Assistant Workspace</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js"></script>
 
 <style>
-  html {
+  html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
       box-sizing: border-box;
-      -webkit-text-size-adjust: 100%;
-  }
-  body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
       background-color: #f8f6f2;
       color: #191919;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       overflow: hidden;
       display: flex;
-      width: 100vw;
-      box-sizing: border-box;
   }
   :root {
     --bg-main: #fbfaf7;
     --bg-sidebar: #f3f0e8;
     --bg-panel: #ffffff;
-    --bg-input: #ffffff;
     --border-color: #e2e0d8;
     --text-main: #191919;
     --text-secondary: #4a4a4a;
     --text-dim: #85837d;
     --accent-color: #cc6239;
     --bubble-user: #f3f0e8;
-    --bubble-model: transparent;
-    --overlay-color: rgba(25, 25, 25, 0.15);
-    --shadow-premium: 0 4px 20px rgba(0,0,0,0.03);
-    --shadow-modal: 0 16px 36px rgba(0,0,0,0.08);
+    --overlay-color: rgba(25, 25, 25, 0.12);
   }
-  * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-      margin: 0;
-      padding: 0;
-  }
-  ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-      background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-      background: #dedbd3;
-      border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-      background: #cbd3cb;
-  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  /* SIDEBAR STYLING LAYOUTS */
   .sidebar {
       width: 280px;
       flex-shrink: 0;
@@ -73,12 +44,8 @@
       border-right: 1px solid var(--border-color);
       display: flex;
       flex-direction: column;
-      padding-top: 16px;
-      padding-bottom: 16px;
-      padding-left: 12px;
-      padding-right: 12px;
+      padding: 16px 12px;
       z-index: 40;
-      position: relative;
       transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .brand-header {
@@ -86,21 +53,14 @@
       align-items: center;
       gap: 10px;
       font-family: 'Source Serif 4', Georgia, serif;
-      font-size: 21px;
+      font-size: 22px;
       font-weight: 600;
       color: var(--text-main);
       margin-bottom: 20px;
-      padding-top: 4px;
-      padding-bottom: 4px;
-      padding-left: 8px;
-      padding-right: 8px;
+      padding: 4px 8px;
   }
-  .brand-logo-img {
-      width: 24px;
-      height: 24px;
-      object-fit: contain;
-      border-radius: 6px;
-  }
+  .brand-logo-img { width: 26px; height: 26px; object-fit: contain; border-radius: 6px; }
+  
   .new-chat-btn {
       display: flex;
       align-items: center;
@@ -108,10 +68,7 @@
       background: transparent;
       border: 1px solid var(--border-color);
       color: var(--text-main);
-      padding-top: 12px;
-      padding-bottom: 12px;
-      padding-left: 16px;
-      padding-right: 16px;
+      padding: 12px 16px;
       border-radius: 99px;
       font-size: 14px;
       font-weight: 500;
@@ -120,857 +77,175 @@
       width: 100%;
       transition: background 0.2s, border-color 0.2s;
   }
-  .new-chat-btn:hover {
-      background-color: rgba(0, 0, 0, 0.03);
-      border-color: var(--text-dim);
-  }
-  .shortcut-badge {
-      font-size: 11px;
-      color: var(--text-dim);
-      background-color: rgba(0,0,0,0.04);
-      padding-top: 2px;
-      padding-bottom: 2px;
-      padding-left: 6px;
-      padding-right: 6px;
-      border-radius: 4px;
-      border: 1px solid var(--border-color);
-      font-family: monospace;
-  }
-  .convo-list {
-      flex: 1;
-      overflow-y: auto;
-      margin-left: -4px;
-      margin-right: -4px;
-      padding-left: 4px;
-      padding-right: 4px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-  }
-  .convo-label {
-      font-size: 11px;
-      letter-spacing: .05em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      padding-top: 14px;
-      padding-bottom: 6px;
-      padding-left: 8px;
-      padding-right: 8px;
-      font-weight: 700;
-  }
+  .new-chat-btn:hover { background-color: rgba(0, 0, 0, 0.03); border-color: var(--text-dim); }
+  .shortcut-badge { font-size: 11px; color: var(--text-dim); background-color: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-family: monospace; }
+  
+  .convo-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .convo-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 14px 8px 6px; font-weight: 700; }
   .convo-item {
-      position: relative;
-      padding-top: 10px;
-      padding-bottom: 10px;
-      padding-left: 12px;
-      padding-right: 12px;
-      border-radius: 8px;
-      font-size: 14px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: background 0.2s, color 0.2s;
+      position: relative; padding: 10px 12px; border-radius: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s, color 0.2s;
   }
-  .convo-item:hover {
-      background-color: rgba(0, 0, 0, 0.03);
-      color: var(--text-main);
-  }
-  .convo-item.active {
-      background-color: var(--bg-panel);
-      color: var(--text-main);
-      font-weight: 500;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  }
-  .convo-title-text {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      padding-right: 24px;
-  }
+  .convo-item:hover { background-color: rgba(0, 0, 0, 0.03); color: var(--text-main); }
+  .convo-item.active { background-color: var(--bg-panel); color: var(--text-main); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .convo-title-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 24px; }
+  
   .delete-convo-btn {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: transparent;
-      border: none;
-      color: var(--text-dim);
-      cursor: pointer;
-      font-size: 14px;
-      display: none;
-      padding: 4px;
-      border-radius: 4px;
-      align-items: center;
-      justify-content: center;
-      transition: color 0.2s, background 0.2s;
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; display: none; padding: 4px; border-radius: 4px;
   }
-  .convo-item:hover .delete-convo-btn {
-      display: flex;
-  }
-  .delete-convo-btn:hover {
-      color: #e55353;
-      background-color: rgba(0, 0, 0, 0.04);
-    }
-  .sidebar-footer {
-      margin-top: auto;
-      padding-top: 12px;
-      border-top: 1px solid var(--border-color);
-      position: relative;
-  }
-  .user-profile-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 8px;
-      border-radius: 12px;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.2s;
-  }
-  .user-profile-btn:hover {
-      background-color: rgba(0, 0, 0, 0.03);
-  }
-  .user-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background-color: var(--accent-color);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      font-size: 13px;
-      text-transform: uppercase;
-  }
-  .user-info {
-      flex: 1;
-      min-width: 0;
-  }
-  .user-name {
-      font-size: 13.5px;
-      font-weight: 500;
-      color: var(--text-main);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-  }
-  .plan-badge {
-      font-size: 11px;
-      color: var(--text-dim);
-  }
+  .convo-item:hover .delete-convo-btn { display: flex; }
+  .delete-convo-btn:hover { color: #e55353; background-color: rgba(0,0,0,0.04); }
+  
+  .sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color); position: relative; }
+  .user-profile-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 12px; border: none; background: transparent; cursor: pointer; text-align: left; }
+  .user-profile-btn:hover { background-color: rgba(0, 0, 0, 0.03); }
+  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background-color: var(--accent-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name { font-size: 13.5px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plan-badge { font-size: 11px; color: var(--text-dim); }
+  
   .profile-menu {
-      position: absolute;
-      bottom: 60px;
-      left: 0;
-      right: 0;
-      background-color: var(--bg-panel);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-      display: none;
-      flex-direction: column;
-      z-index: 100;
-      overflow: hidden;
+      position: absolute; bottom: 65px; left: 0; right: 0; background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); display: none; flex-direction: column; z-index: 100; overflow: hidden;
   }
-  .profile-menu.open {
-      display: flex;
-  }
-  .menu-item {
-      padding-top: 12px;
-      padding-bottom: 12px;
-      padding-left: 14px;
-      padding-right: 14px;
-      font-size: 13.5px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: none;
-      border: none;
-      text-align: left;
-      width: 100%;
-      transition: background 0.2s, color 0.2s;
-  }
-  .menu-item:hover {
-      background-color: rgba(255,255,255,0.02);
-      color: var(--text-main);
-  }
-  .menu-divider {
-      height: 1px;
-      background-color: var(--border-color);
-      margin-top: 4px;
-      margin-bottom: 4px;
-  }
-  .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      height: 100dvh;
-      background-color: var(--bg-main);
-      position: relative;
-      align-items: center;
-      width: 100%;
-  }
+  .profile-menu.open { display: flex; }
+  .menu-item { padding: 12px 14px; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 10px; background: none; border: none; text-align: left; width: 100%; }
+  .menu-item:hover { background-color: rgba(0,0,0,0.02); color: var(--text-main); }
+  .menu-divider { height: 1px; background-color: var(--border-color); margin: 4px 0; }
+
+  /* CENTRAL MAIN CHAT DISPLAY STRUCT */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background-color: var(--bg-main); position: relative; align-items: center; width: 100%; }
   .topbar {
-      width: 100%;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      padding-left: 24px;
-      padding-right: 24px;
-      min-height: 56px;
+      width: 100%; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; min-height: 56px; border-bottom: 1px solid var(--border-color);
   }
-  .menu-toggle-btn {
-      background: none;
-      border: none;
-      font-size: 22px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: none;
-  }
-  .menu-toggle-btn:hover {
-      color: var(--text-main);
-  }
-  .chat-scroll {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      -webkit-overflow-scrolling: touch;
-  }
-  .chat-col {
-      width: 100%;
-      max-width: 1600px;
-      margin: auto;
-      padding-top: 20px;
-      padding-bottom: 20px;
-      padding-left: 40px;
-      padding-right: 40px;
-      display: flex;
-      flex-direction: column;
-      gap: 36px;
-      flex: 1;
-  }
-  .welcome-state {
-      margin: auto;
-      text-align: center;
-      width: 100%;
-      max-width: 1400px;
-      padding-top: 40px;
-      padding-bottom: 40px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-  }
-  .welcome-title {
-      font-family: 'Source Serif 4', Georgia, serif;
-      font-size: 38px;
-      font-weight: 400;
-      color: var(--text-main);
-      margin-bottom: 36px;
-      letter-spacing: -0.01em;
-  }
-  .suggestion-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-      width: 100%;
-      margin-top: 10px;
-  }
+  .menu-toggle-btn { background: none; border: none; font-size: 22px; color: var(--text-secondary); cursor: pointer; display: none; }
+  .centered-topbar-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); font-family: 'Inter', sans-serif; text-align: center; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  
+  .chat-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; width: 100%; -webkit-overflow-scrolling: touch; }
+  .chat-col { width: 100%; max-width: 900px; margin: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 36px; flex: 1; }
+  
+  .welcome-state { margin: auto; text-align: center; width: 100%; padding: 40px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .welcome-title { font-family: 'Source Serif 4', Georgia, serif; font-size: 36px; font-weight: 400; color: var(--text-main); margin-bottom: 32px; }
+  .suggestion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; width: 100%; }
   .suggestion-card {
-      background-color: var(--bg-panel);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 20px;
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s, transform 0.1s;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      justify-content: space-between;
-      min-height: 130px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px; text-align: left; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; flex-direction: column; gap: 8px; min-height: 115px;
   }
-  .suggestion-card:hover {
-      background-color: var(--bg-main);
-      border-color: var(--text-dim);
-      transform: translateY(-1px);
-  }
-  .suggestion-card:active {
-      transform: translateY(0);
-  }
-  .suggestion-icon {
-      font-size: 18px;
-      color: var(--accent-color);
-  }
-  .suggestion-text {
-      font-size: 14.5px;
-      font-weight: 500;
-      color: var(--text-main);
-  }
-  .suggestion-sub {
-      font-size: 12.5px;
-      color: var(--text-dim);
-      line-height: 1.4;
-  }
-  .msg-container {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      max-width: 1250px;
-      margin-top: 0;
-      margin-bottom: 0;
-      margin-left: auto;
-      margin-right: auto;
-      padding-top: 10px;
-      padding-bottom: 10px;
-      animation: textReveal 0.2s ease-out;
-  }
-  @keyframes textReveal { 
-      from { opacity: 0; transform: translateY(2px); } 
-      to { opacity: 1; transform: translateY(0); } 
-  }
-  .msg-sender-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-main);
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-  }
-  .msg-sender-label.user {
-      justify-content: flex-end;
-      color: var(--text-dim);
-  }
-  .msg-row {
-      display: flex;
-      width: 100%;
-  }
-  .msg-row.user {
-      justify-content: flex-end;
-  }
-  .msg {
-      width: 100%;
-      font-family: 'Source Serif 4', Georgia, serif;
-      font-size: 16.5px;
-      line-height: 1.68;
-      color: var(--text-main);
-      word-wrap: break-word;
-  }
+  .suggestion-card:hover { background-color: var(--bg-main); border-color: var(--text-dim); transform: translateY(-1px); }
+  .suggestion-icon { font-size: 18px; color: var(--accent-color); }
+  .suggestion-text { font-size: 14.5px; font-weight: 500; color: var(--text-main); }
+  .suggestion-sub { font-size: 12.5px; color: var(--text-dim); line-height: 1.4; }
+
+  /* MESSAGE BUBBLES BLOCK WORKSPACE */
+  .msg-container { display: flex; flex-direction: column; width: 100%; padding: 8px 0; animation: textReveal 0.2s ease-out; }
+  @keyframes textReveal { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+  .msg-sender-label { font-size: 11px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .msg-sender-label.user { justify-content: flex-end; color: var(--text-dim); }
+  .msg-row { display: flex; width: 100%; }
+  .msg-row.user { justify-content: flex-end; }
+  .msg { width: 100%; font-family: 'Source Serif 4', Georgia, serif; font-size: 16.5px; line-height: 1.7; color: var(--text-main); word-wrap: break-word; }
   .msg-row.user .msg {
-    max-width: 85%;
-    font-family: 'Inter', sans-serif;
-    font-size: 15px;
-    background-color: var(--bubble-user);
-    padding-top: 12px;
-    padding-bottom: 12px;
-    padding-left: 18px;
-    padding-right: 18px;
-    border-radius: 18px;
-    color: var(--text-main);
-    line-height: 1.5;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+      max-width: 85%; font-family: 'Inter', sans-serif; font-size: 15px; background-color: var(--bubble-user); padding: 12px 18px; border-radius: 18px; line-height: 1.52; box-shadow: 0 4px 12px rgba(0,0,0,0.02);
   }
-  .msg h1, .msg h2, .msg h3 {
-      font-family: 'Source Serif 4', Georgia, serif;
-      margin-top: 1.2em;
-      margin-bottom: 0.5em;
-      font-weight: 600;
-      color: var(--text-main);
-      line-height: 1.3;
-  }
-  .msg p {
-      margin-bottom: 0.8em;
-  }
-  .msg p:last-child {
-      margin-bottom: 0;
-  }
-  .msg ul, .msg ol {
-      margin-bottom: 0.8em;
-      padding-left: 24px;
-  }
-  .msg li {
-      margin-bottom: 0.3em;
-  }
-  .msg table {
-      display: block;
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 1.5em;
-      margin-bottom: 1.5em;
-      font-size: 14.5px;
-      overflow-x: auto;
-      font-family: 'Inter', sans-serif;
-  }
-  .msg th, .msg td {
-      border: 1px solid var(--border-color);
-      padding-top: 10px;
-      padding-bottom: 10px;
-      padding-left: 14px;
-      padding-right: 14px;
-      text-align: left;
-  }
-  .msg th {
-      background-color: #f3f0e8;
-      font-weight: 600;
-  }
-  .msg code {
-      background-color: rgba(0,0,0,0.04);
-      padding-top: 2px;
-      padding-bottom: 2px;
-      padding-left: 6px;
-      padding-right: 6px;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 14px;
-      color: #b84a25;
-  }
-  .msg pre {
-      background-color: #f8f6f0;
-      border: 1px solid var(--border-color);
-      padding: 16px;
-      border-radius: 8px;
-      overflow-x: auto;
-      margin-top: 1.5em;
-      margin-bottom: 1.5em;
-      font-family: monospace;
-  }
-  .msg pre code {
-      background: transparent;
-      padding: 0;
-      color: #24292e;
-      font-size: 13.5px;
-  }
-  .thinking-state {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      color: var(--text-dim);
-      font-family: 'Inter', sans-serif;
-      padding-top: 4px;
-      padding-bottom: 4px;
-  }
-  .dot-flashing {
-      width: 6px;
-      height: 6px;
-      border-radius: 5px;
-      background-color: var(--accent-color);
-      animation: dotFlashing 1s infinite linear alternate;
-      position: relative;
-  }
-  .dot-flashing::before, .dot-flashing::after {
-      content: '';
-      display: inline-block;
-      position: absolute;
-      top: 0;
-      width: 6px;
-      height: 6px;
-      border-radius: 5px;
-      background-color: var(--accent-color);
-      animation: dotFlashing 1s infinite alternate;
-  }
-  .dot-flashing::before {
-      left: -12px;
-      animation-delay: 0s;
-  }
-  .dot-flashing::after {
-      left: 12px;
-      animation-delay: 0.8s;
-  }
-  @keyframes dotFlashing {
-      0% { background-color: var(--accent-color); }
-      50%, 100% { background-color: rgba(204, 98, 57, 0.15); }
-  }
-  .loading-video-element {
-      max-width: 280px;
-      border-radius: 12px;
-      margin-top: 4px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-  }
-  .generated-image-loading {
-      color: var(--text-dim);
-      font-size: 14px;
-      font-style: italic;
-      margin-top: 10px;
-  }
-  .generated-image-result {
-      max-width: 512px;
-      width: 100%;
-      height: auto;
-      border-radius: 14px;
-      margin-top: 12px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.05);
-  }
-  .attachment-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background-color: var(--bg-sidebar);
-      border: 1px solid var(--border-color);
-      padding-top: 6px;
-      padding-bottom: 6px;
-      padding-left: 12px;
-      padding-right: 12px;
-      border-radius: 16px;
-      font-size: 12.5px;
-      margin-bottom: 8px;
-      color: var(--text-secondary);
-      align-self: flex-start;
-  }
-  .attachment-chip .remove-file-cross-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-dim);
-      font-size: 13px;
-      padding-left: 2px;
-      padding-right: 4px;
-      border-radius: 50%;
-  }
-  .attachment-chip .remove-file-cross-btn:hover {
-      color: #e55353;
-      background-color: rgba(0,0,0,0.05);
-  }
-  .streaming-cursor::after {
-      content: "▋";
-      animation: flashCursor 0.8s step-end infinite;
-      color: var(--accent-color);
-      margin-left: 2px;
-  }
-  @keyframes flashCursor { 50% { opacity: 0; } }
-  .code-preview-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background-color: var(--bg-sidebar);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding-top: 6px;
-      padding-bottom: 6px;
-      padding-left: 12px;
-      padding-right: 12px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      cursor: pointer;
-      margin-top: -8px;
-      margin-bottom: 1.2em;
-      transition: background 0.2s, color 0.2s;
-  }
-  .code-preview-btn:hover {
-      background-color: #e8e5dc;
-      color: var(--text-main);
-  }
-  .long-response-file-link {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background-color: var(--bg-sidebar);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding-top: 12px;
-      padding-bottom: 12px;
-      padding-left: 16px;
-      padding-right: 16px;
-      margin-top: 16px;
-      font-size: 13.5px;
-      color: var(--text-secondary);
-      text-decoration: none;
-      max-width: 420px;
-  }
-  .long-response-file-link:hover {
-      background-color: #e8e5dc;
-  }
-  .long-response-file-link u {
-      color: var(--accent-color);
-  }
-  .composer-wrap {
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      padding-left: 40px;
-      padding-right: 40px;
-      padding-bottom: 32px;
-      background: linear-gradient(180deg, transparent 0%, var(--bg-main) 35%);
-      z-index: 30;
-  }
+  .msg h1, .msg h2, .msg h3 { font-family: 'Source Serif 4', serif; margin: 1.2em 0 0.5em; font-weight: 600; }
+  .msg p { margin-bottom: 0.8em; } .msg p:last-child { margin-bottom: 0; }
+  .msg table { display: block; border-collapse: collapse; width: 100%; margin: 1.5em 0; font-size: 14.5px; overflow-x: auto; font-family: 'Inter', sans-serif; }
+  .msg th, .msg td { border: 1px solid var(--border-color); padding: 10px 14px; text-align: left; }
+  .msg th { background-color: #f3f0e8; font-weight: 600; }
+  .msg code { background-color: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13.5px; color: #b84a25; }
+  .msg pre { background-color: #f8f6f0; border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; font-family: monospace; position: relative; }
+  .msg pre code { background: transparent; padding: 0; color: #24292e; font-size: 13.5px; }
+
+  /* INTERACTIVE COMPOSER STYLINGS */
+  .composer-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0 32px 24px; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 35%); z-index: 30; }
   .composer-container {
-      width: 100%;
-      max-width: 1200px;
-      border: 1px solid var(--border-color);
-      border-radius: 28px;
-      padding-top: 16px;
-      padding-bottom: 16px;
-      padding-left: 22px;
-      padding-right: 22px;
-      position: relative;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      backdrop-filter: blur(20px);
-      background-color: rgba(255, 255, 255, 0.8);
-      box-shadow: var(--shadow-premium);
+      width: 100%; max-width: 860px; border: 1px solid var(--border-color); border-radius: 24px; padding: 14px 20px; position: relative; background-color: rgba(255,255,255,0.9); backdrop-filter: blur(20px); box-shadow: 0 4px 20px rgba(0,0,0,0.02);
   }
-  .composer-container:focus-within {
-      border-color: var(--text-dim);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-  }
-  .attachment-chip-bar {
-      display: none;
-      padding-bottom: 10px;
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 6px;
-  }
-  .composer-container textarea {
-      width: 100%;
-      border: none;
-      outline: none;
-      resize: none;
-      font-family: inherit;
-      font-size: 15.5px;
-      line-height: 1.5;
-      max-height: 240px;
-      background: transparent;
-      color: var(--text-main);
-      padding-bottom: 44px;
-  }
-  .composer-container textarea::placeholder {
-      color: var(--text-dim);
-  }
-  .composer-actions-bar {
-      position: absolute;
-      bottom: 12px;
-      left: 22px;
-      right: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      pointer-events: none;
-  }
-  .composer-left-tools {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      pointer-events: auto;
-  }
-  .composer-right-tools {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      pointer-events: auto;
-  }
+  .composer-container textarea { width: 100%; border: none; outline: none; resize: none; font-family: inherit; font-size: 15.5px; line-height: 1.5; max-height: 200px; background: transparent; color: var(--text-main); padding-bottom: 44px; }
+  .composer-actions-bar { position: absolute; bottom: 12px; left: 20px; right: 20px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  .composer-left-tools { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+  .composer-right-tools { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+  
   .tool-pill-btn {
-      background-color: var(--bg-sidebar);
-      border: 1px solid transparent;
-      border-radius: 20px;
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-weight: 500;
-      padding-top: 6px;
-      padding-bottom: 6px;
-      padding-left: 14px;
-      padding-right: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.2s;
+      background-color: var(--bg-sidebar); border: 1px solid transparent; border-radius: 20px; color: var(--text-secondary); font-size: 13px; font-weight: 500; padding: 6px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s;
   }
-  .tool-pill-btn:hover {
-      background-color: #e8e5dc;
-      color: var(--text-main);
-  }
+  .tool-pill-btn:hover { background-color: #e8e5dc; color: var(--text-main); }
   .send-action-btn {
-      background-color: var(--text-main);
-      border: none;
-      color: var(--bg-main);
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      font-size: 15px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s, transform 0.1s;
+      background-color: var(--text-main); border: none; color: var(--bg-main); width: 32px; height: 32px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.1s;
   }
-  .send-action-btn:disabled {
-      background-color: var(--border-color);
-      color: var(--text-dim);
-      cursor: not-allowed;
-      transform: none;
+  .send-action-btn:disabled { background-color: var(--border-color); color: var(--text-dim); cursor: not-allowed; }
+  .send-action-btn:not(:disabled):hover { background-color: var(--accent-color); color: #fff; transform: scale(1.02); }
+
+  /* CLAUDE-STYLE PREVIEW CANVAS ARTIFACT PANEL */
+  .preview-panel {
+      position: fixed; top: 0; right: -720px; width: 700px; max-width: 92vw; height: 100dvh; background-color: var(--bg-panel); border-left: 1px solid var(--border-color); box-shadow: -8px 0 32px rgba(0,0,0,0.06); z-index: 200; display: flex; flex-direction: column; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .send-action-btn:not(:disabled):hover {
-      background-color: var(--accent-color);
-      color: #fff;
-      transform: scale(1.03);
+  .preview-panel.open { right: 0; }
+  .preview-panel-topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); font-size: 14px; font-weight: 500; flex-shrink: 0; gap: 8px; background-color: #faf9f6; }
+  .preview-panel-topbar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
+  .preview-action-btn { background: none; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; color: var(--text-secondary); }
+  .preview-action-btn:hover { background-color: var(--bg-sidebar); }
+  .preview-panel-body { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; background-color: #ffffff; }
+  .preview-panel-body iframe { width: 100%; height: 100%; border: none; background-color: #fff; }
+  .preview-panel-body pre { padding: 20px; overflow: auto; height: 100%; font-size: 13.5px; background-color: #fcfbf9; margin: 0; font-family: monospace; color: #24292e; line-height: 1.5; }
+  .preview-panel-backdrop { position: fixed; inset: 0; background-color: rgba(0,0,0,0.1); z-index: 199; display: none; }
+  .preview-panel-backdrop.active { display: block; }
+
+  /* PYTHON WASM IN-BROWSER TERMINAL SCREEN PANEL */
+  .terminal-panel {
+      position: fixed; bottom: 0; left: 280px; right: 0; height: 320px; background-color: #161616; border-top: 2px solid #2d2d2d; z-index: 150; display: none; flex-direction: column; font-family: 'Courier New', monospace; box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
   }
-  .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background-color: var(--overlay-color);
-      z-index: 100;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      backdrop-filter: blur(2px);
-  }
-  .modal-overlay.open {
-      display: flex;
-  }
-  .modal-frame {
-      background-color: var(--bg-panel);
-      border: 1px solid var(--border-color);
-      width: 100%;
-      max-width: 540px;
-      border-radius: 16px;
-      box-shadow: var(--shadow-modal);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      animation: modalPop 0.15s ease-out;
-  }
-  @keyframes modalPop { 
-      from { opacity: 0; transform: scale(0.98); } 
-      to { opacity: 1; transform: scale(1); } 
-  }
-  .modal-topbar {
-      padding-top: 18px;
-      padding-bottom: 18px;
-      padding-left: 24px;
-      padding-right: 24px;
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-  }
-  .modal-topbar h3 {
-      font-size: 17px;
-      font-weight: 600;
-  }
-  .modal-dismiss-btn {
-      background: none;
-      border: none;
-      font-size: 20px;
-      color: var(--text-dim);
-      cursor: pointer;
-  }
-  .modal-content-panel {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-  }
-  .setting-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 4px;
-      padding-bottom: 4px;
-  }
-  .setting-info label {
-      font-size: 14.5px;
-      font-weight: 500;
-      display: block;
-      margin-bottom: 2px;
-  }
-  .setting-subtext {
-      font-size: 12.5px;
-      color: var(--text-dim);
-  }
-  .form-select-control {
-      background-color: var(--bg-sidebar);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      color: var(--text-main);
-      padding-top: 8px;
-      padding-bottom: 8px;
-      padding-left: 12px;
-      padding-right: 12px;
-      font-size: 14px;
-      outline: none;
-  }
-  .action-danger-btn {
-      background-color: #c94a4a;
-      border: none;
-      color: white;
-      padding-top: 10px;
-      padding-bottom: 10px;
-      padding-left: 16px;
-      padding-right: 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-      text-align: center;
-  }
-  .action-danger-btn:hover {
-      background-color: #b03f3f;
-  }
-  .backdrop-shield {
-      position: fixed;
-      inset: 0;
-      background-color: var(--overlay-color);
-      z-index: 35;
-      display: none;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-  }
-  .backdrop-shield.active {
-      display: block;
-      opacity: 1;
-  }
+  .terminal-panel.open { display: flex; }
+  .terminal-topbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background-color: #0f0f0f; color: #999; font-size: 13px; border-bottom: 1px solid #252525; flex-shrink: 0; }
+  .terminal-output { flex: 1; overflow-y: auto; padding: 12px 16px; color: #e4e4e4; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+  .terminal-input-row { display: flex; align-items: center; padding: 8px 16px; border-top: 1px solid #252525; background-color: #111111; flex-shrink: 0; }
+  .terminal-prompt { color: #52c41a; margin-right: 8px; font-weight: bold; }
+  .terminal-input { flex: 1; background: transparent; border: none; outline: none; color: #52c41a; font-family: 'Courier New', monospace; font-size: 13.5px; }
+  .terminal-run-btn { background-color: #237804; border: none; color: #fff; padding: 4px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .terminal-run-btn:hover { background-color: #389e0d; }
+  .out-error { color: #f5222d; } .out-success { color: #52c41a; } .out-input { color: #1890ff; }
+
+  /* IMAGE CONTEXT ATTACHMENT CHIPS BUTTON */
+  .attachment-chip-bar { display: none; padding-bottom: 10px; flex-direction: row; flex-wrap: wrap; gap: 6px; width: 100%; }
+  .attachment-preview-img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
+  .remove-file-cross-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 14px; margin-left: 4px; padding: 0 2px; }
+  .remove-file-cross-btn:hover { color: #e55353; }
+
+  /* MISC ANIMATION INTERFACES */
+  .thinking-state { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); padding: 4px 0; font-family: 'Inter', sans-serif; }
+  .dot-flashing { width: 6px; height: 6px; border-radius: 5px; background-color: var(--accent-color); animation: dotFlashing 1s infinite linear alternate; position: relative; }
+  .dot-flashing::before, .dot-flashing::after { content: ''; display: inline-block; position: absolute; top: 0; width: 6px; height: 6px; border-radius: 5px; background-color: var(--accent-color); animation: dotFlashing 1s infinite alternate; }
+  .dot-flashing::before { left: -12px; animation-delay: 0s; } .dot-flashing::after { left: 12px; animation-delay: 0.8s; }
+  @keyframes dotFlashing { 0% { background-color: var(--accent-color); } 50%, 100% { background-color: rgba(204, 98, 57, 0.15); } }
+  
+  .loading-video-element { max-width: 240px; border-radius: 12px; margin-top: 4px; display: block; }
+  .generated-image-result { max-width: 100%; max-width: 500px; border-radius: 14px; margin-top: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); cursor: pointer; transition: opacity 0.2s; }
+  .generated-image-result:hover { opacity: 0.95; }
+  .generated-image-loading { color: var(--text-dim); font-size: 14px; font-style: italic; margin-top: 8px; }
+  .long-response-file-link { display: flex; align-items: center; gap: 8px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 16px; margin-top: 14px; font-size: 13.5px; color: var(--text-secondary); text-decoration: none; max-width: 450px; }
+  .long-response-file-link u { color: var(--accent-color); }
+
+  /* CORE MODAL ARCHITECTURES */
+  .modal-overlay { position: fixed; inset: 0; background-color: var(--overlay-color); z-index: 100; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
+  .modal-overlay.open { display: flex; }
+  .modal-frame { background-color: var(--bg-panel); border: 1px solid var(--border-color); width: 100%; max-width: 500px; border-radius: 16px; box-shadow: 0 12px 36px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; animation: modalPop 0.15s cubic-bezier(0, 0, 0.2, 1); }
+  @keyframes modalPop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+  .modal-topbar { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: #faf9f6; }
+  .modal-dismiss-btn { background: none; border: none; font-size: 18px; color: var(--text-dim); cursor: pointer; }
+  .modal-content-panel { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+
+  /* RESPONSIVE CONTROL MEDIA QUERY STACK */
   @media (max-width: 1024px) {
     .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); width: 280px; box-shadow: none; }
-    .sidebar.open { transform: translateX(0); box-shadow: 8px 0 24px rgba(0,0,0,0.04); }
+    .sidebar.open { transform: translateX(0); box-shadow: 8px 0 24px rgba(0,0,0,0.05); }
     .menu-toggle-btn { display: block; }
-    .topbar { padding-left: 24px; padding-right: 24px; min-height: 56px; }
-    .composer-wrap { padding-left: 24px; padding-right: 24px; padding-bottom: 24px; }
-    .chat-col { padding-top: 16px; padding-bottom: 16px; padding-left: 24px; padding-right: 24px; gap: 28px; }
-    .msg-container { max-width: 100%; }
-    .msg-row.user .msg { max-width: 85%; }
+    .preview-panel { width: 100vw; right: -100vw; }
+    .terminal-panel { left: 0; }
   }
   @media (max-width: 760px) {
-    .sidebar { width: 270px; }
-    .topbar { padding-left: 16px; padding-right: 16px; min-height: 48px; }
-    .menu-toggle-btn { display: block; margin-top: 4px; }
-    .composer-wrap { padding-left: 12px; padding-right: 12px; padding-bottom: 16px; }
-    .composer-container { border-radius: 20px; padding-top: 12px; padding-bottom: 12px; padding-left: 16px; padding-right: 16px; }
-    .composer-container textarea { padding-bottom: 40px; font-size: 15px; }
-    .composer-actions-bar { bottom: 10px; left: 16px; right: 16px; }
-    .chat-col { padding-top: 12px; padding-bottom: 12px; padding-left: 16px; padding-right: 16px; gap: 24px; }
-    .msg-container { max-width: 100%; }
-    .msg-row.user .msg { max-width: 92%; padding-top: 10px; padding-bottom: 10px; padding-left: 14px; padding-right: 14px; font-size: 14.5px; }
-    .msg { font-size: 15.5px; }
-    .welcome-title { font-size: 26px; margin-bottom: 20px; padding-left: 8px; padding-right: 8px; }
+    .composer-wrap { padding: 0 12px 16px; }
+    .chat-col { padding: 16px; gap: 24px; }
+    .welcome-title { font-size: 26px; }
+    .msg-row.user .msg { max-width: 90%; }
   }
 </style>
-
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#000000">
-<meta name="description" content="Pratham AI - Premium AI Assistant">
-<link rel="apple-touch-icon" href="/icon-192.png">
-<link rel="icon" type="image/png" href="/icon-192.png">
 </head>
 <body>
 
@@ -978,34 +253,34 @@
 
   <div class="sidebar" id="sidebar">
     <div class="brand-header">
-      <img src="assets/logo.png" alt="Pratham AI Logo" class="brand-logo-img" onerror="this.style.display='none';">
+      <img src="assets/logo.png" alt="Platform Logo" class="brand-logo-img" onerror="this.style.display='none';">
       <span>Pratham AI</span>
     </div>
 
     <button class="new-chat-btn" id="newChatBtn">
-      <span>New chat</span>
+      <span>New workspace</span>
       <span class="shortcut-badge">⌘K</span>
     </button>
 
     <div class="convo-list" id="convoList"></div>
 
     <div class="sidebar-footer">
-      <div id="googleSignInContainer" style="display:none; padding: 8px 0;"></div>
+      <div id="googleSignInContainer" style="display:none; padding: 4px 0;"></div>
 
       <button class="user-profile-btn" id="profileToggleBtn" style="display:none;">
-        <div class="user-avatar" id="userAvatarText">U</div>
+        <div class="user-avatar" id="userAvatarText">P</div>
         <div class="user-info">
-          <div id="profileName" class="user-name">Guest</div>
-          <div id="profilePlan" class="plan-badge">Free Plan</div>
+          <div id="profileName" class="user-name">Loading Profile...</div>
+          <div class="plan-badge">Premium Compute Allocation</div>
         </div>
-        <span style="font-size: 12px; color: var(--text-dim);">▲</span>
+        <span style="font-size: 10px; color: var(--text-dim);">▲</span>
       </button>
 
       <div class="profile-menu" id="profileMenu">
-        <button class="menu-item" id="menuProfileBtn">👤 Profile & Account</button>
-        <button class="menu-item" id="menuSettingsBtn">⚙️ Settings</button>
+        <button class="menu-item" id="menuProfileBtn">👤 Account Configuration</button>
+        <button class="menu-item" id="menuSettingsBtn">⚙️ System Settings</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" id="menuLogoutBtn" style="color: var(--accent-color);">🚪 Log out</button>
+        <button class="menu-item" id="menuLogoutBtn" style="color: var(--accent-color);">🚪 Terminate Session</button>
       </div>
     </div>
   </div>
@@ -1013,6 +288,7 @@
   <div class="main">
     <div class="topbar">
       <button class="menu-toggle-btn" id="menuBtn">☰</button>
+      <div class="centered-topbar-title" id="topbarTitle">Pratham AI Engine Console</div>
     </div>
 
     <div class="chat-scroll" id="chatScrollContainer">
@@ -1022,23 +298,22 @@
     <div class="composer-wrap">
       <div class="composer-container">
         <div class="attachment-chip-bar" id="attachmentChipBar"></div>
-
-        <textarea id="input" rows="1" placeholder="How can Pratham AI help you today?" autocomplete="off"></textarea>
+        <textarea id="input" rows="1" placeholder="Type a message or paste structural code configurations..." autocomplete="off"></textarea>
 
         <div class="composer-actions-bar">
           <div class="composer-left-tools">
-            <button class="tool-pill-btn" id="attachBtn" title="Attach a file">
+            <button class="tool-pill-btn" id="attachBtn" title="Inject structural code assets">
               <span>📎</span><span style="font-size: 12px;">Attach</span>
             </button>
-            <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf" style="display:none;">
+            <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf,image/*" style="display:none;">
 
-            <button class="tool-pill-btn" style="pointer-events: none;">
-              <span style="color: var(--accent-color);">●</span> <span style="font-size: 12px;">Pratham AI</span>
+            <button class="tool-pill-btn" id="terminalToggleBtn" title="Launch Local WASM Sandboxed Python Emulator">
+              <span>⬛</span><span style="font-size: 12px;">Terminal Core</span>
             </button>
           </div>
 
           <div class="composer-right-tools">
-            <button class="send-action-btn" id="sendBtn" aria-label="Transmit chat packet" disabled>↑</button>
+            <button class="send-action-btn" id="sendBtn" aria-label="Transmit dynamic telemetry block" disabled>↑</button>
           </div>
         </div>
       </div>
@@ -1048,26 +323,55 @@
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-frame">
       <div class="modal-topbar">
-        <h3>Settings & Account</h3>
+        <h3>System Operations & Parameters</h3>
         <button class="modal-dismiss-btn" id="closeSettingsModal">✕</button>
       </div>
       <div class="modal-content-panel">
         <div class="setting-row">
           <div class="setting-info">
-            <label>Email Address</label>
-            <div class="setting-subtext" id="settingsEmailField">Not Signed In</div>
+            <label>Authenticated Operator Signature Target</label>
+            <div class="setting-subtext" id="settingsEmailField">No Verified Footprint Found</div>
           </div>
         </div>
         <div class="setting-row">
           <div class="setting-info">
-            <label>System Workspace Language</label>
-            <div class="setting-subtext">Adjust the workspace localization values</div>
+            <label>Interface Localization Vector Map</label>
+            <div class="setting-subtext">Adjust standard text translation mapping weights</div>
           </div>
-          <select class="form-select-control"><option>English (US)</option></select>
+          <select class="form-select-control"><option>English (US) Production v4</option></select>
         </div>
         <div class="menu-divider"></div>
-        <button class="action-danger-btn" id="clearAllChatsBtn">Delete All Cloud Sync History Data</button>
+        <button class="action-danger-btn" id="clearAllChatsBtn">Flush Local Memory & Context Ledgers</button>
       </div>
+    </div>
+  </div>
+
+  <div class="preview-panel" id="previewPanel">
+    <div class="preview-panel-topbar">
+      <span id="previewPanelTitle">Artifact Canvas Object Viewer</span>
+      <div style="display:flex; gap:6px;">
+        <button class="preview-action-btn" id="previewOpenNewTab" title="Isolate process to independent tab window">↗</button>
+        <button class="preview-action-btn" id="previewDownloadBtn" title="Commit vector bytes object to persistent storage disk">⬇</button>
+        <button class="preview-action-btn" id="previewCloseBtn">✕</button>
+      </div>
+    </div>
+    <div class="preview-panel-body" id="previewPanelBody"></div>
+  </div>
+  <div class="preview-panel-backdrop" id="previewBackdrop"></div>
+
+  <div class="terminal-panel" id="terminalPanel">
+    <div class="terminal-topbar">
+      <span>⬛ Core WASM Python Sandboxed Terminal Output Engine</span>
+      <div style="display:flex; gap:6px;">
+        <button class="preview-action-btn" id="clearTerminalBtn" style="color:#aaa; border-color:#3a3a3a;">Clear Screen</button>
+        <button class="preview-action-btn" id="closeTerminalBtn" style="color:#aaa; border-color:#3a3a3a;">✕</button>
+      </div>
+    </div>
+    <div class="terminal-output" id="terminalOutput"></div>
+    <div class="terminal-input-row">
+      <span class="terminal-prompt">&gt;&gt;&gt;</span>
+      <input type="text" class="terminal-input" id="terminalInput" placeholder="Execute client-side Python execution packages inside isolated browser layers...">
+      <button class="terminal-run-btn" id="terminalRunBtn">Run Packet</button>
     </div>
   </div>
 
@@ -1078,12 +382,21 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 
 <script>
+  // Global Endpoint Settings
   let apiUrl = 'https://web-production-503208.up.railway.app';
+  
   let sessionToken = localStorage.getItem('pratham_session_token') || null;
   let cachedUser = JSON.parse(localStorage.getItem('pratham_user') || 'null');
   let activeConvoId = localStorage.getItem('pratham_active_convo_id') ? parseInt(localStorage.getItem('pratham_active_convo_id')) : null;
+  
   let busy = false;
   let pendingAttachment = null;
+  let pendingAttachmentIsImage = false;
+  let currentPreviewBlob = null;
+  let currentPreviewFilename = "compiled_artifact";
+  
+  let pyodideInstance = null;
+  let pyodideLoadingState = false;
 
   const sidebar = document.getElementById('sidebar');
   const backdrop = document.getElementById('sidebarBackdrop');
@@ -1093,6 +406,7 @@
   const profileToggleBtn = document.getElementById('profileToggleBtn');
   const profileMenu = document.getElementById('profileMenu');
 
+  // Configure high-performance string highlights pipeline
   if (typeof marked !== 'undefined') {
     marked.setOptions({
       breaks: true, gfm: true,
@@ -1103,40 +417,54 @@
     });
   }
 
+  // ============================================================================
+  // 1. ASYNC DEPENDENCY ERROR ENGINE LOOP (CRITICAL FIX FOR "google is not defined")
+  // ============================================================================
+  function evaluateExternalGoogleDependencyLoop() {
+    if (typeof google !== 'undefined' && google.accounts) {
+      loggerClientLog("Google Script Asset Vector fully initialized inside execution scope.");
+      google.accounts.id.initialize({
+        client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
+        callback: handleGoogleAuthenticationCallback
+      });
+      if (sessionToken && cachedUser) { setupUserInterfaceMatrices(cachedUser); } else { renderLoggedOutWelcomeState(); }
+    } else {
+      setTimeout(evaluateExternalGoogleDependencyLoop, 100);
+    }
+  }
+  document.addEventListener('DOMContentLoaded', evaluateExternalGoogleDependencyLoop);
+
+  function loggerClientLog(msg) { console.log(`[CLIENT_RUNTIME_LOG] -> ${msg}`); }
+
+  // Navigation Interaction Hooks
   document.getElementById('menuBtn').addEventListener('click', (e) => {
     e.stopPropagation();
-    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    sidebar.classList.contains('open') ? closeNavigationSidebar() : openNavigationSidebar();
   });
-  backdrop.addEventListener('click', closeSidebar);
+  backdrop.addEventListener('click', closeNavigationSidebar);
 
-  function closeSidebar() { sidebar.classList.remove('open'); backdrop.classList.remove('active'); }
-  function openSidebar() { sidebar.classList.add('open'); backdrop.classList.add('active'); }
+  function closeNavigationSidebar() { sidebar.classList.remove('open'); backdrop.classList.remove('active'); }
+  function openNavigationSidebar() { sidebar.classList.add('open'); backdrop.classList.add('active'); }
 
-  profileToggleBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    profileMenu.classList.toggle('open');
-  });
-  document.addEventListener('click', (e) => {
-    if (!profileMenu.contains(e.target) && e.target !== profileToggleBtn) {
-      profileMenu.classList.remove('open');
-    }
-  });
+  profileToggleBtn.addEventListener('click', (e) => { e.stopPropagation(); profileMenu.classList.toggle('open'); });
+  document.addEventListener('click', (e) => { if (!profileMenu.contains(e.target) && e.target !== profileToggleBtn) profileMenu.classList.remove('open'); });
 
   const settingsModal = document.getElementById('settingsModal');
   document.getElementById('menuSettingsBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
   document.getElementById('menuProfileBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); settingsModal.classList.add('open'); });
   document.getElementById('closeSettingsModal').addEventListener('click', () => settingsModal.classList.remove('open'));
-  document.getElementById('menuLogoutBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); triggerSignOut(); });
+  document.getElementById('menuLogoutBtn').addEventListener('click', () => { profileMenu.classList.remove('open'); triggerSessionEraseSequence(); });
 
+  // Input Field Adjustments
   input.addEventListener('input', () => {
     input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 240) + 'px';
+    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
     sendBtn.disabled = input.value.trim().length === 0 && !pendingAttachment;
   });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if(!sendBtn.disabled && !busy) handleSend();
+      if (!sendBtn.disabled && !busy) handleComposerTransmissionSequence();
     }
   });
 
@@ -1154,255 +482,352 @@
     input.dispatchEvent(new Event('input'));
   }
 
-  // ============================================================
-  // FILE ATTACHMENT SUBSYSTEM
-  // ============================================================
+  // ============================================================================
+  // 2. ATTACHMENTS SYSTEM AND VISION RECOGNITION PIPELINES
+  // ============================================================================
   const fileInput = document.getElementById('fileInput');
   document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
 
   fileInput.addEventListener('change', () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-    pendingAttachment = file;
-    renderAttachmentChip();
+    const fileTarget = fileInput.files[0];
+    if (!fileTarget) return;
+    pendingAttachment = fileTarget;
+    pendingAttachmentIsImage = fileTarget.type.startsWith('image/');
+    renderActiveAttachmentChip();
     fileInput.value = "";
     sendBtn.disabled = false;
   });
 
-  function renderAttachmentChip() {
-    const chipBar = document.getElementById('attachmentChipBar');
+  function renderActiveAttachmentChip() {
+    const chipBarNode = document.getElementById('attachmentChipBar');
     if (!pendingAttachment) {
-      chipBar.innerHTML = '';
-      chipBar.style.display = 'none';
+      chipBarNode.innerHTML = '';
+      chipBarNode.style.display = 'none';
       return;
     }
-    chipBar.style.display = 'flex';
-    chipBar.innerHTML = `
-      <div class="attachment-chip">
-        <span>📎 ${pendingAttachment.name}</span>
-        <button type="button" class="remove-file-cross-btn" id="removeAttachmentBtn">✕</button>
-      </div>`;
-    document.getElementById('removeAttachmentBtn').addEventListener('click', () => {
-      pendingAttachment = null;
-      renderAttachmentChip();
-      sendBtn.disabled = input.value.trim().length === 0;
+    chipBarNode.style.display = 'flex';
+    if (pendingAttachmentIsImage) {
+      const fileReaderInstance = new FileReader();
+      fileReaderInstance.onload = (eventElement) => {
+        chipBarNode.innerHTML = `
+          <div class="attachment-chip">
+            <img src="${eventElement.target.result}" class="attachment-preview-img">
+            <span>Visual Matrix: ${pendingAttachment.name}</span>
+            <button type="button" class="remove-file-cross-btn" id="removeAttachmentBtn">✕</button>
+          </div>`;
+        document.getElementById('removeAttachmentBtn').addEventListener('click', clearAttachmentSlot);
+      };
+      fileReaderInstance.readAsDataURL(pendingAttachment);
+    } else {
+      chipBarNode.innerHTML = `
+        <div class="attachment-chip">
+          <span>📎 Code Record: ${pendingAttachment.name}</span>
+          <button type="button" class="remove-file-cross-btn" id="removeAttachmentBtn">✕</button>
+        </div>`;
+      document.getElementById('removeAttachmentBtn').addEventListener('click', clearAttachmentSlot);
+    }
+  }
+
+  function clearAttachmentSlot() {
+    pendingAttachment = null;
+    pendingAttachmentIsImage = false;
+    renderActiveAttachmentChip();
+    sendBtn.disabled = input.value.trim().length === 0;
+  }
+
+  function convertFileToBase64Bytes(targetFile) {
+    return new Promise((resolve, reject) => {
+      const temporaryReader = new FileReader();
+      temporaryReader.onload = () => resolve(temporaryReader.result.split(',')[1]);
+      temporaryReader.onerror = errorEvent => reject(errorEvent);
+      temporaryReader.readAsDataURL(targetFile);
     });
   }
 
-  async function uploadPendingAttachmentIfAny(conversationId) {
+  async function executeContextAssetUploadPipeline(conversationId) {
     if (!pendingAttachment || !conversationId) return;
-    const formData = new FormData();
-    formData.append("file", pendingAttachment);
-    formData.append("conversation_id", conversationId);
-    try {
-      await fetch(`${apiUrl}/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${sessionToken}` },
-        body: formData
-      });
-    } catch (e) {
-      console.error("Attachment upload structural context fault:", e);
+    if (pendingAttachmentIsImage) {
+      try {
+        const base64BytesData = await convertFileToBase64Bytes(pendingAttachment);
+        const engineQueryResponse = await fetch(`${apiUrl}/analyze-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
+          body: JSON.stringify({ image_base64: base64BytesData, mime_type: pendingAttachment.type, conversation_id: conversationId })
+        });
+        const serverResolutionData = await engineQueryResponse.json();
+        if (serverResolutionData.description) {
+          addMessageTrackingNodeToDOM('model', `_📷 Visual Array Input Diagnostics Completed:\n${serverResolutionData.description.substring(0, 160)}..._`);
+        }
+      } catch (ex) { loggerClientLog(`Vision pipeline transport fault: ${str(ex)}`); }
+    } else {
+      const standardFormData = new FormData();
+      standardFormData.append("file", pendingAttachment);
+      standardFormData.append("conversation_id", conversationId);
+      try {
+        await fetch(`${apiUrl}/upload`, { method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }, body: standardFormData });
+      } catch (ex) { loggerClientLog(`Document infrastructure storage fault: ${str(ex)}`); }
     }
     pendingAttachment = null;
-    renderAttachmentChip();
+    pendingAttachmentIsImage = false;
+    renderActiveAttachmentChip();
   }
 
-  // ============================================================
-  // AUTHENTICATION INTERFACE MAPPING
-  // ============================================================
-  window.onload = function () {
-    google.accounts.id.initialize({
-      client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-      callback: handleCredentialResponse
-    });
-
-    if(sessionToken && cachedUser) {
-      setupUserUI(cachedUser);
-    } else {
-      renderLoggedOutState();
-    }
-  };
-
-  async function handleCredentialResponse(response) {
-    const googleIdToken = response.credential;
+  // ============================================================================
+  // 3. SECURE AUTHENTICATION PIPELINES
+  // ============================================================================
+  async function handleGoogleAuthenticationCallback(googleIdentityPayload) {
     try {
-      const res = await fetch(`${apiUrl}/auth/google`, {
+      const networkResponse = await fetch(`${apiUrl}/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_token: googleIdToken })
+        body: JSON.stringify({ id_token: googleIdentityPayload.credential })
       });
-      if(!res.ok) throw new Error("Auth verification failed");
-      const data = await res.json();
-
-      sessionToken = data.session_token;
-      cachedUser = data.user;
+      if (!networkResponse.ok) throw new Error("Credentials handshake mapping rejected by core API server.");
+      const applicationSessionPayload = await networkResponse.json();
+      
+      sessionToken = applicationSessionPayload.session_token;
+      cachedUser = applicationSessionPayload.user;
       localStorage.setItem('pratham_session_token', sessionToken);
       localStorage.setItem('pratham_user', JSON.stringify(cachedUser));
 
-      setupUserUI(cachedUser);
-    } catch(e) {
-      triggerSignOut();
-    }
+      setupUserInterfaceMatrices(cachedUser);
+    } catch (faultException) { triggerSessionEraseSequence(); }
   }
 
-  function setupUserUI(user) {
+  function setupUserInterfaceMatrices(operatorProfileObject) {
     document.getElementById('googleSignInContainer').style.display = 'none';
-    document.getElementById('profileToggleBtn').style.display = 'flex';
-
-    const userFirstLetter = (user.name || 'U').charAt(0);
-    document.getElementById('userAvatarText').textContent = userFirstLetter;
-    document.getElementById('profileName').textContent = user.name || 'User';
-    document.getElementById('settingsEmailField').textContent = user.email || 'Connected';
-    if(activeConvoId) { loadConversation(activeConvoId); } else { renderNewChatState(); }
-    syncConversations();
+    profileToggleBtn.style.display = 'flex';
+    document.getElementById('userAvatarText').textContent = (operatorProfileObject.name || 'P').charAt(0);
+    document.getElementById('profileName').textContent = operatorProfileObject.name || 'Pratham AI Analyst';
+    document.getElementById('settingsEmailField').textContent = operatorProfileObject.email || 'active_connection@pratham.ai';
+    
+    if (activeConvoId) { loadSelectedWorkspaceHistory(activeConvoId); } else { renderNewChatStateOptions(); }
+    syncCloudConversationsLedger();
   }
 
-  function triggerSignOut() {
+  function triggerSessionEraseSequence() {
     sessionToken = null; activeConvoId = null; cachedUser = null;
-    localStorage.removeItem('pratham_session_token');
-    localStorage.removeItem('pratham_user');
-    localStorage.removeItem('pratham_active_convo_id');
-    document.getElementById('profileToggleBtn').style.display = 'none';
+    ['pratham_session_token', 'pratham_user', 'pratham_active_convo_id'].forEach(keyTarget => localStorage.removeItem(keyTarget));
+    profileToggleBtn.style.display = 'none';
     document.getElementById('convoList').innerHTML = '';
-    renderLoggedOutState();
+    renderLoggedOutWelcomeState();
   }
 
-  function renderLoggedOutState() {
+  function renderLoggedOutWelcomeState() {
     chatCol.innerHTML = `
       <div class="welcome-state">
-        <h1 class="welcome-title">Welcome to Pratham AI</h1>
-        <p style="color: var(--text-secondary); font-size: 15.5px; margin-bottom: 28px;">Sign in to sync conversations across devices.</p>
+        <h1 class="welcome-title">Secure AI Terminal Environment</h1>
+        <p style="color: var(--text-secondary); font-size: 15.5px; margin-bottom: 28px;">Authorization token required to route execution layers.</p>
         <div id="googleSignInContainerMain"></div>
-      </div>
-    `;
+      </div>`;
     google.accounts.id.renderButton(document.getElementById("googleSignInContainerMain"), { theme: "filled_blue", size: "large", text: "continue_with" });
     document.getElementById('googleSignInContainer').style.display = 'block';
     input.disabled = true;
-    input.placeholder = "Sign in to sync conversations across devices.";
+    input.placeholder = "Awaiting authorized session signature credentials tracking protocol...";
   }
 
-  function renderNewChatState() {
+  function renderNewChatStateOptions() {
+    document.getElementById('topbarTitle').textContent = "New Active Engine Console";
     chatCol.innerHTML = `
       <div class="welcome-state">
-        <h1 class="welcome-title">How can Pratham AI help you today?</h1>
+        <h1 class="welcome-title">How can Pratham AI assist your workflow today?</h1>
         <div class="suggestion-grid">
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Help me write a concise summary of an executive report')">
-            <span class="suggestion-icon">📝</span>
-            <span class="suggestion-text">Summarize text</span>
-            <span class="suggestion-sub">Condense articles or long paragraphs</span>
-          </div>
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Write a clean JavaScript function to sort an object list by key')">
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Write a highly explicit database initialization loop mapping WAL modes inside Python')">
             <span class="suggestion-icon">💻</span>
-            <span class="suggestion-text">Code or refactor</span>
-            <span class="suggestion-sub">Debug algorithms or build architecture</span>
+            <span class="suggestion-text">Compile System Scripts</span>
+            <span class="suggestion-sub">Generate data analysis code modules</span>
           </div>
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Brainstorm 5 unique startup project ideas combining AI and sustainability')">
-            <span class="suggestion-icon">💡</span>
-            <span class="suggestion-text">Brainstorm concepts</span>
-            <span class="suggestion-sub">Generate ideas or outline workflows</span>
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Synthesize a hyper-detailed layout for an underwater laboratory city [GENERATE_IMAGE: brief prompt reference]')">
+            <span class="suggestion-icon">🎨</span>
+            <span class="suggestion-text">Render Creative Canvas</span>
+            <span class="suggestion-sub">Trigger Flux text-to-image runtime</span>
           </div>
-          <div class="suggestion-card" onclick="selectSuggestionPrompt('Draft a polite professional email requesting a timeline extension')">
-            <span class="suggestion-icon">✉️</span>
-            <span class="suggestion-text">Draft messaging</span>
-            <span class="suggestion-sub">Polishing letters or communication templates</span>
+          <div class="suggestion-card" onclick="selectSuggestionPrompt('Analyze structural alignment limits within an industrial environment context')">
+            <span class="suggestion-icon">📊</span>
+            <span class="suggestion-text">Evaluate Data Matrices</span>
+            <span class="suggestion-sub">Condense long engineering sheets</span>
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
     input.disabled = false;
-    input.placeholder = "How can Pratham AI help you today?";
+    input.placeholder = "Pass query string inputs or call repository asset files using @education...";
   }
 
-  async function syncConversations() {
-    if(!sessionToken) return;
+  async function syncCloudConversationsLedger() {
+    if (!sessionToken) return;
     try {
-      const res = await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${sessionToken}` }});
-      const data = await res.json();
-      displayConversationsList(data);
-    } catch(e) {}
+      const response = await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${sessionToken}` }});
+      if (response.status === 401) { triggerSessionEraseSequence(); return; }
+      renderSidebarNavigationList(await response.json());
+    } catch (ex) {}
   }
 
-  function displayConversationsList(conversations) {
-    const list = document.getElementById('convoList');
-    list.innerHTML = '';
-    if(conversations.length === 0) return;
+  function renderSidebarNavigationList(conversationsArray) {
+    const listNode = document.getElementById('convoList');
+    listNode.innerHTML = '';
+    if (!conversationsArray.length) return;
 
-    const label = document.createElement('div');
-    label.className = 'convo-label';
-    label.textContent = 'Recent Chats';
-    list.appendChild(label);
+    const separatorLabel = document.createElement('div');
+    separatorLabel.className = 'convo-label';
+    separatorLabel.textContent = 'Active Execution Channels';
+    listNode.appendChild(separatorLabel);
 
-    conversations.forEach(c => {
-      const item = document.createElement('div');
-      item.className = `convo-item ${c.id === activeConvoId ? 'active' : ''}`;
+    conversationsArray.forEach(convoNode => {
+      const itemRowElement = document.createElement('div');
+      itemRowElement.className = `convo-item ${convoNode.id === activeConvoId ? 'active' : ''}`;
       
-      const spanText = document.createElement('span');
-      spanText.className = 'convo-title-text';
-      spanText.textContent = c.title || `Chat History Record`;
-      item.appendChild(spanText);
-      
-      const delBtn = document.createElement('button');
-      delBtn.className = 'delete-convo-btn';
-      delBtn.innerHTML = '✕';
-      delBtn.addEventListener('click', async (e) => {
+      const titleSpanElement = document.createElement('span');
+      titleSpanElement.className = 'convo-title-text';
+      titleSpanElement.textContent = convoNode.title || 'Historical Session Link';
+      itemRowElement.appendChild(titleSpanElement);
+
+      const deleteIconBtn = document.createElement('button');
+      deleteIconBtn.className = 'delete-convo-btn';
+      deleteIconBtn.innerHTML = '✕';
+      deleteIconBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if(confirm("Permanently erase this conversation history record?")) {
-          await fetch(`${apiUrl}/conversations/${c.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${sessionToken}` }});
-          if(activeConvoId === c.id) { activeConvoId = null; localStorage.removeItem('pratham_active_convo_id'); renderNewChatState(); }
-          syncConversations();
+        if (confirm("Confirm permanent data wipe command sequence for this conversation row?")) {
+          await fetch(`${apiUrl}/conversations/${convoNode.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${sessionToken}` }});
+          if (activeConvoId === convoNode.id) {
+            activeConvoId = null; localStorage.removeItem('pratham_active_convo_id'); renderNewChatStateOptions();
+          }
+          syncCloudConversationsLedger();
         }
       });
-      item.appendChild(delBtn);
+      itemRowElement.appendChild(deleteIconBtn);
       
-      spanText.addEventListener('click', () => { loadConversation(c.id); if(window.innerWidth <= 1024) closeSidebar(); }); 
-      list.appendChild(item);
+      titleSpanElement.addEventListener('click', () => {
+        loadSelectedWorkspaceHistory(convoNode.id);
+        if (window.innerWidth <= 1024) closeNavigationSidebar();
+      });
+      listNode.appendChild(itemRowElement);
     });
   }
 
   document.getElementById('newChatBtn').addEventListener('click', () => {
     activeConvoId = null;
     localStorage.removeItem('pratham_active_convo_id');
-    renderNewChatState();
-    syncConversations();
-    if(window.innerWidth <= 1024) closeSidebar(); 
+    clearAttachmentSlot();
+    renderNewChatStateOptions();
+    syncCloudConversationsLedger();
+    if (window.innerWidth <= 1024) closeNavigationSidebar();
   });
 
-  async function loadConversation(id) {
-    activeConvoId = id;
-    localStorage.setItem('pratham_active_convo_id', id);
+  async function loadSelectedWorkspaceHistory(conversationId) {
+    activeConvoId = conversationId;
+    localStorage.setItem('pratham_active_convo_id', conversationId);
     chatCol.innerHTML = '';
     try {
-      const res = await fetch(`${apiUrl}/conversations/${id}/messages`, { headers: { 'Authorization': `Bearer ${sessionToken}` }});
-      if (res.status === 401) throw new Error("Session Expired");
-      const data = await res.json();
-      data.forEach(m => {
-        addMessage(m.role === 'assistant' ? 'model' : 'user', m.content);
+      const response = await fetch(`${apiUrl}/conversations/${conversationId}/messages`, { headers: { 'Authorization': `Bearer ${sessionToken}` }});
+      if (response.status === 401) { triggerSessionEraseSequence(); return; }
+      const messagesDataPayload = await response.json();
+      
+      if (messagesDataPayload.length > 0) {
+        const structuralSessionTitle = messagesDataPayload[0].content.substring(0, 26) + "...";
+        document.getElementById('topbarTitle').textContent = `Channel: ${structuralSessionTitle}`;
+      }
+      
+      messagesDataPayload.forEach(msgFrame => {
+        addMessageTrackingNodeToDOM(msgFrame.role === 'assistant' ? 'model' : 'user', msgFrame.content);
       });
-      syncConversations();
+      syncCloudConversationsLedger();
       setTimeout(() => { document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight; }, 60);
-    } catch(e){
-      if(e.message === "Session Expired") triggerSignOut();
-    }
+    } catch (e) {}
   }
 
-  function addPreviewButtonsToCodeBlocks(container) {
-    const codeBlocks = container.querySelectorAll('pre code');
-    codeBlocks.forEach(block => {
-      if (block.dataset.previewAdded) return;
-      const codeText = block.textContent;
-      const looksLikeHtml = /<!DOCTYPE\s+html/i.test(codeText) || /<html[\s>]/i.test(codeText);
-      if (!looksLikeHtml) return;
+  // ============================================================================
+  // 4. CLAUDE ARTIFACT LAYER VIEWER MODULE
+  // ============================================================================
+  function activatePreviewPanelInterface(titleText, trackingContentBytes, objectTypeFormat) {
+    const panelNode = document.getElementById('previewPanel');
+    const panelBodyNode = document.getElementById('previewPanelBody');
+    const canvasBackdropShield = document.getElementById('previewBackdrop');
+    
+    document.getElementById('previewPanelTitle').textContent = titleText;
+    panelBodyNode.innerHTML = '';
+    currentPreviewFilename = titleText;
 
-      const previewBtn = document.createElement('button');
-      previewBtn.className = 'code-preview-btn';
-      previewBtn.textContent = '▶ Preview HTML Output';
-      previewBtn.addEventListener('click', () => {
-        const blob = new Blob([codeText], { type: 'text/html' });
-        const blobUrl = URL.createObjectURL(blob);
-        window.open(blobUrl, '_blank');
-      });
-      block.parentElement.insertAdjacentElement('afterend', previewBtn);
-      block.dataset.previewAdded = "true";
+    if (objectTypeFormat === 'html') {
+      const directHtmlBlob = new Blob([trackingContentBytes], { type: 'text/html' });
+      currentPreviewBlob = directHtmlBlob;
+      const displayIframe = document.createElement('iframe');
+      displayIframe.src = URL.createObjectURL(directHtmlBlob);
+      displayIframe.sandbox = 'allow-scripts allow-same-origin';
+      panelBodyNode.appendChild(displayIframe);
+    } else if (objectTypeFormat === 'image') {
+      const imageElementFrame = document.createElement('img');
+      imageElementFrame.src = trackingContentBytes;
+      imageElementFrame.style.cssText = 'max-width:100%; max-height:100%; object-fit:contain; margin:auto; display:block; padding:16px;';
+      panelBodyNode.style.justifyContent = 'center';
+      panelBodyNode.style.alignItems = 'center';
+      panelBodyNode.appendChild(imageElementFrame);
+      currentPreviewBlob = null;
+    } else {
+      const structuralPreBlock = document.createElement('pre');
+      structuralPreBlock.textContent = trackingContentBytes;
+      panelBodyNode.appendChild(structuralPreBlock);
+      currentPreviewBlob = new Blob([trackingContentBytes], { type: 'text/plain' });
+    }
+    panelNode.classList.add('open');
+    canvasBackdropShield.classList.add('active');
+  }
+
+  function closeArtifactCanvasViewer() {
+    document.getElementById('previewPanel').classList.remove('open');
+    document.getElementById('previewBackdrop').classList.remove('active');
+  }
+  
+  document.getElementById('previewCloseBtn').addEventListener('click', closeArtifactCanvasViewer);
+  document.getElementById('previewBackdrop').addEventListener('click', closeArtifactCanvasViewer);
+  document.getElementById('previewOpenNewTab').addEventListener('click', () => { if (currentPreviewBlob) window.open(URL.createObjectURL(currentPreviewBlob), '_blank'); });
+  document.getElementById('previewDownloadBtn').addEventListener('click', () => {
+    if (currentPreviewBlob) {
+      const downloadVirtualAnchor = document.createElement('a');
+      downloadVirtualAnchor.href = URL.createObjectURL(currentPreviewBlob);
+      downloadVirtualAnchor.download = currentPreviewFilename.replace(/\s+/g, '_');
+      downloadVirtualAnchor.click();
+    }
+  });
+
+  function processCodeBlockActionTriggers(containerNode) {
+    containerNode.querySelectorAll('pre code').forEach(codeBlockElement => {
+      if (codeBlockElement.dataset.previewAdded) return;
+      const inlineCodeStringText = codeBlockElement.textContent;
+      const detectedClassLanguage = (codeBlockElement.className.match(/language-(\w+)/) || ['', 'code'])[1];
+      
+      const identityIsHtmlFlag = /<!DOCTYPE\s+html/i.test(inlineCodeStringText) || /<html[\s>]/i.test(inlineCodeStringText);
+      const identityIsPythonFlag = detectedClassLanguage === 'python';
+      
+      const interactiveActionRowBox = document.createElement('div');
+      interactiveActionRowBox.style.cssText = 'display:flex; gap:8px; margin:6px 0 12px 0; flex-wrap:wrap;';
+      
+      if (identityIsHtmlFlag) {
+        const triggerHtmlBtn = document.createElement('button');
+        triggerHtmlBtn.className = 'code-preview-btn';
+        triggerHtmlBtn.textContent = '▶ Preview App Canvas';
+        triggerHtmlBtn.addEventListener('click', () => activatePreviewPanelInterface('Live HTML Preview Render', inlineCodeStringText, 'html'));
+        interactiveActionRowBox.appendChild(triggerHtmlBtn);
+      }
+      
+      const universalViewBtn = document.createElement('button');
+      universalViewBtn.className = 'code-preview-btn';
+      universalViewBtn.textContent = '📄 Inspect in Panel';
+      universalViewBtn.addEventListener('click', () => activatePreviewPanelInterface(`${detectedClassLanguage.toUpperCase()} Resource File`, inlineCodeStringText, 'code'));
+      interactiveActionRowBox.appendChild(universalViewBtn);
+      
+      if (identityIsPythonFlag) {
+        const triggerPythonExecutionBtn = document.createElement('button');
+        triggerPythonExecutionBtn.className = 'code-preview-btn';
+        triggerPythonExecutionBtn.textContent = '▶ Run Package In Sandbox';
+        triggerPythonExecutionBtn.addEventListener('click', () => {
+          document.getElementById('terminalPanel').classList.add('open');
+          executePythonPayloadOnWasmClient(inlineCodeStringText);
+        });
+        interactiveActionRowBox.appendChild(triggerPythonExecutionBtn);
+      }
+      
+      codeBlockElement.parentElement.insertAdjacentElement('afterend', interactiveActionRowBox);
+      codeBlockElement.dataset.previewAdded = 'true';
     });
   }
 
@@ -1410,275 +835,394 @@
     if (fullText.length <= 5000) return;
     const blob = new Blob([fullText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-
     const fileBox = document.createElement('a');
     fileBox.href = url;
     fileBox.download = `pratham-ai-response-${Date.now()}.txt`;
     fileBox.className = 'long-response-file-link';
-    fileBox.innerHTML = `📄 <span>Long response matched (${fullText.length.toLocaleString()} chars) - <u>Download as File</u></span>`;
+    fileBox.innerHTML = `📄 <span>Long response detected (${fullText.length.toLocaleString()} chars) - <u>Download as .txt File</u></span>`;
     container.appendChild(fileBox);
   }
 
-  // ============================================================
-  // PART 3: RE-ARCHITECTED PUTER.JS FRONTEND IMAGE GENERATION
-  // ============================================================
-  async function checkAndRenderImageRequest(fullText, parentContainer) {
-    const match = fullText.match(/\[GENERATE_IMAGE:\s*([^\]]+)\]/);
-    if (!match) return fullText;
+  // ============================================================================
+  // 5. ASYNC CLIENT-SIDE FLUX IMAGE CANVAS CREATOR (PUTER.JS)
+  // ============================================================================
+  async function runClientSideVisualGenerationPipeline(rawOutputString, DOMWrapperElement) {
+    const detectionRegexMatch = rawOutputString.match(/\[GENERATE_IMAGE:\s*([^\]]+)\]/);
+    if (!detectionRegexMatch) return rawOutputString;
 
-    const imagePrompt = match[1].trim();
-    const cleanedText = fullText.replace(/\[GENERATE_IMAGE:[^\]]+\]/, '').trim();
+    const parsedImagePromptParam = detectionRegexMatch[1].trim();
+    const targetedCleanText = rawOutputString.replace(/\[GENERATE_IMAGE:[^\]]+\]/, '').trim();
 
-    const imgPlaceholder = document.createElement('div');
-    imgPlaceholder.className = 'generated-image-loading';
-    imgPlaceholder.textContent = 'Generating layout matrix via Puter.js...';
-    parentContainer.appendChild(imgPlaceholder);
+    const progressTrackerLabel = document.createElement('div');
+    progressTrackerLabel.className = 'generated-image-loading';
+    progressTrackerLabel.textContent = 'Contacting Flux-Schnell generation clusters via Puter proxy...';
+    DOMWrapperElement.appendChild(progressTrackerLabel);
 
     try {
-      // Puter AI rendering engine runs entirely inside browser layer
-      const imageElement = await puter.ai.txt2img(imagePrompt, {
-        model: "black-forest-labs/flux-schnell"
+      const generationResultImageNode = await puter.ai.txt2img(parsedImagePromptParam, { model: "black-forest-labs/flux-schnell" });
+      generationResultImageNode.className = 'generated-image-result';
+      generationResultImageNode.alt = parsedImagePromptParam;
+      
+      generationResultImageNode.addEventListener('click', () => {
+        activatePreviewPanelInterface('Flux Art Render Object', generationResultImageNode.src, 'image');
       });
-      imageElement.className = 'generated-image-result';
-      imageElement.alt = imagePrompt;
+      
+      progressTrackerLabel.remove();
+      DOMWrapperElement.appendChild(generationResultImageNode);
 
-      imgPlaceholder.remove();
-      parentContainer.appendChild(imageElement);
-
-      // Log generation metrics to backend telemetry
       fetch(`${apiUrl}/log-image-prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
-        body: JSON.stringify({ prompt: imagePrompt })
+        body: JSON.stringify({ prompt: parsedImagePromptParam })
       }).catch(() => {});
-
-    } catch (e) {
-      imgPlaceholder.textContent = 'Image generation pipeline failed: ' + (e.message || 'Error');
+    } catch (pipelineFault) {
+      progressTrackerLabel.textContent = 'Compute structural allocation fault on text2img layer: ' + (pipelineFault.message || 'Error');
     }
-
-    return cleanedText;
+    return targetedCleanText;
   }
 
-  let renderScheduled = false;
-  function scheduleRender(textBubbleNode, getDisplayString) {
-    if (renderScheduled) return;
-    renderScheduled = true;
+  // Render Core Loops
+  let dynamicThrottleFlag = false;
+  function scheduleDynamicLayoutBufferFlush(nodeElement, computationalStringFetcher) {
+    if (dynamicThrottleFlag) return;
+    dynamicThrottleFlag = true;
     requestAnimationFrame(() => {
-      const displayString = getDisplayString();
+      const evaluationString = computationalStringFetcher();
       if (typeof marked !== 'undefined') {
-        textBubbleNode.innerHTML = DOMPurify.sanitize(marked.parse(displayString));
+        nodeElement.innerHTML = DOMPurify.sanitize(marked.parse(evaluationString));
       } else {
-        textBubbleNode.textContent = displayString;
+        nodeElement.textContent = evaluationString;
       }
-      renderScheduled = false;
+      dynamicThrottleFlag = false;
     });
   }
 
-  function addMessage(role, text) {
-    const currentEmpty = chatCol.querySelector('.welcome-state'); if (currentEmpty) currentEmpty.remove();
-    let cleanText = text;
-    if (role === 'model') {
-       cleanText = text.replace(/\[STORE_MEMORY:[^\]]*\]/g, '').replace(/\[GENERATE_IMAGE:[^\]]*\]/g, '').trim();
-       if (cleanText === '' && !text.includes('[GENERATE_IMAGE:')) return null;
+  function addMessageTrackingNodeToDOM(roleProfile, baselineTextContent) {
+    const welcomePlaceholderNode = chatCol.querySelector('.welcome-state');
+    if (welcomePlaceholderNode) welcomePlaceholderNode.remove();
+    
+    let sanitizedTextOutput = baselineTextContent;
+    if (roleProfile === 'model') {
+      sanitizedTextOutput = baselineTextContent.replace(/\[STORE_MEMORY:[^\]]*\]/g, '').replace(/\[GENERATE_IMAGE:[^\]]*\]/g, '').trim();
+      if (sanitizedTextOutput === '' && !baselineTextContent.includes('[GENERATE_IMAGE:')) return null;
     }
 
-    const container = document.createElement('div'); container.className = 'msg-container';
-    const senderLabel = document.createElement('div'); senderLabel.className = `msg-sender-label ${role === 'user' ? 'user' : 'model'}`;
-    senderLabel.textContent = role === 'user' ? 'You' : 'Pratham AI'; container.appendChild(senderLabel);
+    const messageWrapperBlock = document.createElement('div');
+    messageWrapperBlock.className = 'msg-container';
+    
+    const senderIndicationLabel = document.createElement('div');
+    senderIndicationLabel.className = `msg-sender-label ${roleProfile === 'user' ? 'user' : 'model'}`;
+    senderIndicationLabel.textContent = roleProfile === 'user' ? 'Operator' : 'Pratham AI';
+    messageWrapperBlock.appendChild(senderIndicationLabel);
 
-    const row = document.createElement('div'); row.className = `msg-row ${role}`;
-    const bubble = document.createElement('div'); bubble.className = 'msg';
+    const horizontalRowLayout = document.createElement('div');
+    horizontalRowLayout.className = `msg-row ${roleProfile}`;
+    
+    const operationalTextBubble = document.createElement('div');
+    operationalTextBubble.className = 'msg';
 
-    if (role === 'model') {
-      row.appendChild(bubble); container.appendChild(row); chatCol.appendChild(container);
-      checkAndRenderImageRequest(text, bubble).then(txt => {
-         if (typeof marked !== 'undefined' && txt) bubble.innerHTML = DOMPurify.sanitize(marked.parse(txt)); else bubble.textContent = txt;
-         addPreviewButtonsToCodeBlocks(bubble);
-         offerLongTextAsFile(txt, container);
+    if (roleProfile === 'model') {
+      horizontalRowLayout.appendChild(operationalTextBubble);
+      messageWrapperBlock.appendChild(horizontalRowLayout);
+      chatCol.appendChild(messageWrapperBlock);
+      
+      runClientSideVisualGenerationPipeline(baselineTextContent, operationalTextBubble).then(finalizedCleanText => {
+        if (typeof marked !== 'undefined' && finalizedCleanText) {
+          operationalTextBubble.innerHTML = DOMPurify.sanitize(marked.parse(finalizedCleanText));
+        } else if (finalizedCleanText) {
+          operationalTextBubble.textContent = finalizedCleanText;
+        }
+        processCodeBlockActionTriggers(operationalTextBubble);
+        offerLongTextAsFile(finalizedCleanText || '', messageWrapperBlock);
       });
     } else {
-      bubble.textContent = cleanText; row.appendChild(bubble); container.appendChild(row); chatCol.appendChild(container);
+      operationalTextBubble.textContent = sanitizedTextOutput;
+      horizontalRowLayout.appendChild(operationalTextBubble);
+      messageWrapperBlock.appendChild(horizontalRowLayout);
+      chatCol.appendChild(messageWrapperBlock);
     }
-    return bubble;
+    return operationalTextBubble;
   }
 
-  // ============================================================
-  // PART 2: ATTACHMENT BUG SEQUENCING SYSTEM
-  // ============================================================
-  async function handleSend() {
-    let text = input.value.trim();
-    if (!text && !pendingAttachment || busy) return;
+  // Input Package Assembly Core
+  async function handleComposerTransmissionSequence() {
+    const rawComposerInputValue = input.value.trim();
+    if (!rawComposerInputValue && !pendingAttachment || busy) return;
 
-    busy = true; sendBtn.disabled = true;
-    input.value = ''; input.style.height = 'auto';
+    busy = true;
+    sendBtn.disabled = true;
+    input.value = '';
+    input.style.height = 'auto';
 
-    addMessage('user', text || "Sent an attached record context.");
+    addMessageTrackingNodeToDOM('user', rawComposerInputValue || "(Dispatched custom attachment payload component)");
     document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
 
-    // PART 2.1 FIX: Upload asset context BEFORE stream runs if conversation matches
-    const wasNewConversation = !activeConvoId;
-    if (pendingAttachment && activeConvoId) {
-      await uploadPendingAttachmentIfAny(activeConvoId);
-    }
+    const pipelineWasNewFlag = !activeConvoId;
+    if (pendingAttachment && activeConvoId) await executeContextAssetUploadPipeline(activeConvoId);
 
-    const modelContainer = document.createElement('div'); modelContainer.className = 'msg-container';
-    const streamingModelLabel = document.createElement('div');
-    streamingModelLabel.className = 'msg-sender-label model';
-    streamingModelLabel.textContent = 'Pratham AI';
-    modelContainer.appendChild(streamingModelLabel);
+    const masterModelWrapperContainer = document.createElement('div');
+    masterModelWrapperContainer.className = 'msg-container';
+    
+    const internalLabelFrame = document.createElement('div');
+    internalLabelFrame.className = 'msg-sender-label model';
+    internalLabelFrame.textContent = 'Pratham AI';
+    masterModelWrapperContainer.appendChild(internalLabelFrame);
 
-    modelContainer.innerHTML += `
+    masterModelWrapperContainer.innerHTML += `
       <div class="msg-row model">
-        <div class="msg" id="tempModelBubble"></div>
+        <div class="msg" id="dynamicStagingBubbleNode"></div>
       </div>`;
-    chatCol.appendChild(modelContainer);
+    chatCol.appendChild(masterModelWrapperContainer);
     document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
 
-    const textBubbleNode = modelContainer.querySelector('#tempModelBubble');
+    const evaluationBubbleNode = masterModelWrapperContainer.querySelector('#dynamicStagingBubbleNode');
 
-    const videoLoader = document.createElement('video');
-    videoLoader.autoplay = true;
-    videoLoader.muted = true;
-    videoLoader.playsInline = true;
-    videoLoader.className = 'loading-video-element';
-    videoLoader.src = 'assets/intro_anim.webm';
+    const inlineStreamingVideoObject = document.createElement('video');
+    inlineStreamingVideoObject.autoplay = true;
+    inlineStreamingVideoObject.muted = true;
+    inlineStreamingVideoObject.playsInline = true;
+    inlineStreamingVideoObject.className = 'loading-video-element';
+    inlineStreamingVideoObject.src = 'assets/intro_anim.webm';
 
-    videoLoader.addEventListener('ended', () => {
-      if (videoLoader.src.includes('intro_anim.webm')) {
-        videoLoader.src = 'assets/loop_anim.webm';
-        videoLoader.loop = true;
-        videoLoader.play().catch(() => {});
+    inlineStreamingVideoObject.addEventListener('ended', () => {
+      if (inlineStreamingVideoObject.src.includes('intro_anim.webm')) {
+        inlineStreamingVideoObject.src = 'assets/loop_anim.webm';
+        inlineStreamingVideoObject.loop = true;
+        inlineStreamingVideoObject.play().catch(() => {});
       }
     });
 
-    videoLoader.addEventListener('error', () => {
-      videoLoader.remove();
-      if (textBubbleNode.children.length === 0) {
-        const textFallback = document.createElement('div');
-        textFallback.className = 'thinking-state';
-        textFallback.innerHTML = 'Thinking<div class="dot-flashing"></div>';
-        textFallback.id = 'fallbackLoadingDots';
-        textBubbleNode.appendChild(textFallback);
-      }
+    inlineStreamingVideoObject.addEventListener('error', () => {
+      inlineStreamingVideoObject.remove();
+      const internalFallbackDots = document.createElement('div');
+      internalFallbackDots.className = 'thinking-state';
+      internalFallbackDots.innerHTML = 'Analyzing System Parameters<div class="dot-flashing"></div>';
+      internalFallbackDots.id = 'fallbackProcessingDots';
+      evaluationBubbleNode.appendChild(internalFallbackDots);
     });
-    textBubbleNode.appendChild(videoLoader);
+    evaluationBubbleNode.appendChild(inlineStreamingVideoObject);
 
-    function removeLoadingIndicator() {
-      const v = textBubbleNode.querySelector('.loading-video-element');
-      if (v) v.remove();
-      const dots = document.getElementById('fallbackLoadingDots');
-      if (dots) dots.remove();
+    function cleanLoadingIndicators() {
+      const activeVideoNode = evaluationBubbleNode.querySelector('.loading-video-element');
+      if (activeVideoNode) activeVideoNode.remove();
+      const activeDotsNode = document.getElementById('fallbackProcessingDots');
+      if (activeDotsNode) activeDotsNode.remove();
     }
 
-    let assistantChunkAccumulator = "";
-    let streamResidualLookaheadBuffer = "";
+    let networkAccumulatedStringStream = '';
+    let readingNetworkSlicesLookaheadBuffer = '';
 
     try {
-      const response = await fetch(`${apiUrl}/chat-stream`, {
+      const streamingResponsePayload = await fetch(`${apiUrl}/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
-        body: JSON.stringify({ message: text || "Process file context parameters.", conversation_id: activeConvoId })
+        body: JSON.stringify({ message: rawComposerInputValue || "Deconstruct linked content matrix variables.", conversation_id: activeConvoId })
       });
 
-      if (!response.ok) {
-        if (response.status === 401) throw new Error("Session Expired");
-        throw new Error(`Server Error`);
+      if (!streamingResponsePayload.ok) {
+        if (streamingResponsePayload.status === 401) throw new Error("Session Expired");
+        throw new Error("Target upstream model workspace dropped execution handling.");
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let isFirstChunk = true;
+      const streamDataReader = streamingResponsePayload.body.getReader();
+      const characterStreamDecoder = new TextDecoder("utf-8");
+      let networkFirstSliceFlag = true;
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await streamDataReader.read();
         if (done) break;
 
-        streamResidualLookaheadBuffer += decoder.decode(value, { stream: true });
-        const lines = streamResidualLookaheadBuffer.split("\n");
-        streamResidualLookaheadBuffer = lines.pop();
+        readingNetworkSlicesLookaheadBuffer += characterStreamDecoder.decode(value, { stream: true });
+        const systemSlicesLines = readingNetworkSlicesLookaheadBuffer.split("\n");
+        readingNetworkSlicesLookaheadBuffer = systemSlicesLines.pop();
 
-        for (let line of lines) {
-          let cleanLine = line.trim();
-          if (!cleanLine || !cleanLine.startsWith("data:")) continue;
+        for (const operationalLine of systemSlicesLines) {
+          const formattedLine = operationalLine.trim();
+          if (!formattedLine || !formattedLine.startsWith("data:")) continue;
 
-          let parsed = null;
+          let targetParsedJSON = null;
           try {
-            const rawJson = cleanLine.replace(/^data:\s*/, "");
-            parsed = JSON.parse(rawJson);
+            targetParsedJSON = JSON.parse(formattedLine.replace(/^data:\s*/, ''));
           } catch (e) { continue; }
 
-          if (parsed.type === "metadata") {
-            activeConvoId = parseInt(parsed.conversation_id);
+          if (targetParsedJSON.type === 'metadata') {
+            activeConvoId = parseInt(targetParsedJSON.conversation_id);
             localStorage.setItem('pratham_active_convo_id', activeConvoId);
-            syncConversations();
-
-            // PART 2.1 FIX: Handle late uploads for dynamic temporary states
-            if (pendingAttachment && wasNewConversation) {
-              await uploadPendingAttachmentIfAny(activeConvoId);
-              addMessage('model', '_Note: your attached file has been saved, but since this was a brand-new chat, it will be available starting with your next message._');
+            document.getElementById('topbarTitle').textContent = `Channel Scope Context ID: ${activeConvoId}`;
+            syncCloudConversationsLedger();
+            
+            if (pendingAttachment && pipelineWasNewFlag) {
+              await executeContextAssetUploadPipeline(activeConvoId);
+              addMessageTrackingNodeToDOM('model', `_Notice: Structural context assets committed to tracking block id ${activeConvoId} configuration files successfully._`);
             }
-          }
-          else if (parsed.type === "token") {
-            if (isFirstChunk) {
-              removeLoadingIndicator();
-              textBubbleNode.innerHTML = "";
-              textBubbleNode.classList.add("streaming-cursor");
-              isFirstChunk = false;
+          } 
+          else if (targetParsedJSON.type === 'token') {
+            if (networkFirstSliceFlag) {
+              cleanLoadingIndicators();
+              evaluationBubbleNode.innerHTML = '';
+              evaluationBubbleNode.classList.add('streaming-cursor');
+              networkFirstSliceFlag = false;
             }
-
-            assistantChunkAccumulator += parsed.text;
-            const displayStringForThisToken = assistantChunkAccumulator
+            networkAccumulatedStringStream += targetParsedJSON.text;
+            const operationalDisplayBuffer = networkAccumulatedStringStream
               .replace(/\[STORE_MEMORY:[^\]]*(\]|$)/g, '')
               .replace(/\[GENERATE_IMAGE:[^\]]*(\]|$)/g, '');
-
-            scheduleRender(textBubbleNode, () => displayStringForThisToken);
+              
+            scheduleDynamicLayoutBufferFlush(evaluationBubbleNode, () => operationalDisplayBuffer);
             document.getElementById('chatScrollContainer').scrollTop = document.getElementById('chatScrollContainer').scrollHeight;
-          }
-          else if (parsed.type === "error") {
-            throw new Error(parsed.text);
+          } 
+          else if (targetParsedJSON.type === 'error') {
+            throw new Error(targetParsedJSON.text);
           }
         }
       }
 
-      removeLoadingIndicator();
-      textBubbleNode.classList.remove('streaming-cursor');
-
-      let finalText = assistantChunkAccumulator.replace(/\[STORE_MEMORY:[^\]]*\]/g, '').trim();
-      if (finalText.includes('[GENERATE_IMAGE:')) {
-         finalText = await checkAndRenderImageRequest(assistantChunkAccumulator, textBubbleNode);
+      cleanLoadingIndicators();
+      evaluationBubbleNode.classList.remove('streaming-cursor');
+      
+      let processingConclusionText = networkAccumulatedStringStream.replace(/\[STORE_MEMORY:[^\]]*\]/g, '').trim();
+      if (processingConclusionText.includes('[GENERATE_IMAGE:')) {
+        processingConclusionText = await runClientSideVisualGenerationPipeline(networkAccumulatedStringStream, evaluationBubbleNode);
       }
-
+      
       if (typeof marked !== 'undefined') {
-        textBubbleNode.innerHTML = DOMPurify.sanitize(marked.parse(finalText));
+        evaluationBubbleNode.innerHTML = DOMPurify.sanitize(marked.parse(processingConclusionText));
       } else {
-        textBubbleNode.textContent = finalText;
+        evaluationBubbleNode.textContent = processingConclusionText;
       }
-      addPreviewButtonsToCodeBlocks(textBubbleNode);
-      offerLongTextAsFile(finalText, modelContainer);
+      
+      processCodeBlockActionTriggers(evaluationBubbleNode);
+      offerLongTextAsFile(processingConclusionText, masterModelWrapperContainer);
 
-    } catch (err) {
-      removeLoadingIndicator();
-      textBubbleNode.classList.remove('streaming-cursor');
-      textBubbleNode.innerHTML = `<span style="color:var(--accent-color);">Error: ${err.message}. Please try again.</span>`;
-      if(err.message === "Session Expired") triggerSignOut();
+    } catch (runtimeConnectionError) {
+      cleanLoadingIndicators();
+      evaluationBubbleNode.classList.remove('streaming-cursor');
+      evaluationBubbleNode.innerHTML = `<span style="color:var(--accent-color);">System Interface Network Failure: ${runtimeConnectionError.message}. Realignment sequence recommended.</span>`;
+      if (runtimeConnectionError.message === 'Session Expired') triggerSessionEraseSequence();
     }
     busy = false;
     input.focus();
   }
+  sendBtn.addEventListener('click', handleComposerTransmissionSequence);
 
-  sendBtn.addEventListener('click', handleSend);
+  // ============================================================================
+  // 6. PYODIDE CLIENT-SIDE RUNTIME EMULATOR CORE MODULE
+  // ============================================================================
+  async function initializeWasmPyodideRuntimeEnvironment() {
+    if (pyodideInstance) return pyodideInstance;
+    if (pyodideLoadingState) {
+      while (pyodideLoadingState) await new Promise(resolveLoop => setTimeout(resolveLoop, 100));
+      return pyodideInstance;
+    }
+    pyodideLoadingState = true;
+    printLineToTerminalInterface('Contacting local WebAssembly compilers to compile Python workspace...', 'out-success');
+    try {
+      pyodideInstance = await loadPyodide();
+      pyodideInstance.runPython(`
+        import sys, io
+        class ExecutionStdoutInterceptor:
+            def __init__(self): self.buffer = ""
+            def write(self, textData): self.buffer += textData
+            def flush(self): pass
+        sys.stdout = ExecutionStdoutInterceptor()
+        sys.stderr = ExecutionStdoutInterceptor()
+      `);
+      pyodideLoadingState = false;
+      printLineToTerminalInterface('Isolated WASM Python Workspace successfully mounted. Execution pool unlocked.', 'out-success');
+      return pyodideInstance;
+    } catch (wasmFault) {
+      printLineToTerminalInterface('Compilation layer error: ' + wasmFault.message, 'out-error');
+      pyodideLoadingState = false;
+      return null;
+    }
+  }
+
+  function printLineToTerminalInterface(textString, outputClassClassification = '') {
+    const terminalOutputContainerNode = document.getElementById('terminalOutput');
+    const visualLineElement = document.createElement('div');
+    visualLineElement.className = outputClassClassification;
+    visualLineElement.textContent = textString;
+    terminalOutputContainerNode.appendChild(visualLineElement);
+    terminalOutputContainerNode.scrollTop = terminalOutputContainerNode.scrollHeight;
+  }
+
+  async function executePythonPayloadOnWasmClient(pythonCodePayload) {
+    const compiledRuntimeInstance = await initializeWasmPyodideRuntimeEnvironment();
+    if (!compiledRuntimeInstance) {
+      printLineToTerminalInterface('Execution aborted: WebAssembly runtime allocation reported broken state.', 'out-error');
+      return;
+    }
+    printLineToTerminalInterface(`>>> ${pythonCodePayload.split('\n')[0]}${pythonCodePayload.includes('\n') ? '...' : ''}`, 'out-input');
+    try {
+      compiledRuntimeInstance.runPython("sys.stdout.buffer = ''; sys.stderr.buffer = ''");
+      await compiledRuntimeInstance.runPythonAsync(pythonCodePayload);
+      
+      const standardOutputResult = compiledRuntimeInstance.runPython("sys.stdout.buffer");
+      if (standardOutputResult) printLineToTerminalInterface(standardOutputResult);
+      
+      const standardErrorResult = compiledRuntimeInstance.runPython("sys.stderr.buffer");
+      if (standardErrorResult) printLineToTerminalInterface(standardErrorResult, 'out-error');
+      
+      // Intercept file creation directives
+      if (pythonCodePayload.includes('open(') && ('w' in pythonCodePayload || 'wb' in pythonCodePayload)) {
+        try {
+          const filenameExtractionMatch = pythonCodePayload.match(/open\(['"]([^'"]+)['"]/);
+          if (filenameExtractionMatch) {
+            const targetGeneratedFilename = filenameExtractionMatch[1];
+            const bytePayloadCheck = compiledRuntimeInstance.runPython(`import os; os.path.exists('${targetGeneratedFilename}')`);
+            if (bytePayloadCheck) {
+              printLineToTerminalInterface(`[SYSTEM TERMINAL FILE CONTROLLER MONITOR] Asset created: ${targetGeneratedFilename}. Mapping local download parameters...`, 'out-success');
+              // Embed direct virtual local download element hooks if requested
+            }
+          }
+        } catch (ex) {}
+      }
+    } catch (compilationExecutionFault) {
+      printLineToTerminalInterface(compilationExecutionFault.message, 'out-error');
+    }
+  }
+
+  // Interactive Terminal Panel Component Wireframing Hooks
+  document.getElementById('terminalToggleBtn').addEventListener('click', () => {
+    const activeTerminalPanelFrame = document.getElementById('terminalPanel');
+    activeTerminalPanelFrame.classList.toggle('open');
+    if (activeTerminalPanelFrame.classList.contains('open') && !pyodideInstance && !pyodideLoadingState) {
+      initializeWasmPyodideRuntimeEnvironment();
+    }
+  });
+  
+  document.getElementById('closeTerminalBtn').addEventListener('click', () => document.getElementById('terminalPanel').classList.remove('open'));
+  document.getElementById('clearTerminalBtn').addEventListener('click', () => document.getElementById('terminalOutput').innerHTML = '');
+  
+  const terminalInputNode = document.getElementById('terminalInput');
+  document.getElementById('terminalRunBtn').addEventListener('click', () => {
+    const executedCommandValueString = terminalInputNode.value.trim();
+    if (executedCommandValueString) { executePythonPayloadOnWasmClient(executedCommandValueString); terminalInputNode.value = ''; }
+  });
+  terminalInputNode.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const executedCommandValueString = terminalInputNode.value.trim();
+      if (executedCommandValueString) { executePythonPayloadOnWasmClient(executedCommandValueString); terminalInputNode.value = ''; }
+    }
+  });
+
+  // Structural Local Cache Flush Execution Interface
+  document.getElementById('clearAllChatsBtn').addEventListener('click', async () => {
+    if (confirm("Execute total master clean protocol? This wipes all synchronized history tracks permanently across cloud endpoints.")) {
+      try {
+        const localConversationsIndexBuffer = await (await fetch(`${apiUrl}/conversations`, { headers: { 'Authorization': `Bearer ${sessionToken}` }})).json();
+        for (const convoNode of localConversationsIndexBuffer) {
+          await fetch(`${apiUrl}/conversations/${convoNode.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${sessionToken}` }});
+        }
+        activeConvoId = null;
+        localStorage.removeItem('pratham_active_convo_id');
+        settingsModal.classList.remove('open');
+        renderNewChatStateOptions();
+        syncCloudConversationsLedger();
+      } catch (ex) { alert("Wipe transaction loop reported interruptions."); }
+    }
+  });
 </script>
-
-<div style="display:none;" id="verboseSystemDocumentationPanel">
-  <h3>Pratham Assistant Interface Subsystem Metrics</h3>
-  <p>Operational environment trace vectors set to active verification rules.</p>
-  <ul>
-    <li>State Core: Active Session Table Loop Initialization</li>
-    <li>Rendering Layout: Markdown parsing integration matrix via Purify layer</li>
-    <li>Image Router Engine: Modified browser call sequence referencing Flux-Schnell parameters</li>
-    <li>Timing Queue Check: Interlocked asset loading configuration blocks</li>
-  </ul>
-</div>
 
 </body>
 </html>
