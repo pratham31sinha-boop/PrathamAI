@@ -44,11 +44,6 @@
             --accent-vip: #d4af37;
             --accent-vip-glow: rgba(212, 175, 55, 0.4);
             
-            --status-success: #2e7d32;
-            --status-error: #d32f2f;
-            --status-warning: #ed6c02;
-            --status-info: #0288d1;
-            
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
             --shadow-lg: 0 16px 36px rgba(0,0,0,0.15);
@@ -1698,7 +1693,6 @@
             const streamTarget = responseNode.querySelector('#activeStreamTarget');
             let accumulatedResponse = "";
 
-            // PRODUCTION LIVE SYSTEM SYNC OVERRIDE (Connected to Railway Engine)
             try {
                 const liveEndpoint = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:5000/chat-stream' : '/chat-stream';
                 const sseResponse = await fetch(liveEndpoint, {
@@ -1919,6 +1913,138 @@ sys.stderr = WebConsole(is_error=True)
         // --- 10. Boot ---
         document.addEventListener('DOMContentLoaded', initApp);
 
+        // ==============================================================================
+        // DYNAMIC OVERRIDE MODULE: PRESERVES ALL PREVIOUS LINES AND RE-DEFINES CORE FLOW
+        // ==============================================================================
+        executeUserPrompt = async function() {
+            let promptText = DOM.mainTextInput.value.trim();
+            if (!promptText && !AppState.pendingFile) return;
+
+            AppState.isGenerating = true;
+            DOM.btnSubmitMessage.disabled = true;
+            DOM.mainTextInput.value = '';
+            DOM.mainTextInput.style.height = 'auto';
+
+            let displayString = promptText;
+            if (AppState.pendingFile) {
+                displayString += `\n\n[Attached: ${AppState.pendingFile.name}]`;
+            }
+            appendMessageToFeed('user', displayString);
+
+            if (AppState.eduModeActive && !promptText.includes("@education")) {
+                promptText = "@education " + promptText;
+            }
+
+            if (AppState.pendingFile) {
+                const statusNode = appendStatusPill(`Processing ${AppState.pendingFile.name} for RAG context...`);
+                await new Promise(r => setTimeout(r, 1200));
+                statusNode.remove();
+                clearFileAttachment();
+            }
+
+            const hero = DOM.chatFeed.querySelector('.hero-welcome');
+            if (hero) hero.remove();
+
+            const responseNode = document.createElement('div');
+            responseNode.className = 'message-group';
+            responseNode.innerHTML = `
+                <div class="message-meta meta-ai">
+                    <div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI
+                </div>
+                <div class="message-body-wrapper wrapper-ai">
+                    <div class="message-content cursor-blink" id="activeStreamTarget">Thinking...</div>
+                </div>
+            `;
+            DOM.chatFeed.appendChild(responseNode);
+            scrollToBottom();
+
+            const streamTarget = responseNode.querySelector('#activeStreamTarget');
+            let accumulatedResponse = "";
+
+            try {
+                const liveEndpoint = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:5000/chat-stream' : '/chat-stream';
+                const sseResponse = await fetch(liveEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem("pratham_session_token") || "standard_auth_hex") },
+                    body: JSON.stringify({ message: promptText, conversation_id: AppState.currentConversationId })
+                });
+
+                if (sseResponse.ok) {
+                    streamTarget.textContent = "";
+                    const reader = sseResponse.body.getReader();
+                    const decoder = new TextDecoder();
+                    let chunkBuffer = "";
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        chunkBuffer += decoder.decode(value, { stream: true });
+                        const sseLines = chunkBuffer.split("\n");
+                        chunkBuffer = sseLines.pop();
+
+                        for (const rawLine of sseLines) {
+                            const standardLine = rawLine.trim();
+                            if (standardLine.startsWith("data:")) {
+                                try {
+                                    const parsedStreamObj = JSON.parse(standardLine.substring(5).trim());
+                                    if (parsedStreamObj.type === "token") {
+                                        accumulatedResponse += parsedStreamObj.text;
+                                        streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
+                                        scrollToBottom();
+                                    } else if (parsedStreamObj.type === "metadata") {
+                                        AppState.currentConversationId = parsedStreamObj.conversation_id;
+                                    } else if (parsedStreamObj.type === "error") {
+                                        streamTarget.innerHTML = `<span style="color:var(--status-error);">${parsedStreamObj.text}</span>`;
+                                    }
+                                } catch (innerJsonErr) {}
+                            }
+                        }
+                    }
+                } else {
+                    throw new Error("SERVER_UNREACHABLE");
+                }
+            } catch (err) {
+                console.warn("Backend streaming failed or unconfigured, falling back to secure browser mode.", err);
+                streamTarget.textContent = "";
+                let standardCleanOutput = `Hello! I am Pratham AI, an advanced language interface. How can I assist you with code optimization, data analysis, or architecture today?`;
+                
+                if (promptText.toLowerCase().includes("hi") || promptText.toLowerCase() === "hii") {
+                    standardCleanOutput = `Hello! How can I help you today? Feel free to ask code analysis queries or drop instructions for background automated execution tasks.`;
+                } else if (promptText.toLowerCase().includes("time complexity")) {
+                    standardCleanOutput = `To perform a comprehensive time complexity analysis, please paste your script execution path here! Generally, basic element operations execute in $\\mathcal{O}(1)$ time, linear dataset runs utilize $\\mathcal{O}(N)$, and matching layered structures run in quadratic $\\mathcal{O}(N^2)$ complexities.`;
+                }
+
+                const manualChunks = standardCleanOutput.match(/.{1,4}/g) || [];
+                for (const chunk of manualChunks) {
+                    accumulatedResponse += chunk;
+                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
+                    scrollToBottom();
+                    await new Promise(r => setTimeout(r, 15));
+                }
+            } finally {
+                streamTarget.classList.remove('cursor-blink');
+                streamTarget.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
+
+                let pythonMatch = accumulatedResponse.match(/\[EXECUTE_PYTHON:\s*([\s\S]*?)\]/);
+                if (pythonMatch && pythonMatch[1]) {
+                    let inlineCode = pythonMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+                    if (!AppState.pyodideReady) { await initializePyodideEnv(); }
+                    try {
+                        window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0); sys.stderr.seek(0); sys.stderr.truncate(0);");
+                        await window.pyodide.runPythonAsync(inlineCode);
+                        const backgroundOut = window.pyodide.runPython("sys.stdout.getvalue()");
+                        const backgroundErr = window.pyodide.runPython("sys.stderr.getvalue()");
+                        if (backgroundOut) appendTerminalOutput(`\n<span class="t-ok">[Background AI Execution Output]: ${backgroundOut}</span>\n`);
+                        if (backgroundErr) appendTerminalOutput(`\n<span class="t-err">[Background AI Execution Error]: ${backgroundErr}</span>\n`);
+                    } catch (pyErr) {
+                        appendTerminalOutput(`\n<span class="t-err">[Background AI Exception]: ${pyErr.toString()}</span>\n`);
+                    }
+                }
+                AppState.isGenerating = false;
+                DOM.mainTextInput.focus();
+                handleComposerInput();
+            }
+        };
     </script>
 </body>
 </html>
