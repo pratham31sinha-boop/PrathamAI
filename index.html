@@ -923,6 +923,7 @@
             color: #888888;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 12px;
         }
         .mac-dots { display: flex; gap: 6px; }
@@ -1883,7 +1884,7 @@ sys.stderr = WebConsole(is_error=True)
         (function() {
             // Explicitly enforce workspace visibility mapping
             function validateAuthenticationStatus() {
-                const sToken = localStorage.getItem("pratham_session_token") || localStorage.getItem("sessionToken");
+                const sToken = localStorage.getItem("pratham_session_token") || localStorage.getItem("sessionToken") || window.sessionToken;
                 const authScreen = document.getElementById("authWallScreen");
                 if (sToken) {
                     if (authScreen) authScreen.style.setProperty("display", "none", "important");
@@ -1933,21 +1934,31 @@ sys.stderr = WebConsole(is_error=True)
                     // Commit directly locally first to ensure lock screen vanishes instantly
                     localStorage.setItem("pratham_session_token", res.credential);
                     localStorage.setItem("sessionToken", res.credential);
+                    window.sessionToken = res.credential;
                     
                     // Parse client details out
                     const base64Url = res.credential.split('.')[1];
                     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                    const rawProfile = JSON.parse(atob(base64));
-                    const mappedUserObj = {
-                        id: rawProfile.sub,
-                        email: rawProfile.email,
-                        name: rawProfile.name || 'User Profile',
+                    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+                    const decodedUser = JSON.parse(jsonPayload);
+                    
+                    window.cachedUser = {
+                        id: decodedUser.sub,
+                        email: decodedUser.email,
+                        name: decodedUser.name || 'User Profile',
                         role: 'standard'
                     };
-                    localStorage.setItem("pratham_user_profile", JSON.stringify(mappedUserObj));
-                    validateAuthenticationStatus();
 
-                    // Network replication handshake
+                    localStorage.setItem("pratham_user_profile", JSON.stringify(window.cachedUser));
+                    
+                    const nameEl = document.getElementById("uiUserName");
+                    const planEl = document.getElementById("uiUserPlan");
+                    if (nameEl) nameEl.textContent = window.cachedUser.name;
+                    if (planEl) planEl.textContent = "Standard Tier";
+                    
+                    // Fire backend route exchange mapping
                     const authExchange = await fetch('/auth/google', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1957,12 +1968,16 @@ sys.stderr = WebConsole(is_error=True)
                         const payload = await authExchange.json();
                         localStorage.setItem("pratham_session_token", payload.session_token);
                         localStorage.setItem("pratham_user_profile", JSON.stringify(payload.user));
+                        window.sessionToken = payload.session_token;
+                        window.cachedUser = payload.user;
                         
-                        document.getElementById("uiUserName").textContent = payload.user.name;
-                        document.getElementById("uiUserPlan").textContent = payload.user.role === 'vip' ? "Creator Access" : "Standard Tier";
+                        if (nameEl) nameEl.textContent = payload.user.name;
+                        if (planEl) planEl.textContent = payload.user.role === 'vip' ? "Creator Access" : "Standard Tier";
                     }
+                    validateAuthenticationStatus();
                 } catch (err) {
                     console.error("Identity verification connection anomaly:", err);
+                    validateAuthenticationStatus();
                 }
             }
 
@@ -1971,6 +1986,8 @@ sys.stderr = WebConsole(is_error=True)
             if (sessionProfileData) {
                 try {
                     const parsedUserObj = JSON.parse(sessionProfileData);
+                    window.cachedUser = parsedUserObj;
+                    window.sessionToken = localStorage.getItem("pratham_session_token");
                     document.addEventListener("DOMContentLoaded", () => {
                         const nameEl = document.getElementById("uiUserName");
                         const planEl = document.getElementById("uiUserPlan");
@@ -2126,12 +2143,13 @@ sys.stderr = WebConsole(is_error=True)
             if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                 const nativeInitCall = google.accounts.id.initialize;
                 google.accounts.id.initialize = function(configurationOptions) {
-                    if (configurationObjectOptions && configurationOptions.callback) {
+                    if (configurationOptions && configurationOptions.callback) {
                         const nativeExecutionCallback = configurationOptions.callback;
                         configurationOptions.callback = async function(responseWrapper) {
                             if (responseWrapper && responseWrapper.credential) {
                                 localStorage.setItem("pratham_session_token", responseWrapper.credential);
                                 localStorage.setItem("sessionToken", responseWrapper.credential);
+                                window.sessionToken = responseWrapper.credential;
                             }
                             const executionOutput = await nativeExecutionCallback(responseWrapper);
                             validateAuthenticationStatus();
