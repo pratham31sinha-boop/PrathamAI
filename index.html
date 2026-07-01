@@ -1149,6 +1149,8 @@
             <div class="auth-logo">Pratham AI</div>
             <div class="auth-subtitle">Enterprise cognitive processing workspace interface.</div>
             <div id="gSignInBtnTarget"></div>
+            <div id="gsiMain"></div>
+            <div id="googleSignInContainer"></div>
         </div>
     </div>
 
@@ -1757,7 +1759,6 @@
                     accumulatedResponse += chunk;
                     // Sanitize and parse markdown on every tick
                     streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
-                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
                     scrollToBottom();
                     // Artificial network latency
                     await new Promise(r => setTimeout(r, 15 + Math.random() * 20)); 
@@ -1882,12 +1883,12 @@ sys.stderr = WebConsole(is_error=True)
         (function() {
             // Explicitly enforce workspace visibility mapping
             function validateAuthenticationStatus() {
-                const sToken = localStorage.getItem("pratham_session_token");
+                const sToken = localStorage.getItem("pratham_session_token") || localStorage.getItem("sessionToken");
                 const authScreen = document.getElementById("authWallScreen");
                 if (sToken) {
-                    authScreen.style.setProperty("display", "none", "important");
+                    if (authScreen) authScreen.style.setProperty("display", "none", "important");
                 } else {
-                    authScreen.style.setProperty("display", "flex", "important");
+                    if (authScreen) authScreen.style.setProperty("display", "flex", "important");
                 }
             }
 
@@ -1896,29 +1897,57 @@ sys.stderr = WebConsole(is_error=True)
                 
                 // Initialize Official Identity Services Script
                 setTimeout(() => {
-                    if (typeof google !== 'undefined') {
+                    if (typeof google !== 'undefined' && google.accounts) {
                         google.accounts.id.initialize({
                             client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
                             callback: handleGoogleSignInResponse,
                             auto_select: true
                         });
-                        google.accounts.id.renderButton(
-                            document.getElementById("gSignInBtnTarget"),
-                            { theme: "outline", size: "large", width: "320" }
-                        );
+                        
+                        // Render onto your multiple target configurations safely
+                        const targets = ["gSignInBtnTarget", "gsiMain", "googleSignInContainer"];
+                        targets.forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                google.accounts.id.renderButton(el, { theme: "outline", size: "large", width: "320" });
+                            }
+                        });
                     }
                 }, 1000);
 
                 // Setup clear logout listener routine
-                document.getElementById("btnLogout").addEventListener("click", () => {
-                    localStorage.removeItem("pratham_session_token");
-                    localStorage.removeItem("pratham_user_profile");
-                    location.reload();
-                });
+                const logoutBtn = document.getElementById("btnLogout");
+                if (logoutBtn) {
+                    logoutBtn.addEventListener("click", () => {
+                        localStorage.removeItem("pratham_session_token");
+                        localStorage.removeItem("sessionToken");
+                        localStorage.removeItem("pratham_user_profile");
+                        location.reload();
+                    });
+                }
             });
 
             async function handleGoogleSignInResponse(res) {
+                if (!res || !res.credential) return;
                 try {
+                    // Commit directly locally first to ensure lock screen vanishes instantly
+                    localStorage.setItem("pratham_session_token", res.credential);
+                    localStorage.setItem("sessionToken", res.credential);
+                    
+                    // Parse client details out
+                    const base64Url = res.credential.split('.')[1];
+                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    const rawProfile = JSON.parse(atob(base64));
+                    const mappedUserObj = {
+                        id: rawProfile.sub,
+                        email: rawProfile.email,
+                        name: rawProfile.name || 'User Profile',
+                        role: 'standard'
+                    };
+                    localStorage.setItem("pratham_user_profile", JSON.stringify(mappedUserObj));
+                    validateAuthenticationStatus();
+
+                    // Network replication handshake
                     const authExchange = await fetch('/auth/google', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1931,7 +1960,6 @@ sys.stderr = WebConsole(is_error=True)
                         
                         document.getElementById("uiUserName").textContent = payload.user.name;
                         document.getElementById("uiUserPlan").textContent = payload.user.role === 'vip' ? "Creator Access" : "Standard Tier";
-                        validateAuthenticationStatus();
                     }
                 } catch (err) {
                     console.error("Identity verification connection anomaly:", err);
@@ -1944,8 +1972,10 @@ sys.stderr = WebConsole(is_error=True)
                 try {
                     const parsedUserObj = JSON.parse(sessionProfileData);
                     document.addEventListener("DOMContentLoaded", () => {
-                        document.getElementById("uiUserName").textContent = parsedUserObj.name;
-                        document.getElementById("uiUserPlan").textContent = parsedUserObj.role === 'vip' ? "Creator Access" : "Standard Tier";
+                        const nameEl = document.getElementById("uiUserName");
+                        const planEl = document.getElementById("uiUserPlan");
+                        if (nameEl) nameEl.textContent = parsedUserObj.name;
+                        if (planEl) planEl.textContent = parsedUserObj.role === 'vip' ? "Creator Access" : "Standard Tier";
                     });
                 } catch(e) {}
             }
@@ -2006,7 +2036,7 @@ sys.stderr = WebConsole(is_error=True)
                 }
 
                 try {
-                    const token = localStorage.getItem("pratham_session_token") || "standard_auth_hex";
+                    const token = localStorage.getItem("pratham_session_token") || localStorage.getItem("sessionToken") || "standard_auth_hex";
                     const sseResponse = await fetch('/chat-stream', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -2091,73 +2121,29 @@ sys.stderr = WebConsole(is_error=True)
                     handleComposerInput();
                 }
             };
-        })();
 
-        // ==============================================================================
-        // AUTOMATED TASK FORCE LAYER - LIFECYCLE MONITOR AND INTERCEPTOR PATCH
-        // Resolves the Google Credential mismatch and guarantees seamless main screen routing
-        // ==============================================================================
-        (function() {
-            const originalHandleGoogleCredential = window.handleGoogleCredential;
-            const originalSetupUI = window.setupUI;
-
-            if (typeof window.handleGoogleCredential === 'function') {
-                window.handleGoogleCredential = async function(response) {
-                    try {
-                        if (response && response.credential) {
-                            const base64Url = response.credential.split('.')[1];
-                            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                            }).join(''));
-                            const decodedUser = JSON.parse(jsonPayload);
-                            
-                            window.sessionToken = response.credential;
-                            window.cachedUser = {
-                                id: decodedUser.sub,
-                                email: decodedUser.email,
-                                name: decodedUser.name || 'User Profile',
-                                role: 'standard'
-                            };
-
-                            localStorage.setItem("pratham_session_token", window.sessionToken);
-                            localStorage.setItem("pratham_user_profile", JSON.stringify(window.cachedUser));
-                        }
-                    } catch (err) {
-                        console.warn("Auth pipeline intercept modification resolved safely.", err);
+            // GLOBAL COGNITIVE WORKSPACE ANCHOR INITIALIZATION INTERCEPTOR
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                const nativeInitCall = google.accounts.id.initialize;
+                google.accounts.id.initialize = function(configurationOptions) {
+                    if (configurationObjectOptions && configurationOptions.callback) {
+                        const nativeExecutionCallback = configurationOptions.callback;
+                        configurationOptions.callback = async function(responseWrapper) {
+                            if (responseWrapper && responseWrapper.credential) {
+                                localStorage.setItem("pratham_session_token", responseWrapper.credential);
+                                localStorage.setItem("sessionToken", responseWrapper.credential);
+                            }
+                            const executionOutput = await nativeExecutionCallback(responseWrapper);
+                            validateAuthenticationStatus();
+                            return executionOutput;
+                        };
                     }
-                    if (typeof originalHandleGoogleCredential === 'function') {
-                        await originalHandleGoogleCredential(response);
-                    }
-                    forceDisplayGatingRefresh();
+                    return nativeInitCall.apply(this, arguments);
                 };
             }
 
-            if (typeof window.setupUI === 'function') {
-                window.setupUI = function(user) {
-                    const dynamicContext = user || window.cachedUser || JSON.parse(localStorage.getItem("pratham_user_profile"));
-                    if (typeof originalSetupUI === 'function') {
-                        originalSetupUI(dynamicContext);
-                    }
-                    forceDisplayGatingRefresh();
-                };
-            }
-
-            function forceDisplayGatingRefresh() {
-                const currentToken = localStorage.getItem("pratham_session_token") || window.sessionToken;
-                const gateElement = document.getElementById("authWallScreen");
-                if (gateElement) {
-                    if (currentToken) {
-                        gateElement.style.setProperty("display", "none", "important");
-                        gateElement.setAttribute("aria-hidden", "true");
-                    } else {
-                        gateElement.style.setProperty("display", "flex", "important");
-                        gateElement.setAttribute("aria-hidden", "false");
-                    }
-                }
-            }
-
-            setInterval(forceDisplayGatingRefresh, 100);
+            // High-frequency runtime safety daemon loop to handle view transitions instantly
+            setInterval(validateAuthenticationStatus, 100);
         })();
     </script>
 </body>
