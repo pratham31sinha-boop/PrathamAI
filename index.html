@@ -17,7 +17,7 @@
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     
-    <script src="https://cdn.jsdelivr.net/npm/pyodide@0.27.0/pyodide.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js"></script>
 
     <style>
         /* ==========================================================================
@@ -30,7 +30,7 @@
             --bg-panel: #ffffff;
             --bg-hover: rgba(0, 0, 0, 0.04);
             --bg-active: rgba(0, 0, 0, 0.08);
-            
+            Ros
             --border-light: #e2e0d8;
             --border-heavy: #d1cfc7;
             
@@ -43,6 +43,11 @@
             --accent-hover: #b35531;
             --accent-vip: #d4af37;
             --accent-vip-glow: rgba(212, 175, 55, 0.4);
+            
+            --status-success: #2e7d32;
+            --status-error: #d32f2f;
+            --status-warning: #ed6c02;
+            --status-info: #0288d1;
             
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
@@ -90,7 +95,7 @@
                 
                 --accent-primary: #e87b51;
                 --accent-hover: #ff8f66;
-                
+                                
                 --overlay-bg: rgba(0, 0, 0, 0.7);
             }
         }
@@ -113,7 +118,7 @@
             font-family: var(--font-sans);
             font-size: 16px;
             line-height: 1.5;
-            overflow: hidden;
+           overflow: hidden;
             display: flex;
             text-rendering: optimizeLegibility;
             -webkit-font-smoothing: antialiased;
@@ -191,7 +196,7 @@
             justify-content: space-between;
             background-color: transparent;
             border: 1px solid var(--border-heavy);
-            color: var(--text-primary);
+      0 0  color: var(--text-primary);
             padding: 12px 16px;
             border-radius: var(--radius-pill);
             font-size: 14px;
@@ -519,7 +524,7 @@
             flex-direction: column;
             align-items: center;
             text-align: center;
-            padding: 60px 0 40px;
+           padding: 60px 0 40px;
             animation: fadeUp 0.6s ease-out;
         }
 
@@ -587,7 +592,7 @@
         .prompt-desc { font-size: 13px; color: var(--text-tertiary); line-height: 1.4; }
 
         /* Message Structure */
-        .message-group {
+       .message-group {
             display: flex;
             flex-direction: column;
             width: 100%;
@@ -607,7 +612,7 @@
 
         .meta-user { justify-content: flex-end; color: var(--text-tertiary); }
         .meta-ai { justify-content: flex-start; color: var(--text-primary); }
-        
+        Mez
         .ai-badge-icon {
             width: 16px;
             height: 16px;
@@ -652,6 +657,7 @@
         /* Markdown Elements within Message */
         .message-content p { margin-bottom: 1.2em; }
         .message-content p:last-child { margin-bottom: 0; }
+ inversion
         .message-content h1, .message-content h2, .message-content h3 {
             font-family: var(--font-sans);
             font-weight: 700;
@@ -721,7 +727,7 @@
             align-items: center;
             gap: 10px;
             background-color: var(--bg-sidebar);
-            border: 1px solid var(--border-heavy);
+           border: 1px solid var(--border-heavy);
             padding: 8px 16px;
             border-radius: var(--radius-pill);
             font-family: var(--font-sans);
@@ -848,7 +854,7 @@
             transition: all 0.2s;
         }
         .btn-icon:hover { background-color: var(--bg-hover); color: var(--text-primary); }
-        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+       .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
 
         .btn-send {
             width: 36px;
@@ -918,6 +924,7 @@
             color: #888888;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 12px;
         }
         .mac-dots { display: flex; gap: 6px; }
@@ -950,6 +957,7 @@
         
         /* Terminal Syntax Colors */
         .t-sys { color: #888888; font-style: italic; }
+ inversion
         .t-cmd { color: var(--term-cmd); }
         .t-ok  { color: var(--term-ok); }
         .t-err { color: var(--term-err); }
@@ -1014,7 +1022,7 @@
         .overlay-backdrop.is-visible .modal-card {
             transform: scale(1) translateY(0);
             opacity: 1;
-        }
+                    }
 
         .modal-header {
             padding: 20px 24px;
@@ -1144,7 +1152,7 @@
                     Activate VIP Code
                 </button>
                 <button class="menu-action" id="btnSettings" role="menuitem">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     System Settings
                 </button>
                 <div class="menu-divider"></div>
@@ -1225,7 +1233,7 @@
                     <div class="mac-dots">
                         <div class="mac-dot md-red"></div>
                         <div class="mac-dot md-yel"></div>
-                        <div class="mac-dot md-grn"></div>
+                       <div class="mac-dot md-grn"></div>
                     </div>
                     Python 3.11 Sandbox (WASM)
                 </div>
@@ -1285,7 +1293,6 @@
             isGenerating: false,
             pendingFile: null,
             pyodideReady: false,
-            currentConversationId: null,
             theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
         };
 
@@ -1299,7 +1306,7 @@
             btnProfileMenu: document.getElementById('btnProfileMenu'),
             profileDropdownMenu: document.getElementById('profileDropdownMenu'),
             btnOpenVipModal: document.getElementById('btnOpenVipModal'),
-            uiVipBadge: document.getElementById('uiVipBadge'),
+           uiVipBadge: document.getElementById('uiVipBadge'),
             uiAvatarIcon: document.getElementById('uiAvatarIcon'),
             uiUserPlan: document.getElementById('uiUserPlan'),
             
@@ -1330,7 +1337,7 @@
             terminalPanel: document.getElementById('terminalPanel'),
             termOutputDisplay: document.getElementById('termOutputDisplay'),
             termInputField: document.getElementById('termInputField'),
-            btnCloseTerm: document.getElementById('btnCloseTerm'),
+           btnCloseTerm: document.getElementById('btnCloseTerm'),
             btnClearTerm: document.getElementById('btnClearTerm')
         };
 
@@ -1392,14 +1399,14 @@
             // VIP Modal Flow
             DOM.btnOpenVipModal.addEventListener('click', () => openModal(DOM.vipModalCard));
             DOM.btnCloseVipModal.addEventListener('click', closeModal);
-            DOM.btnSubmitVipCode.addEventListener('click', verifyVipCode);
-            DOM.vipCodeInput.addEventListener('keydown', (e) => {
+           DOM.btnSubmitVipCode.addEventListener('click', verifyVipCode);
+           DOM.vipCodeInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') verifyVipCode();
             });
 
             // Tool Toggles
             DOM.btnToggleEdu.addEventListener('click', toggleEduMode);
-            DOM.btnToggleTerminal.addEventListener('click', toggleTerminalPanel);
+           DOM.btnToggleTerminal.addEventListener('click', toggleTerminalPanel);
             
             // Terminal Internal Actions
             DOM.btnCloseTerm.addEventListener('click', () => {
@@ -1408,11 +1415,11 @@
                 DOM.btnToggleTerminal.classList.remove('is-active');
             });
             DOM.btnClearTerm.addEventListener('click', () => DOM.termOutputDisplay.innerHTML = '');
-            DOM.termInputField.addEventListener('keydown', handleTerminalInput);
+           DOM.termInputField.addEventListener('keydown', handleTerminalInput);
 
             // Composer Textarea Auto-resize & Input parsing
-            DOM.mainTextInput.addEventListener('input', handleComposerInput);
-            DOM.mainTextInput.addEventListener('keydown', (e) => {
+           DOM.mainTextInput.addEventListener('input', handleComposerInput);
+           DOM.mainTextInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (!DOM.btnSubmitMessage.disabled) executeUserPrompt();
@@ -1421,7 +1428,7 @@
 
             // Attachments
             DOM.btnAttachFile.addEventListener('click', () => DOM.hiddenFileInput.click());
-            DOM.hiddenFileInput.addEventListener('change', handleFileSelection);
+           DOM.hiddenFileInput.addEventListener('change', handleFileSelection);
             DOM.btnSubmitMessage.addEventListener('click', executeUserPrompt);
         }
 
@@ -1515,14 +1522,14 @@
         // --- 7. VIP & Modal Logic ---
         function openModal(modalNode) {
             DOM.modalBackdrop.classList.add('is-visible');
-            DOM.modalBackdrop.setAttribute('aria-hidden', 'false');
+           DOM.modalBackdrop.setAttribute('aria-hidden', 'false');
             // Small delay to allow CSS animation to trigger properly
             setTimeout(() => DOM.vipCodeInput.focus(), 100);
         }
 
         function closeModal() {
             DOM.modalBackdrop.classList.remove('is-visible');
-            DOM.modalBackdrop.setAttribute('aria-hidden', 'true');
+           DOM.modalBackdrop.setAttribute('aria-hidden', 'true');
             DOM.vipFormGroup.classList.remove('has-error');
             DOM.vipCodeInput.value = '';
         }
@@ -1531,7 +1538,7 @@
             if (AppState.isVip) {
                 DOM.uiVipBadge.style.display = 'inline-block';
                 DOM.uiAvatarIcon.classList.add('is-vip');
-                DOM.uiUserPlan.textContent = "Creator / Supervisor Access";
+               DOM.uiUserPlan.textContent = "Creator / Supervisor Access";
                 DOM.btnOpenVipModal.style.display = "none";
             }
         }
@@ -1550,13 +1557,13 @@
                     localStorage.setItem("pratham_is_vip", "true");
                     applyVipStateUI();
                     closeModal();
-                    
+                    trim
                     // Trigger the specific Relationship questionnaire flow
                     appendMessageToFeed('model', `**[SYSTEM ALERT]: VIP Authentication Successful.**\n\nWelcome back. GitHub auto-logging has been bypassed for this session to ensure privacy.\n\n*For internal contextual memory logging (saving to \`vip.txt\`), please state your name and confirm your specific relationship with Pratham.*`);
                 } else {
                     DOM.vipFormGroup.classList.add('has-error');
                 }
-                
+                                
                 DOM.btnSubmitVipCode.innerHTML = originalText;
                 DOM.btnSubmitVipCode.disabled = false;
             }, 800); // Artificial delay for effect
@@ -1613,8 +1620,8 @@
 
         function appendStatusPill(text) {
             const node = document.createElement('div');
-            node.className = 'message-group';
-            node.innerHTML = `
+           node.className = 'message-group';
+           node.innerHTML = `
                 <div class="message-body-wrapper wrapper-ai">
                     <div class="status-pill">
                         <div class="spinner"></div>
@@ -1623,7 +1630,7 @@
                 </div>
             `;
             DOM.chatFeed.appendChild(node);
-            scrollToBottom();
+           scrollToBottom();
             return node;
         }
 
@@ -1635,11 +1642,6 @@
                     behavior: 'smooth'
                 });
             });
-        }
-
-        function resetChatSession() {
-            AppState.currentConversationId = null;
-            renderWelcomeScreen();
         }
 
         // The main Execution Loop
@@ -1694,64 +1696,6 @@
             let accumulatedResponse = "";
 
             try {
-                const liveEndpoint = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:5000/chat-stream' : '/chat-stream';
-                const sseResponse = await fetch(liveEndpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem("pratham_session_token") || "standard_auth_hex") },
-                    body: JSON.stringify({ message: promptText, conversation_id: AppState.currentConversationId })
-                });
-                if (sseResponse.ok) {
-                    streamTarget.textContent = "";
-                    const reader = sseResponse.body.getReader();
-                    const decoder = new TextDecoder();
-                    let chunkBuffer = "";
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) break;
-                        chunkBuffer += decoder.decode(value, { stream: true });
-                        const sseLines = chunkBuffer.split("\n");
-                        chunkBuffer = sseLines.pop();
-                        for (const rawLine of sseLines) {
-                            const standardLine = rawLine.trim();
-                            if (standardLine.startsWith("data:")) {
-                                try {
-                                    const parsedStreamObj = JSON.parse(standardLine.substring(5).trim());
-                                    if (parsedStreamObj.type === "token") {
-                                        accumulatedResponse += parsedStreamObj.text;
-                                        streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
-                                        scrollToBottom();
-                                    } else if (parsedStreamObj.type === "metadata") {
-                                        AppState.currentConversationId = parsedStreamObj.conversation_id;
-                                    } else if (parsedStreamObj.type === "error") {
-                                        streamTarget.innerHTML = `<span style="color:var(--status-error);">${parsedStreamObj.text}</span>`;
-                                    }
-                                } catch (innerJsonErr) {}
-                            }
-                        }
-                    }
-                    throw new Error("LIVE_SSE_STREAM_COMPLETE");
-                }
-            } catch (sseExecutionPipelineError) {
-                if (sseExecutionPipelineError.message === "LIVE_SSE_STREAM_COMPLETE") {
-                    streamTarget.classList.remove('cursor-blink');
-                    streamTarget.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
-                    let inlineMacroPythonPattern = accumulatedResponse.match(/\[EXECUTE_PYTHON:\s*([\s\S]*?)\]/);
-                    if (inlineMacroPythonPattern && inlineMacroPythonPattern[1]) {
-                        let parsedMacroScriptCode = inlineMacroPythonPattern[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-                        if (!AppState.pyodideReady) { await initializePyodideEnv(); }
-                        try {
-                            window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0); sys.stderr.seek(0); sys.stderr.truncate(0);");
-                            await window.pyodide.runPythonAsync(parsedMacroScriptCode);
-                        } catch (macroRunErr) {}
-                    }
-                    AppState.isGenerating = false;
-                    DOM.mainTextInput.focus();
-                    handleComposerInput();
-                    return;
-                }
-            }
-
-            try {
                 // =========================================================
                 // DEMO STREAMING ENGINE (Replaces fetch to /chat-stream)
                 // =========================================================
@@ -1774,7 +1718,6 @@
                     accumulatedResponse += chunk;
                     // Sanitize and parse markdown on every tick
                     streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
-                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
                     scrollToBottom();
                     // Artificial network latency
                     await new Promise(r => setTimeout(r, 15 + Math.random() * 20)); 
@@ -1789,26 +1732,6 @@
                 streamTarget.querySelectorAll('pre code').forEach((block) => {
                     hljs.highlightElement(block);
                 });
-                
-                // Background execution trigger if [EXECUTE_PYTHON: <code>] pattern is parsed from response
-                let pythonMatch = accumulatedResponse.match(/\[EXECUTE_PYTHON:\s*([\s\S]*?)\]/);
-                if (pythonMatch && pythonMatch[1]) {
-                    let inlineCode = pythonMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-                    if (!AppState.pyodideReady) {
-                        await initializePyodideEnv();
-                    }
-                    try {
-                        window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0)");
-                        window.pyodide.runPython("sys.stderr.seek(0); sys.stderr.truncate(0)");
-                        await window.pyodide.runPythonAsync(inlineCode);
-                        const backgroundOut = window.pyodide.runPython("sys.stdout.getvalue()");
-                        const backgroundErr = window.pyodide.runPython("sys.stderr.getvalue()");
-                        if (backgroundOut) appendTerminalOutput(`\n<span class="t-ok">[Background AI Execution Output]: ${backgroundOut}</span>\n`);
-                        if (backgroundErr) appendTerminalOutput(`\n<span class="t-err">[Background AI Execution Error]: ${backgroundErr}</span>\n`);
-                    } catch (pyErr) {
-                        appendTerminalOutput(`\n<span class="t-err">[Background AI Exception]: ${pyErr.toString()}</span>\n`);
-                    }
-                }
 
                 AppState.isGenerating = false;
                 DOM.mainTextInput.focus();
@@ -1890,7 +1813,7 @@ sys.stderr = WebConsole(is_error=True)
 
                 try {
                     // Clear previous buffers inside python
-                    window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0)");
+                   window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0)");
                     window.pyodide.runPython("sys.stderr.seek(0); sys.stderr.truncate(0)");
                     
                     // Execute async
@@ -1913,138 +1836,184 @@ sys.stderr = WebConsole(is_error=True)
         // --- 10. Boot ---
         document.addEventListener('DOMContentLoaded', initApp);
 
-        // ==============================================================================
-        // DYNAMIC OVERRIDE MODULE: PRESERVES ALL PREVIOUS LINES AND RE-DEFINES CORE FLOW
-        // ==============================================================================
-        executeUserPrompt = async function() {
-            let promptText = DOM.mainTextInput.value.trim();
-            if (!promptText && !AppState.pendingFile) return;
+    </script>
 
-            AppState.isGenerating = true;
-            DOM.btnSubmitMessage.disabled = true;
-            DOM.mainTextInput.value = '';
-            DOM.mainTextInput.style.height = 'auto';
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        (function() {
+            // Setup a persistent container inside the UI shell for login management
+            document.addEventListener('DOMContentLoaded', () => {
+                const container = document.createElement('div');
+                container.id = 'embeddedGoogleBtn';
+                container.style.padding = '8px 12px';
+                DOM.profileDropdownMenu.insertBefore(container, DOM.profileDropdownMenu.firstChild);
+                
+                setTimeout(() => {
+                    if (typeof google !== 'undefined') {
+                        google.accounts.id.initialize({
+                            client_id: "614833215904-u8d31sinhaenterprise.apps.googleusercontent.com",
+                            callback: handleGoogleSignInCallback,
+                            auto_select: true
+                        });
+                        google.accounts.id.renderButton(
+                            document.getElementById("embeddedGoogleBtn"),
+                            { theme: "outline", size: "large", width: "100%" }
+                        );
+                    }
+                }, 1500);
+            });
 
-            let displayString = promptText;
-            if (AppState.pendingFile) {
-                displayString += `\n\n[Attached: ${AppState.pendingFile.name}]`;
+            async function handleGoogleSignInCallback(res) {
+                const apiBase = window.location.origin;
+                try {
+                    const backendAuth = await fetch(`${apiBase}/auth/google`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id_token: res.credential })
+                    });
+                    if (backendAuth.ok) {
+                        const data = await backendAuth.json();
+                        localStorage.setItem("pratham_session_token", data.session_token);
+                        localStorage.setItem("pratham_user_profile", JSON.stringify(data.user));
+                        document.getElementById("uiUserName").textContent = data.user.name;
+                        document.getElementById("uiUserPlan").textContent = data.user.role === 'vip' ? "Creator Access" : "Standard Tier";
+                    }
+                } catch (e) {}
             }
-            appendMessageToFeed('user', displayString);
 
-            if (AppState.eduModeActive && !promptText.includes("@education")) {
-                promptText = "@education " + promptText;
+            // Rehydrate and check Session State on Launch
+            const savedProf = localStorage.getItem("pratham_user_profile");
+            if (savedProf) {
+                const user = JSON.parse(savedProf);
+                document.getElementById("uiUserName").textContent = user.name;
+                document.getElementById("uiUserPlan").textContent = user.role === 'vip' ? "Creator Access" : "Standard Tier";
             }
 
-            if (AppState.pendingFile) {
-                const statusNode = appendStatusPill(`Processing ${AppState.pendingFile.name} for RAG context...`);
-                await new Promise(r => setTimeout(r, 1200));
-                statusNode.remove();
-                clearFileAttachment();
-            }
+            // OVERRIDE THE CHAT ENGINE TO INTERCEPT REPETITIVE DEMO CHUNKS AND CONNECT TO LIVE INFRASTRUCTURE
+            executeUserPrompt = async function() {
+                let promptText = DOM.mainTextInput.value.trim();
+                if (!promptText && !AppState.pendingFile) return;
 
-            const hero = DOM.chatFeed.querySelector('.hero-welcome');
-            if (hero) hero.remove();
+                AppState.isGenerating = true;
+                DOM.btnSubmitMessage.disabled = true;
+                DOM.mainTextInput.value = '';
+                DOM.mainTextInput.style.height = 'auto';
 
-            const responseNode = document.createElement('div');
-            responseNode.className = 'message-group';
-            responseNode.innerHTML = `
-                <div class="message-meta meta-ai">
-                    <div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI
-                </div>
-                <div class="message-body-wrapper wrapper-ai">
-                    <div class="message-content cursor-blink" id="activeStreamTarget">Thinking...</div>
-                </div>
-            `;
-            DOM.chatFeed.appendChild(responseNode);
-            scrollToBottom();
+                let displayString = promptText;
+                if (AppState.pendingFile) {
+                    displayString += `\n\n[Attached: ${AppState.pendingFile.name}]`;
+                }
+                appendMessageToFeed('user', displayString);
 
-            const streamTarget = responseNode.querySelector('#activeStreamTarget');
-            let accumulatedResponse = "";
+                if (AppState.eduModeActive && !promptText.includes("@education")) {
+                    promptText = "@education " + promptText;
+                }
 
-            try {
-                const liveEndpoint = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:5000/chat-stream' : '/chat-stream';
-                const sseResponse = await fetch(liveEndpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem("pratham_session_token") || "standard_auth_hex") },
-                    body: JSON.stringify({ message: promptText, conversation_id: AppState.currentConversationId })
-                });
+                const hero = DOM.chatFeed.querySelector('.hero-welcome');
+                if (hero) hero.remove();
 
-                if (sseResponse.ok) {
+                const responseNode = document.createElement('div');
+                responseNode.className = 'message-group';
+                responseNode.innerHTML = `
+                    <div class="message-meta meta-ai">
+                        <div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI
+                    </div>
+                    <div class="message-body-wrapper wrapper-ai">
+                        <div class="message-content cursor-blink" id="activeStreamTarget">Thinking...</div>
+                    </div>
+                `;
+                DOM.chatFeed.appendChild(responseNode);
+                scrollToBottom();
+
+                const streamTarget = responseNode.querySelector('#activeStreamTarget');
+                let accumulatedResponse = "";
+
+                // POLLINATIONS AI DYNAMIC IMAGE GENERATION TRIGGER
+                const isImageRequest = /\b(generate image|draw|paint|imagine|create a picture of|make an image)\b/i.test(promptText);
+                if (isImageRequest) {
                     streamTarget.textContent = "";
-                    const reader = sseResponse.body.getReader();
-                    const decoder = new TextDecoder();
-                    let chunkBuffer = "";
+                    const cleanPrompt = promptText.replace(/\b(generate image|draw|paint|imagine|create a picture of|make an image)\b/ig, "").trim();
+                    const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt || "vibrant hyperrealistic future landscape engineered by AI")}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+                    accumulatedResponse = `I have successfully constructed and rendered your custom image request based on the creative prompt configuration:\n\n![Generated Artifact](${imgUrl})`;
+                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
+                    streamTarget.classList.remove('cursor-blink');
+                    AppState.isGenerating = false;
+                    DOM.mainTextInput.focus();
+                    handleComposerInput();
+                    return;
+                }
 
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) break;
-                        chunkBuffer += decoder.decode(value, { stream: true });
-                        const sseLines = chunkBuffer.split("\n");
-                        chunkBuffer = sseLines.pop();
+                try {
+                    const liveEndpoint = '/chat-stream';
+                    const token = localStorage.getItem("pratham_session_token") || "standard_auth_hex";
+                    const sseResponse = await fetch(liveEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ message: promptText, conversation_id: AppState.currentConversationId })
+                    });
 
-                        for (const rawLine of sseLines) {
-                            const standardLine = rawLine.trim();
-                            if (standardLine.startsWith("data:")) {
-                                try {
-                                    const parsedStreamObj = JSON.parse(standardLine.substring(5).trim());
-                                    if (parsedStreamObj.type === "token") {
-                                        accumulatedResponse += parsedStreamObj.text;
-                                        streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
-                                        scrollToBottom();
-                                    } else if (parsedStreamObj.type === "metadata") {
-                                        AppState.currentConversationId = parsedStreamObj.conversation_id;
-                                    } else if (parsedStreamObj.type === "error") {
-                                        streamTarget.innerHTML = `<span style="color:var(--status-error);">${parsedStreamObj.text}</span>`;
-                                    }
-                                } catch (innerJsonErr) {}
+                    if (sseResponse.ok) {
+                        streamTarget.textContent = "";
+                        const reader = sseResponse.body.getReader();
+                        const decoder = new TextDecoder();
+                        let chunkBuffer = "";
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            chunkBuffer += decoder.decode(value, { stream: true });
+                            const sseLines = chunkBuffer.split("\n");
+                            chunkBuffer = sseLines.pop();
+
+                            for (const rawLine of sseLines) {
+                                const standardLine = rawLine.trim();
+                                if (standardLine.startsWith("data:")) {
+                                    try {
+                                        const parsedStreamObj = JSON.parse(standardLine.substring(5).trim());
+                                        if (parsedStreamObj.type === "token") {
+                                            accumulatedResponse += parsedStreamObj.text;
+                                            streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
+                                            scrollToBottom();
+                                        } else if (parsedStreamObj.type === "metadata") {
+                                            AppState.currentConversationId = parsedStreamObj.conversation_id;
+                                        }
+                                    } catch (innerJsonErr) {}
+                                }
                             }
                         }
+                        streamTarget.classList.remove('cursor-blink');
+                        AppState.isGenerating = false;
+                        DOM.mainTextInput.focus();
+                        handleComposerInput();
+                        return;
                     }
-                } else {
-                    throw new Error("SERVER_UNREACHABLE");
-                }
-            } catch (err) {
-                console.warn("Backend streaming failed or unconfigured, falling back to secure browser mode.", err);
+                } catch (e) {}
+
+                // ADVANCED HIGH-CONVERSATIONAL CLIENT-SIDE FALLBACK ROUTE
                 streamTarget.textContent = "";
-                let standardCleanOutput = `Hello! I am Pratham AI, an advanced language interface. How can I assist you with code optimization, data analysis, or architecture today?`;
+                let naturalOutput = `I have received your inquiry. As an advanced systemic intelligence model, I am fully equipped to handle computing architecture, programming validation, and data structuring tasks. Please ensure the backend connection is established to leverage active key streams.`;
                 
-                if (promptText.toLowerCase().includes("hi") || promptText.toLowerCase() === "hii") {
-                    standardCleanOutput = `Hello! How can I help you today? Feel free to ask code analysis queries or drop instructions for background automated execution tasks.`;
-                } else if (promptText.toLowerCase().includes("time complexity")) {
-                    standardCleanOutput = `To perform a comprehensive time complexity analysis, please paste your script execution path here! Generally, basic element operations execute in $\\mathcal{O}(1)$ time, linear dataset runs utilize $\\mathcal{O}(N)$, and matching layered structures run in quadratic $\\mathcal{O}(N^2)$ complexities.`;
+                if (/complexity|big o|optimize/i.test(promptText)) {
+                    naturalOutput = `Analyzing the performance constraints of your target algorithm involves computing its asymptotic upper bounds. Standard sequential iteration scales linearly at $\\mathcal{O}(N)$, whereas layered loops require nested quadratic indexing at $\\mathcal{O}(N^2)$. Please paste the specific logic snippet to perform code parsing and validation.`;
+                } else if (/name|who are you/i.test(promptText)) {
+                    naturalOutput = `I am Pratham AI, an advanced interface with multi-provider orchestration and web sandboxing systems designed for technical optimization and seamless user interaction.`;
+                } else if (/hi|hello|hii/i.test(promptText)) {
+                    naturalOutput = `Greetings! I am active and ready to assist you. Whether you need deep algorithm optimization, file system mapping, or visual generation tasks, please specify your objective.`;
                 }
 
-                const manualChunks = standardCleanOutput.match(/.{1,4}/g) || [];
-                for (const chunk of manualChunks) {
+                const clientChunks = naturalOutput.match(/.{1,4}/g) || [];
+                for (const chunk of clientChunks) {
                     accumulatedResponse += chunk;
                     streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
                     scrollToBottom();
-                    await new Promise(r => setTimeout(r, 15));
+                    await new Promise(r => setTimeout(r, 12));
                 }
-            } finally {
                 streamTarget.classList.remove('cursor-blink');
-                streamTarget.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
-
-                let pythonMatch = accumulatedResponse.match(/\[EXECUTE_PYTHON:\s*([\s\S]*?)\]/);
-                if (pythonMatch && pythonMatch[1]) {
-                    let inlineCode = pythonMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-                    if (!AppState.pyodideReady) { await initializePyodideEnv(); }
-                    try {
-                        window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0); sys.stderr.seek(0); sys.stderr.truncate(0);");
-                        await window.pyodide.runPythonAsync(inlineCode);
-                        const backgroundOut = window.pyodide.runPython("sys.stdout.getvalue()");
-                        const backgroundErr = window.pyodide.runPython("sys.stderr.getvalue()");
-                        if (backgroundOut) appendTerminalOutput(`\n<span class="t-ok">[Background AI Execution Output]: ${backgroundOut}</span>\n`);
-                        if (backgroundErr) appendTerminalOutput(`\n<span class="t-err">[Background AI Execution Error]: ${backgroundErr}</span>\n`);
-                    } catch (pyErr) {
-                        appendTerminalOutput(`\n<span class="t-err">[Background AI Exception]: ${pyErr.toString()}</span>\n`);
-                    }
-                }
                 AppState.isGenerating = false;
                 DOM.mainTextInput.focus();
                 handleComposerInput();
-            }
-        };
+            };
+        })();
     </script>
 </body>
 </html>
