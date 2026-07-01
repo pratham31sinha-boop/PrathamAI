@@ -657,7 +657,6 @@
         /* Markdown Elements within Message */
         .message-content p { margin-bottom: 1.2em; }
         .message-content p:last-child { margin-bottom: 0; }
-        
         .message-content h1, .message-content h2, .message-content h3 {
             font-family: var(--font-sans);
             font-weight: 700;
@@ -924,7 +923,6 @@
             color: #888888;
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 12px;
         }
         .mac-dots { display: flex; gap: 6px; }
@@ -1759,6 +1757,7 @@
                     accumulatedResponse += chunk;
                     // Sanitize and parse markdown on every tick
                     streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
+                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
                     scrollToBottom();
                     // Artificial network latency
                     await new Promise(r => setTimeout(r, 15 + Math.random() * 20)); 
@@ -2095,24 +2094,71 @@ sys.stderr = WebConsole(is_error=True)
         })();
 
         // ==============================================================================
-        // AUTOMATED TASK FORCE LAYER - CONTINUOUS POLLING SYNC ENGINE
-        // Ensures that when any Google Authenticator completes, the view drops instantly.
+        // AUTOMATED TASK FORCE LAYER - LIFECYCLE MONITOR AND INTERCEPTOR PATCH
+        // Resolves the Google Credential mismatch and guarantees seamless main screen routing
         // ==============================================================================
-        setInterval(function() {
-            const currentToken = localStorage.getItem("pratham_session_token");
-            const authViewElement = document.getElementById("authWallScreen");
-            if (authViewElement) {
-                if (currentToken) {
-                    if (authViewElement.style.display !== "none") {
-                        authViewElement.style.setProperty("display", "none", "important");
+        (function() {
+            const originalHandleGoogleCredential = window.handleGoogleCredential;
+            const originalSetupUI = window.setupUI;
+
+            if (typeof window.handleGoogleCredential === 'function') {
+                window.handleGoogleCredential = async function(response) {
+                    try {
+                        if (response && response.credential) {
+                            const base64Url = response.credential.split('.')[1];
+                            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                            }).join(''));
+                            const decodedUser = JSON.parse(jsonPayload);
+                            
+                            window.sessionToken = response.credential;
+                            window.cachedUser = {
+                                id: decodedUser.sub,
+                                email: decodedUser.email,
+                                name: decodedUser.name || 'User Profile',
+                                role: 'standard'
+                            };
+
+                            localStorage.setItem("pratham_session_token", window.sessionToken);
+                            localStorage.setItem("pratham_user_profile", JSON.stringify(window.cachedUser));
+                        }
+                    } catch (err) {
+                        console.warn("Auth pipeline intercept modification resolved safely.", err);
                     }
-                } else {
-                    if (authViewElement.style.display !== "flex") {
-                        authViewElement.style.setProperty("display", "flex", "important");
+                    if (typeof originalHandleGoogleCredential === 'function') {
+                        await originalHandleGoogleCredential(response);
+                    }
+                    forceDisplayGatingRefresh();
+                };
+            }
+
+            if (typeof window.setupUI === 'function') {
+                window.setupUI = function(user) {
+                    const dynamicContext = user || window.cachedUser || JSON.parse(localStorage.getItem("pratham_user_profile"));
+                    if (typeof originalSetupUI === 'function') {
+                        originalSetupUI(dynamicContext);
+                    }
+                    forceDisplayGatingRefresh();
+                };
+            }
+
+            function forceDisplayGatingRefresh() {
+                const currentToken = localStorage.getItem("pratham_session_token") || window.sessionToken;
+                const gateElement = document.getElementById("authWallScreen");
+                if (gateElement) {
+                    if (currentToken) {
+                        gateElement.style.setProperty("display", "none", "important");
+                        gateElement.setAttribute("aria-hidden", "true");
+                    } else {
+                        gateElement.style.setProperty("display", "flex", "important");
+                        gateElement.setAttribute("aria-hidden", "false");
                     }
                 }
             }
-        }, 100);
+
+            setInterval(forceDisplayGatingRefresh, 100);
+        })();
     </script>
 </body>
 </html>
