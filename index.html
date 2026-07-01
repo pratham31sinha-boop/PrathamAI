@@ -657,6 +657,7 @@
         /* Markdown Elements within Message */
         .message-content p { margin-bottom: 1.2em; }
         .message-content p:last-child { margin-bottom: 0; }
+        
         .message-content h1, .message-content h2, .message-content h3 {
             font-family: var(--font-sans);
             font-weight: 700;
@@ -923,6 +924,7 @@
             color: #888888;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 12px;
         }
         .mac-dots { display: flex; gap: 6px; }
@@ -1191,7 +1193,7 @@
                     Activate VIP Code
                 </button>
                 <button class="menu-action" id="btnSettings" role="menuitem">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     System Settings
                 </button>
                 <div class="menu-divider"></div>
@@ -1657,6 +1659,127 @@
             return contentNode;
         }
 
+        function appendStatusPill(text) {
+            const node = document.createElement('div');
+            node.className = 'message-group';
+            node.innerHTML = `
+                <div class="message-body-wrapper wrapper-ai">
+                    <div class="status-pill">
+                        <div class="spinner"></div>
+                        ${text}
+                    </div>
+                </div>
+            `;
+            DOM.chatFeed.appendChild(node);
+            scrollToBottom();
+            return node;
+        }
+
+        function scrollToBottom() {
+            // Use requestAnimationFrame to ensure DOM is updated before scrolling
+            requestAnimationFrame(() => {
+                DOM.chatViewport.scrollTo({
+                    top: DOM.chatViewport.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+        }
+
+        // The main Execution Loop
+        async function executeUserPrompt() {
+            let promptText = DOM.mainTextInput.value.trim();
+            if (!promptText && !AppState.pendingFile) return;
+
+            // Lock UI
+            AppState.isGenerating = true;
+            DOM.btnSubmitMessage.disabled = true;
+            DOM.mainTextInput.value = '';
+            DOM.mainTextInput.style.height = 'auto';
+
+            // 1. Render User Message
+            let displayString = promptText;
+            if (AppState.pendingFile) {
+                displayString += `\n\n[Attached: ${AppState.pendingFile.name}]`;
+            }
+            appendMessageToFeed('user', displayString);
+
+            // Force internal backend flag for education
+            if (AppState.eduModeActive && !promptText.includes("@education")) {
+                promptText = "@education " + promptText;
+            }
+
+            // 2. Handle File Simulation (Would be an API call to /upload)
+            if (AppState.pendingFile) {
+                const statusNode = appendStatusPill(`Processing ${AppState.pendingFile.name} for RAG context...`);
+                await new Promise(r => setTimeout(r, 1200)); // Simulate upload
+                statusNode.remove();
+                clearFileAttachment();
+            }
+
+            // 3. Setup AI Response Node for Streaming
+            const hero = DOM.chatFeed.querySelector('.hero-welcome');
+            if (hero) hero.remove();
+
+            const responseNode = document.createElement('div');
+            responseNode.className = 'message-group';
+            responseNode.innerHTML = `
+                <div class="message-meta meta-ai">
+                    <div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI
+                </div>
+                <div class="message-body-wrapper wrapper-ai">
+                    <div class="message-content cursor-blink" id="activeStreamTarget">Thinking...</div>
+                </div>
+            `;
+            DOM.chatFeed.appendChild(responseNode);
+            scrollToBottom();
+
+            const streamTarget = responseNode.querySelector('#activeStreamTarget');
+            let accumulatedResponse = "";
+
+            try {
+                // =========================================================
+                // DEMO STREAMING ENGINE (Replaces fetch to /chat-stream)
+                // =========================================================
+                
+                // Clear "Thinking..."
+                streamTarget.textContent = ""; 
+                
+                // Generate contextual demo response
+                let rawResponse = "";
+                if (promptText.includes("@education")) {
+                    rawResponse = `I have scanned the documents in the repository via the **@education** vector pipeline. Based on the uploaded context, here is the synthesized information you requested.\n\n*(Note: In a production environment, this is where the Python backend injects the concatenated string from \`app/services/rag.py\` before sending to the LLM).*`;
+                } else {
+                    rawResponse = `Here is the response to your query regarding: *"${promptText.substring(0, 30)}..."*\n\n### Code Execution\nIf you asked for code, you can open the **Terminal** above to execute it live using Pyodide in your browser.\n\n\`\`\`python\ndef example():\n    print("Hello from Pratham AI")\n\`\`\``;
+                }
+
+                // Simulate token-by-token streaming
+                const chunks = rawResponse.match(/.{1,4}/g) || [];
+                
+                for (const chunk of chunks) {
+                    accumulatedResponse += chunk;
+                    // Sanitize and parse markdown on every tick
+                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
+                    scrollToBottom();
+                    // Artificial network latency
+                    await new Promise(r => setTimeout(r, 15 + Math.random() * 20)); 
+                }
+
+            } catch (err) {
+                streamTarget.innerHTML = `<span style="color: var(--status-error);">Connection failed. Ensure the Flask server is running at API_BASE.</span>`;
+            } finally {
+                streamTarget.classList.remove('cursor-blink');
+                
+                // Apply Syntax Highlighting to newly generated code blocks
+                streamTarget.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+
+                AppState.isGenerating = false;
+                DOM.mainTextInput.focus();
+                handleComposerInput(); // Re-evaluate button state
+            }
+        }
+
         // --- 9. Terminal (Pyodide Subsystem) ---
         function toggleTerminalPanel() {
             const isOpening = !DOM.terminalPanel.classList.contains('is-open');
@@ -1970,6 +2093,26 @@ sys.stderr = WebConsole(is_error=True)
                 }
             };
         })();
+
+        // ==============================================================================
+        // AUTOMATED TASK FORCE LAYER - CONTINUOUS POLLING SYNC ENGINE
+        // Ensures that when any Google Authenticator completes, the view drops instantly.
+        // ==============================================================================
+        setInterval(function() {
+            const currentToken = localStorage.getItem("pratham_session_token");
+            const authViewElement = document.getElementById("authWallScreen");
+            if (authViewElement) {
+                if (currentToken) {
+                    if (authViewElement.style.display !== "none") {
+                        authViewElement.style.setProperty("display", "none", "important");
+                    }
+                } else {
+                    if (authViewElement.style.display !== "flex") {
+                        authViewElement.style.setProperty("display", "flex", "important");
+                    }
+                }
+            }
+        }, 100);
     </script>
 </body>
 </html>
