@@ -24,6 +24,7 @@
            1. CSS VARIABLES & THEME DEFINITIONS
            ========================================================================== */
         :root {
+            /* Light Theme (Default) */
             --bg-main: #fbfaf7;
             --bg-sidebar: #f3f0e8;
             --bg-panel: #ffffff;
@@ -53,10 +54,12 @@
             --shadow-lg: 0 16px 36px rgba(0,0,0,0.15);
             --overlay-bg: rgba(25, 25, 25, 0.4);
             
+            /* Typography */
             --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             --font-serif: 'Source Serif 4', Georgia, Cambria, "Times New Roman", Times, serif;
             --font-mono: 'Fira Code', Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
             
+            /* Spacing & Geometry */
             --radius-sm: 6px;
             --radius-md: 12px;
             --radius-lg: 16px;
@@ -64,6 +67,7 @@
             --sidebar-width: 280px;
             --topbar-height: 60px;
             
+            /* Terminal Specific */
             --term-bg: #1e1e1e;
             --term-header: #252526;
             --term-text: #cccccc;
@@ -96,6 +100,9 @@
             }
         }
 
+        /* ==========================================================================
+           2. GLOBAL RESET & BASE STYLES
+           ========================================================================== */
         *, *::before, *::after {
             box-sizing: border-box;
             margin: 0;
@@ -118,12 +125,34 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-heavy);
+            border-radius: var(--radius-pill);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--text-tertiary);
+        }
+
+        /* Typography Defaults */
         h1, h2, h3, h4, h5, h6 { font-family: var(--font-serif); font-weight: 600; line-height: 1.2; }
         button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
         button { cursor: pointer; border: none; background: none; }
         a { color: var(--accent-primary); text-decoration: none; }
         a:hover { text-decoration: underline; }
 
+        /* ==========================================================================
+           3. LAYOUT: SIDEBAR
+           ========================================================================== */
         .app-sidebar {
             width: var(--sidebar-width);
             flex-shrink: 0;
@@ -177,6 +206,12 @@
             margin-bottom: 20px;
         }
 
+        .btn-new-chat:hover, .btn-new-chat:focus-visible {
+            background-color: var(--bg-hover);
+            border-color: var(--text-tertiary);
+            outline: none;
+        }
+
         .shortcut-badge {
             font-size: 11px;
             color: var(--text-secondary);
@@ -187,6 +222,7 @@
             letter-spacing: 0.5px;
         }
 
+        /* Conversation List */
         .convo-list-container {
             flex: 1;
             overflow-y: auto;
@@ -215,9 +251,14 @@
             justify-content: space-between;
             align-items: center;
             transition: all 0.2s;
+            position: relative;
         }
 
-        .convo-item:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+        .convo-item:hover {
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
         .convo-item.active {
             background-color: var(--bg-panel);
             color: var(--text-primary);
@@ -226,6 +267,24 @@
             border: 1px solid var(--border-light);
         }
 
+        .convo-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .convo-icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+            opacity: 0.7;
+        }
+
+        /* Sidebar Footer (Profile) */
         .sidebar-footer {
             margin-top: auto;
             padding-top: 16px;
@@ -244,6 +303,11 @@
             text-align: left;
         }
 
+        .profile-trigger:hover, .profile-trigger:focus-visible {
+            background-color: var(--bg-hover);
+            outline: none;
+        }
+
         .avatar-circle {
             width: 36px;
             height: 36px;
@@ -255,13 +319,51 @@
             justify-content: center;
             font-weight: 600;
             font-size: 16px;
+            position: relative;
         }
 
         .avatar-circle.is-vip {
             background-color: var(--accent-vip);
             box-shadow: 0 0 12px var(--accent-vip-glow);
+            border: 2px solid var(--bg-sidebar);
         }
 
+        .profile-details {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .profile-name {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .vip-indicator {
+            font-size: 10px;
+            color: var(--accent-vip);
+            background: var(--bg-active);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: none;
+        }
+
+        .profile-status {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* Profile Dropdown Menu */
         .dropdown-menu {
             position: absolute;
             bottom: 70px;
@@ -281,59 +383,733 @@
             z-index: 100;
         }
 
-        .dropdown-menu.is-open { opacity: 1; pointer-events: auto; transform: translateY(0); }
-        .menu-action { padding: 10px 12px; font-size: 14px; color: var(--text-secondary); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
-        .menu-action:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+        .dropdown-menu.is-open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .menu-action {
+            padding: 10px 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            text-align: left;
+            transition: all 0.15s;
+        }
+
+        .menu-action:hover, .menu-action:focus-visible {
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
+            outline: none;
+        }
+
         .menu-action svg { width: 18px; height: 18px; fill: currentColor; }
         .menu-action.danger { color: var(--status-error); }
+        .menu-action.danger:hover { background-color: rgba(211, 47, 47, 0.1); }
         .menu-divider { height: 1px; background-color: var(--border-light); margin: 6px 0; }
 
-        .app-main { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; background-color: var(--bg-main); position: relative; }
-        .app-topbar { width: 100%; height: var(--topbar-height); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--border-light); background-color: rgba(251, 250, 247, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); position: absolute; top: 0; z-index: 20; }
-        .chat-viewport { flex: 1; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; width: 100%; padding-top: calc(var(--topbar-height) + 24px); padding-bottom: 24px; scroll-behavior: smooth; }
-        .chat-content-max { width: 100%; max-width: 840px; display: flex; flex-direction: column; gap: 32px; padding: 0 24px; }
+        /* ==========================================================================
+           4. LAYOUT: MAIN WORKSPACE
+           ========================================================================== */
+        .app-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            height: 100%;
+            background-color: var(--bg-main);
+            position: relative;
+        }
 
-        .hero-welcome { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 60px 0 40px; }
-        .hero-title { font-size: 40px; font-family: var(--font-serif); font-weight: 400; margin-bottom: 12px; }
-        .hero-subtitle { font-size: 16px; color: var(--text-secondary); margin-bottom: 40px; max-width: 500px; }
-        .prompt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; width: 100%; }
-        .prompt-card { background-color: var(--bg-panel); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
-        .prompt-card:hover { border-color: var(--border-heavy); transform: translateY(-4px); box-shadow: var(--shadow-md); }
+        /* Topbar */
+        .app-topbar {
+            width: 100%;
+            height: var(--topbar-height);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            border-bottom: 1px solid var(--border-light);
+            background-color: rgba(251, 250, 247, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            position: absolute;
+            top: 0;
+            z-index: 20;
+        }
 
-        .message-group { display: flex; flex-direction: column; width: 100%; }
-        .message-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        @media (prefers-color-scheme: dark) {
+            .app-topbar { background-color: rgba(18, 18, 18, 0.8); }
+        }
+
+        .topbar-left { display: flex; align-items: center; gap: 16px; }
+        
+        .mobile-menu-btn {
+            display: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+        }
+        .mobile-menu-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+        .chat-header-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            opacity: 0.9;
+        }
+
+        .topbar-tools { display: flex; align-items: center; gap: 12px; }
+
+        .tool-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--bg-sidebar);
+            border: 1px solid var(--border-heavy);
+            padding: 6px 16px;
+            border-radius: var(--radius-pill);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .tool-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+
+        .tool-toggle:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+        .tool-toggle.is-active {
+            background-color: var(--text-primary);
+            color: var(--text-inverse);
+            border-color: var(--text-primary);
+        }
+
+        /* ==========================================================================
+           5. CHAT FEED & MESSAGES
+           ========================================================================== */
+        .chat-viewport {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding-top: calc(var(--topbar-height) + 24px);
+            padding-bottom: 24px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-content-max {
+            width: 100%;
+            max-width: 840px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            padding: 0 24px;
+        }
+
+        /* Welcome / Zero State */
+        .hero-welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 60px 0 40px;
+            animation: fadeUp 0.6s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-title {
+            font-size: 40px;
+            font-family: var(--font-serif);
+            font-weight: 400;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            max-width: 500px;
+        }
+
+        .prompt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            width: 100%;
+        }
+
+        .prompt-card {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            text-align: left;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .prompt-card:hover {
+            border-color: var(--border-heavy);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .prompt-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background-color: var(--bg-sidebar);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 4px;
+        }
+        .prompt-icon svg { width: 18px; height: 18px; fill: var(--text-secondary); }
+        .prompt-card:hover .prompt-icon svg { fill: var(--accent-primary); }
+
+        .prompt-headline { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .prompt-desc { font-size: 13px; color: var(--text-tertiary); line-height: 1.4; }
+
+        /* Message Structure */
+        .message-group {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            animation: fadeUp 0.3s ease-out;
+        }
+
+        .message-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
         .meta-user { justify-content: flex-end; color: var(--text-tertiary); }
         .meta-ai { justify-content: flex-start; color: var(--text-primary); }
-        .message-body-wrapper { display: flex; width: 100%; }
+        
+        .ai-badge-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            background: var(--text-primary);
+            color: var(--bg-main);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-badge-icon svg { width: 10px; height: 10px; fill: currentColor; }
+
+        .message-body-wrapper {
+            display: flex;
+            width: 100%;
+        }
+
         .wrapper-user { justify-content: flex-end; }
         .wrapper-ai { justify-content: flex-start; }
-        .message-content { font-family: var(--font-serif); font-size: 17px; line-height: 1.7; color: var(--text-primary); width: 100%; word-wrap: break-word; }
-        .wrapper-user .message-content { max-width: 85%; font-family: var(--font-sans); font-size: 15px; background-color: var(--bg-sidebar); padding: 16px 20px; border-radius: var(--radius-lg); border-bottom-right-radius: 4px; }
 
-        .message-content img { max-width: 100%; border-radius: var(--radius-md); margin-top: 12px; border: 1px solid var(--border-light); box-shadow: var(--shadow-md); }
-        .status-pill { display: inline-flex; align-items: center; gap: 10px; background-color: var(--bg-sidebar); border: 1px solid var(--border-heavy); padding: 8px 16px; border-radius: var(--radius-pill); font-family: var(--font-sans); font-size: 13px; color: var(--text-secondary); }
-        .spinner { width: 14px; height: 14px; border: 2px solid var(--border-heavy); border-top-color: var(--accent-primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        /* Content Styling */
+        .message-content {
+            font-family: var(--font-serif);
+            font-size: 17px;
+            line-height: 1.7;
+            color: var(--text-primary);
+            width: 100%;
+            word-wrap: break-word;
+        }
+
+        .wrapper-user .message-content {
+            max-width: 85%;
+            font-family: var(--font-sans);
+            font-size: 15px;
+            background-color: var(--bg-sidebar);
+            padding: 16px 20px;
+            border-radius: var(--radius-lg);
+            border-bottom-right-radius: 4px;
+            line-height: 1.5;
+        }
+
+        /* Markdown Elements within Message */
+        .message-content p { margin-bottom: 1.2em; }
+        .message-content p:last-child { margin-bottom: 0; }
+        .message-content h1, .message-content h2, .message-content h3 {
+            font-family: var(--font-sans);
+            font-weight: 700;
+            margin: 1.5em 0 0.5em;
+            color: var(--text-primary);
+        }
+        .message-content ul, .message-content ol {
+            margin-bottom: 1.2em;
+            padding-left: 24px;
+        }
+        .message-content li { margin-bottom: 0.5em; }
+        
+        /* Code Blocks */
+        .message-content pre {
+            background-color: var(--term-bg);
+            border: 1px solid var(--term-border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            overflow-x: auto;
+            margin: 1.5em 0;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .message-content code {
+            font-family: var(--font-mono);
+            background-color: rgba(128, 128, 128, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: var(--accent-primary);
+        }
+        .message-content pre code { background: transparent; padding: 0; color: inherit; }
+
+        /* Tables */
+        .message-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5em 0;
+            font-family: var(--font-sans);
+            font-size: 14px;
+        }
+        .message-content th, .message-content td {
+            border: 1px solid var(--border-heavy);
+            padding: 10px 14px;
+            text-align: left;
+        }
+        .message-content th {
+            background-color: var(--bg-sidebar);
+            font-weight: 600;
+        }
+
+        /* Streaming Indicator */
+        .cursor-blink::after {
+            content: "▋";
+            display: inline-block;
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+            color: var(--accent-primary);
+            margin-left: 4px;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* Process Status Blocks */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background-color: var(--bg-sidebar);
+            border: 1px solid var(--border-heavy);
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin: 10px 0;
+        }
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border-heavy);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .input-dock { width: 100%; padding: 0 24px 32px; display: flex; justify-content: center; background: linear-gradient(180deg, transparent 0%, var(--bg-main) 15%, var(--bg-main) 100%); flex-shrink: 0; }
-        .input-card { width: 100%; max-width: 840px; background-color: var(--bg-panel); border: 1px solid var(--border-heavy); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
-        .textarea-wrapper { padding: 14px 16px; display: flex; flex-direction: column; }
-        .main-textarea { width: 100%; background: transparent; border: none; outline: none; resize: none; font-family: var(--font-sans); font-size: 16px; max-height: 250px; }
-        .composer-toolbar { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; }
-        .btn-send { width: 36px; height: 36px; border-radius: 50%; background-color: var(--text-primary); color: var(--bg-panel); display: flex; align-items: center; justify-content: center; }
-        .btn-send:disabled { background-color: var(--border-heavy); color: var(--text-tertiary); cursor: not-allowed; }
+        /* ==========================================================================
+           6. COMPOSER (Input Area)
+           ========================================================================== */
+        .input-dock {
+            width: 100%;
+            padding: 0 24px 32px;
+            display: flex;
+            justify-content: center;
+            background: linear-gradient(180deg, transparent 0%, var(--bg-main) 15%, var(--bg-main) 100%);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 30;
+        }
 
-        .terminal-drawer { position: absolute; bottom: 0; left: 0; right: 0; height: 0; background-color: var(--term-bg); border-top: 1px solid var(--term-border); z-index: 100; display: flex; flex-direction: column; overflow: hidden; }
-        .overlay-backdrop { position: fixed; inset: 0; background-color: var(--overlay-bg); backdrop-filter: blur(4px); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; }
+        .input-card {
+            width: 100%;
+            max-width: 840px;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-heavy);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .input-card:focus-within {
+            border-color: var(--text-secondary);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Attachments Area */
+        .attachment-rack {
+            display: none;
+            padding: 12px 16px 0;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .attachment-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--bg-sidebar);
+            border: 1px solid var(--border-light);
+            padding: 6px 12px;
+            border-radius: var(--radius-pill);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .attachment-chip svg { width: 14px; height: 14px; fill: currentColor; }
+        .btn-remove-chip {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: rgba(0,0,0,0.05);
+            color: var(--text-tertiary);
+            transition: all 0.2s;
+        }
+        .btn-remove-chip:hover { background-color: var(--status-error); color: white; }
+
+        /* Textarea */
+        .textarea-wrapper {
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: var(--font-sans);
+            font-size: 16px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            max-height: 250px;
+            min-height: 24px;
+        }
+        .main-textarea::placeholder { color: var(--text-tertiary); }
+
+        /* Composer Controls (Bottom Row) */
+        .composer-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+        }
+        .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            background-color: transparent;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .btn-send {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--text-primary);
+            color: var(--bg-panel);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-send svg { width: 16px; height: 16px; fill: currentColor; }
+        .btn-send:disabled {
+            background-color: var(--border-heavy);
+            color: var(--text-tertiary);
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-send:not(:disabled):hover {
+            transform: scale(1.08);
+            background-color: var(--accent-primary);
+        }
+
+        .disclaimer-text {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            margin-top: 12px;
+            width: 100%;
+        }
+
+        /* ==========================================================================
+           7. TERMINAL PANEL (Python Sandbox)
+           ========================================================================== */
+        .terminal-drawer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 0;
+            background-color: var(--term-bg);
+            border-top: 1px solid var(--term-border);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            transition: height 0.35s cubic-bezier(0.19, 1, 0.22, 1);
+            overflow: hidden;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
+        }
+
+        .terminal-drawer.is-open { height: 350px; }
+
+        .term-header-bar {
+            background-color: var(--term-header);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--term-border);
+            flex-shrink: 0;
+        }
+        
+        .term-title {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #888888;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .mac-dots { display: flex; gap: 6px; }
+        .mac-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .md-red { background: #ff5f56; } .md-yel { background: #ffbd2e; } .md-grn { background: #27c93f; }
+
+        .term-actions { display: flex; gap: 8px; }
+        .btn-term-action {
+            background-color: transparent;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: var(--font-sans);
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        .btn-term-action:hover { background-color: #333; color: white; }
+
+        .term-output-area {
+            flex: 1;
+            padding: 12px 16px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--term-text);
+            white-space: pre-wrap;
+        }
+        
+        /* Terminal Syntax Colors */
+        .t-sys { color: #888888; font-style: italic; }
+        .t-cmd { color: var(--term-cmd); }
+        .t-ok  { color: var(--term-ok); }
+        .t-err { color: var(--term-err); }
+
+        .term-input-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            border-top: 1px solid var(--term-border);
+            background-color: #1a1a1a;
+            flex-shrink: 0;
+        }
+        .term-prompt-symbol {
+            color: #4ec9b0;
+            font-family: var(--font-mono);
+            margin-right: 12px;
+            font-weight: 600;
+        }
+        .term-input-field {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            font-family: var(--font-mono);
+            font-size: 14px;
+        }
+
+        /* ==========================================================================
+           8. MODALS & OVERLAYS
+           ========================================================================== */
+        .overlay-backdrop {
+            position: fixed;
+            inset: 0;
+            background-color: var(--overlay-bg);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
         .overlay-backdrop.is-visible { opacity: 1; pointer-events: auto; }
-        .modal-card { background-color: var(--bg-panel); border: 1px solid var(--border-heavy); width: 90%; max-width: 440px; border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden; }
 
+        .modal-card {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-heavy);
+            width: 90%;
+            max-width: 440px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95) translateY(10px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .overlay-backdrop.is-visible .modal-card {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title { font-size: 18px; font-family: var(--font-serif); font-weight: 600; }
+        .btn-close-modal {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            transition: background 0.2s;
+        }
+        .btn-close-modal:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+        .btn-close-modal svg { width: 16px; height: 16px; fill: currentColor; }
+
+        .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+        .modal-text { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-label { font-size: 12px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border-heavy);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-size: 15px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-input:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(204, 98, 57, 0.15); outline: none; }
+
+        .btn-primary {
+            background-color: var(--text-primary);
+            color: var(--bg-panel);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-primary:hover { background-color: var(--accent-primary); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+        
+        /* Hidden interface components per system instructions */
         #btnOpenVipModal, #btnToggleEdu, #btnToggleTerminal, #terminalPanel { display: none !important; }
 
-        #authWallScreen { position: fixed; inset: 0; z-index: 99999; background-color: var(--bg-main); display: flex; align-items: center; justify-content: center; font-family: var(--font-sans); }
-        .auth-container-box { background-color: var(--bg-panel); border: 1px solid var(--border-heavy); padding: 40px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); text-align: center; max-width: 420px; width: 90%; }
-        .auth-logo { font-family: var(--font-serif); font-size: 32px; font-weight: 700; margin-bottom: 8px; }
-        .auth-subtitle { font-size: 14px; color: var(--text-secondary); margin-bottom: 32px; }
+        /* Sleek Auth Wall Screen Overrides */
+        #authWallScreen {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background-color: var(--bg-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-sans);
+        }
+        .auth-container-box {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-heavy);
+            padding: 40px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+        }
+        .auth-logo {
+            font-family: var(--font-serif);
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .auth-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
     </style>
 </head>
 <body>
@@ -390,14 +1166,24 @@
     </aside>
 
     <main class="app-main">
+        
         <header class="app-topbar">
             <div class="topbar-left">
-                <button class="mobile-menu-btn" id="btnToggleSidebar" aria-label="Toggle Sidebar"></button>
+                <button class="mobile-menu-btn" id="btnToggleSidebar" aria-label="Toggle Sidebar">
+                    <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
                 <h1 class="chat-header-title" id="uiChatTitle">New Session</h1>
             </div>
+            
             <div class="topbar-tools">
-                <button class="tool-toggle" id="btnToggleEdu"><span>@education mode</span></button>
-                <button class="tool-toggle" id="btnToggleTerminal"><span>Terminal</span></button>
+                <button class="tool-toggle" id="btnToggleEdu" aria-pressed="false" title="Toggle Document Retrieval (RAG)">
+                    <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/></svg>
+                    <span>@education mode</span>
+                </button>
+                <button class="tool-toggle" id="btnToggleTerminal" aria-pressed="false" title="Open Python Terminal">
+                    <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    <span>Terminal</span>
+                </button>
             </div>
         </header>
 
@@ -407,58 +1193,161 @@
 
         <div class="input-dock">
             <div class="input-card">
+                
                 <div class="attachment-rack" id="attachmentRack"></div>
+
                 <div class="textarea-wrapper">
-                    <textarea id="mainTextInput" class="main-textarea" rows="1" placeholder="Message Pratham AI..."></textarea>
+                    <textarea 
+                        id="mainTextInput" 
+                        class="main-textarea" 
+                        rows="1" 
+                        placeholder="Message Pratham AI... Use @education for documents."
+                        aria-label="Message Input Area"
+                    ></textarea>
+                    
                     <div class="composer-toolbar">
                         <div class="toolbar-left">
-                            <button class="btn-icon" id="btnAttachFile"></button>
-                            <input type="file" id="hiddenFileInput" style="display:none;">
+                            <button class="btn-icon" id="btnAttachFile" aria-label="Attach Document">
+                                <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            <input type="file" id="hiddenFileInput" style="display:none;" aria-hidden="true">
                         </div>
                         <div class="toolbar-right">
-                            <button class="btn-send" id="btnSubmitMessage" disabled></button>
+                            <button class="btn-send" id="btnSubmitMessage" disabled aria-label="Send Message">
+                                <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
+            
+            <p class="disclaimer-text">
+                Pratham AI can make mistakes. Verify critical code and information.
+            </p>
         </div>
+
+        <div class="terminal-drawer" id="terminalPanel" aria-hidden="true">
+            <div class="term-header-bar">
+                <div class="term-title">
+                    <div class="mac-dots">
+                        <div class="mac-dot md-red"></div>
+                        <div class="mac-dot md-yel"></div>
+                        <div class="mac-dot md-grn"></div>
+                    </div>
+                    Python 3.11 Sandbox (WASM)
+                </div>
+                <div class="term-actions">
+                    <button class="btn-term-action" id="btnClearTerm">Clear</button>
+                    <button class="btn-term-action" id="btnCloseTerm">✕</button>
+                </div>
+            </div>
+            <div class="term-output-area" id="termOutputDisplay">
+                <span class="t-sys">Awaiting initialization...</span>
+            </div>
+            <div class="term-input-row">
+                <span class="term-prompt-symbol">>>></span>
+                <input type="text" class="term-input-field" id="termInputField" placeholder="Write python code and press Enter" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+
     </main>
+
+    <div class="overlay-backdrop" id="modalBackdrop" aria-hidden="true">
+        <div class="modal-card" id="vipModalCard" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">VIP Access</h2>
+                <button class="btn-close-modal" id="btnCloseVipModal" aria-label="Close dialog">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-text">Enter the creator/supervisor secret code to bypass GitHub logging and unlock full architectural features.</p>
+                <div class="form-group" id="vipFormGroup">
+                    <label class="form-label" for="vipCodeInput">Secret Code</label>
+                    <input type="password" id="vipCodeInput" class="form-input" placeholder="e.g. 3108...">
+                    <span class="form-error-msg" id="vipErrorMsg">Invalid authorization code.</span>
+                </div>
+                <button class="btn-primary" id="btnSubmitVipCode">
+                    Authenticate
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
     <script>
+        /**
+         * PRATHAM AI - Enterprise Frontend Controller
+         * Architecture: State-driven UI updates, encapsulated modules.
+         */
+
+        // --- 1. Global State Management ---
         const AppState = {
             isVip: localStorage.getItem("pratham_is_vip") === "true",
             eduModeActive: false,
             isGenerating: false,
             pendingFile: null,
             pyodideReady: false,
-            hasInitialized: false,
-            activeConversationId: null
+            theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
         };
 
+        // --- 2. DOM Node Cache ---
         const DOM = {
+            // Layout
             sidebar: document.getElementById('mainSidebar'),
             btnToggleSidebar: document.getElementById('btnToggleSidebar'),
+            
+            // Profile & VIP
             btnProfileMenu: document.getElementById('btnProfileMenu'),
             profileDropdownMenu: document.getElementById('profileDropdownMenu'),
-            mainTextInput: document.getElementById('mainTextInput'),
-            btnSubmitMessage: document.getElementById('btnSubmitMessage'),
+            btnOpenVipModal: document.getElementById('btnOpenVipModal'),
+            uiVipBadge: document.getElementById('uiVipBadge'),
+            uiAvatarIcon: document.getElementById('uiAvatarIcon'),
+            uiUserPlan: document.getElementById('uiUserPlan'),
+            
+            // Modals
+            modalBackdrop: document.getElementById('modalBackdrop'),
+            vipModalCard: document.getElementById('vipModalCard'),
+            btnCloseVipModal: document.getElementById('btnCloseVipModal'),
+            btnSubmitVipCode: document.getElementById('btnSubmitVipCode'),
+            vipCodeInput: document.getElementById('vipCodeInput'),
+            vipFormGroup: document.getElementById('vipFormGroup'),
+            
+            // Topbar
+            btnToggleEdu: document.getElementById('btnToggleEdu'),
+            btnToggleTerminal: document.getElementById('btnToggleTerminal'),
+            
+            // Chat View
             chatViewport: document.getElementById('chatViewport'),
             chatFeed: document.getElementById('chatFeed'),
-            hiddenFileInput: document.getElementById('hiddenFileInput')
+            
+            // Composer
+            mainTextInput: document.getElementById('mainTextInput'),
+            btnSubmitMessage: document.getElementById('btnSubmitMessage'),
+            btnAttachFile: document.getElementById('btnAttachFile'),
+            hiddenFileInput: document.getElementById('hiddenFileInput'),
+            attachmentRack: document.getElementById('attachmentRack'),
+            
+            // Terminal
+            terminalPanel: document.getElementById('terminalPanel'),
+            termOutputDisplay: document.getElementById('termOutputDisplay'),
+            termInputField: document.getElementById('termInputField'),
+            btnCloseTerm: document.getElementById('btnCloseTerm'),
+            btnClearTerm: document.getElementById('btnClearTerm')
         };
 
+        // --- 3. Initialization & Setup ---
         function initApp() {
             configureMarkdown();
             bindEventListeners();
             applyVipStateUI();
+            renderWelcomeScreen();
             
-            const btnNewChat = document.getElementById('btnNewChat');
-            if (btnNewChat) btnNewChat.addEventListener('click', resetChatSession);
-            
+            // Keyboard shortcut for New Chat (Cmd/Ctrl + K)
             window.addEventListener('keydown', (e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                     e.preventDefault();
@@ -468,10 +1357,66 @@
         }
 
         function configureMarkdown() {
-            marked.setOptions({ breaks: true, gfm: true });
+            marked.setOptions({
+                highlight: function(code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                },
+                breaks: true,
+                gfm: true
+            });
         }
 
+        // --- 4. Event Binding ---
         function bindEventListeners() {
+            // Sidebar Mobile Toggle
+            DOM.btnToggleSidebar.addEventListener('click', () => {
+                DOM.sidebar.classList.toggle('is-open');
+            });
+            
+            // Close sidebar when clicking outside on mobile
+            document.addEventListener('click', (e) => {
+                if (window.innerWidth <= 900 && 
+                    !DOM.sidebar.contains(e.target) && 
+                    !DOM.btnToggleSidebar.contains(e.target)) {
+                    DOM.sidebar.classList.remove('is-open');
+                }
+            });
+
+            // Profile Dropdown
+            DOM.btnProfileMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = DOM.profileDropdownMenu.classList.contains('is-open');
+                DOM.profileDropdownMenu.classList.toggle('is-open');
+                DOM.btnProfileMenu.setAttribute('aria-expanded', !isOpen);
+            });
+            document.addEventListener('click', () => {
+                DOM.profileDropdownMenu.classList.remove('is-open');
+                DOM.btnProfileMenu.setAttribute('aria-expanded', 'false');
+            });
+
+            // VIP Modal Flow
+            DOM.btnOpenVipModal.addEventListener('click', () => openModal(DOM.vipModalCard));
+            DOM.btnCloseVipModal.addEventListener('click', closeModal);
+            DOM.btnSubmitVipCode.addEventListener('click', verifyVipCode);
+            DOM.vipCodeInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') verifyVipCode();
+            });
+
+            // Tool Toggles
+            DOM.btnToggleEdu.addEventListener('click', toggleEduMode);
+            DOM.btnToggleTerminal.addEventListener('click', toggleTerminalPanel);
+            
+            // Terminal Internal Actions
+            DOM.btnCloseTerm.addEventListener('click', () => {
+                DOM.terminalPanel.classList.remove('is-open');
+                DOM.terminalPanel.setAttribute('aria-hidden', 'true');
+                DOM.btnToggleTerminal.classList.remove('is-active');
+            });
+            DOM.btnClearTerm.addEventListener('click', () => DOM.termOutputDisplay.innerHTML = '');
+            DOM.termInputField.addEventListener('keydown', handleTerminalInput);
+
+            // Composer Textarea Auto-resize & Input parsing
             DOM.mainTextInput.addEventListener('input', handleComposerInput);
             DOM.mainTextInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -479,45 +1424,427 @@
                     if (!DOM.btnSubmitMessage.disabled) executeUserPrompt();
                 }
             });
+
+            // Attachments
+            DOM.btnAttachFile.addEventListener('click', () => DOM.hiddenFileInput.click());
+            DOM.hiddenFileInput.addEventListener('change', handleFileSelection);
+            DOM.btnSubmitMessage.addEventListener('click', executeUserPrompt);
         }
 
+        // --- 5. UI Render Functions ---
+        function renderWelcomeScreen() {
+            DOM.chatFeed.innerHTML = `
+                <div class="hero-welcome">
+                    <h1 class="hero-title">How can I help you today?</h1>
+                    <p class="hero-subtitle">I am Pratham AI. I can analyze code, answer questions, and query your documents.</p>
+                    
+                    <div class="prompt-grid">
+                        <div class="prompt-card" onclick="injectPromptText('Analyze the time complexity of this Python script')">
+                            <div class="prompt-icon">
+                                <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            </div>
+                            <span class="prompt-headline">Code Analysis</span>
+                            <span class="prompt-desc">Optimize algorithms and debug errors</span>
+                        </div>
+                        <div class="prompt-card" onclick="injectPromptText('@education Summarize the key points in my documents')">
+                            <div class="prompt-icon">
+                                <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/></svg>
+                            </div>
+                            <span class="prompt-headline">Document Querying</span>
+                            <span class="prompt-desc">Extract facts using @education mode</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function injectPromptText(text) {
+            DOM.mainTextInput.value = text;
+            handleComposerInput();
+            DOM.mainTextInput.focus();
+        }
+
+        // --- 6. Composer & Input Logic ---
         function handleComposerInput() {
             const el = DOM.mainTextInput;
+            // Auto-resize
             el.style.height = 'auto';
             el.style.height = Math.min(el.scrollHeight, 250) + 'px';
-            DOM.btnSubmitMessage.disabled = el.value.trim().length === 0;
+            
+            // Check button state
+            const hasText = el.value.trim().length > 0;
+            DOM.btnSubmitMessage.disabled = (!hasText && !AppState.pendingFile) || AppState.isGenerating;
+
+            // Auto-trigger @education mode visual if typed
+            if (el.value.includes('@education') && !AppState.eduModeActive) {
+                toggleEduMode(true);
+            }
         }
 
-        function applyVipStateUI() {}
-        function renderWelcomeScreen() {
-            DOM.chatFeed.innerHTML = `<div class="hero-welcome"><h1 class="hero-title">How can I help you today?</h1></div>`;
+        function handleFileSelection(e) {
+            const file = e.target.files[0];
+            if (file) {
+                AppState.pendingFile = file;
+                DOM.attachmentRack.style.display = 'flex';
+                DOM.attachmentRack.innerHTML = `
+                    <div class="attachment-chip">
+                        <svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                        <span>${file.name}</span>
+                        <button class="btn-remove-chip" onclick="clearFileAttachment()" aria-label="Remove attachment">✕</button>
+                    </div>
+                `;
+                handleComposerInput(); // Update button state
+            }
         }
-        function scrollToBottom() { DOM.chatViewport.scrollTop = DOM.chatViewport.scrollHeight; }
+
+        function clearFileAttachment() {
+            AppState.pendingFile = null;
+            DOM.hiddenFileInput.value = '';
+            DOM.attachmentRack.style.display = 'none';
+            handleComposerInput();
+        }
+
+        function toggleEduMode(forceState) {
+            AppState.eduModeActive = typeof forceState === 'boolean' ? forceState : !AppState.eduModeActive;
+            
+            if (AppState.eduModeActive) {
+                DOM.btnToggleEdu.classList.add('is-active');
+                DOM.btnToggleEdu.setAttribute('aria-pressed', 'true');
+                DOM.mainTextInput.placeholder = "Querying loaded documents... (@education active)";
+            } else {
+                DOM.btnToggleEdu.classList.remove('is-active');
+                DOM.btnToggleEdu.setAttribute('aria-pressed', 'false');
+                DOM.mainTextInput.placeholder = "Message Pratham AI...";
+            }
+        }
+
+        // --- 7. VIP & Modal Logic ---
+        function openModal(modalNode) {
+            DOM.modalBackdrop.classList.add('is-visible');
+            DOM.modalBackdrop.setAttribute('aria-hidden', 'false');
+            // Small delay to allow CSS animation to trigger properly
+            setTimeout(() => DOM.vipCodeInput.focus(), 100);
+        }
+
+        function closeModal() {
+            DOM.modalBackdrop.classList.remove('is-visible');
+            DOM.modalBackdrop.setAttribute('aria-hidden', 'true');
+            DOM.vipFormGroup.classList.remove('has-error');
+            DOM.vipCodeInput.value = '';
+        }
+
+        function applyVipStateUI() {
+            if (AppState.isVip) {
+                DOM.uiVipBadge.style.display = 'inline-block';
+                DOM.uiAvatarIcon.classList.add('is-vip');
+                DOM.uiUserPlan.textContent = "Creator / Supervisor Access";
+                DOM.btnOpenVipModal.style.display = "none";
+            }
+        }
+
+        function verifyVipCode() {
+            const code = DOM.vipCodeInput.value.trim();
+            const originalText = DOM.btnSubmitVipCode.innerHTML;
+            
+            DOM.btnSubmitVipCode.innerHTML = `<div class="spinner"></div> Verifying...`;
+            DOM.btnSubmitVipCode.disabled = true;
+
+            // Simulate Network Request for security verification
+            setTimeout(() => {
+                if (code === "31082011") {
+                    AppState.isVip = true;
+                    localStorage.setItem("pratham_is_vip", "true");
+                    applyVipStateUI();
+                    closeModal();
+                    
+                    // Trigger the specific Relationship questionnaire flow
+                    appendMessageToFeed('model', `**[SYSTEM ALERT]: VIP Authentication Successful.**\n\nWelcome back. GitHub auto-logging has been bypassed for this session to ensure privacy.\n\n*For internal contextual memory logging (saving to \`vip.txt\`), please state your name and confirm your specific relationship with Pratham.*`);
+                } else {
+                    DOM.vipFormGroup.classList.add('has-error');
+                }
+                
+                DOM.btnSubmitVipCode.innerHTML = originalText;
+                DOM.btnSubmitVipCode.disabled = false;
+            }, 800); // Artificial delay for effect
+        }
+
+        // --- 8. Core Chat Engine ---
+        function createMessageNode(role, rawContent) {
+            const isUser = role === 'user';
+            
+            const node = document.createElement('div');
+            node.className = 'message-group';
+            
+            // Meta Label
+            const meta = document.createElement('div');
+            meta.className = `message-meta ${isUser ? 'meta-user' : 'meta-ai'}`;
+            if (isUser) {
+                meta.textContent = 'You';
+            } else {
+                meta.innerHTML = `<div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI`;
+            }
+
+            // Body Wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-body-wrapper ${isUser ? 'wrapper-user' : 'wrapper-ai'}`;
+            
+            // Content
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            
+            if (isUser) {
+                content.textContent = rawContent;
+            } else {
+                // Parse markdown safely
+                content.innerHTML = DOMPurify.sanitize(marked.parse(rawContent));
+            }
+
+            wrapper.appendChild(content);
+            node.appendChild(meta);
+            node.appendChild(wrapper);
+            
+            return { node, contentNode: content };
+        }
+
+        function appendMessageToFeed(role, text) {
+            // Remove hero screen if present
+            const hero = DOM.chatFeed.querySelector('.hero-welcome');
+            if (hero) hero.remove();
+
+            const { node, contentNode } = createMessageNode(role, text);
+            DOM.chatFeed.appendChild(node);
+            scrollToBottom();
+            return contentNode;
+        }
+
+        function appendStatusPill(text) {
+            const node = document.createElement('div');
+            node.className = 'message-group';
+            node.innerHTML = `
+                <div class="message-body-wrapper wrapper-ai">
+                    <div class="status-pill">
+                        <div class="spinner"></div>
+                        ${text}
+                    </div>
+                </div>
+            `;
+            DOM.chatFeed.appendChild(node);
+            scrollToBottom();
+            return node;
+        }
+
+        function scrollToBottom() {
+            // Use requestAnimationFrame to ensure DOM is updated before scrolling
+            requestAnimationFrame(() => {
+                DOM.chatViewport.scrollTo({
+                    top: DOM.chatViewport.scrollHeight,
+                    bottom: 'smooth'
+                });
+            });
+        }
+
+        // The main Execution Loop
+        async function executeUserPrompt() {
+            let promptText = DOM.mainTextInput.value.trim();
+            if (!promptText && !AppState.pendingFile) return;
+
+            // Lock UI
+            AppState.isGenerating = true;
+            DOM.btnSubmitMessage.disabled = true;
+            DOM.mainTextInput.value = '';
+            DOM.mainTextInput.style.height = 'auto';
+
+            // 1. Render User Message
+            let displayString = promptText;
+            if (AppState.pendingFile) {
+                displayString += `\n\n[Attached: ${AppState.pendingFile.name}]`;
+            }
+            appendMessageToFeed('user', displayString);
+
+            // Force internal backend flag for education
+            if (AppState.eduModeActive && !promptText.includes("@education")) {
+                promptText = "@education " + promptText;
+            }
+
+            // 2. Handle File Simulation (Would be an API call to /upload)
+            if (AppState.pendingFile) {
+                const statusNode = appendStatusPill(`Processing ${AppState.pendingFile.name} for RAG context...`);
+                await new Promise(r => setTimeout(r, 1200)); // Simulate upload
+                statusNode.remove();
+                clearFileAttachment();
+            }
+
+            // 3. Setup AI Response Node for Streaming
+            const hero = DOM.chatFeed.querySelector('.hero-welcome');
+            if (hero) hero.remove();
+
+            const responseNode = document.createElement('div');
+            responseNode.className = 'message-group';
+            responseNode.innerHTML = `
+                <div class="message-meta meta-ai">
+                    <div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI
+                </div>
+                <div class="message-body-wrapper wrapper-ai">
+                    <div class="message-content cursor-blink" id="activeStreamTarget">Thinking...</div>
+                </div>
+            `;
+            DOM.chatFeed.appendChild(responseNode);
+            scrollToBottom();
+
+            const streamTarget = responseNode.querySelector('#activeStreamTarget');
+            let accumulatedResponse = "";
+
+            try {
+                // =========================================================
+                // DEMO STREAMING ENGINE (Replaces fetch to /chat-stream)
+                // =========================================================
+                
+                // Clear "Thinking..."
+                streamTarget.textContent = ""; 
+                
+                // Generate contextual demo response
+                let rawResponse = "";
+                if (promptText.includes("@education")) {
+                    rawResponse = `I have scanned the documents in the repository via the **@education** vector pipeline. Based on the uploaded context, here is the synthesized information you requested.\n\n*(Note: In a production environment, this is where the Python backend injects the concatenated string from \`app/services/rag.py\` before sending to the LLM).*`;
+                } else {
+                    rawResponse = `Here is the response to your query regarding: *"${promptText.substring(0, 30)}..."*\n\n### Code Execution\nIf you asked for code, you can open the **Terminal** above to execute it live using Pyodide in your browser.\n\n\`\`\`python\ndef example():\n    print("Hello from Pratham AI")\n\`\`\``;
+                }
+
+                // Simulate token-by-token streaming
+                const chunks = rawResponse.match(/.{1,4}/g) || [];
+                
+                for (const chunk of chunks) {
+                    accumulatedResponse += chunk;
+                    // Sanitize and parse markdown on every tick
+                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
+                    scrollToBottom();
+                    // Artificial network latency
+                    await new Promise(r => setTimeout(r, 15 + Math.random() * 20)); 
+                }
+
+            } catch (err) {
+                streamTarget.innerHTML = `<span style="color: var(--status-error);">Connection failed. Ensure the Flask server is running at API_BASE.</span>`;
+            } finally {
+                streamTarget.classList.remove('cursor-blink');
+                
+                // Apply Syntax Highlighting to newly generated code blocks
+                streamTarget.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+
+                AppState.isGenerating = false;
+                DOM.mainTextInput.focus();
+                handleComposerInput(); // Re-evaluate button state
+            }
+        }
+
+        // --- 9. Terminal (Pyodide Subsystem) ---
+        function toggleTerminalPanel() {
+            const isOpening = !DOM.terminalPanel.classList.contains('is-open');
+            
+            if (isOpening) {
+                DOM.terminalPanel.classList.add('is-open');
+                DOM.terminalPanel.setAttribute('aria-hidden', 'false');
+                DOM.btnToggleTerminal.classList.add('is-active');
+                
+                if (!AppState.pyodideReady) {
+                    initializePyodideEnv();
+                } else {
+                    DOM.termInputField.focus();
+                }
+            } else {
+                DOM.terminalPanel.classList.remove('is-open');
+                DOM.terminalPanel.setAttribute('aria-hidden', 'true');
+                DOM.btnToggleTerminal.classList.remove('is-active');
+            }
+        }
+
+        async function initializePyodideEnv() {
+            appendTerminalOutput('\n<span class="t-sys">[System] Downloading WASM Python engine... (This takes a moment on first load)</span>');
+            
+            try {
+                // loadPyodide is available globally from the CDN script tag
+                window.pyodide = await loadPyodide();
+                
+                // Route Python's stdout/stderr to our custom DOM element
+                window.pyodide.runPython(`
+import sys
+import io
+
+class WebConsole(io.StringIO):
+    def __init__(self, is_error=False):
+        super().__init__()
+        self.is_error = is_error
+        
+    def write(self, s):
+        # We handle the writing in JS by reading the buffer
+        super().write(s)
+
+sys.stdout = WebConsole()
+sys.stderr = WebConsole(is_error=True)
+                `);
+                
+                AppState.pyodideReady = true;
+                appendTerminalOutput('\n<span class="t-ok">[System] Pyodide initialized successfully. Python 3.11 ready.</span>\n');
+                DOM.termInputField.focus();
+            } catch (err) {
+                appendTerminalOutput(`\n<span class="t-err">[Error] Pyodide failed to load: ${err.message}</span>\n`);
+            }
+        }
+
+        function appendTerminalOutput(htmlStr) {
+            DOM.termOutputDisplay.innerHTML += htmlStr;
+            DOM.termOutputDisplay.scrollTop = DOM.termOutputDisplay.scrollHeight;
+        }
+
+        async function handleTerminalInput(e) {
+            if (e.key === 'Enter') {
+                const code = e.target.value.trim();
+                if (!code) return;
+
+                e.target.value = '';
+                appendTerminalOutput(`\n<span class="term-prompt-symbol">>>></span> <span class="t-cmd">${code}</span>\n`);
+
+                if (!AppState.pyodideReady) {
+                    appendTerminalOutput('<span class="t-err">Error: Python engine is not loaded yet.</span>');
+                    return;
+                }
+
+                try {
+                    // Clear previous buffers inside python
+                    window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0)");
+                    window.pyodide.runPython("sys.stderr.seek(0); sys.stderr.truncate(0)");
+                    
+                    // Execute async
+                    await window.pyodide.runPythonAsync(code);
+                    
+                    // Fetch results from buffers
+                    const out = window.pyodide.runPython("sys.stdout.getvalue()");
+                    const err = window.pyodide.runPython("sys.stderr.getvalue()");
+                    
+                    if (out) appendTerminalOutput(`<span class="t-ok">${out}</span>`);
+                    if (err) appendTerminalOutput(`<span class="t-err">${err}</span>`);
+                    
+                } catch (pythonError) {
+                    // Handle syntax errors or exceptions thrown directly by execution
+                    appendTerminalOutput(`<span class="t-err">${pythonError.toString()}</span>\n`);
+                }
+            }
+        }
+
+        // --- 10. Boot ---
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
         (function() {
+            // Explicitly enforce workspace visibility mapping
             function validateAuthenticationStatus() {
-                const sToken = localStorage.getItem("pratham_session_token");
+                const sToken = localStorage.getItem("pratham_session_token") || localStorage.getItem("sessionToken") || window.sessionToken;
                 const authScreen = document.getElementById("authWallScreen");
                 if (sToken) {
                     if (authScreen) authScreen.style.setProperty("display", "none", "important");
-                    
-                    try {
-                        const savedUser = JSON.parse(localStorage.getItem("pratham_user_profile") || "null");
-                        if (savedUser) {
-                            document.getElementById("uiUserName").textContent = savedUser.name || "User";
-                            document.getElementById("uiUserPlan").textContent = savedUser.role === "vip" ? "Creator Access" : "Standard Tier";
-                            document.getElementById("uiAvatarIcon").textContent = (savedUser.name || "U").charAt(0).toUpperCase();
-                        }
-                    } catch(e) {}
-                    
-                    if (typeof loadConversationList === 'function') loadConversationList();
-                    if (!AppState.hasInitialized) {
-                        AppState.hasInitialized = true;
-                        renderWelcomeScreen();
-                    }
                 } else {
                     if (authScreen) authScreen.style.setProperty("display", "flex", "important");
                 }
@@ -525,138 +1852,316 @@
 
             document.addEventListener("DOMContentLoaded", () => {
                 validateAuthenticationStatus();
+                
+                // Initialize Official Identity Services Script
                 setTimeout(() => {
                     if (typeof google !== 'undefined' && google.accounts) {
                         google.accounts.id.initialize({
                             client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-                            callback: handleGoogleSignInResponse
+                            callback: handleGoogleSignInResponse,
+                            auto_select: true
                         });
-                        ["gSignInBtnTarget", "gsiMain", "googleSignInContainer"].forEach(id => {
+                        
+                        // Render onto your multiple target configurations safely
+                        const targets = ["gSignInBtnTarget", "gsiMain", "googleSignInContainer"];
+                        targets.forEach(id => {
                             const el = document.getElementById(id);
-                            if (el) google.accounts.id.renderButton(el, { theme: "outline", size: "large", width: "320" });
+                            if (el) {
+                                google.accounts.id.renderButton(el, { theme: "outline", size: "large", width: "320" });
+                            }
                         });
                     }
                 }, 1000);
 
-                document.getElementById("btnLogout").addEventListener("click", () => {
-                    localStorage.clear();
-                    location.reload();
-                });
+                // Setup clear logout listener routine
+                const logoutBtn = document.getElementById("btnLogout");
+                if (logoutBtn) {
+                    logoutBtn.addEventListener("click", () => {
+                        localStorage.removeItem("pratham_session_token");
+                        localStorage.removeItem("sessionToken");
+                        localStorage.removeItem("pratham_user_profile");
+                        location.reload();
+                    });
+                }
             });
 
             async function handleGoogleSignInResponse(res) {
                 if (!res || !res.credential) return;
-                localStorage.setItem("pratham_session_token", res.credential);
-                const base64 = res.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-                const user = JSON.parse(decodeURIComponent(escape(atob(base64))));
-                localStorage.setItem("pratham_user_profile", JSON.stringify({ name: user.name, email: user.email }));
-                validateAuthenticationStatus();
+                try {
+                    // Commit directly locally first to ensure lock screen vanishes instantly
+                    localStorage.setItem("pratham_session_token", res.credential);
+                    localStorage.setItem("sessionToken", res.credential);
+                    window.sessionToken = res.credential;
+                    
+                    // Parse client details out
+                    const base64Url = res.credential.split('.')[1];
+                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+                    const decodedUser = JSON.parse(jsonPayload);
+                    
+                    window.cachedUser = {
+                        id: decodedUser.sub,
+                        email: decodedUser.email,
+                        name: decodedUser.name || 'User Profile',
+                        role: 'standard'
+                    };
+
+                    localStorage.setItem("pratham_user_profile", JSON.stringify(window.cachedUser));
+                    
+                    const nameEl = document.getElementById("uiUserName");
+                    const planEl = document.getElementById("uiUserPlan");
+                    if (nameEl) nameEl.textContent = window.cachedUser.name;
+                    if (planEl) planEl.textContent = "Standard Tier";
+                    
+                    // Fire backend route exchange mapping
+                    const authExchange = await fetch('/auth/google', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id_token: res.credential })
+                    });
+                    if (authExchange.ok) {
+                        const payload = await authExchange.json();
+                        localStorage.setItem("pratham_session_token", payload.session_token);
+                        localStorage.setItem("pratham_user_profile", JSON.stringify(payload.user));
+                        window.sessionToken = payload.session_token;
+                        window.cachedUser = payload.user;
+                        
+                        if (nameEl) nameEl.textContent = payload.user.name;
+                        if (planEl) planEl.textContent = payload.user.role === 'vip' ? "Creator Access" : "Standard Tier";
+                    }
+                    validateAuthenticationStatus();
+                } catch (err) {
+                    console.error("Identity verification connection anomaly:", err);
+                    validateAuthenticationStatus();
+                }
             }
 
-            function getApiBase() {
-                return (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://127.0.0.1:5000' : '';
+            // Hydrate profile data without clearing token sessions
+            const sessionProfileData = localStorage.getItem("pratham_user_profile");
+            if (sessionProfileData) {
+                try {
+                    const parsedUserObj = JSON.parse(sessionProfileData);
+                    window.cachedUser = parsedUserObj;
+                    window.sessionToken = localStorage.getItem("pratham_session_token");
+                    document.addEventListener("DOMContentLoaded", () => {
+                        const nameEl = document.getElementById("uiUserName");
+                        const planEl = document.getElementById("uiUserPlan");
+                        if (nameEl) nameEl.textContent = parsedUserObj.name;
+                        if (planEl) planEl.textContent = parsedUserObj.role === 'vip' ? "Creator Access" : "Standard Tier";
+                    });
+                } catch(e) {}
             }
 
-            async function executeUserPrompt() {
+            // OVERRIDE INTERFACE CORE FUNCTION WITH PIPELINE RUNNERS
+            executeUserPrompt = async function() {
                 let promptText = DOM.mainTextInput.value.trim();
-                if (!promptText) return;
+                if (!promptText && !AppState.pendingFile) return;
 
                 AppState.isGenerating = true;
                 DOM.btnSubmitMessage.disabled = true;
                 DOM.mainTextInput.value = '';
+                DOM.mainTextInput.style.height = 'auto';
 
-                appendMessageToFeed('user', promptText);
+                let displayString = promptText;
+                if (AppState.pendingFile) {
+                    displayString += `\n\n[Attached: ${AppState.pendingFile.name}]`;
+                }
+                appendMessageToFeed('user', displayString);
 
-                const isVisual = /\b(generate image|draw|create a picture of|make an image)\b/i.test(promptText);
-                if (isVisual) {
-                    const cleanPrompt = promptText.replace(/\b(generate image|draw|create a picture of|make an image)\b/ig, "").trim();
-                    const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt || "artwork")}?width=1024&height=1024&nologo=true`;
-                    
-                    const streamTarget = appendMessageToFeed('model', 'Generating visual architecture asset...');
-                    streamTarget.innerHTML = `<img src="${imgUrl}" alt="AI Asset" onload="scrollToBottom()">`;
+                if (AppState.eduModeActive && !promptText.includes("@education")) {
+                    promptText = "@education " + promptText;
+                }
+
+                const hero = DOM.chatFeed.querySelector('.hero-welcome');
+                if (hero) hero.remove();
+
+                const responseNode = document.createElement('div');
+                responseNode.className = 'message-group';
+                responseNode.innerHTML = `
+                    <div class="message-meta meta-ai">
+                        <div class="ai-badge-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#fff"/></svg></div> Pratham AI
+                    </div>
+                    <div class="message-body-wrapper wrapper-ai">
+                        <div class="message-content cursor-blink" id="activeStreamTarget">Thinking...</div>
+                    </div>
+                `;
+                DOM.chatFeed.appendChild(responseNode);
+                scrollToBottom();
+
+                const streamTarget = responseNode.querySelector('#activeStreamTarget');
+                let accumulatedResponse = "";
+
+                // INTERCEPT LOGIC FOR POLLINATIONS ARTWORK GENERATION
+                const isVisualArtTrigger = /\b(generate image|draw|paint|imagine|create a picture of|make an image)\b/i.test(promptText);
+                if (isVisualArtTrigger) {
+                    streamTarget.textContent = "";
+                    const promptExtract = promptText.replace(/\b(generate image|draw|paint|imagine|create a picture of|make an image)\b/ig, "").trim();
+                    const seedId = Math.floor(Math.random() * 9999999);
+                    const productionImgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptExtract || "vibrant detailed workspace artwork masterfully designed by enterprise intelligence")}?width=1024&height=1024&nologo=true&seed=${seedId}`;
+                    accumulatedResponse = `I have processed your creative parameters. Here is your dynamically generated visual artifact:\n\n![Generated Image Assets](${productionImgUrl})`;
+                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
+                    streamTarget.classList.remove('cursor-blink');
                     AppState.isGenerating = false;
+                    DOM.mainTextInput.focus();
+                    handleComposerInput();
                     return;
                 }
 
-                const streamTarget = appendMessageToFeed('model', 'Thinking...');
                 try {
-                    const r = await fetch(getApiBase() + '/chat-stream', {
+                    const token = localStorage.getItem("pratham_session_token") || localStorage.getItem("sessionToken") || "standard_auth_hex";
+                    const sseResponse = await fetch('/chat-stream', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + localStorage.getItem("pratham_session_token")
-                        },
-                        body: JSON.stringify({ message: promptText, conversation_id: AppState.activeConversationId })
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ message: promptText, conversation_id: AppState.currentConversationId })
                     });
 
-                    if (!r.ok) throw new Error(`HTTP Operational Status: [${r.status}]`);
-                    
-                    streamTarget.textContent = "";
-                    const reader = r.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buf = "";
+                    if (sseResponse.ok) {
+                        streamTarget.textContent = "";
+                        const reader = sseResponse.body.getReader();
+                        const decoder = new TextDecoder();
+                        let chunkBuffer = "";
 
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) break;
-                        buf += decoder.decode(value, { stream: true });
-                        const lines = buf.split('\n');
-                        buf = lines.pop();
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            chunkBuffer += decoder.decode(value, { stream: true });
+                            const sseLines = chunkBuffer.split("\n");
+                            chunkBuffer = sseLines.pop();
 
-                        for (const line of lines) {
-                            if (line.trim().startsWith('data:')) {
-                                const parsed = JSON.parse(line.trim().substring(5).trim());
-                                if (parsed.type === 'token') {
-                                    accumulatedResponse += parsed.text;
-                                    streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse));
-                                    scrollToBottom();
-                                } else if (parsed.type === 'metadata') {
-                                    AppState.activeConversationId = parsed.conversation_id;
+                            for (const rawLine of sseLines) {
+                                const standardLine = rawLine.trim();
+                                if (standardLine.startsWith("data:")) {
+                                    try {
+                                        const parsedStreamObj = JSON.parse(standardLine.substring(5).trim());
+                                        if (parsedStreamObj.type === "token") {
+                                            accumulatedResponse += parsedStreamObj.text;
+                                            streamTarget.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedResponse.replace(/\[EXECUTE_PYTHON:[\s\S]*?\]/g, "")));
+                                            scrollToBottom();
+                                        } else if (parsedStreamObj.type === "metadata") {
+                                            AppState.currentConversationId = parsedStreamObj.conversation_id;
+                                        } else if (parsedStreamObj.type === "error") {
+                                            streamTarget.innerHTML = `<span style="color:var(--status-error);">${parsedStreamObj.text}</span>`;
+                                        }
+                                    } catch (innerJsonErr) {}
                                 }
                             }
                         }
+                    } else {
+                        const errPayload = await sseResponse.json().catch(() => ({}));
+                        throw new Error(errPayload.error || `HTTP System Failure Response: Status Code [${sseResponse.status}]`);
                     }
                 } catch (err) {
-                    streamTarget.innerHTML = `<span style="color:var(--status-error)">[CRITICAL TRANSACTION EXCEPTION]: ${err.message}</span>`;
+                    console.warn("Exposing server infrastructure exception log details via client window.", err);
+                    streamTarget.classList.remove('cursor-blink');
+                    streamTarget.innerHTML = `<span style="color: var(--status-error); font-family: var(--font-mono); font-size: 13px;">[CRITICAL TRANSACTION EXCEPTION]: ${err.message}</span>`;
                 } finally {
+                    streamTarget.classList.remove('cursor-blink');
+                    streamTarget.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
+
+                    // Execute scripts silently inside the local sandbox workspace if execution anchors are found
+                    let pyMatch = accumulatedResponse.match(/\[EXECUTE_PYTHON:\s*([\s\S]*?)\]/);
+                    if (pyMatch && pyMatch[1]) {
+                        let innerScriptCode = pyMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+                        if (!AppState.pyodideReady) { await initializePyodideEnv(); }
+                        try {
+                            window.pyodide.runPython("sys.stdout.seek(0); sys.stdout.truncate(0); sys.stderr.seek(0); sys.stderr.truncate(0);");
+                            await window.pyodide.runPythonAsync(innerScriptCode);
+                            const sandboxOut = window.pyodide.runPython("sys.stdout.getvalue()");
+                            const sandboxErr = window.pyodide.runPython("sys.stderr.getvalue()");
+                            if (sandboxOut) appendTerminalOutput(`\n<span class="t-ok">[Automated Task Output]: ${sandboxOut}</span>\n`);
+                            if (sandboxErr) appendTerminalOutput(`\n<span class="t-err">[Automated Task Error]: ${sandboxErr}</span>\n`);
+                        } catch (pySandboxException) {
+                            appendTerminalOutput(`\n<span class="t-err">[Sandbox Exception]: ${pySandboxException.toString()}</span>\n`);
+                        }
+                    }
+
                     AppState.isGenerating = false;
+                    DOM.mainTextInput.focus();
                     handleComposerInput();
                 }
-            }
-
-            async function loadConversationList() {
-                try {
-                    const r = await fetch(getApiBase() + '/conversations', {
-                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem("pratham_session_token") }
-                    });
-                    if (!r.ok) return;
-                    const convos = await r.json();
-                    const container = document.getElementById('conversationList');
-                    container.innerHTML = convos.map(c => `<div class="convo-item" onclick="loadConversation(${c.id})">${c.title}</div>`).join('');
-                } catch(e) {}
-            }
-
-            window.loadConversation = async function(id) {
-                AppState.activeConversationId = id;
-                DOM.chatFeed.innerHTML = "";
-                try {
-                    const r = await fetch(getApiBase() + `/conversations/${id}/messages`, {
-                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem("pratham_session_token") }
-                    });
-                    const msgs = await r.json();
-                    msgs.forEach(m => appendMessageToFeed(m.role === 'assistant' ? 'model' : 'user', m.content));
-                } catch(e) {}
             };
 
-            function resetChatSession() {
-                AppState.activeConversationId = null;
-                renderWelcomeScreen();
+            // GLOBAL COGNITIVE WORKSPACE ANCHOR INITIALIZATION INTERCEPTOR
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                const nativeInitCall = google.accounts.id.initialize;
+                google.accounts.id.initialize = function(configurationOptions) {
+                    if (configurationOptions && configurationOptions.callback) {
+                        const nativeExecutionCallback = configurationOptions.callback;
+                        configurationOptions.callback = async function(responseWrapper) {
+                            if (responseWrapper && responseWrapper.credential) {
+                                localStorage.setItem("pratham_session_token", responseWrapper.credential);
+                                localStorage.setItem("sessionToken", responseWrapper.credential);
+                                window.sessionToken = responseWrapper.credential;
+                            }
+                            const executionOutput = await nativeExecutionCallback(responseWrapper);
+                            validateAuthenticationStatus();
+                            return executionOutput;
+                        };
+                    }
+                    return nativeInitCall.apply(this, arguments);
+                };
             }
 
+            // High-frequency runtime safety daemon loop to handle view transitions instantly
             setInterval(validateAuthenticationStatus, 100);
-            window.initApp = initApp;
         })();
-        window.initApp();
+
+        // ==============================================================================
+        // GLOBAL FETCH AUTOMATED ROUTING PATCH
+        // Intercepts structural 404 deadlocks and anchors absolute targeting to port 5000 during local engineering environments
+        // ==============================================================================
+        (function() {
+            const nativeFetch = window.fetch;
+            window.fetch = function(input, init) {
+                let pathTarget = input;
+                if (typeof input === 'string' && input.startsWith('/')) {
+                    const localExecutionEnvironment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                    const targetEngineHost = localExecutionEnvironment ? 'http://127.0.0.1:5000' : window.location.origin;
+                    pathTarget = targetEngineHost + input;
+                }
+                return nativeFetch(pathTarget, init);
+            };
+        })();
+
+        // ==============================================================================
+        // AUTOMATED LIFECYCLE RE-ROUTING & AUTHWALL GATING INTERCEPTOR PATCH
+        // Ensures that when Google Credentials land, the layout shifts immediately to main chat view
+        // ==============================================================================
+        (function() {
+            function forceUIVisibilityTransition() {
+                const activeToken = localStorage.getItem("pratham_session_token") || window.sessionToken;
+                const authGatePanel = document.getElementById("authWallScreen");
+                
+                if (authGatePanel) {
+                    if (activeToken) {
+                        authGatePanel.style.setProperty("display", "none", "important");
+                        authGatePanel.setAttribute("aria-hidden", "true");
+                        
+                        // Hydrate UI labels instantly from the unpacked profile data
+                        try {
+                            const cachedProf = localStorage.getItem("pratham_user_profile");
+                            if (cachedProf) {
+                                const userObj = JSON.parse(cachedProf);
+                                document.getElementById("uiUserName").textContent = userObj.name || "User";
+                                document.getElementById("uiAvatarIcon").textContent = (userObj.name || "U").charAt(0).toUpperCase();
+                            }
+                        } catch(e){}
+                        
+                        // Populate chats pane automatically
+                        if (typeof window.loadConversationList === 'function' && !window.hasRunAutoHydration) {
+                            window.hasRunAutoHydration = true;
+                            window.loadConversationList();
+                        }
+                    } else {
+                        authGatePanel.style.setProperty("display", "flex", "important");
+                        authGatePanel.setAttribute("aria-hidden", "false");
+                    }
+                }
+            }
+            setInterval(forceUIVisibilityTransition, 100);
+        })();
     </script>
 </body>
 </html>
