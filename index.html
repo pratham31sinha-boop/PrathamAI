@@ -132,7 +132,7 @@
 
         /* ==============================================================================
            GATEKEEPER SECURITY SHIELD (AUTH WALL)
-           ============================================================================= */
+           ============================================================================== */
         #authWallScreen {
             position: fixed;
             inset: 0;
@@ -410,7 +410,7 @@
         }
 
         /* ==============================================================================
-           MAIN INTERACTION WORKSPACE Layout
+           MAIN INTERACTION WORKSPACE LAYOUT
            ============================================================================== */
         .workspace-main {
             flex: 1;
@@ -1311,7 +1311,7 @@
             GOOGLE_CLIENT_ID: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com"
         };
 
-        // FIXED CRITICAL 404 INTERCEPT: Forces all structural fetch requests cleanly to the live backend domain
+        // FIXED CRITICAL INTERCEPT: Bypasses localhost confusion entirely by enforcing absolute targets globally
         (function() {
             const nativeFetch = window.fetch;
             window.fetch = function(input, init) {
@@ -1322,9 +1322,6 @@
                 return nativeFetch(pathTarget, init);
             };
         })();
-
-        // FIXED: Re-enforcing static reference to bypass localhost confusion splits entirely
-        const API_BASE = CONFIG.API_BASE;
 
         const State = {
             sessionToken: localStorage.getItem('pai_session') || null,
@@ -1465,7 +1462,8 @@
         async function interceptIdentityGatewayTokenPayloads(securityCredentialResponsePacket) {
             if (!securityCredentialResponsePacket || !securityCredentialResponsePacket.credential) return;
             try {
-                const responseDataStream = await nativeFetch(`${API_BASE}/auth/google`, {
+                // FIXED: Uses synchronized global fetch route interception rules cleanly
+                const responseDataStream = await fetch(`/auth/google`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id_token: securityCredentialResponsePacket.credential })
@@ -1521,7 +1519,7 @@
             requestOptionsObject.headers = Object.assign({}, requestOptionsObject.headers, {
                 'Authorization': `Bearer ${State.sessionToken}`
             });
-            const operationalResponseStream = await nativeFetch(API_BASE + targetPathRouterString, requestOptionsObject);
+            const operationalResponseStream = await fetch(targetPathRouterString, requestOptionsObject);
             if (operationalResponseStream.status === 401) {
                 localStorage.removeItem('pai_session');
                 localStorage.removeItem('pai_user');
