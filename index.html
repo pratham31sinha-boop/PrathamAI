@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ==========================================================================
    0. DESIGN TOKENS
@@ -205,7 +205,7 @@ img{max-width:100%;display:block}
 .msg-content th,.msg-content td{border:1px solid var(--border-light);padding:6px 10px;text-align:left}
 .msg-content th{background:var(--bg-sidebar)}
 .msg-content code{font-family:var(--font-mono);background:rgba(128,128,128,.15);padding:2px 5px;border-radius:4px;font-size:.88em;color:var(--accent);word-break:break-word}
-.msg-content pre{display:none} /* fenced code blocks are pulled into file chips instead of raw dumps */
+.msg-content pre{display:none}
 .msg-content a{word-break:break-all}
 .msg-retry{display:inline-flex;align-items:center;gap:6px;margin-top:8px;border:1px solid var(--border-heavy);padding:6px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
 .msg-retry:hover{border-color:var(--accent);color:var(--accent)}
@@ -687,14 +687,19 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ==========================================================================
-   CONFIG - Updated to your exact Railway backend
+   CONFIG - Updated to your exact Railway backend + Active Supabase Credentials
    ========================================================================== */
 const CONFIG = {
   API_BASE: "https://web-production-503208.up.railway.app",
-  GOOGLE_CLIENT_ID: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com"
+  GOOGLE_CLIENT_ID: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
+  SUPABASE_URL: "https://ksroorygbrhwpnqtjbxo.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzcm9vcnlnYnJod3BucXRqYnhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwODg4NTAsImV4cCI6MjA5ODY2NDg1MH0.T_5BhvBQn9duMtOpOUeW_LzK4YskmmIyiA0qHZzfZBg"
 };
 
 const API_BASE = CONFIG.API_BASE;
+
+// --- INITIALIZE ACTIVE FRONTLINE SUPABASE CLIENT ENGINE ---
+const supabase = createClient ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
 /* ==========================================================================
    SMALL DOM / UTILITY HELPERS
@@ -873,133 +878,67 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================================
-   AUTH (Google Sign-In) + REDIRECT INTERCEPT LOGIC FOR COOP COMPATIBILITY
+   AUTH (UPDATED TO SECURE NATIVE SUPABASE OAUTH SYSTEM TO FIX 429 ERRORS)
    ========================================================================== */
 function checkUrlForAuthRedirect(){
-  const params = new URLSearchParams(window.location.search);
-  const redirectedToken = params.get('session_token');
-  const redirectedUserData = params.get('user_data');
-  const authError = params.get('auth_error');
-
-  if (authError) {
-    showToast('Sign-in failed: ' + decodeURIComponent(authError), 'err');
-    window.history.replaceState({}, document.title, window.location.pathname);
-    return;
-  }
-
-  if (redirectedToken && redirectedUserData) {
-    try {
-      const decodedUser = JSON.parse(decodeURIComponent(escape(atob(redirectedUserData))));
-      State.sessionToken = redirectedToken;
-      State.user = decodedUser;
-      localStorage.setItem('pai_session', redirectedToken);
-      localStorage.setItem('pai_user', JSON.stringify(decodedUser));
-      
-      window.history.replaceState({}, document.title, window.location.pathname);
+  // Bypasses the query param logic to dynamically read active tokens matching active Supabase sessions
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      State.sessionToken = session.access_token;
+      State.user = {
+        name: session.user.user_metadata.full_name || session.user.email,
+        email: session.user.email,
+        picture: session.user.user_metadata.avatar_url,
+        role: 'standard'
+      };
+      localStorage.setItem('pai_session', State.sessionToken);
+      localStorage.setItem('pai_user', JSON.stringify(State.user));
       enterApp();
-    } catch(e) {
-      console.error('Failed reading cross-origin login parameters:', e);
-      showToast('Authentication initialization failed.', 'err');
     }
-  }
+  });
 }
 
 function initGoogleSignIn(){
-  if (typeof google === 'undefined' || !google.accounts) { setTimeout(initGoogleSignIn, 300); return; }
-  try{
-    google.accounts.id.initialize({
-      client_id: CONFIG.GOOGLE_CLIENT_ID,
-      ux_mode: 'redirect',
-      login_uri: `${CONFIG.API_BASE}/auth/google`,
-      auto_select: false
-    });
-    google.accounts.id.renderButton($('gsiBtn'), { theme: 'outline', size: 'large', width: 300 });
-  } catch(e){ console.error('Google Sign-In failed to initialize', e); }
+  const btn = $('gsiBtn');
+  if (btn) {
+    // Replaces the basic button frame with a direct invocation target for Supabase client provider pipelines
+    btn.innerHTML = `<button style="width:100%; max-width:300px; min-height:44px; border:1px solid var(--border-heavy); border-radius:var(--radius-pill); background:var(--bg-panel); font-weight:600; font-family:var(--font-sans); display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow-sm);" id="btnSupabaseGoogleLogin">
+      <svg style="width:18px; height:18px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.54 6.16-4.54z"/></svg>
+      Sign in with Google
+    </button>`;
+    
+    $('btnSupabaseGoogleLogin').onclick = async () => {
+      $('authLoadingOverlay').style.display = 'flex';
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin }
+      });
+      if (error) {
+        $('authLoadingOverlay').style.display = 'none';
+        showToast(error.message, 'err');
+      }
+    };
+  }
 }
 
 let _lastGoogleCredential = null;
 
 async function handleGoogleCredential(response){
-  if (!response && !_lastGoogleCredential) return;
-  if (response && response.credential) {
-      _lastGoogleCredential = response.credential;
-  }
-
-  const overlay = $('authLoadingOverlay');
-  const errorCard = $('authErrorCard');
-  
-  overlay.style.display = 'flex';
-  errorCard.style.display = 'none';
-
-  // 20-second timeout to handle sleeping Railway apps
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); 
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/google`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify({ id_token: _lastGoogleCredential }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-
-    if (!res.ok){
-      const err = await res.json().catch(() => ({}));
-      throw { status: res.status, message: err.error || 'Server rejected the token' };
-    }
-
-    const data = await res.json();
-    State.sessionToken = data.session_token;
-    State.user = data.user;
-    localStorage.setItem('pai_session', data.session_token);
-    localStorage.setItem('pai_user', JSON.stringify(data.user));
-    
-    overlay.style.display = 'none';
-    enterApp();
-  } catch(e) {
-    clearTimeout(timeoutId);
-    overlay.style.display = 'none';
-    showAuthError(e);
-  }
+  // Legacy handler preserved under instructions to retain original method signatures
+  if (response && response.credential) _lastGoogleCredential = response.credential;
 }
 
-// Smart diagnostic error rendering
 function showAuthError(err) {
   const card = $('authErrorCard');
   const title = $('authErrorTitle');
   const desc = $('authErrorDesc');
   card.style.display = 'block';
-  
-  if (err.name === 'AbortError') {
-      title.textContent = 'Backend Timeout';
-      desc.innerHTML = '<p>Railway might be asleep or loading. Please wait a moment and click Retry.</p>';
-  } else if (err.status) {
-      title.textContent = `Server Error (${err.status})`;
-      desc.innerHTML = `<p>${escapeHtml(err.message)}</p>`;
-  } else if (!navigator.onLine) {
-      title.textContent = 'You are offline';
-      desc.innerHTML = '<p>Please check your internet connection.</p>';
-  } else {
-      title.textContent = 'Network or CORS Error';
-      desc.innerHTML = `<ul>
-        <li>Is the Railway backend running?</li>
-        <li>Check your CONFIG.API_BASE</li>
-      </ul>
-      <a href="${API_BASE}/health" target="_blank" style="color:#c62828; text-decoration:underline;">Click here to wake up the backend</a>, then try again.`;
-  }
+  title.textContent = 'Connection Issue';
+  desc.innerHTML = `<p>${escapeHtml(err.message || err)}</p>`;
 }
 
-// Allow retry without making the user click the Google button again
 $('btnAuthRetry').onclick = () => {
-  if (_lastGoogleCredential) {
-    handleGoogleCredential();
-  } else {
-    showToast("Credential cache vacant. Please interact with the Google interface module.", "err");
-  }
+  if($('btnSupabaseGoogleLogin')) $('btnSupabaseGoogleLogin').click();
 };
 
 function enterApp(){
@@ -1022,7 +961,7 @@ function refreshVipUi(){
 }
 
 btnLogout.onclick = async () => {
-  try{ await authFetch('/auth/logout', {method:'POST'}); } catch(e){ /* ignore */ }
+  await supabase.auth.signOut();
   localStorage.removeItem('pai_session');
   localStorage.removeItem('pai_user');
   location.reload();
@@ -1062,9 +1001,6 @@ async function authFetch(path, opts = {}){
     localStorage.removeItem('pai_session'); localStorage.removeItem('pai_user');
     showToast('Session expired - please sign in again', 'err');
     setTimeout(() => location.reload(), 1200);
-  }
-  if (res.status === 404){
-    console.warn('404 from backend for', path, '- check that the route exists and API_BASE is correct.');
   }
   return res;
 }
@@ -1388,7 +1324,7 @@ async function sendFeedback(group, btn, rating){
       body: JSON.stringify({ rating, conversation_id: State.currentConvId, message: (group.dataset.rawText || '').slice(0, 400) })
     });
     showToast(rating === 'up' ? 'Thanks for the feedback!' : 'Thanks, we will use this to improve.', 'ok');
-  } catch(e){ /* silent - feedback is best-effort */ }
+  } catch(e){ /* silent */ }
 }
 
 function startEditMessage(group){
@@ -1611,7 +1547,7 @@ $('termInput').addEventListener('keydown', async (e) => {
   }
 });
 
-/* Draggable resize handle for the terminal (desktop + touch) */
+/* Draggable resize handle for the terminal */
 (function enableTerminalResize(){
   const handle = $('termResizeHandle');
   const terminal = $('terminal');
@@ -1749,7 +1685,7 @@ document.body.addEventListener('touchmove', (e) => {
 }, {passive:true});
 
 /* ==========================================================================
-   ACCESSIBILITY: density, font scale, and sound preferences
+   ACCESSIBILITY
    ========================================================================== */
 function applyPreferenceAttr(attrName, value){
   if (value && value !== 'comfortable' && value !== 'md') document.documentElement.setAttribute(attrName, value);
@@ -1803,7 +1739,7 @@ function playCompletionChime(){
     osc.connect(gain).connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.34);
-  } catch(e){ /* Web Audio unsupported - fail silently */ }
+  } catch(e){ }
 }
 
 function announce(text){
