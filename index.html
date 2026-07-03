@@ -331,7 +331,7 @@ img{max-width:100%;display:block}
 .seg-control{display:flex;background:var(--bg-sidebar);border-radius:var(--radius-pill);padding:2px;gap:2px}
 .seg-btn{padding:5px 12px;font-size:11.5px;border-radius:var(--radius-pill);font-weight:600}
 .seg-btn.active{background:var(--bg-panel);box-shadow:var(--shadow-sm)}
-.modal-input(width:100%;padding:9px 12px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);background:var(--bg-main);margin:10px 0;font-size:16px}
+.modal-input{width:100%;padding:9px 12px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);background:var(--bg-main);margin:10px 0;font-size:16px}
 .modal-actions{display:flex;gap:8px;margin-top:16px}
 .modal-btn{flex:1;padding:10px;border-radius:var(--radius-pill);font-size:13px;font-weight:600;border:1px solid var(--border-heavy);min-height:42px}
 .modal-btn.primary{background:var(--text-primary);color:var(--bg-panel);border-color:var(--text-primary)}
@@ -674,7 +674,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 
 <script>
 /* ==========================================================================
-   SERVICE WORKER CLEANUP / BYPASS
+   SERVICE WORKER BYPASS/CLEANUP
    ========================================================================== */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -873,14 +873,44 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================================
-   AUTH (Google Sign-In) + CLAUDE'S POPUP CALLBACK INTERFACE
+   AUTH (Google Sign-In) + REDIRECT INTERCEPT LOGIC FOR COOP COMPATIBILITY
    ========================================================================== */
+function checkUrlForAuthRedirect(){
+  const params = new URLSearchParams(window.location.search);
+  const redirectedToken = params.get('session_token');
+  const redirectedUserData = params.get('user_data');
+  const authError = params.get('auth_error');
+
+  if (authError) {
+    showToast('Sign-in failed: ' + decodeURIComponent(authError), 'err');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  if (redirectedToken && redirectedUserData) {
+    try {
+      const decodedUser = JSON.parse(decodeURIComponent(escape(atob(redirectedUserData))));
+      State.sessionToken = redirectedToken;
+      State.user = decodedUser;
+      localStorage.setItem('pai_session', redirectedToken);
+      localStorage.setItem('pai_user', JSON.stringify(decodedUser));
+      
+      window.history.replaceState({}, document.title, window.location.pathname);
+      enterApp();
+    } catch(e) {
+      console.error('Failed reading cross-origin login parameters:', e);
+      showToast('Authentication initialization failed.', 'err');
+    }
+  }
+}
+
 function initGoogleSignIn(){
   if (typeof google === 'undefined' || !google.accounts) { setTimeout(initGoogleSignIn, 300); return; }
   try{
     google.accounts.id.initialize({
       client_id: CONFIG.GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential, // Fixed: Using Popup Callback completely breaks loop chains
+      ux_mode: 'redirect',
+      login_uri: `${CONFIG.API_BASE}/auth/google`,
       auto_select: false
     });
     google.accounts.id.renderButton($('gsiBtn'), { theme: 'outline', size: 'large', width: 300 });
@@ -901,6 +931,7 @@ async function handleGoogleCredential(response){
   overlay.style.display = 'flex';
   errorCard.style.display = 'none';
 
+  // 20-second timeout to handle sleeping Railway apps
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
@@ -936,6 +967,7 @@ async function handleGoogleCredential(response){
   }
 }
 
+// Smart diagnostic error rendering
 function showAuthError(err) {
   const card = $('authErrorCard');
   const title = $('authErrorTitle');
@@ -961,11 +993,12 @@ function showAuthError(err) {
   }
 }
 
+// Allow retry without making the user click the Google button again
 $('btnAuthRetry').onclick = () => {
   if (_lastGoogleCredential) {
     handleGoogleCredential();
   } else {
-    showToast("Interaction context dropped. Click the sign-in button overlay element.", "err");
+    showToast("Credential cache vacant. Please interact with the Google interface module.", "err");
   }
 };
 
@@ -988,7 +1021,7 @@ function refreshVipUi(){
   $('planEl').textContent = isVip ? 'VIP / Admin' : 'Standard';
 }
 
-$('btnLogout').onclick = async () => {
+btnLogout.onclick = async () => {
   try{ await authFetch('/auth/logout', {method:'POST'}); } catch(e){ /* ignore */ }
   localStorage.removeItem('pai_session');
   localStorage.removeItem('pai_user');
@@ -996,6 +1029,7 @@ $('btnLogout').onclick = async () => {
 };
 
 onReady(() => {
+  checkUrlForAuthRedirect();
   if (State.sessionToken && State.user) enterApp();
   initGoogleSignIn();
   $('apiBaseLabel').textContent = API_BASE;
@@ -1212,11 +1246,9 @@ window.quickFill = quickFill;
    ========================================================================== */
 const textInput = $('textInput');
 textInput.addEventListener('input', () => {
-  const len = textInput.value.length;
-  $('charCounter').textContent = len > 400 ? `${len}/${MAX_CHARS_SOFT_LIMIT}` : '';
-  const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
-  if (textInput.value) localStorage.setItem(draftKey, textInput.value);
-  else localStorage.removeItem(draftKey);
+  textInput.style.height = 'auto';
+  textInput.style.height = Math.min(textInput.scrollHeight, 180) + 'px';
+  $('btnSend').disabled = (!textInput.value.trim() && !State.pendingFile) || State.generating;
 });
 textInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 640){
