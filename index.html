@@ -44,7 +44,7 @@
     --accent:#e87b51; --accent-hover:#ff8f66; --accent-soft:rgba(232,123,81,.16);
   }
 }
-/* Manual theme overrides (data-theme attribute set by the settings modal) take priority over the OS preference */
+/* Manual theme overrides */
 html[data-theme="light"]{
   --bg-main:#fbfaf7; --bg-sidebar:#f3f0e8; --bg-panel:#ffffff; --bg-hover:rgba(0,0,0,.04); --bg-active:rgba(0,0,0,.08);
   --border-light:#e2e0d8; --border-heavy:#d1cfc7; --text-primary:#191919; --text-secondary:#4a4a4a; --text-tertiary:#85837d;
@@ -74,16 +74,15 @@ img{max-width:100%;display:block}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
 }
-@media print{
-  .sidebar,.dock,.topbar,.terminal,.preview-drawer,.overlay-scrim,#authWall,#configBanner,.toast-stack{display:none !important}
-  body{overflow:visible}
-}
 
 /* ==========================================================================
-   2. CONFIG / STATUS BANNERS
+   2. CONFIG / STATUS BANNERS & OVERLAYS
    ========================================================================== */
 #configBanner{position:fixed;top:0;left:0;right:0;background:var(--error);color:#fff;font-size:12.5px;padding:6px 14px;padding-top:calc(6px + var(--safe-top));text-align:center;z-index:var(--z-banner);display:none}
 #offlineBanner{position:fixed;top:0;left:0;right:0;background:var(--warn);color:#1c1200;font-size:12.5px;font-weight:600;padding:6px 14px;padding-top:calc(6px + var(--safe-top));text-align:center;z-index:var(--z-banner);display:none}
+
+#authLoadingOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 600; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; backdrop-filter: blur(4px); }
+.auth-spinner { width: 44px; height: 44px; border: 4px solid rgba(255,255,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px; }
 
 /* ==========================================================================
    3. TOAST NOTIFICATIONS
@@ -95,17 +94,28 @@ img{max-width:100%;display:block}
 .toast.ok{background:var(--ok);color:#fff}
 
 /* ==========================================================================
-   4. AUTH SCREEN
+   4. AUTH SCREEN & SMART ERROR CARDS
    ========================================================================== */
 #authWall{position:fixed;inset:0;z-index:var(--z-auth);background:var(--bg-main);display:flex;align-items:center;justify-content:center;padding:16px}
-.auth-box{background:var(--bg-panel);border:1px solid var(--border-heavy);padding:36px 30px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);text-align:center;max-width:380px;width:100%}
+.auth-box{background:var(--bg-panel);border:1px solid var(--border-heavy);padding:36px 30px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);text-align:center;max-width:400px;width:100%}
 .auth-logo{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px}
 .auth-sub{font-size:13px;color:var(--text-secondary);margin-bottom:22px;line-height:1.5}
 #gsiBtn{display:flex;justify-content:center;min-height:44px}
 .auth-fallback{margin-top:14px;font-size:11.5px}
-.auth-fallback button{color:var(--accent);text-decoration:underline;font-size:11.5px}
+.auth-fallback button{color:var(--text-tertiary);font-size:11.5px;}
+.auth-fallback button:hover { color:var(--text-primary); text-decoration:underline; }
 .privacy-note{margin-top:18px;font-size:11px;color:var(--text-tertiary);line-height:1.5}
 .privacy-note .lock{margin-right:4px}
+
+#authErrorCard { display: none; background: #ffebee; border: 1px solid #ffcdd2; color: #c62828; padding: 18px; border-radius: 8px; margin-top: 18px; text-align: left; font-size: 13px; line-height: 1.5; }
+#authErrorCard h4 { margin-bottom: 8px; font-size: 14px; font-weight:700; }
+#authErrorCard ul { margin-left: 20px; margin-bottom: 12px; }
+.auth-error-actions { display: flex; gap: 8px; margin-top:14px; }
+.auth-error-btn { flex: 1; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; border: 1px solid transparent; text-align:center; }
+.btn-retry { background: #c62828; color: white; }
+.btn-retry:hover { background: #b71c1c; }
+.btn-dismiss { background: transparent; color: #c62828; border-color: #c62828; }
+.btn-dismiss:hover { background: rgba(198, 40, 40, 0.05); }
 
 /* ==========================================================================
    5. SIDEBAR
@@ -221,7 +231,7 @@ img{max-width:100%;display:block}
 .scroll-bottom-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
 
 /* ==========================================================================
-   7. FILE CHIPS (code never floods the chat - it becomes a clickable chip)
+   7. FILE CHIPS 
    ========================================================================== */
 .file-chip{display:flex;align-items:center;gap:10px;border:1px solid var(--border-heavy);background:var(--bg-panel);border-radius:var(--radius-md);padding:12px 14px;margin:8px 0;cursor:pointer;max-width:320px;transition:all .15s;min-height:56px}
 .file-chip:hover{border-color:var(--accent);box-shadow:var(--shadow-sm)}
@@ -266,7 +276,7 @@ img{max-width:100%;display:block}
 .disclaimer .lock{margin:0 3px}
 
 /* ==========================================================================
-   9. TERMINAL (server-side Python sandbox; AI can use it in background too)
+   9. TERMINAL
    ========================================================================== */
 .terminal{position:absolute;bottom:0;left:0;right:0;height:0;background:#1e1e1e;border-top:1px solid #333;z-index:var(--z-terminal);display:flex;flex-direction:column;overflow:hidden;transition:height .25s ease}
 .terminal.open{height:280px}
@@ -287,8 +297,7 @@ img{max-width:100%;display:block}
 .term-close{color:#999;font-size:16px;width:28px;height:28px}
 
 /* ==========================================================================
-   10. PREVIEW DRAWER (right-hand panel; html renders in a sandboxed iframe,
-       never navigates away from the app)
+   10. PREVIEW DRAWER
    ========================================================================== */
 .preview-drawer{position:fixed;top:0;right:-100%;width:46%;min-width:360px;max-width:760px;height:100%;background:var(--bg-panel);border-left:1px solid var(--border-heavy);z-index:var(--z-drawer);display:flex;flex-direction:column;box-shadow:var(--shadow-lg);transition:right .3s cubic-bezier(.19,1,.22,1)}
 .preview-drawer.open{right:0}
@@ -386,9 +395,6 @@ img{max-width:100%;display:block}
 
 /* ==========================================================================
    13. DENSITY + FONT-SIZE ACCESSIBILITY CONTROLS
-   Applied via [data-density] / [data-fontscale] attributes on <html>,
-   toggled from the Settings modal so the whole UI (not just the chat
-   text) respects the user's preference, including on small phones.
    ========================================================================== */
 html[data-density="compact"] .msg-group{gap:2px}
 html[data-density="compact"] .feed{gap:14px}
@@ -416,6 +422,13 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <!-- CONFIG / OFFLINE WARNINGS -->
 <div id="configBanner"></div>
 <div id="offlineBanner">You are offline - messages will send once your connection returns.</div>
+
+<!-- CLAUDE'S FIX: NEW LOADING OVERLAY -->
+<div id="authLoadingOverlay">
+  <div class="auth-spinner"></div>
+  <h3 id="authLoadingText">Connecting to backend...</h3>
+</div>
+
 <div class="toast-stack" id="toastStack"></div>
 
 <!-- AUTH -->
@@ -423,7 +436,19 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   <div class="auth-box">
     <div class="auth-logo">Pratham AI</div>
     <div class="auth-sub">Sign in to start chatting. Your conversations are saved to a private, per-account log so you can pick up where you left off on any device.</div>
+    
     <div id="gsiBtn"></div>
+    
+    <!-- CLAUDE'S FIX: DIAGNOSTIC ERROR CARD -->
+    <div id="authErrorCard">
+        <h4 id="authErrorTitle">Connection Failed</h4>
+        <div id="authErrorDesc"></div>
+        <div class="auth-error-actions">
+            <button class="auth-error-btn btn-retry" id="btnAuthRetry">Retry Sign-in</button>
+            <button class="auth-error-btn btn-dismiss" onclick="document.getElementById('authErrorCard').style.display='none'">Dismiss</button>
+        </div>
+    </div>
+
     <div class="auth-fallback"><button id="btnHealthRetry" type="button">Having trouble? Re-check backend connection</button></div>
     <div class="privacy-note"><span class="lock">&#128274;</span>Conversations are stored in a private GitHub repository, organized per account and per day, and are never publicly browsable.</div>
   </div>
@@ -523,7 +548,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
     <p class="disclaimer">Pratham AI can make mistakes. Verify important information. <span class="lock">&#128274;</span>Private per-account history.</p>
   </div>
 
-  <!-- TERMINAL: runs Python server-side; the AI can also trigger it via ```python-exec blocks in the background -->
   <div class="terminal" id="terminal">
     <div class="term-resize-handle" id="termResizeHandle"></div>
     <div class="term-head">
@@ -533,7 +557,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
         <button class="term-close" id="btnCloseTerm">&#10005;</button>
       </div>
     </div>
-    <div class="term-out" id="termOut"><span class="t-sys">Server-side Python sandbox ready. The AI can also run code here automatically in the background while answering (look for the "AI executed code" entries).</span></div>
+    <div class="term-out" id="termOut"><span class="t-sys">Server-side Python sandbox ready. The AI can also run code here automatically in the background while answering.</span></div>
     <div class="term-input-row">
       <span class="term-prompt">&gt;&gt;&gt;</span>
       <input type="text" id="termInput" class="term-input" placeholder="Write Python and press Enter" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -541,8 +565,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </main>
 
-<!-- PREVIEW DRAWER: opens on the right when a file/code chip is clicked. HTML files render
-     inline in a sandboxed iframe - clicking Preview never opens or navigates to another site. -->
+<!-- PREVIEW DRAWER -->
 <div class="overlay-scrim" id="scrim"></div>
 <div class="preview-drawer" id="previewDrawer" role="dialog" aria-label="Code preview">
   <div class="preview-head">
@@ -638,7 +661,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       Multi-provider chat assistant (Groq default with OpenRouter, Cerebras and Mistral
       fallback), @education RAG over your uploaded PDFs, a server-side Python terminal the
       AI can also drive in the background, and private per-account conversation history
-      synced to a locked-down GitHub repository, organized by account name and date.
+      synced to a locked-down GitHub repository.
     </p>
   </div>
 </div>
@@ -662,31 +685,14 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 
 <script>
 /* ==========================================================================
-   CONFIG - set these two values before using the app
+   CONFIG - Updated to your exact Railway backend
    ========================================================================== */
 const CONFIG = {
-  // Must be the exact base URL of your running Flask backend (from app.py).
-  // Example: "https://your-app.up.railway.app"  (no trailing slash)
-  // If you are serving this HTML from the SAME Flask app/domain as the
-  // backend, you can leave this as window.location.origin.
   API_BASE: "https://web-production-503208.up.railway.app",
-
-  // Must match GOOGLE_CLIENT_ID in app.py exactly.
   GOOGLE_CLIENT_ID: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com"
 };
 
-(function checkConfig(){
-  const banner = document.getElementById('configBanner');
-  const problems = [];
-  if (!CONFIG.API_BASE || CONFIG.API_BASE.startsWith("PASTE_YOUR_")) problems.push("API_BASE is not set");
-  if (!CONFIG.GOOGLE_CLIENT_ID || CONFIG.GOOGLE_CLIENT_ID.startsWith("PASTE_YOUR_")) problems.push("GOOGLE_CLIENT_ID is not set");
-  if (problems.length){
-    banner.style.display = 'block';
-    banner.textContent = 'Setup needed: ' + problems.join(' \u00b7 ') + ' \u2014 edit the CONFIG block near the top of the <script> tag.';
-  }
-})();
-
-const API_BASE = CONFIG.API_BASE.startsWith("PASTE_YOUR_") ? window.location.origin : CONFIG.API_BASE;
+const API_BASE = CONFIG.API_BASE;
 
 /* ==========================================================================
    SMALL DOM / UTILITY HELPERS
@@ -705,7 +711,6 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-/* Safe escaping for use inside onclick="" attributes (escapes all quote types) */
 function escapeAttr(str){
   return String(str == null ? '' : str)
     .replace(/&/g, '&amp;')
@@ -757,12 +762,9 @@ function applyTheme(theme){
 
 /* ==========================================================================
    MARKDOWN + FILE-CHIP EXTRACTION
-   Any fenced code block in the AI's reply becomes a clickable file chip
-   instead of dumping raw code into the chat, per the "only file, click to
-   preview on the right" requirement.
    ========================================================================== */
 marked.setOptions({ breaks: true, gfm: true });
-let chipRegistry = {}; // id -> {code, lang}
+let chipRegistry = {}; 
 let chipCounter = 0;
 
 function extractCodeBlocksToChips(markdownText){
@@ -858,7 +860,6 @@ $('btnDownload').onclick = () => {
   showToast('Download started', 'ok');
 };
 
-/* Escape key closes whichever overlay is open (preview, sidebar on mobile, modals) */
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if ($('previewDrawer').classList.contains('open')) closePreview();
@@ -870,7 +871,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================================
-   AUTH (Google Sign-In)
+   AUTH (Google Sign-In) + CLAUDE'S SMART ERROR HANDLING
    ========================================================================== */
 function initGoogleSignIn(){
   if (typeof google === 'undefined' || !google.accounts) { setTimeout(initGoogleSignIn, 300); return; }
@@ -884,30 +885,84 @@ function initGoogleSignIn(){
   } catch(e){ console.error('Google Sign-In failed to initialize', e); }
 }
 
+let _lastGoogleCredential = null;
+
 async function handleGoogleCredential(response){
-  if (!response || !response.credential) return;
-  try{
+  if (!response && !_lastGoogleCredential) return;
+  if (response && response.credential) {
+      _lastGoogleCredential = response.credential;
+  }
+
+  const overlay = $('authLoadingOverlay');
+  const errorCard = $('authErrorCard');
+  
+  overlay.style.display = 'flex';
+  errorCard.style.display = 'none';
+
+  // Claude's Fix: 20-second timeout to handle sleeping Railway apps
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000); 
+
+  try {
     const res = await fetch(`${API_BASE}/auth/google`, {
       method: 'POST',
+      mode: 'cors',         // Claude's Fix: Explicit CORS
+      credentials: 'omit',  // Claude's Fix: Prevent cross-origin cookie issues
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ id_token: response.credential })
+      body: JSON.stringify({ id_token: _lastGoogleCredential }),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
+
     if (!res.ok){
       const err = await res.json().catch(() => ({}));
-      showToast('Sign-in failed: ' + (err.error || res.status), 'err');
-      return;
+      throw { status: res.status, message: err.error || 'Server rejected the token' };
     }
+
     const data = await res.json();
     State.sessionToken = data.session_token;
     State.user = data.user;
     localStorage.setItem('pai_session', data.session_token);
     localStorage.setItem('pai_user', JSON.stringify(data.user));
+    
+    overlay.style.display = 'none';
     enterApp();
-  } catch(e){
-    console.error(e);
-    showToast('Could not reach the backend at ' + API_BASE + '. Check CONFIG.API_BASE.', 'err');
+  } catch(e) {
+    clearTimeout(timeoutId);
+    overlay.style.display = 'none';
+    showAuthError(e);
   }
 }
+
+// Claude's Fix: Smart diagnostic error rendering
+function showAuthError(err) {
+  const card = $('authErrorCard');
+  const title = $('authErrorTitle');
+  const desc = $('authErrorDesc');
+  card.style.display = 'block';
+  
+  if (err.name === 'AbortError') {
+      title.textContent = 'Backend Timeout';
+      desc.innerHTML = '<p>Railway might be asleep or loading. Please wait a moment and click Retry.</p>';
+  } else if (err.status) {
+      title.textContent = `Server Error (${err.status})`;
+      desc.innerHTML = `<p>${escapeHtml(err.message)}</p>`;
+  } else if (!navigator.onLine) {
+      title.textContent = 'You are offline';
+      desc.innerHTML = '<p>Please check your internet connection.</p>';
+  } else {
+      title.textContent = 'Network or CORS Error';
+      desc.innerHTML = `<ul>
+        <li>Is the Railway backend running?</li>
+        <li>Check your CONFIG.API_BASE</li>
+      </ul>
+      <a href="${API_BASE}/health" target="_blank" style="color:#c62828; text-decoration:underline;">Click here to wake up the backend</a>, then try again.`;
+  }
+}
+
+// Claude's Fix: Allow retry without making the user click the Google button again
+$('btnAuthRetry').onclick = () => handleGoogleCredential();
 
 function enterApp(){
   $('authWall').style.display = 'none';
@@ -1572,9 +1627,7 @@ $('btnOpenAbout').onclick = openAbout;
 $('btnCloseAbout').onclick = closeAbout;
 $('aboutScrim').addEventListener('click', (e) => { if (e.target.id === 'aboutScrim') closeAbout(); });
 
-/* True mobile viewport height fix - iOS Safari's 100vh includes the address
-   bar, which causes the composer to be clipped. We compute the real
-   viewport height in JS and expose it as --app-vh for anything that needs it. */
+/* True mobile viewport height fix */
 function setAppViewportHeight(){
   document.documentElement.style.setProperty('--app-vh', `${window.innerHeight * 0.01}px`);
 }
@@ -1616,7 +1669,7 @@ $('btnSubmitVip').onclick = async () => {
 };
 
 /* ==========================================================================
-   MISC UI (profile dropdown, sidebar toggling, mobile behavior)
+   MISC UI 
    ========================================================================== */
 $('btnProfile').onclick = (e) => { e.stopPropagation(); $('dropdown').classList.toggle('open'); };
 document.addEventListener('click', () => $('dropdown').classList.remove('open'));
@@ -1648,7 +1701,6 @@ window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === '/'){ e.preventDefault(); $('btnTerminal').click(); }
 });
 
-/* Prevent the mobile pull-to-refresh gesture from fighting the chat scroll */
 document.body.addEventListener('touchmove', (e) => {
   if (e.target.closest('.viewport, .term-out, .preview-body, .sidebar')) return;
 }, {passive:true});
@@ -1694,8 +1746,6 @@ $('soundSeg') && $('soundSeg').addEventListener('click', (e) => {
   syncSegControl('soundSeg', 'sound', Prefs.sound);
 });
 
-/* A tiny Web Audio beep - no external asset needed - played once a reply finishes,
-   if the user has sound enabled in Settings. */
 function playCompletionChime(){
   if (Prefs.sound !== 'on') return;
   try{
@@ -1719,7 +1769,7 @@ function announce(text){
 }
 
 /* ==========================================================================
-   COMPOSER: character counter + per-conversation draft autosave
+   COMPOSER
    ========================================================================== */
 const MAX_CHARS_SOFT_LIMIT = 6000;
 textInput.addEventListener('input', () => {
@@ -1740,7 +1790,7 @@ function restoreDraftForCurrentConversation(){
 }
 
 /* ==========================================================================
-   REGENERATE last AI response (re-sends the last user message)
+   REGENERATE 
    ========================================================================== */
 function addRegenerateButtonToLastReply(){
   const groups = feed.querySelectorAll('.msg-group[data-role="ai"]');
@@ -1807,8 +1857,6 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-/* Hook regenerate button + chime + aria-live announcement into the existing
-   streamAiReply pipeline without altering its core control flow. */
 const _originalStreamAiReply = streamAiReply;
 streamAiReply = async function(text){
   await _originalStreamAiReply(text);
