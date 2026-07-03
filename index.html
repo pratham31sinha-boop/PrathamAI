@@ -419,11 +419,9 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <body>
 <a href="#textInput" class="skip-link">Skip to message box</a>
 
-<!-- CONFIG / OFFLINE WARNINGS -->
 <div id="configBanner"></div>
 <div id="offlineBanner">You are offline - messages will send once your connection returns.</div>
 
-<!-- CLAUDE'S FIX: NEW LOADING OVERLAY -->
 <div id="authLoadingOverlay">
   <div class="auth-spinner"></div>
   <h3 id="authLoadingText">Connecting to backend...</h3>
@@ -431,7 +429,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 
 <div class="toast-stack" id="toastStack"></div>
 
-<!-- AUTH -->
 <div id="authWall">
   <div class="auth-box">
     <div class="auth-logo">Pratham AI</div>
@@ -439,7 +436,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
     
     <div id="gsiBtn"></div>
     
-    <!-- CLAUDE'S FIX: DIAGNOSTIC ERROR CARD -->
     <div id="authErrorCard">
         <h4 id="authErrorTitle">Connection Failed</h4>
         <div id="authErrorDesc"></div>
@@ -454,7 +450,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </div>
 
-<!-- SIDEBAR -->
 <div class="sidebar-scrim" id="sidebarScrim"></div>
 <aside class="sidebar" id="sidebar">
   <div class="brand">
@@ -485,7 +480,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </aside>
 
-<!-- MAIN -->
 <main class="main" id="mainArea">
   <header class="topbar">
     <div class="topbar-left">
@@ -565,7 +559,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </main>
 
-<!-- PREVIEW DRAWER -->
 <div class="overlay-scrim" id="scrim"></div>
 <div class="preview-drawer" id="previewDrawer" role="dialog" aria-label="Code preview">
   <div class="preview-head">
@@ -586,7 +579,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </div>
 
-<!-- SETTINGS MODAL -->
 <div class="modal-scrim" id="settingsScrim">
   <div class="modal-box">
     <button class="close-x" id="btnCloseSettings">&#10005;</button>
@@ -638,7 +630,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 </div>
 <div class="sr-only" aria-live="polite" id="ariaLiveRegion"></div>
 
-<!-- KEYBOARD SHORTCUTS MODAL -->
 <div class="modal-scrim" id="shortcutsScrim">
   <div class="modal-box">
     <button class="close-x" id="btnCloseShortcuts">&#10005;</button>
@@ -651,7 +642,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </div>
 
-<!-- ABOUT MODAL -->
 <div class="modal-scrim" id="aboutScrim">
   <div class="modal-box">
     <button class="close-x" id="btnCloseAbout">&#10005;</button>
@@ -666,7 +656,6 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </div>
 
-<!-- VIP CODE MODAL -->
 <div class="modal-scrim" id="vipScrim">
   <div class="modal-box">
     <button class="close-x" id="btnCloseVip">&#10005;</button>
@@ -684,6 +673,19 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
 <script>
+/* ==========================================================================
+   SERVICE WORKER CLEANUP / BYPASS
+   ========================================================================== */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    for (let registration of registrations) {
+      registration.unregister();
+    }
+  }).catch(function(err) {
+    console.warn('Service Worker unregistration failure:', err);
+  });
+}
+
 /* ==========================================================================
    CONFIG - Updated to your exact Railway backend
    ========================================================================== */
@@ -871,14 +873,44 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================================
-   AUTH (Google Sign-In) + CLAUDE'S SMART ERROR HANDLING
+   AUTH (Google Sign-In) + REDIRECT COOP COMPATIBILITY FIXES
    ========================================================================== */
+function checkUrlForAuthRedirect(){
+  const params = new URLSearchParams(window.location.search);
+  const redirectedToken = params.get('session_token');
+  const redirectedUserData = params.get('user_data');
+  const authError = params.get('auth_error');
+
+  if (authError) {
+    showToast('Sign-in failed: ' + decodeURIComponent(authError), 'err');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  if (redirectedToken && redirectedUserData) {
+    try {
+      const decodedUser = JSON.parse(decodeURIComponent(escape(atob(redirectedUserData))));
+      State.sessionToken = redirectedToken;
+      State.user = decodedUser;
+      localStorage.setItem('pai_session', redirectedToken);
+      localStorage.setItem('pai_user', JSON.stringify(decodedUser));
+      
+      window.history.replaceState({}, document.title, window.location.pathname);
+      enterApp();
+    } catch(e) {
+      console.error('Failed processing inbound payload configuration mapping:', e);
+      showToast('Session assembly failed.', 'err');
+    }
+  }
+}
+
 function initGoogleSignIn(){
   if (typeof google === 'undefined' || !google.accounts) { setTimeout(initGoogleSignIn, 300); return; }
   try{
     google.accounts.id.initialize({
       client_id: CONFIG.GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential,
+      ux_mode: 'redirect',
+      login_uri: `${CONFIG.API_BASE}/auth/google`,
       auto_select: false
     });
     google.accounts.id.renderButton($('gsiBtn'), { theme: 'outline', size: 'large', width: 300 });
@@ -899,16 +931,15 @@ async function handleGoogleCredential(response){
   overlay.style.display = 'flex';
   errorCard.style.display = 'none';
 
-  // Claude's Fix: 20-second timeout to handle sleeping Railway apps
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
   try {
     const res = await fetch(`${API_BASE}/auth/google`, {
       method: 'POST',
-      mode: 'cors',         // Claude's Fix: Explicit CORS
-      credentials: 'omit',  // Claude's Fix: Prevent cross-origin cookie issues
-      headers: {'Content-Type': 'application/json'},
+      mode: 'cors',
+      credentials: 'omit',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: JSON.stringify({ id_token: _lastGoogleCredential }),
       signal: controller.signal
     });
@@ -935,7 +966,6 @@ async function handleGoogleCredential(response){
   }
 }
 
-// Claude's Fix: Smart diagnostic error rendering
 function showAuthError(err) {
   const card = $('authErrorCard');
   const title = $('authErrorTitle');
@@ -961,8 +991,13 @@ function showAuthError(err) {
   }
 }
 
-// Claude's Fix: Allow retry without making the user click the Google button again
-$('btnAuthRetry').onclick = () => handleGoogleCredential();
+$('btnAuthRetry').onclick = () => {
+  if (_lastGoogleCredential) {
+    handleGoogleCredential();
+  } else {
+    showToast("Please interact with the Google Sign-in selector element.", "err");
+  }
+};
 
 function enterApp(){
   $('authWall').style.display = 'none';
@@ -983,7 +1018,7 @@ function refreshVipUi(){
   $('planEl').textContent = isVip ? 'VIP / Admin' : 'Standard';
 }
 
-$('btnLogout').onclick = async () => {
+btnLogout.onclick = async () => {
   try{ await authFetch('/auth/logout', {method:'POST'}); } catch(e){ /* ignore */ }
   localStorage.removeItem('pai_session');
   localStorage.removeItem('pai_user');
@@ -991,6 +1026,7 @@ $('btnLogout').onclick = async () => {
 };
 
 onReady(() => {
+  checkUrlForAuthRedirect();
   if (State.sessionToken && State.user) enterApp();
   initGoogleSignIn();
   $('apiBaseLabel').textContent = API_BASE;
@@ -998,7 +1034,7 @@ onReady(() => {
 
 $('btnHealthRetry').onclick = async () => {
   try{
-    const res = await fetch(`${API_BASE}/health`);
+    const res = await fetch(`${API_BASE}/health`, { mode: 'cors' });
     if (res.ok) showToast('Backend reachable \u2705', 'ok');
     else showToast('Backend responded with status ' + res.status, 'err');
   } catch(e){
@@ -1007,7 +1043,11 @@ $('btnHealthRetry').onclick = async () => {
 };
 
 async function authFetch(path, opts = {}){
-  opts.headers = Object.assign({}, opts.headers, { 'Authorization': `Bearer ${State.sessionToken}` });
+  opts.mode = 'cors';
+  opts.headers = Object.assign({}, opts.headers, { 
+    'Authorization': `Bearer ${State.sessionToken}`,
+    'Accept': 'application/json'
+  });
   let res;
   try{
     res = await fetch(`${API_BASE}${path}`, opts);
@@ -1028,7 +1068,7 @@ async function authFetch(path, opts = {}){
 
 async function pollHealth(){
   try{
-    const res = await fetch(`${API_BASE}/health`);
+    const res = await fetch(`${API_BASE}/health`, { mode: 'cors' });
     const dot = $('connDot');
     if (res.ok){
       const data = await res.json().catch(() => ({}));
