@@ -425,7 +425,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
     <div class="auth-sub">Sign in to start chatting. Your conversations are saved to a private, per-account log so you can pick up where you left off on any device.</div>
     <div id="gsiBtn"></div>
     <div class="auth-fallback"><button id="btnHealthRetry" type="button">Having trouble? Re-check backend connection</button></div>
-    <div class="privacy-note"><span class="lock">🔒</span>Conversations are stored in a private GitHub repository, organized per account and per day, and are never publicly browsable.</div>
+    <div class="privacy-note"><span class="lock">&#128274;</span>Conversations are stored in a private GitHub repository, organized per account and per day, and are never publicly browsable.</div>
   </div>
 </div>
 
@@ -452,10 +452,10 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       </div>
     </button>
     <div class="dropdown" id="dropdown">
-      <button class="menu-item" id="btnOpenSettings">⚙️ Settings</button>
-      <button class="menu-item" id="btnOpenVip">⭐ Enter VIP code</button>
-      <button class="menu-item" id="btnExportChat">⬇️ Export current chat (.txt)</button>
-      <button class="menu-item danger" id="btnLogout">🚪 Sign out</button>
+      <button class="menu-item" id="btnOpenSettings">&#9881;&#65039; Settings</button>
+      <button class="menu-item" id="btnOpenVip">&#11088; Enter VIP code</button>
+      <button class="menu-item" id="btnExportChat">&#11014;&#65039; Export current chat (.txt)</button>
+      <button class="menu-item danger" id="btnLogout">&#128682; Sign out</button>
     </div>
   </div>
 </aside>
@@ -468,7 +468,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       <div class="chat-title" id="chatTitle">New chat</div>
     </div>
     <div class="topbar-tools">
-      <button class="tool-toggle" id="btnSearchInConvo" title="Search this conversation (Ctrl/⌘ + F)">
+      <button class="tool-toggle" id="btnSearchInConvo" title="Search this conversation (Ctrl/&#8984; + F)">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
       <button class="tool-toggle" id="btnEdu" title="@education mode: answers grounded in your uploaded PDFs">
@@ -485,7 +485,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   <div class="search-in-convo" id="searchInConvo">
     <input type="text" id="searchInConvoInput" placeholder="Search messages in this conversation...">
     <span class="char-counter" id="searchMatchCount"></span>
-    <button id="btnCloseSearchInConvo">✕</button>
+    <button id="btnCloseSearchInConvo">&#10005;</button>
   </div>
 
   <div class="viewport" id="viewport">
@@ -520,7 +520,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
         </div>
       </div>
     </div>
-    <p class="disclaimer">Pratham AI can make mistakes. Verify important information. <span class="lock">🔒</span>Private per-account history.</p>
+    <p class="disclaimer">Pratham AI can make mistakes. Verify important information. <span class="lock">&#128274;</span>Private per-account history.</p>
   </div>
 
   <!-- TERMINAL: runs Python server-side; the AI can also trigger it via ```python-exec blocks in the background -->
@@ -530,7 +530,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       <div class="term-title"><div class="dots"><div class="dot" style="background:#ff5f56"></div><div class="dot" style="background:#ffbd2e"></div><div class="dot" style="background:#27c93f"></div></div>Python sandbox (server-side)</div>
       <div class="term-head-actions">
         <button class="term-btn" id="btnClearTerm">clear</button>
-        <button class="term-close" id="btnCloseTerm">✕</button>
+        <button class="term-close" id="btnCloseTerm">&#10005;</button>
       </div>
     </div>
     <div class="term-out" id="termOut"><span class="t-sys">Server-side Python sandbox ready. The AI can also run code here automatically in the background while answering (look for the "AI executed code" entries).</span></div>
@@ -552,9 +552,9 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       <button class="ptab" id="tabPreview">Preview</button>
     </div>
     <div class="preview-toolbar">
-      <button class="ptool-btn" id="btnCopy"><span>📋</span>Copy</button>
-      <button class="ptool-btn" id="btnDownload"><span>⬇️</span>Download</button>
-      <button class="preview-close" id="btnClosePreview" aria-label="Close preview">✕</button>
+      <button class="ptool-btn" id="btnCopy"><span>&#128203;</span>Copy</button>
+      <button class="ptool-btn" id="btnDownload"><span>&#11014;&#65039;</span>Download</button>
+      <button class="preview-close" id="btnClosePreview" aria-label="Close preview">&#10005;</button>
     </div>
   </div>
   <div class="preview-body">
@@ -566,7 +566,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <!-- SETTINGS MODAL -->
 <div class="modal-scrim" id="settingsScrim">
   <div class="modal-box">
-    <button class="close-x" id="btnCloseSettings">✕</button>
+    <button class="close-x" id="btnCloseSettings">&#10005;</button>
     <h3>Settings</h3>
     <div class="modal-row"><span>Theme</span>
       <div class="seg-control" id="themeSeg">
@@ -582,7 +582,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
     <div class="modal-row" style="flex-direction:column;align-items:stretch">
       <span>Preferred provider (auto-falls-back if it hits a limit)</span>
       <select class="provider-select" id="preferredProviderSelect">
-        <option value="">Auto (Groq default \u2192 fallback chain)</option>
+        <option value="">Auto (Groq default &#8594; fallback chain)</option>
         <option value="groq">Groq</option>
         <option value="openrouter">OpenRouter</option>
         <option value="cerebras">Cerebras</option>
@@ -618,12 +618,12 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <!-- KEYBOARD SHORTCUTS MODAL -->
 <div class="modal-scrim" id="shortcutsScrim">
   <div class="modal-box">
-    <button class="close-x" id="btnCloseShortcuts">✕</button>
+    <button class="close-x" id="btnCloseShortcuts">&#10005;</button>
     <h3>Keyboard shortcuts</h3>
     <div class="shortcut-row"><span>Send message</span><span class="kbd">Enter</span></div>
     <div class="shortcut-row"><span>New line</span><span class="kbd">Shift + Enter</span></div>
-    <div class="shortcut-row"><span>New chat</span><span class="kbd">Ctrl/⌘ + K</span></div>
-    <div class="shortcut-row"><span>Toggle terminal</span><span class="kbd">Ctrl/⌘ + /</span></div>
+    <div class="shortcut-row"><span>New chat</span><span class="kbd">Ctrl/&#8984; + K</span></div>
+    <div class="shortcut-row"><span>Toggle terminal</span><span class="kbd">Ctrl/&#8984; + /</span></div>
     <div class="shortcut-row"><span>Close any panel</span><span class="kbd">Esc</span></div>
   </div>
 </div>
@@ -631,7 +631,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <!-- ABOUT MODAL -->
 <div class="modal-scrim" id="aboutScrim">
   <div class="modal-box">
-    <button class="close-x" id="btnCloseAbout">✕</button>
+    <button class="close-x" id="btnCloseAbout">&#10005;</button>
     <span class="about-badge">Pratham AI</span>
     <h3>About this build</h3>
     <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.6">
@@ -646,7 +646,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <!-- VIP CODE MODAL -->
 <div class="modal-scrim" id="vipScrim">
   <div class="modal-box">
-    <button class="close-x" id="btnCloseVip">✕</button>
+    <button class="close-x" id="btnCloseVip">&#10005;</button>
     <h3>Enter VIP code</h3>
     <p style="font-size:12.5px;color:var(--text-secondary)">Have a VIP access code? Enter it below to unlock the VIP badge and admin plan label.</p>
     <input type="password" id="vipCodeInput" class="modal-input" placeholder="VIP code" autocomplete="off">
@@ -703,6 +703,16 @@ function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = String(str == null ? '' : str);
   return div.innerHTML;
+}
+
+/* Safe escaping for use inside onclick="" attributes (escapes all quote types) */
+function escapeAttr(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function showToast(message, kind){
@@ -762,11 +772,11 @@ function extractCodeBlocksToChips(markdownText){
     const id = 'chip_' + (++chipCounter);
     chipRegistry[id] = { code: code.trim(), lang: normalizedLang };
     const ext = extForLang(normalizedLang);
-    const autoRun = /-exec$/i.test(lang || '') ? ' · auto-run in terminal' : '';
+    const autoRun = /-exec$/i.test(lang || '') ? ' \u00b7 auto-run in terminal' : '';
     return `\n<div class="file-chip" data-chip="${id}" onclick="openChip('${id}')" role="button" tabindex="0">
       <div class="file-chip-icon"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>
-      <div class="file-chip-info"><div class="file-chip-name">code${ext}</div><div class="file-chip-sub">${normalizedLang}${autoRun} · click to preview</div></div>
-      <div class="file-chip-caret">›</div>
+      <div class="file-chip-info"><div class="file-chip-name">code${ext}</div><div class="file-chip-sub">${normalizedLang}${autoRun} \u00b7 click to preview</div></div>
+      <div class="file-chip-caret">\u203a</div>
     </div>\n`;
   });
 }
@@ -778,7 +788,7 @@ function extForLang(lang){
 
 function renderMarkdown(raw){
   const withChips = extractCodeBlocksToChips(raw);
-  const html = DOMPurify.sanitize(marked.parse(withChips), {ADD_ATTR: ['onclick', 'data-chip', 'target', 'rel']});
+  const html = DOMPurify.sanitize(marked.parse(withChips), {ADD_ATTR: ['onclick', 'data-chip', 'target', 'rel', 'role', 'tabindex']});
   return html;
 }
 
@@ -1006,12 +1016,12 @@ function renderConvoList(convos){
   }
   $('convoList').innerHTML = convos.map(c => `
     <div class="convo-item ${c.id === State.currentConvId ? 'active' : ''}" data-id="${c.id}" onclick="openConversation(${c.id}, this)">
-      <span class="convo-title">${c.pinned ? '📌 ' : ''}${escapeHtml(c.title || 'Untitled')}</span>
+      <span class="convo-title">${c.pinned ? '\uD83D\uDCCC ' : ''}${escapeHtml(c.title || 'Untitled')}</span>
       <span class="convo-actions">
-        <span class="convo-icon-btn ${c.pinned ? 'convo-pin' : ''}" title="Pin" onclick="event.stopPropagation(); togglePin(${c.id})">📌</span>
-        <span class="convo-icon-btn" title="Rename" onclick="event.stopPropagation(); startRename(${c.id}, this)">✎</span>
-        <span class="convo-icon-btn" title="Export" onclick="event.stopPropagation(); exportConversation(${c.id})">⬇</span>
-        <span class="convo-icon-btn danger" title="Delete" onclick="event.stopPropagation(); deleteConversation(${c.id})">✕</span>
+        <span class="convo-icon-btn ${c.pinned ? 'convo-pin' : ''}" title="Pin" onclick="event.stopPropagation(); togglePin(${c.id})">\uD83D\uDCCC</span>
+        <span class="convo-icon-btn" title="Rename" onclick="event.stopPropagation(); startRename(${c.id}, this)">\u270E</span>
+        <span class="convo-icon-btn" title="Export" onclick="event.stopPropagation(); exportConversation(${c.id})">\u2B07</span>
+        <span class="convo-icon-btn danger" title="Delete" onclick="event.stopPropagation(); deleteConversation(${c.id})">\u2715</span>
       </span>
     </div>`).join('');
 }
@@ -1063,7 +1073,7 @@ window.togglePin = togglePin;
 function startRename(id, el){
   const item = el.closest('.convo-item');
   const titleEl = item.querySelector('.convo-title');
-  const current = titleEl.textContent.replace('📌 ', '');
+  const current = titleEl.textContent.replace('\uD83D\uDCCC ', '');
   const input = document.createElement('input');
   input.className = 'convo-title-input';
   input.value = current;
@@ -1166,7 +1176,7 @@ async function handleIncomingFile(file){
   if (!file.name.toLowerCase().endsWith('.pdf')){ showToast('Only PDF files are supported', 'err'); return; }
   State.pendingFile = file;
   $('attachRack').style.display = 'flex';
-  $('attachRack').innerHTML = `<span class="attach-chip">📎 ${escapeHtml(file.name)} <button onclick="clearAttachment()">✕</button></span>`;
+  $('attachRack').innerHTML = `<span class="attach-chip">\uD83D\uDCCE ${escapeHtml(file.name)} <button onclick="clearAttachment()">\u2715</button></span>`;
   const fd = new FormData();
   fd.append('file', file);
   try{
@@ -1241,7 +1251,7 @@ function buildMessageActions(role, group){
   const copyBtn = document.createElement('button');
   copyBtn.className = 'msg-action-btn';
   copyBtn.title = 'Copy text';
-  copyBtn.innerHTML = '📋';
+  copyBtn.innerHTML = '\uD83D\uDCCB';
   copyBtn.onclick = () => {
     navigator.clipboard.writeText(group.dataset.rawText || '').then(() => showToast('Message copied', 'ok'));
   };
@@ -1251,21 +1261,21 @@ function buildMessageActions(role, group){
     const editBtn = document.createElement('button');
     editBtn.className = 'msg-action-btn';
     editBtn.title = 'Edit & resend';
-    editBtn.innerHTML = '✎';
+    editBtn.innerHTML = '\u270E';
     editBtn.onclick = () => startEditMessage(group);
     bar.appendChild(editBtn);
   } else {
     const upBtn = document.createElement('button');
     upBtn.className = 'msg-action-btn';
     upBtn.title = 'Good response';
-    upBtn.innerHTML = '👍';
+    upBtn.innerHTML = '\uD83D\uDC4D';
     upBtn.onclick = () => sendFeedback(group, upBtn, 'up');
     bar.appendChild(upBtn);
 
     const downBtn = document.createElement('button');
     downBtn.className = 'msg-action-btn';
     downBtn.title = 'Bad response';
-    downBtn.innerHTML = '👎';
+    downBtn.innerHTML = '\uD83D\uDC4E';
     downBtn.onclick = () => sendFeedback(group, downBtn, 'down');
     bar.appendChild(downBtn);
   }
@@ -1384,9 +1394,11 @@ async function streamAiReply(text){
       const err = await res.json().catch(() => ({}));
       const status = res.status;
       const msg = status === 404
-        ? `The backend route was not found (404). Check that CONFIG.API_BASE (${API_BASE}) points at the running Flask server.`
+        ? `The backend route was not found (404). Check that CONFIG.API_BASE (${escapeHtml(API_BASE)}) points at the running Flask server.`
         : (err.error || ('HTTP ' + status));
-      aiBody.innerHTML = `<span style="color:var(--error)">Error: ${escapeHtml(msg)}</span><br><button class="msg-retry" onclick="retryLast('${escapeHtml(text).replace(/'/g, "\\'")}')">Retry</button>`;
+      const escapedMsg = escapeHtml(msg);
+      const escapedText = escapeAttr(text);
+      aiBody.innerHTML = `<span style="color:var(--error)">Error: ${escapedMsg}</span><br><button class="msg-retry" onclick="retryLast('${escapedText}')">Retry</button>`;
       return;
     }
     const reader = res.body.getReader();
@@ -1448,7 +1460,8 @@ async function streamAiReply(text){
       aiBody.innerHTML = renderMarkdown(fullText + '\n\n_(stopped)_');
     } else {
       console.error(e);
-      aiBody.innerHTML = `<span style="color:var(--error)">Connection failed. Check that the backend at ${escapeHtml(API_BASE)} is running and reachable.</span><br><button class="msg-retry" onclick="retryLast('${escapeHtml(text).replace(/'/g, "\\'")}')">Retry</button>`;
+      const escapedText = escapeAttr(text);
+      aiBody.innerHTML = `<span style="color:var(--error)">Connection failed. Check that the backend at ${escapeHtml(API_BASE)} is running and reachable.</span><br><button class="msg-retry" onclick="retryLast('${escapedText}')">Retry</button>`;
     }
   } finally {
     State.generating = false;
@@ -1500,18 +1513,34 @@ $('termInput').addEventListener('keydown', async (e) => {
   }
 });
 
-/* Draggable resize handle for the terminal (desktop) */
+/* Draggable resize handle for the terminal (desktop + touch) */
 (function enableTerminalResize(){
   const handle = $('termResizeHandle');
   const terminal = $('terminal');
   let dragging = false;
-  handle.addEventListener('mousedown', () => { dragging = true; document.body.style.userSelect = 'none'; });
-  window.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = ''; });
-  window.addEventListener('mousemove', (e) => {
+
+  function startDrag(e){
+    dragging = true;
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }
+  function stopDrag(){
+    dragging = false;
+    document.body.style.userSelect = '';
+  }
+  function onDrag(e){
     if (!dragging || !terminal.classList.contains('open')) return;
-    const newHeight = Math.max(140, Math.min(window.innerHeight * 0.85, window.innerHeight - e.clientY));
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const newHeight = Math.max(140, Math.min(window.innerHeight * 0.85, window.innerHeight - clientY));
     terminal.style.height = newHeight + 'px';
-  });
+  }
+
+  handle.addEventListener('mousedown', startDrag);
+  handle.addEventListener('touchstart', startDrag, {passive: false});
+  window.addEventListener('mouseup', stopDrag);
+  window.addEventListener('touchend', stopDrag);
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('touchmove', onDrag, {passive: false});
 })();
 
 /* ==========================================================================
@@ -1578,7 +1607,7 @@ $('btnSubmitVip').onclick = async () => {
       State.user = data.user;
       localStorage.setItem('pai_user', JSON.stringify(data.user));
       refreshVipUi();
-      showToast('VIP unlocked \u2b50', 'ok');
+      showToast('VIP unlocked \u2B50', 'ok');
       closeVip();
     } else {
       showToast(data.error || 'Incorrect code', 'err');
@@ -1720,7 +1749,7 @@ function addRegenerateButtonToLastReply(){
   last.querySelectorAll('.regen-btn').forEach(b => b.remove());
   const btn = document.createElement('button');
   btn.className = 'regen-btn';
-  btn.textContent = '↻ Regenerate response';
+  btn.textContent = '\u21BB Regenerate response';
   btn.onclick = () => {
     const userGroups = feed.querySelectorAll('.msg-group[data-role="user"]');
     const lastUser = userGroups[userGroups.length - 1];
