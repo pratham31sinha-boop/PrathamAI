@@ -98,7 +98,7 @@ img{max-width:100%;display:block}
    ========================================================================== */
 #authWall{position:fixed;inset:0;z-index:var(--z-auth);background:var(--bg-main);display:flex;align-items:center;justify-content:center;padding:16px}
 .auth-box{background:var(--bg-panel);border:1px solid var(--border-heavy);padding:36px 30px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);text-align:center;max-width:400px;width:100%}
-.auth-logo{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px}
+.auth-box h2{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px}
 .auth-sub{font-size:13px;color:var(--text-secondary);margin-bottom:22px;line-height:1.5}
 #gsiBtn{display:flex;justify-content:center;min-height:44px}
 .auth-fallback{margin-top:14px;font-size:11.5px}
@@ -698,8 +698,8 @@ const CONFIG = {
 
 const API_BASE = CONFIG.API_BASE;
 
-// --- INITIALIZE ACTIVE FRONTLINE SUPABASE CLIENT ENGINE ---
-const supabase = createClient ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+// --- INITIALIZE FRONTLINE SUPABASE CLIENT SAFELY THROUGH GLOBAL SCOPE ---
+const supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
 /* ==========================================================================
    SMALL DOM / UTILITY HELPERS
@@ -878,11 +878,10 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================================
-   AUTH (UPDATED TO SECURE NATIVE SUPABASE OAUTH SYSTEM TO FIX 429 ERRORS)
+   AUTH SYSTEM
    ========================================================================== */
 function checkUrlForAuthRedirect(){
-  // Bypasses the query param logic to dynamically read active tokens matching active Supabase sessions
-  supabase.auth.getSession().then(({ data: { session } }) => {
+  supabaseClient.auth.getSession().then(({ data: { session } }) => {
     if (session) {
       State.sessionToken = session.access_token;
       State.user = {
@@ -901,15 +900,14 @@ function checkUrlForAuthRedirect(){
 function initGoogleSignIn(){
   const btn = $('gsiBtn');
   if (btn) {
-    // Replaces the basic button frame with a direct invocation target for Supabase client provider pipelines
-    btn.innerHTML = `<button style="width:100%; max-width:300px; min-height:44px; border:1px solid var(--border-heavy); border-radius:var(--radius-pill); background:var(--bg-panel); font-weight:600; font-family:var(--font-sans); display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow-sm);" id="btnSupabaseGoogleLogin">
+    btn.innerHTML = `<button style="width:100%; max-width:300px; min-height:44px; border:1px solid var(--border-heavy); border-radius:var(--radius-pill); background:var(--bg-panel); font-weight:600; font-family:var(--font-sans); display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow-sm); margin: 0 auto;" id="btnSupabaseGoogleLogin">
       <svg style="width:18px; height:18px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.54 6.16-4.54z"/></svg>
       Sign in with Google
     </button>`;
     
     $('btnSupabaseGoogleLogin').onclick = async () => {
       $('authLoadingOverlay').style.display = 'flex';
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin }
       });
@@ -924,7 +922,6 @@ function initGoogleSignIn(){
 let _lastGoogleCredential = null;
 
 async function handleGoogleCredential(response){
-  // Legacy handler preserved under instructions to retain original method signatures
   if (response && response.credential) _lastGoogleCredential = response.credential;
 }
 
@@ -961,7 +958,7 @@ function refreshVipUi(){
 }
 
 btnLogout.onclick = async () => {
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
   localStorage.removeItem('pai_session');
   localStorage.removeItem('pai_user');
   location.reload();
@@ -1181,576 +1178,6 @@ window.quickFill = quickFill;
    COMPOSER
    ========================================================================== */
 const textInput = $('textInput');
-textInput.addEventListener('input', () => {
-  textInput.style.height = 'auto';
-  textInput.style.height = Math.min(textInput.scrollHeight, 180) + 'px';
-  $('btnSend').disabled = (!textInput.value.trim() && !State.pendingFile) || State.generating;
-});
-textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 640){
-    e.preventDefault();
-    if (!$('btnSend').disabled) sendMessage();
-  }
-});
-
-$('btnEdu').onclick = () => {
-  State.eduMode = !State.eduMode;
-  $('btnEdu').classList.toggle('active', State.eduMode);
-  if (State.eduMode && !textInput.value.includes('@education')){
-    textInput.value = '@education ' + textInput.value;
-    textInput.dispatchEvent(new Event('input'));
-  }
-};
-
-$('btnAttach').onclick = () => $('fileInput').click();
-$('fileInput').onchange = (e) => handleIncomingFile(e.target.files[0]);
-
-async function handleIncomingFile(file){
-  if (!file) return;
-  if (!file.name.toLowerCase().endsWith('.pdf')){ showToast('Only PDF files are supported', 'err'); return; }
-  State.pendingFile = file;
-  $('attachRack').style.display = 'flex';
-  $('attachRack').innerHTML = `<span class="attach-chip">\uD83D\uDCCE ${escapeHtml(file.name)} <button onclick="clearAttachment()">\u2715</button></span>`;
-  const fd = new FormData();
-  fd.append('file', file);
-  try{
-    const res = await authFetch('/upload', {method:'POST', body: fd});
-    if (res.ok) showToast('PDF attached for @education mode', 'ok');
-    else showToast('Upload failed', 'err');
-  } catch(err){ console.error(err); }
-  textInput.dispatchEvent(new Event('input'));
-}
-
-function clearAttachment(){
-  State.pendingFile = null;
-  $('fileInput').value = '';
-  $('attachRack').style.display = 'none';
-  textInput.dispatchEvent(new Event('input'));
-}
-window.clearAttachment = clearAttachment;
-
-/* Drag & drop PDF onto the composer */
-['dragenter', 'dragover'].forEach(evt => document.addEventListener(evt, (e) => {
-  if (e.dataTransfer && Array.from(e.dataTransfer.items || []).some(it => it.type === 'application/pdf')){
-    e.preventDefault();
-    $('dropHint').classList.add('show');
-  }
-}));
-['dragleave', 'drop'].forEach(evt => document.addEventListener(evt, (e) => {
-  $('dropHint').classList.remove('show');
-}));
-document.addEventListener('drop', (e) => {
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]){
-    e.preventDefault();
-    handleIncomingFile(e.dataTransfer.files[0]);
-  }
-});
-
-$('btnSend').onclick = sendMessage;
-$('btnStop').onclick = () => { if (State.abortController) State.abortController.abort(); };
-
-function formatTimestamp(){
-  return new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-}
-
-function appendMessage(role, content, providerLabel){
-  const group = document.createElement('div');
-  group.className = 'msg-group';
-  group.dataset.role = role;
-  group.dataset.rawText = content;
-  const meta = document.createElement('div');
-  meta.className = `msg-meta ${role === 'user' ? 'meta-user' : ''}`;
-  meta.innerHTML = (role === 'user' ? 'You' : `Pratham AI${providerLabel ? ` <span class="meta-provider">\u00b7 ${escapeHtml(providerLabel)}</span>` : ''}`)
-    + `<span class="msg-timestamp">${formatTimestamp()}</span>`;
-  const wrap = document.createElement('div');
-  wrap.className = `msg-wrap ${role === 'user' ? 'wrap-user' : ''}`;
-  const body = document.createElement('div');
-  body.className = 'msg-content';
-  if (role === 'user') body.textContent = content;
-  else body.innerHTML = renderMarkdown(content);
-  wrap.appendChild(body);
-  group.appendChild(meta);
-  group.appendChild(wrap);
-  group.appendChild(buildMessageActions(role, group));
-  feed.appendChild(group);
-  scrollBottom();
-  return body;
-}
-
-function buildMessageActions(role, group){
-  const bar = document.createElement('div');
-  bar.className = 'msg-actions';
-  if (role === 'user') bar.style.justifyContent = 'flex-end';
-
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'msg-action-btn';
-  copyBtn.title = 'Copy text';
-  copyBtn.innerHTML = '\uD83D\uDCCB';
-  copyBtn.onclick = () => {
-    navigator.clipboard.writeText(group.dataset.rawText || '').then(() => showToast('Message copied', 'ok'));
-  };
-  bar.appendChild(copyBtn);
-
-  if (role === 'user'){
-    const editBtn = document.createElement('button');
-    editBtn.className = 'msg-action-btn';
-    editBtn.title = 'Edit & resend';
-    editBtn.innerHTML = '\u270E';
-    editBtn.onclick = () => startEditMessage(group);
-    bar.appendChild(editBtn);
-  } else {
-    const upBtn = document.createElement('button');
-    upBtn.className = 'msg-action-btn';
-    upBtn.title = 'Good response';
-    upBtn.innerHTML = '\uD83D\uDC4D';
-    upBtn.onclick = () => sendFeedback(group, upBtn, 'up');
-    bar.appendChild(upBtn);
-
-    const downBtn = document.createElement('button');
-    downBtn.className = 'msg-action-btn';
-    downBtn.title = 'Bad response';
-    downBtn.innerHTML = '\uD83D\uDC4E';
-    downBtn.onclick = () => sendFeedback(group, downBtn, 'down');
-    bar.appendChild(downBtn);
-  }
-  return bar;
-}
-
-async function sendFeedback(group, btn, rating){
-  btn.classList.toggle(rating === 'up' ? 'active-up' : 'active-down');
-  try{
-    await authFetch('/feedback', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ rating, conversation_id: State.currentConvId, message: (group.dataset.rawText || '').slice(0, 400) })
-    });
-    showToast(rating === 'up' ? 'Thanks for the feedback!' : 'Thanks, we will use this to improve.', 'ok');
-  } catch(e){ /* silent */ }
-}
-
-function startEditMessage(group){
-  const wrap = group.querySelector('.msg-wrap');
-  const original = group.dataset.rawText || '';
-  wrap.innerHTML = '';
-  const textarea = document.createElement('textarea');
-  textarea.className = 'edit-textarea';
-  textarea.value = original;
-  wrap.style.justifyContent = 'flex-end';
-  wrap.style.flexDirection = 'column';
-  wrap.appendChild(textarea);
-  const actions = document.createElement('div');
-  actions.className = 'edit-actions';
-  actions.innerHTML = '<button data-act="cancel">Cancel</button><button data-act="send" class="primary">Save & resend</button>';
-  wrap.appendChild(actions);
-  textarea.focus();
-  actions.addEventListener('click', (e) => {
-    const act = e.target.dataset.act;
-    if (!act) return;
-    if (act === 'cancel'){
-      wrap.innerHTML = `<div class="msg-content">${escapeHtml(original)}</div>`;
-    } else {
-      const newText = textarea.value.trim();
-      if (!newText) return;
-      group.remove();
-      appendMessage('user', newText);
-      streamAiReply(newText);
-    }
-  });
-}
-
-function scrollBottom(force){
-  const vp = $('viewport');
-  const nearBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 120;
-  if (force || nearBottom){
-    requestAnimationFrame(() => { vp.scrollTop = vp.scrollHeight; });
-  }
-}
-
-(function watchScrollPosition(){
-  const vp = $('viewport');
-  const btn = $('btnScrollBottom');
-  vp.addEventListener('scroll', () => {
-    const distanceFromBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
-    btn.classList.toggle('show', distanceFromBottom > 200);
-  });
-  btn.addEventListener('click', () => scrollBottom(true));
-})();
-
-function showTypingIndicator(){
-  const group = document.createElement('div');
-  group.className = 'msg-group';
-  group.id = 'typingIndicatorGroup';
-  group.innerHTML = `<div class="msg-meta">Pratham AI</div><div class="msg-wrap"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
-  feed.appendChild(group);
-  scrollBottom(true);
-}
-function removeTypingIndicator(){
-  const el = $('typingIndicatorGroup');
-  if (el) el.remove();
-}
-
-async function sendMessage(){
-  const text = textInput.value.trim();
-  if (!text) return;
-  if (feed.querySelector('.hero')) feed.innerHTML = '';
-  appendMessage('user', text);
-  localStorage.removeItem('pai_draft_' + (State.currentConvId || 'new'));
-  textInput.value = '';
-  textInput.style.height = 'auto';
-  textInput.dispatchEvent(new Event('input'));
-  clearAttachment();
-  await streamAiReply(text);
-}
-
-const PROVIDER_DISPLAY_NAMES = { groq: 'Groq', openrouter: 'OpenRouter', cerebras: 'Cerebras', mistral: 'Mistral', 'offline-fallback': 'offline fallback' };
-
-async function streamAiReply(text){
-  State.generating = true;
-  $('btnSend').disabled = true;
-  $('btnSend').style.display = 'none';
-  $('btnStop').style.display = 'flex';
-  State.abortController = new AbortController();
-
-  showTypingIndicator();
-  let aiBody = null;
-  let fullText = '';
-  const preferredProvider = localStorage.getItem('pai_preferred_provider') || '';
-
-  try{
-    const res = await authFetch('/chat-stream', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ message: text, conversation_id: State.currentConvId, preferred_provider: preferredProvider || undefined }),
-      signal: State.abortController.signal
-    });
-    if (!res.ok || !res.body){
-      removeTypingIndicator();
-      aiBody = appendMessage('ai', '');
-      const err = await res.json().catch(() => ({}));
-      const status = res.status;
-      const msg = status === 404
-        ? `The backend route was not found (404). Check that CONFIG.API_BASE (${escapeHtml(API_BASE)}) points at the running Flask server.`
-        : (err.error || ('HTTP ' + status));
-      const escapedMsg = escapeHtml(msg);
-      const escapedText = escapeAttr(text);
-      aiBody.innerHTML = `<span style="color:var(--error)">Error: ${escapedMsg}</span><br><button class="msg-retry" onclick="retryLast('${escapedText}')">Retry</button>`;
-      return;
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true){
-      const {done, value} = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, {stream: true});
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop();
-      for (const line of lines){
-        if (!line.startsWith('data:')) continue;
-        let evt;
-        try{ evt = JSON.parse(line.slice(5)); } catch(e){ continue; }
-        if (evt.type === 'metadata'){
-          State.currentConvId = evt.conversation_id;
-        } else if (evt.type === 'token'){
-          if (!aiBody){
-            removeTypingIndicator();
-            aiBody = appendMessage('ai', '');
-            aiBody.classList.add('cursor-blink');
-          }
-          fullText += evt.text;
-          aiBody.innerHTML = renderMarkdown(fullText) + '<span class="cursor-blink"></span>';
-          scrollBottom();
-        } else if (evt.type === 'exec_result'){
-          logToTerminal(`\n<span class="t-ai">[AI executed code in the background]</span>\n${evt.stdout ? '<span class="t-ok">'+escapeHtml(evt.stdout)+'</span>' : ''}${evt.stderr ? '<span class="t-err">'+escapeHtml(evt.stderr)+'</span>' : ''}`);
-          if (!$('terminal').classList.contains('open')){
-            showToast('AI ran code in the background terminal', 'ok');
-          }
-        } else if (evt.type === 'complete'){
-          if (aiBody && aiBody.closest('.msg-group')){
-            const metaEl = aiBody.closest('.msg-group').querySelector('.msg-meta');
-            const label = PROVIDER_DISPLAY_NAMES[evt.provider] || evt.provider;
-            if (metaEl && label){
-              const tsEl = metaEl.querySelector('.msg-timestamp');
-              metaEl.innerHTML = `Pratham AI <span class="meta-provider">\u00b7 ${escapeHtml(label)}</span>` + (tsEl ? tsEl.outerHTML : '');
-            }
-          }
-        } else if (evt.type === 'error'){
-          if (!aiBody){ removeTypingIndicator(); aiBody = appendMessage('ai', ''); }
-          fullText += `\n\n**Error:** ${evt.text}`;
-          aiBody.innerHTML = renderMarkdown(fullText);
-        }
-      }
-    }
-    removeTypingIndicator();
-    if (!aiBody) aiBody = appendMessage('ai', '');
-    aiBody.classList.remove('cursor-blink');
-    aiBody.innerHTML = renderMarkdown(fullText);
-    if (aiBody.closest('.msg-group')) aiBody.closest('.msg-group').dataset.rawText = fullText;
-    loadConversations();
-  } catch(e){
-    removeTypingIndicator();
-    if (!aiBody) aiBody = appendMessage('ai', '');
-    aiBody.classList.remove('cursor-blink');
-    if (e.name === 'AbortError'){
-      aiBody.innerHTML = renderMarkdown(fullText + '\n\n_(stopped)_');
-    } else {
-      console.error(e);
-      const escapedText = escapeAttr(text);
-      aiBody.innerHTML = `<span style="color:var(--error)">Connection failed. Check that the backend at ${escapeHtml(API_BASE)} is running and reachable.</span><br><button class="msg-retry" onclick="retryLast('${escapedText}')">Retry</button>`;
-    }
-  } finally {
-    State.generating = false;
-    State.abortController = null;
-    $('btnSend').style.display = 'flex';
-    $('btnStop').style.display = 'none';
-    textInput.dispatchEvent(new Event('input'));
-  }
-}
-
-function retryLast(text){
-  appendMessage('user', text);
-  streamAiReply(text);
-}
-window.retryLast = retryLast;
-
-/* ==========================================================================
-   TERMINAL
-   ========================================================================== */
-$('btnTerminal').onclick = () => {
-  $('terminal').classList.toggle('open');
-  $('btnTerminal').classList.toggle('active');
-};
-$('btnCloseTerm').onclick = () => { $('terminal').classList.remove('open'); $('btnTerminal').classList.remove('active'); };
-$('btnClearTerm').onclick = () => { $('termOut').innerHTML = '<span class="t-sys">Terminal cleared.</span>'; };
-
-function logToTerminal(html){
-  $('termOut').innerHTML += html + '\n';
-  $('termOut').scrollTop = $('termOut').scrollHeight;
-}
-
-$('termInput').addEventListener('keydown', async (e) => {
-  if (e.key !== 'Enter') return;
-  const code = e.target.value.trim();
-  if (!code) return;
-  e.target.value = '';
-  logToTerminal(`<span class="term-prompt">&gt;&gt;&gt;</span> <span class="t-cmd">${escapeHtml(code)}</span>`);
-  try{
-    const res = await authFetch('/execute-python', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({code})
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data.stdout) logToTerminal(`<span class="t-ok">${escapeHtml(data.stdout)}</span>`);
-    if (data.stderr) logToTerminal(`<span class="t-err">${escapeHtml(data.stderr)}</span>`);
-    if (!data.stdout && !data.stderr) logToTerminal('<span class="t-sys">(no output)</span>');
-  } catch(err){
-    logToTerminal(`<span class="t-err">Connection failed: ${escapeHtml(String(err))}</span>`);
-  }
-});
-
-/* Draggable resize handle for the terminal */
-(function enableTerminalResize(){
-  const handle = $('termResizeHandle');
-  const terminal = $('terminal');
-  let dragging = false;
-
-  function startDrag(e){
-    dragging = true;
-    document.body.style.userSelect = 'none';
-    e.preventDefault();
-  }
-  function stopDrag(){
-    dragging = false;
-    document.body.style.userSelect = '';
-  }
-  function onDrag(e){
-    if (!dragging || !terminal.classList.contains('open')) return;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const newHeight = Math.max(140, Math.min(window.innerHeight * 0.85, window.innerHeight - clientY));
-    terminal.style.height = newHeight + 'px';
-  }
-
-  handle.addEventListener('mousedown', startDrag);
-  handle.addEventListener('touchstart', startDrag, {passive: false});
-  window.addEventListener('mouseup', stopDrag);
-  window.addEventListener('touchend', stopDrag);
-  window.addEventListener('mousemove', onDrag);
-  window.addEventListener('touchmove', onDrag, {passive: false});
-})();
-
-/* ==========================================================================
-   SETTINGS / VIP MODALS
-   ========================================================================== */
-function openSettings(){
-  $('settingsScrim').classList.add('show');
-  pollHealth();
-  $('preferredProviderSelect').value = localStorage.getItem('pai_preferred_provider') || '';
-}
-function closeSettings(){ $('settingsScrim').classList.remove('show'); }
-$('btnOpenSettings').onclick = () => { $('dropdown').classList.remove('open'); openSettings(); };
-$('btnCloseSettings').onclick = closeSettings;
-$('settingsScrim').addEventListener('click', (e) => { if (e.target.id === 'settingsScrim') closeSettings(); });
-$('preferredProviderSelect').addEventListener('change', (e) => {
-  localStorage.setItem('pai_preferred_provider', e.target.value);
-  showToast(e.target.value ? `Preferred provider set to ${e.target.value}` : 'Using automatic Groq-first cascade', 'ok');
-});
-
-function openShortcuts(){ $('shortcutsScrim').classList.add('show'); }
-function closeShortcuts(){ $('shortcutsScrim').classList.remove('show'); }
-$('btnOpenShortcuts').onclick = openShortcuts;
-$('btnCloseShortcuts').onclick = closeShortcuts;
-$('shortcutsScrim').addEventListener('click', (e) => { if (e.target.id === 'shortcutsScrim') closeShortcuts(); });
-
-function openAbout(){ $('aboutScrim').classList.add('show'); }
-function closeAbout(){ $('aboutScrim').classList.remove('show'); }
-$('btnOpenAbout').onclick = openAbout;
-$('btnCloseAbout').onclick = closeAbout;
-$('aboutScrim').addEventListener('click', (e) => { if (e.target.id === 'aboutScrim') closeAbout(); });
-
-/* True mobile viewport height fix */
-function setAppViewportHeight(){
-  document.documentElement.style.setProperty('--app-vh', `${window.innerHeight * 0.01}px`);
-}
-setAppViewportHeight();
-window.addEventListener('resize', setAppViewportHeight);
-window.addEventListener('orientationchange', setAppViewportHeight);
-
-$('themeSeg').addEventListener('click', (e) => {
-  const btn = e.target.closest('.seg-btn');
-  if (!btn) return;
-  State.theme = btn.dataset.theme;
-  localStorage.setItem('pai_theme', State.theme);
-  applyTheme(State.theme);
-});
-
-function openVip(){ $('vipScrim').classList.add('show'); $('vipCodeInput').value=''; $('vipCodeInput').focus(); }
-function closeVip(){ $('vipScrim').classList.remove('show'); }
-$('btnOpenVip').onclick = () => { $('dropdown').classList.remove('open'); openVip(); };
-$('btnCloseVip').onclick = closeVip;
-$('vipScrim').addEventListener('click', (e) => { if (e.target.id === 'vipScrim') closeVip(); });
-$('btnSubmitVip').onclick = async () => {
-  const code = $('vipCodeInput').value.trim();
-  if (!code){ showToast('Enter a code first', 'err'); return; }
-  try{
-    const res = await authFetch('/auth/vip-upgrade', {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok){
-      State.user = data.user;
-      localStorage.setItem('pai_user', JSON.stringify(data.user));
-      refreshVipUi();
-      showToast('VIP unlocked \u2B50', 'ok');
-      closeVip();
-    } else {
-      showToast(data.error || 'Incorrect code', 'err');
-    }
-  } catch(e){ showToast('Request failed', 'err'); }
-};
-
-/* ==========================================================================
-   MISC UI 
-   ========================================================================== */
-$('btnProfile').onclick = (e) => { e.stopPropagation(); $('dropdown').classList.toggle('open'); };
-document.addEventListener('click', () => $('dropdown').classList.remove('open'));
-
-function openMobileSidebar(){ $('sidebar').classList.add('open'); $('sidebarScrim').classList.add('show'); }
-function closeMobileSidebar(){ if (window.innerWidth <= 900){ $('sidebar').classList.remove('open'); $('sidebarScrim').classList.remove('show'); } }
-$('btnToggleSidebar').onclick = () => {
-  if ($('sidebar').classList.contains('open')) closeMobileSidebar(); else openMobileSidebar();
-};
-$('btnSidebarClose').onclick = closeMobileSidebar;
-$('sidebarScrim').onclick = closeMobileSidebar;
-
-/* Swipe-to-close sidebar on touch devices */
-(function enableSwipeToClose(){
-  let touchStartX = null;
-  $('sidebar').addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, {passive:true});
-  $('sidebar').addEventListener('touchend', (e) => {
-    if (touchStartX === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    if (dx < -60) closeMobileSidebar();
-    touchStartX = null;
-  }, {passive:true});
-})();
-
-window.addEventListener('resize', () => { if (window.innerWidth > 900){ $('sidebar').classList.remove('open'); $('sidebarScrim').classList.remove('show'); } });
-
-window.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k'){ e.preventDefault(); $('btnNewChat').click(); }
-  if ((e.metaKey || e.ctrlKey) && e.key === '/'){ e.preventDefault(); $('btnTerminal').click(); }
-});
-
-document.body.addEventListener('touchmove', (e) => {
-  if (e.target.closest('.viewport, .term-out, .preview-body, .sidebar')) return;
-}, {passive:true});
-
-/* ==========================================================================
-   ACCESSIBILITY
-   ========================================================================== */
-function applyPreferenceAttr(attrName, value){
-  if (value && value !== 'comfortable' && value !== 'md') document.documentElement.setAttribute(attrName, value);
-  else document.documentElement.removeAttribute(attrName);
-}
-
-const Prefs = {
-  density: localStorage.getItem('pai_density') || 'comfortable',
-  fontscale: localStorage.getItem('pai_fontscale') || 'md',
-  sound: localStorage.getItem('pai_sound') || 'on'
-};
-applyPreferenceAttr('data-density', Prefs.density);
-applyPreferenceAttr('data-fontscale', Prefs.fontscale);
-
-function syncSegControl(id, attr, value){
-  document.querySelectorAll(`#${id} .seg-btn`).forEach(b => b.classList.toggle('active', b.dataset[attr] === value));
-}
-onReady(() => {
-  syncSegControl('densitySeg', 'density', Prefs.density);
-  syncSegControl('fontscaleSeg', 'fontscale', Prefs.fontscale);
-  syncSegControl('soundSeg', 'sound', Prefs.sound);
-});
-
-$('densitySeg') && $('densitySeg').addEventListener('click', (e) => {
-  const btn = e.target.closest('.seg-btn'); if (!btn) return;
-  Prefs.density = btn.dataset.density; localStorage.setItem('pai_density', Prefs.density);
-  applyPreferenceAttr('data-density', Prefs.density); syncSegControl('densitySeg', 'density', Prefs.density);
-});
-$('fontscaleSeg') && $('fontscaleSeg').addEventListener('click', (e) => {
-  const btn = e.target.closest('.seg-btn'); if (!btn) return;
-  Prefs.fontscale = btn.dataset.fontscale; localStorage.setItem('pai_fontscale', Prefs.fontscale);
-  applyPreferenceAttr('data-fontscale', Prefs.fontscale); syncSegControl('fontscaleSeg', 'fontscale', Prefs.fontscale);
-});
-$('soundSeg') && $('soundSeg').addEventListener('click', (e) => {
-  const btn = e.target.closest('.seg-btn'); if (!btn) return;
-  Prefs.sound = btn.dataset.sound; localStorage.setItem('pai_sound', Prefs.sound);
-  syncSegControl('soundSeg', 'sound', Prefs.sound);
-});
-
-function playCompletionChime(){
-  if (Prefs.sound !== 'on') return;
-  try{
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 720;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.32);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.34);
-  } catch(e){ }
-}
-
-function announce(text){
-  const region = $('ariaLiveRegion');
-  if (region) region.textContent = text;
-}
-
-/* ==========================================================================
-   COMPOSER
-   ========================================================================== */
-const MAX_CHARS_SOFT_LIMIT = 6000;
 textInput.addEventListener('input', () => {
   const len = textInput.value.length;
   $('charCounter').textContent = len > 400 ? `${len}/${MAX_CHARS_SOFT_LIMIT}` : '';
