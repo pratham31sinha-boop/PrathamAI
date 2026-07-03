@@ -674,7 +674,7 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 
 <script>
 /* ==========================================================================
-   SERVICE WORKER CLEANUP / BYPASS
+   SERVICE WORKER BYPASS/CLEANUP
    ========================================================================== */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -873,7 +873,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================================
-   AUTH (Google Sign-In) + REDIRECT COOP COMPATIBILITY FIXES
+   AUTH (Google Sign-In) + REDIRECT INTERCEPT LOGIC FOR COOP COMPATIBILITY
    ========================================================================== */
 function checkUrlForAuthRedirect(){
   const params = new URLSearchParams(window.location.search);
@@ -898,8 +898,8 @@ function checkUrlForAuthRedirect(){
       window.history.replaceState({}, document.title, window.location.pathname);
       enterApp();
     } catch(e) {
-      console.error('Failed processing inbound payload configuration mapping:', e);
-      showToast('Session assembly failed.', 'err');
+      console.error('Failed reading cross-origin login parameters:', e);
+      showToast('Authentication initialization failed.', 'err');
     }
   }
 }
@@ -931,6 +931,7 @@ async function handleGoogleCredential(response){
   overlay.style.display = 'flex';
   errorCard.style.display = 'none';
 
+  // 20-second timeout to handle sleeping Railway apps
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
@@ -966,6 +967,7 @@ async function handleGoogleCredential(response){
   }
 }
 
+// Smart diagnostic error rendering
 function showAuthError(err) {
   const card = $('authErrorCard');
   const title = $('authErrorTitle');
@@ -991,11 +993,12 @@ function showAuthError(err) {
   }
 }
 
+// Allow retry without making the user click the Google button again
 $('btnAuthRetry').onclick = () => {
   if (_lastGoogleCredential) {
     handleGoogleCredential();
   } else {
-    showToast("Please interact with the Google Sign-in selector element.", "err");
+    showToast("Credential cache vacant. Please interact with the Google interface module.", "err");
   }
 };
 
