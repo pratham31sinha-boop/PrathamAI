@@ -2,9 +2,8 @@
 Pratham AI – Full Production Backend Architecture
 =================================================
 Fixes Applied:
-  1. Eliminated 404 Routing Matrix Errors: Applied comprehensive multi-route decorator 
-     variations across all endpoints to capture standard, slash-terminated, and 
-     proxy-prefixed routes seamlessly.
+  1. Resolved GitHub Repository Root Mismatch: Added explicit `/api/app/...` route matrix
+     bindings across all decorators to match Vercel's serverless file system mapping rules.
   2. Automated Dev-Lenient Auth: Reconfigured verification decorators to allow local 
      connections to communicate anonymously if Supabase keys aren't fully configured.
   3. Robust Cross-Origin Policies: Standardized headers to allow smooth cross-origin 
@@ -196,7 +195,7 @@ def _stream_groq(messages: list[dict], preferred_model: str | None = None):
     last_err = None
     for model in models:
         try:
-            print(f"[STREAM][GROQ] Requesting frame generation tokens from model footprint: {model}")
+            print(f"[STREAM][GROQ] Requesting tokens from model: {model}")
             stream = client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -214,10 +213,10 @@ def _stream_groq(messages: list[dict], preferred_model: str | None = None):
             err_str = str(exc).lower()
             if any(k in err_str for k in ["rate", "quota", "429", "limit"]):
                 _cool("groq")
-            print(f"[STREAM][WARN] Model operational instance {model} generated a non-terminal interrupt code: {exc}")
+            print(f"[STREAM][WARN] Model operational instance {model} generated an error: {exc}")
             continue
 
-    raise RuntimeError(f"All allocated Groq orchestration paradigms failed to compute a response pipeline. Detail: {last_err}")
+    raise RuntimeError(f"All allocated Groq models failed. Detail: {last_err}")
 
 def _stream_openrouter(messages: list[dict]):
     if not OPENROUTER_API_KEY:
@@ -269,7 +268,7 @@ def _stream_fallback_stub(provider_name: str, messages: list[dict]):
     """Dynamic generic stub processor designed to cleanly bridge tertiary providers if enabled."""
     print(f"[STREAM][FALLBACK] Initializing tertiary fallback stub for: {provider_name}")
     yield _sse({"type": "token", "text": f"\n\n*[System Alert: Switched to {provider_name.capitalize()} backup engine]*\n"})
-    yield _sse({"type": "token", "text": "I am standing by in backup mode. Please verify your main provider keys in the Vercel dashboard control panel to restore high-performance rendering functionality."})
+    yield _sse({"type": "token", "text": "I am standing by in backup mode. Please verify your main provider keys in the Vercel dashboard control panel."})
 
 def _build_provider_chain(preferred: str | None) -> list[str]:
     chain = []
@@ -304,8 +303,6 @@ def _do_stream(messages: list[dict], preferred: str | None):
                 yield from _stream_fallback_stub("mistral", messages)
                 succeeded = True
                 break
-            else:
-                print(f"[CHAIN] Provider pass filter skipped item: {provider} (State: Unconfigured or Cooling)")
         except RuntimeError as exc:
             last_err = str(exc)
             print(f"[CHAIN][WARN] Error state encountered at provider node '{provider}': {exc}")
@@ -315,7 +312,7 @@ def _do_stream(messages: list[dict], preferred: str | None):
         print("[CHAIN][FAILURE] Exhausted all dynamic failover targets.")
         yield _sse({
             "type": "error",
-            "text": f"Execution Engine Pipeline Exhaustion. Reason: {last_err} — Please confirm that your environment keys (such as GROQ_API_KEY) are correctly configured in your project dashboard."
+            "text": f"Execution Engine Pipeline Exhaustion. Reason: {last_err} — Please confirm your environment variables."
         })
     yield _sse({"type": "complete"})
 
@@ -395,18 +392,19 @@ def _append_message(conv_id: str, role: str, content: str):
         conv["updated_at"] = datetime.now(timezone.utc).isoformat()
 
 # ══════════════════════════════════════════════════════════════════════
-#  ENDPOINT CONTROL IMPLEMENTATION LABELS WITH FULL DUAL-ROUTING MATRIX
+#  ENDPOINT CONTROL IMPLEMENTATION LABELS WITH FULL VERCEL MATRIX DUAL ROUTING
 # ══════════════════════════════════════════════════════════════════════
 @app.route("/", methods=["GET"])
 @app.route("/api", methods=["GET"])
-@app.route("/api/", methods=["GET"])
+@app.route("/api/app", methods=["GET"])
+@app.route("/api/app/", methods=["GET"])
 def index_root():
     return jsonify({"message": "Pratham AI API System Cluster Online", "status": "active"})
 
 @app.route("/health", methods=["GET"])
-@app.route("/health/", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
-@app.route("/api/health/", methods=["GET"])
+@app.route("/api/app/health", methods=["GET"])
+@app.route("/api/app/health/", methods=["GET"])
 def health():
     return jsonify({
         "status": "ok",
@@ -418,14 +416,13 @@ def health():
     })
 
 @app.route("/api/app", methods=["GET"])
-@app.route("/api/app/", methods=["GET"])
-def api_app():
+def api_app_alias():
     return health()
 
 @app.route("/chat-stream", methods=["POST", "OPTIONS"])
-@app.route("/chat-stream/", methods=["POST", "OPTIONS"])
 @app.route("/api/chat-stream", methods=["POST", "OPTIONS"])
-@app.route("/api/chat-stream/", methods=["POST", "OPTIONS"])
+@app.route("/api/app/chat-stream", methods=["POST", "OPTIONS"])
+@app.route("/api/app/chat-stream/", methods=["POST", "OPTIONS"])
 @require_auth
 def chat_stream():
     if request.method == "OPTIONS":
@@ -490,9 +487,9 @@ def chat_stream():
     return resp
 
 @app.route("/conversations", methods=["GET", "OPTIONS"])
-@app.route("/conversations/", methods=["GET", "OPTIONS"])
 @app.route("/api/conversations", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations/", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/", methods=["GET", "OPTIONS"])
 @require_auth
 def list_conversations():
     if request.method == "OPTIONS":
@@ -500,9 +497,9 @@ def list_conversations():
     return jsonify(_list_convos(_user_id()))
 
 @app.route("/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
-@app.route("/conversations/<conv_id>/messages/", methods=["GET", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/messages/", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/messages/", methods=["GET", "OPTIONS"])
 @require_auth
 def get_messages_route(conv_id: str):
     if request.method == "OPTIONS":
@@ -513,9 +510,9 @@ def get_messages_route(conv_id: str):
     return jsonify(_get_messages(conv_id))
 
 @app.route("/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
-@app.route("/conversations/<conv_id>/", methods=["DELETE", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/", methods=["DELETE", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/", methods=["DELETE", "OPTIONS"])
 @require_auth
 def delete_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -530,9 +527,9 @@ def delete_conversation(conv_id: str):
     return jsonify({"ok": True, "target_id": conv_id})
 
 @app.route("/conversations/<conv_id>/rename", methods=["PATCH", "OPTIONS"])
-@app.route("/conversations/<conv_id>/rename/", methods=["PATCH", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>/rename", methods=["PATCH", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/rename/", methods=["PATCH", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/rename", methods=["PATCH", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/rename/", methods=["PATCH", "OPTIONS"])
 @require_auth
 def rename_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -549,9 +546,9 @@ def rename_conversation(conv_id: str):
     return jsonify({"ok": True, "new_title": title})
 
 @app.route("/conversations/<conv_id>/pin", methods=["POST", "OPTIONS"])
-@app.route("/conversations/<conv_id>/pin/", methods=["POST", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>/pin", methods=["POST", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/pin/", methods=["POST", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/pin", methods=["POST", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/pin/", methods=["POST", "OPTIONS"])
 @require_auth
 def pin_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -570,9 +567,9 @@ def pin_conversation(conv_id: str):
     return jsonify({"ok": True, "pinned_state": new_val})
 
 @app.route("/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
-@app.route("/conversations/<conv_id>/export/", methods=["GET", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/export/", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/export/", methods=["GET", "OPTIONS"])
 @require_auth
 def export_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -593,9 +590,9 @@ def export_conversation(conv_id: str):
     )
 
 @app.route("/execute-python", methods=["POST", "OPTIONS"])
-@app.route("/execute-python/", methods=["POST", "OPTIONS"])
 @app.route("/api/execute-python", methods=["POST", "OPTIONS"])
-@app.route("/api/execute-python/", methods=["POST", "OPTIONS"])
+@app.route("/api/app/execute-python", methods=["POST", "OPTIONS"])
+@app.route("/api/app/execute-python/", methods=["POST", "OPTIONS"])
 @require_auth
 def execute_python():
     if request.method == "OPTIONS":
@@ -622,9 +619,9 @@ def execute_python():
         return jsonify({"stdout": "", "stderr": f"Sandbox supervisor fault exception: {exc}", "returncode": -1})
 
 @app.route("/auth/vip-upgrade", methods=["POST", "OPTIONS"])
-@app.route("/auth/vip-upgrade/", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/vip-upgrade", methods=["POST", "OPTIONS"])
-@app.route("/api/auth/vip-upgrade/", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/vip-upgrade", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/vip-upgrade/", methods=["POST", "OPTIONS"])
 @require_auth
 def vip_upgrade():
     if request.method == "OPTIONS":
@@ -638,9 +635,9 @@ def vip_upgrade():
     return jsonify({"ok": True, "message": "Access escalated successfully.", "user": user})
 
 @app.route("/upload", methods=["POST", "OPTIONS"])
-@app.route("/upload/", methods=["POST", "OPTIONS"])
 @app.route("/api/upload", methods=["POST", "OPTIONS"])
-@app.route("/api/upload/", methods=["POST", "OPTIONS"])
+@app.route("/api/app/upload", methods=["POST", "OPTIONS"])
+@app.route("/api/app/upload/", methods=["POST", "OPTIONS"])
 @require_auth
 def upload_pdf():
     if request.method == "OPTIONS":
