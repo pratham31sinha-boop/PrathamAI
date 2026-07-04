@@ -227,13 +227,16 @@
             return containerNode.querySelector('.model-stream-target-node');
         }
 
-        function mountSystemFailureDisplayNode() {
+        function mountSystemFailureDisplayNode(customErrorText = '') {
             const containerNode = document.createElement('div');
             containerNode.className = 'flex flex-col items-start w-full gap-1';
+            
+            const displayMessage = customErrorText || 'Could not reach Pratham AI. Please try again.';
+            
             containerNode.innerHTML = `
                 <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase px-0.5">PRATHAM AI</span>
                 <div class="text-red-600 font-medium text-[15px] px-0.5">
-                    Could not reach Pratham AI. Please try again.
+                    ${sanitizeOutputText(displayMessage)}
                 </div>
                 <button type="button" onclick="window.location.reload();" class="regenerate-action-btn mt-2 px-3.5 py-1.5 border border-stone-200 rounded-full text-xs flex items-center gap-1.5 font-normal shadow-xs bg-white text-stone-700 cursor-pointer">
                     ↻ Regenerate response
@@ -243,10 +246,11 @@
             autoScrollToViewportBottom();
         }
 
-        function pushOverlayRedErrorToast() {
+        function pushOverlayRedErrorToast(customErrorText = '') {
             const toastNode = document.createElement('div');
             toastNode.className = 'w-full error-banner-tint text-white py-3 px-4 rounded-xl font-medium text-xs text-center shadow-md transition-all duration-300 transform translate-y-2 opacity-0';
-            toastNode.innerText = 'Could not reach Pratham AI. Please try again.';
+            
+            toastNode.innerText = customErrorText || 'Could not reach Pratham AI. Please try again.';
             
             toastRenderingWrapper.appendChild(toastNode);
             setTimeout(() => { toastNode.classList.remove('translate-y-2', 'opacity-0'); }, 15);
@@ -254,7 +258,7 @@
             setTimeout(() => {
                 toastNode.classList.add('opacity-0');
                 setTimeout(() => toastNode.remove(), 300);
-            }, 5500);
+            }, 6500);
         }
 
         function autoScrollToViewportBottom() {
@@ -332,7 +336,7 @@
                 autoScrollToViewportBottom();
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                pushOverlayRedErrorToast();
+                pushOverlayRedErrorToast("Failed to sync conversations logs.");
             }
         }
 
@@ -406,7 +410,7 @@
                 alert(res.message || res.error);
                 toggleModal('pdf-modal');
             } catch(err) {
-                pushOverlayRedErrorToast();
+                pushOverlayRedErrorToast("Upload pipeline failure.");
             }
         }
 
@@ -432,7 +436,7 @@
                     alert(res.error);
                 }
             } catch(err) {
-                pushOverlayRedErrorToast();
+                pushOverlayRedErrorToast("Upgrade logic loop dropped parameters.");
             }
         }
 
@@ -467,7 +471,15 @@
                     })
                 });
 
-                if(!response.ok) throw new Error("Stream baseline connection interface rejected request.");
+                if(!response.ok) {
+                    // Extract real error reasons from the response JSON body if possible
+                    let trackingString = `HTTP Error Code status: ${response.status}`;
+                    try {
+                        const errorDetails = await response.json();
+                        if (errorDetails.error) trackingString += ` (${errorDetails.error})`;
+                    } catch(e) {}
+                    throw new Error(trackingString);
+                }
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
@@ -503,15 +515,15 @@
                                 throw new Error(parsedJson.text);
                             }
                         } catch(exc) {
-                            // Suppress block syntax validation logs
+                            // Suppress stream fragment parse logs
                         }
                     }
                 }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
                 console.error("Transmission stack structural failure:", err);
-                mountSystemFailureDisplayNode();
-                pushOverlayRedErrorToast();
+                mountSystemFailureDisplayNode(err.message);
+                pushOverlayRedErrorToast(err.message);
             }
         });
     </script>
