@@ -44,7 +44,7 @@
         <div class="p-3 border-t border-[#262626] bg-[#171717] flex flex-col gap-2">
             <div class="p-2 bg-[#212121] rounded-xl border border-[#2f2f2f]">
                 <label class="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block mb-1">Target Host Gateway</label>
-                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic detection" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-400" onchange="updateBackendHostContext()"/>
+                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
             </div>
             <div class="flex items-center gap-3 p-2 rounded-xl bg-[#212121] border border-[#2f2f2f] shadow-xs">
                 <div class="w-8 h-8 rounded-full bg-[#3f3f3f] text-neutral-300 flex items-center justify-center font-bold text-xs">U</div>
@@ -175,7 +175,7 @@
         let globalAuthorizationToken = "Bearer dev-session-active-token";
         let SERVER_CONTEXT_HOST = ""; 
 
-        // Initializer Routine to map standard cross-origin properties clean
+        // Auto-resolver sets standard locations cleanly upon bootup
         window.addEventListener('DOMContentLoaded', () => {
             const currentOrigin = window.location.origin;
             if (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) {
@@ -192,22 +192,34 @@
             synchronizeConversationsHistoryIndex();
         }
 
-        // Adaptive Safe Pipeline Executor wrapper to absorb 404 proxy rewrites automatically
+        // Exhaustive Path Auto-Resolver Matrix to completely stop 404 faults
         async function smartFetchRequest(endpointPath, options = {}) {
-            let directUrl = `${SERVER_CONTEXT_HOST}${endpointPath}`;
-            let fallbackUrl = `${SERVER_CONTEXT_HOST}/api${endpointPath}`;
+            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
             
-            try {
-                let response = await fetch(directUrl, options);
-                if (response.status === 404) {
-                    console.warn(`Encountered 404 pathing rule at [${directUrl}]. Re-routing to [${fallbackUrl}]`);
-                    return await fetch(fallbackUrl, options);
+            // Generate all routing configurations
+            const pathPermutations = [
+                `${hostBase}${endpointPath}`,
+                `${hostBase}${endpointPath}/`,
+                `${hostBase}/api${endpointPath}`,
+                `${hostBase}/api${endpointPath}/`,
+                `${endpointPath}`,
+                `/api${endpointPath}`
+            ];
+
+            let lastResponse = null;
+            for (const targetUrl of pathPermutations) {
+                try {
+                    console.log(`[DISCOVERY] Probing route: ${targetUrl}`);
+                    const response = await fetch(targetUrl, options);
+                    if (response.status !== 404) {
+                        return response; // Success, non-404 route discovered
+                    }
+                    lastResponse = response;
+                } catch (err) {
+                    console.warn(`[DISCOVERY] Path unreachable: ${targetUrl}`, err);
                 }
-                return response;
-            } catch (err) {
-                console.error("Baseline transport error, executing secondary fallback attempt...", err);
-                return await fetch(fallbackUrl, options);
             }
+            return lastResponse || new Response(JSON.stringify({ error: "All route permutations exhausted (404)." }), { status: 404 });
         }
 
         function toggleSidebarView() {
@@ -501,27 +513,18 @@
             let combinedTextBuffer = "";
 
             try {
-                let response = await fetch(`${SERVER_CONTEXT_HOST}/chat-stream`, {
+                // Execute streaming sequence via dynamic Path Auto-Resolver Matrix
+                const response = await smartFetchRequest(`/chat-stream`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': globalAuthorizationToken
                     },
-                    body: JSON.stringify({ message: textValue, conversation_id: currentConversationId })
+                    body: JSON.stringify({
+                        message: textValue,
+                        conversation_id: currentConversationId
+                    })
                 });
-
-                // Automated Fallback Trigger Interceptor if the target route returns a 404
-                if (response.status === 404) {
-                    console.warn("Root endpoint missing. Re-routing streaming matrix data to /api/chat-stream...");
-                    response = await fetch(`${SERVER_CONTEXT_HOST}/api/chat-stream`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': globalAuthorizationToken
-                        },
-                        body: JSON.stringify({ message: textValue, conversation_id: currentConversationId })
-                    });
-                }
 
                 if(!response.ok) {
                     let trackingString = `Dropped. Status Code: ${response.status}`;
@@ -562,7 +565,7 @@
                                 throw new Error(parsedJson.text);
                             }
                         } catch(exc) {
-                            // Suppress block validation tracking frames
+                            // Suppress stream fragment parse ticks
                         }
                     }
                 }
