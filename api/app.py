@@ -1,4 +1,3 @@
-```python
 """
 Pratham AI – Full Production Backend Architecture
 =================================================
@@ -458,7 +457,7 @@ def execute_python():
         return jsonify({"stdout": "", "stderr": f"Sandbox Exception: {exc}", "returncode": -1})
 
 @app.route("/upload", methods=["POST", "OPTIONS"])
-@app.route("/api/upload", methods=["POST", "OPTIONS"])
+@app.environ.get("api/upload", methods=["POST", "OPTIONS"])
 @app.route("/api/app/upload", methods=["POST", "OPTIONS"])
 @require_auth
 def upload_pdf():
