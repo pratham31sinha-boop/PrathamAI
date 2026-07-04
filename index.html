@@ -674,60 +674,46 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
 <script>
-/* ==========================================================================
+/* ========================================================================
    SERVICE WORKER BYPASS/CLEANUP
-   ========================================================================== */
+   ======================================================================== */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for (let registration of registrations) {
-      registration.unregister();
-    }
-  }).catch(function(err) {
-    console.warn('Service Worker unregistration failure:', err);
-  });
+    for (let registration of registrations) registration.unregister();
+  }).catch(function(err){ console.warn('SW unregister failed:', err); });
 }
-
-/* ==========================================================================
-   CONFIG - Updated to your exact Railway backend + Active Supabase Credentials
-   ========================================================================== */
+ 
+/* ========================================================================
+   CONFIG
+   ======================================================================== */
 const CONFIG = {
   API_BASE: "https://web-production-503208.up.railway.app",
   GOOGLE_CLIENT_ID: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
   SUPABASE_URL: "https://ksroorygbrhwpnqtjbxo.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzcm9vcnlnYnJod3BucXRqYnhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwODg4NTAsImV4cCI6MjA5ODY2NDg1MH0.T_5BhvBQn9duMtOpOUeW_LzK4YskmmIyiA0qHZzfZBg"
 };
-
 const API_BASE = CONFIG.API_BASE;
-
-// --- INITIALIZE FRONTLINE SUPABASE CLIENT SAFELY THROUGH GLOBAL SCOPE ---
+const MAX_CHARS_SOFT_LIMIT = 6000;
+ 
 const supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-
-/* ==========================================================================
-   SMALL DOM / UTILITY HELPERS
-   ========================================================================== */
+ 
+/* ========================================================================
+   DOM HELPERS
+   ======================================================================== */
 const $ = (id) => document.getElementById(id);
 const feed = $('feed');
-
+ 
 function onReady(fn){
   if (document.readyState === 'interactive' || document.readyState === 'complete') fn();
   else document.addEventListener('DOMContentLoaded', fn);
 }
-
+ 
 function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = String(str == null ? '' : str);
   return div.innerHTML;
 }
-
-function escapeAttr(str){
-  return String(str == null ? '' : str)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
+ 
 function showToast(message, kind){
   const stack = $('toastStack');
   const el = document.createElement('div');
@@ -735,19 +721,35 @@ function showToast(message, kind){
   el.textContent = message;
   stack.appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => {
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 250);
-  }, 3200);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3200);
 }
 window.showToast = showToast;
-
+ 
+function announce(text){
+  const region = $('ariaLiveRegion');
+  if (region) region.textContent = text;
+}
+ 
+function playCompletionChime(){
+  try{
+    if (localStorage.getItem('pai_sound') === 'off') return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(); osc.stop(ctx.currentTime + 0.3);
+  } catch(e){ /* audio not available, ignore */ }
+}
+ 
 window.addEventListener('online', () => { $('offlineBanner').style.display = 'none'; showToast('Back online', 'ok'); });
 window.addEventListener('offline', () => { $('offlineBanner').style.display = 'block'; });
-
-/* ==========================================================================
+ 
+/* ========================================================================
    STATE
-   ========================================================================== */
+   ======================================================================== */
 const State = {
   sessionToken: localStorage.getItem('pai_session') || null,
   user: JSON.parse(localStorage.getItem('pai_user') || 'null'),
@@ -759,22 +761,23 @@ const State = {
   conversationsCache: [],
   theme: localStorage.getItem('pai_theme') || 'system'
 };
-
+ 
 applyTheme(State.theme);
-
+ 
 function applyTheme(theme){
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
   document.querySelectorAll('#themeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
+  localStorage.setItem('pai_theme', theme);
 }
-
-/* ==========================================================================
+ 
+/* ========================================================================
    MARKDOWN + FILE-CHIP EXTRACTION
-   ========================================================================== */
+   ======================================================================== */
 marked.setOptions({ breaks: true, gfm: true });
-let chipRegistry = {}; 
+let chipRegistry = {};
 let chipCounter = 0;
-
+ 
 function extractCodeBlocksToChips(markdownText){
   const codeBlockRe = /```([\w-]+)?\n([\s\S]*?)```/g;
   return markdownText.replace(codeBlockRe, (match, lang, code) => {
@@ -790,21 +793,68 @@ function extractCodeBlocksToChips(markdownText){
     </div>\n`;
   });
 }
-
+ 
 function extForLang(lang){
   const map = {html:'.html', python:'.py', javascript:'.js', js:'.js', typescript:'.ts', css:'.css', json:'.json', bash:'.sh', sh:'.sh', sql:'.sql', text:'.txt'};
   return map[lang] || '.txt';
 }
-
+ 
 function renderMarkdown(raw){
   const withChips = extractCodeBlocksToChips(raw);
-  const html = DOMPurify.sanitize(marked.parse(withChips), {ADD_ATTR: ['onclick', 'data-chip', 'target', 'rel', 'role', 'tabindex']});
-  return html;
+  return DOMPurify.sanitize(marked.parse(withChips), {ADD_ATTR: ['onclick', 'data-chip', 'target', 'rel', 'role', 'tabindex']});
 }
-
-/* ==========================================================================
+ 
+/* ========================================================================
+   MESSAGE RENDERING
+   ======================================================================== */
+function appendMessage(role, content){
+  const hero = feed.querySelector('.hero');
+  if (hero) feed.innerHTML = '';
+ 
+  const group = document.createElement('div');
+  group.className = 'msg-group';
+  group.dataset.role = role;
+  if (role === 'user') group.dataset.rawText = content;
+ 
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta' + (role === 'user' ? ' meta-user' : '');
+  meta.textContent = role === 'user' ? 'You' : 'Pratham AI';
+ 
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap' + (role === 'user' ? ' wrap-user' : '');
+ 
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-content';
+  if (role === 'user') {
+    bubble.textContent = content;
+  } else {
+    bubble.innerHTML = renderMarkdown(content);
+    if (window.hljs) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+  }
+ 
+  wrap.appendChild(bubble);
+  group.appendChild(meta);
+  group.appendChild(wrap);
+  feed.appendChild(group);
+  scrollFeedToBottom();
+  return { group, bubble };
+}
+ 
+function scrollFeedToBottom(){
+  const vp = $('viewport');
+  vp.scrollTop = vp.scrollHeight;
+}
+ 
+$('viewport').addEventListener('scroll', () => {
+  const vp = $('viewport');
+  const nearBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80;
+  $('btnScrollBottom').classList.toggle('show', !nearBottom);
+});
+$('btnScrollBottom').onclick = scrollFeedToBottom;
+ 
+/* ========================================================================
    PREVIEW DRAWER
-   ========================================================================== */
+   ======================================================================== */
 function openChip(id){
   const chip = chipRegistry[id];
   if (!chip) return;
@@ -814,16 +864,16 @@ function openChip(id){
   $('pcodeContent').textContent = chip.code;
   $('pcodeContent').className = 'language-' + chip.lang;
   if (window.hljs) hljs.highlightElement($('pcodeContent'));
-
+ 
   const isHtml = chip.lang === 'html';
   $('previewTabs').style.display = isHtml ? 'flex' : 'none';
   showTab('code');
   if (isHtml) $('pIframe').srcdoc = chip.code;
-
+ 
   $('previewDrawer')._activeChip = chip;
 }
 window.openChip = openChip;
-
+ 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' '){
     const target = e.target;
@@ -833,7 +883,7 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
-
+ 
 function showTab(which){
   $('tabCode').classList.toggle('active', which === 'code');
   $('tabPreview').classList.toggle('active', which === 'preview');
@@ -842,14 +892,11 @@ function showTab(which){
 }
 $('tabCode').onclick = () => showTab('code');
 $('tabPreview').onclick = () => { showTab('preview'); const c = $('previewDrawer')._activeChip; if (c) $('pIframe').srcdoc = c.code; };
-
-function closePreview(){
-  $('previewDrawer').classList.remove('open');
-  $('scrim').classList.remove('show');
-}
+ 
+function closePreview(){ $('previewDrawer').classList.remove('open'); $('scrim').classList.remove('show'); }
 $('btnClosePreview').onclick = closePreview;
 $('scrim').onclick = closePreview;
-
+ 
 $('btnCopy').onclick = () => {
   const c = $('previewDrawer')._activeChip;
   if (!c) return;
@@ -862,30 +909,29 @@ $('btnDownload').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'code' + extForLang(c.lang);
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  document.body.appendChild(a); a.click(); a.remove();
   showToast('Download started', 'ok');
 };
-
+ 
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if ($('previewDrawer').classList.contains('open')) closePreview();
   else if ($('settingsScrim').classList.contains('show')) closeSettings();
   else if ($('vipScrim').classList.contains('show')) closeVip();
-  else if ($('shortcutsScrim') && $('shortcutsScrim').classList.contains('show')) closeShortcuts();
-  else if ($('aboutScrim') && $('aboutScrim').classList.contains('show')) closeAbout();
+  else if ($('shortcutsScrim').classList.contains('show')) closeShortcuts();
+  else if ($('aboutScrim').classList.contains('show')) closeAbout();
   else if ($('sidebar').classList.contains('open')) closeMobileSidebar();
 });
-
-/* ==========================================================================
-   AUTH SYSTEM (UPDATED REDIRECT ENDPOINT TO ELIMINATE LOCALHOST ERRORS)
-   ========================================================================== */
+ 
+/* ========================================================================
+   AUTH
+   ======================================================================== */
 function checkUrlForAuthRedirect(){
   supabaseClient.auth.getSession().then(({ data: { session } }) => {
     if (session) {
       State.sessionToken = session.access_token;
       State.user = {
+        id: session.user.id,
         name: session.user.user_metadata.full_name || session.user.email,
         email: session.user.email,
         picture: session.user.user_metadata.avatar_url,
@@ -896,40 +942,38 @@ function checkUrlForAuthRedirect(){
       enterApp();
     }
   });
+ 
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session){
+      State.sessionToken = session.access_token;
+      localStorage.setItem('pai_session', State.sessionToken);
+    }
+  });
 }
-
+ 
 function initGoogleSignIn(){
   const btn = $('gsiBtn');
-  if (btn) {
-    btn.innerHTML = `<button style="width:100%; max-width:300px; min-height:44px; border:1px solid var(--border-heavy); border-radius:var(--radius-pill); background:var(--bg-panel); font-weight:600; font-family:var(--font-sans); display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow-sm); margin: 0 auto;" id="btnSupabaseGoogleLogin">
-      <svg style="width:18px; height:18px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.54 6.16-4.54z"/></svg>
-      Sign in with Google
-    </button>`;
-    
-    $('btnSupabaseGoogleLogin').onclick = async () => {
-      $('authLoadingOverlay').style.display = 'flex';
-      const { data, error } = await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: { 
-          // --- LINKED EXPLICITLY TO PRODUCTION FRONTEND ASSIGNMENT TO PREVENT LOCALHOST FAILURE ---
-          redirectTo: 'https://prathamai.vercel.app' 
-        }
-      });
-      if (error) {
-        $('authLoadingOverlay').style.display = 'none';
-        showToast(error.message, 'err');
-      }
-    };
-  }
+  if (!btn) return;
+  btn.innerHTML = `<button style="width:100%; max-width:300px; min-height:44px; border:1px solid var(--border-heavy); border-radius:var(--radius-pill); background:var(--bg-panel); font-weight:600; font-family:var(--font-sans); display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow-sm); margin: 0 auto;" id="btnSupabaseGoogleLogin">
+    <svg style="width:18px; height:18px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+    Sign in with Google
+  </button>`;
+ 
+  $('btnSupabaseGoogleLogin').onclick = async () => {
+    $('authLoadingOverlay').style.display = 'flex';
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'https://prathamai.vercel.app' }
+    });
+    if (error) {
+      $('authLoadingOverlay').style.display = 'none';
+      showAuthError(error);
+      showToast(error.message, 'err');
+    }
+  };
 }
-
-let _lastGoogleCredential = null;
-
-async function handleGoogleCredential(response){
-  if (response && response.credential) _lastGoogleCredential = response.credential;
-}
-
-function showAuthError(err) {
+ 
+function showAuthError(err){
   const card = $('authErrorCard');
   const title = $('authErrorTitle');
   const desc = $('authErrorDesc');
@@ -937,11 +981,9 @@ function showAuthError(err) {
   title.textContent = 'Connection Issue';
   desc.innerHTML = `<p>${escapeHtml(err.message || err)}</p>`;
 }
-
-$('btnAuthRetry').onclick = () => {
-  if($('btnSupabaseGoogleLogin')) $('btnSupabaseGoogleLogin').click();
-};
-
+ 
+$('btnAuthRetry').onclick = () => { if ($('btnSupabaseGoogleLogin')) $('btnSupabaseGoogleLogin').click(); };
+ 
 function enterApp(){
   $('authWall').style.display = 'none';
   $('nameEl').textContent = State.user.name || State.user.email;
@@ -953,41 +995,32 @@ function enterApp(){
   pollHealth();
   setInterval(pollHealth, 30000);
 }
-
+ 
 function refreshVipUi(){
   const isVip = State.user && State.user.role === 'vip';
   $('vipBadge').style.display = isVip ? 'inline-block' : 'none';
   $('avatarEl').classList.toggle('vip', isVip);
   $('planEl').textContent = isVip ? 'VIP / Admin' : 'Standard';
 }
-
-btnLogout.onclick = async () => {
+ 
+$('btnLogout').onclick = async () => {
   await supabaseClient.auth.signOut();
   localStorage.removeItem('pai_session');
   localStorage.removeItem('pai_user');
   location.reload();
 };
-
-onReady(() => {
-  checkUrlForAuthRedirect();
-  if (State.sessionToken && State.user) enterApp();
-  initGoogleSignIn();
-  $('apiBaseLabel').textContent = API_BASE;
-});
-
+ 
 $('btnHealthRetry').onclick = async () => {
   try{
     const res = await fetch(`${API_BASE}/health`, { mode: 'cors' });
-    if (res.ok) showToast('Backend reachable \u2705', 'ok');
+    if (res.ok) showToast('Backend reachable', 'ok');
     else showToast('Backend responded with status ' + res.status, 'err');
-  } catch(e){
-    showToast('Backend unreachable. Check CONFIG.API_BASE.', 'err');
-  }
+  } catch(e){ showToast('Backend unreachable. Check CONFIG.API_BASE.', 'err'); }
 };
-
+ 
 async function authFetch(path, opts = {}){
   opts.mode = 'cors';
-  opts.headers = Object.assign({}, opts.headers, { 
+  opts.headers = Object.assign({}, opts.headers, {
     'Authorization': `Bearer ${State.sessionToken}`,
     'Accept': 'application/json'
   });
@@ -1005,7 +1038,7 @@ async function authFetch(path, opts = {}){
   }
   return res;
 }
-
+ 
 async function pollHealth(){
   try{
     const res = await fetch(`${API_BASE}/health`, { mode: 'cors' });
@@ -1014,14 +1047,10 @@ async function pollHealth(){
       const data = await res.json().catch(() => ({}));
       dot.className = 'status-dot';
       renderProviderStatus(data.providers || []);
-    } else {
-      dot.className = 'status-dot warn';
-    }
-  } catch(e){
-    $('connDot').className = 'status-dot bad';
-  }
+    } else dot.className = 'status-dot warn';
+  } catch(e){ $('connDot').className = 'status-dot bad'; }
 }
-
+ 
 function renderProviderStatus(providers){
   const list = $('providerStatusList');
   if (!list) return;
@@ -1031,10 +1060,17 @@ function renderProviderStatus(providers){
       <span style="color:var(--text-tertiary)">${p.configured ? (p.cooling_down ? 'cooling down' : 'ready') : 'not configured'}</span>
     </div>`).join('');
 }
-
-/* ==========================================================================
+ 
+onReady(() => {
+  checkUrlForAuthRedirect();
+  if (State.sessionToken && State.user) enterApp();
+  initGoogleSignIn();
+  $('apiBaseLabel').textContent = API_BASE;
+});
+ 
+/* ========================================================================
    SIDEBAR / CONVERSATIONS
-   ========================================================================== */
+   ======================================================================== */
 async function loadConversations(){
   try{
     const res = await authFetch('/conversations');
@@ -1043,30 +1079,30 @@ async function loadConversations(){
     renderConvoList(State.conversationsCache);
   } catch(e){ console.error(e); }
 }
-
+ 
 function renderConvoList(convos){
   if (!convos.length){
     $('convoList').innerHTML = '<div class="convo-empty-hint">No conversations yet.<br>Start typing below to create one.</div>';
     return;
   }
   $('convoList').innerHTML = convos.map(c => `
-    <div class="convo-item ${c.id === State.currentConvId ? 'active' : ''}" data-id="${c.id}" onclick="openConversation(${c.id}, this)">
+    <div class="convo-item ${c.id === State.currentConvId ? 'active' : ''}" data-id="${escapeHtml(c.id)}" onclick="openConversation('${c.id}', this)">
       <span class="convo-title">${c.pinned ? '\uD83D\uDCCC ' : ''}${escapeHtml(c.title || 'Untitled')}</span>
       <span class="convo-actions">
-        <span class="convo-icon-btn ${c.pinned ? 'convo-pin' : ''}" title="Pin" onclick="event.stopPropagation(); togglePin(${c.id})">\uD83D\uDCCC</span>
-        <span class="convo-icon-btn" title="Rename" onclick="event.stopPropagation(); startRename(${c.id}, this)">\u270E</span>
-        <span class="convo-icon-btn" title="Export" onclick="event.stopPropagation(); exportConversation(${c.id})">\u2B07</span>
-        <span class="convo-icon-btn danger" title="Delete" onclick="event.stopPropagation(); deleteConversation(${c.id})">\u2715</span>
+        <span class="convo-icon-btn ${c.pinned ? 'convo-pin' : ''}" title="Pin" onclick="event.stopPropagation(); togglePin('${c.id}')">\uD83D\uDCCC</span>
+        <span class="convo-icon-btn" title="Rename" onclick="event.stopPropagation(); startRename('${c.id}', this)">\u270E</span>
+        <span class="convo-icon-btn" title="Export" onclick="event.stopPropagation(); exportConversation('${c.id}')">\u2B07</span>
+        <span class="convo-icon-btn danger" title="Delete" onclick="event.stopPropagation(); deleteConversation('${c.id}')">\u2715</span>
       </span>
     </div>`).join('');
 }
-
+ 
 $('convoSearch').addEventListener('input', (e) => {
   const q = e.target.value.trim().toLowerCase();
   const filtered = !q ? State.conversationsCache : State.conversationsCache.filter(c => (c.title || '').toLowerCase().includes(q));
   renderConvoList(filtered);
 });
-
+ 
 async function openConversation(id, el){
   State.currentConvId = id;
   document.querySelectorAll('.convo-item').forEach(n => n.classList.remove('active'));
@@ -1089,7 +1125,7 @@ async function openConversation(id, el){
   setTimeout(restoreDraftForCurrentConversation, 0);
 }
 window.openConversation = openConversation;
-
+ 
 async function deleteConversation(id){
   if (!confirm('Delete this conversation? This cannot be undone.')) return;
   await authFetch(`/conversations/${id}`, {method:'DELETE'});
@@ -1098,13 +1134,10 @@ async function deleteConversation(id){
   loadConversations();
 }
 window.deleteConversation = deleteConversation;
-
-async function togglePin(id){
-  await authFetch(`/conversations/${id}/pin`, {method:'POST'});
-  loadConversations();
-}
+ 
+async function togglePin(id){ await authFetch(`/conversations/${id}/pin`, {method:'POST'}); loadConversations(); }
 window.togglePin = togglePin;
-
+ 
 function startRename(id, el){
   const item = el.closest('.convo-item');
   const titleEl = item.querySelector('.convo-title');
@@ -1113,8 +1146,7 @@ function startRename(id, el){
   input.className = 'convo-title-input';
   input.value = current;
   titleEl.replaceWith(input);
-  input.focus();
-  input.select();
+  input.focus(); input.select();
   const commit = async () => {
     const newTitle = input.value.trim() || current;
     await authFetch(`/conversations/${id}/rename`, {
@@ -1127,7 +1159,7 @@ function startRename(id, el){
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
 }
 window.startRename = startRename;
-
+ 
 async function exportConversation(id){
   try{
     const res = await authFetch(`/conversations/${id}/export`);
@@ -1136,19 +1168,17 @@ async function exportConversation(id){
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `conversation_${id}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    document.body.appendChild(a); a.click(); a.remove();
     showToast('Conversation exported', 'ok');
   } catch(e){ showToast('Export failed', 'err'); }
 }
 window.exportConversation = exportConversation;
-
+ 
 $('btnExportChat').onclick = () => {
   if (!State.currentConvId){ showToast('Open a conversation first', 'err'); return; }
   exportConversation(State.currentConvId);
 };
-
+ 
 $('btnNewChat').onclick = () => {
   State.currentConvId = null;
   $('chatTitle').textContent = 'New chat';
@@ -1158,7 +1188,7 @@ $('btnNewChat').onclick = () => {
   toggleSearchInConvo(false);
   setTimeout(restoreDraftForCurrentConversation, 0);
 };
-
+ 
 function renderWelcome(){
   feed.innerHTML = `<div class="hero">
     <h1>How can I help you today?</h1>
@@ -1170,38 +1200,156 @@ function renderWelcome(){
     </div>
   </div>`;
 }
-
+ 
 function quickFill(text){
   $('textInput').value = text;
   $('textInput').dispatchEvent(new Event('input'));
   $('textInput').focus();
 }
 window.quickFill = quickFill;
-
-/* ==========================================================================
-   COMPOSER
-   ========================================================================== */
+ 
+/* ========================================================================
+   COMPOSER + SEND
+   ======================================================================== */
 const textInput = $('textInput');
+ 
+function autoresizeTextarea(){
+  textInput.style.height = 'auto';
+  textInput.style.height = Math.min(textInput.scrollHeight, 180) + 'px';
+}
+ 
 textInput.addEventListener('input', () => {
   const len = textInput.value.length;
   $('charCounter').textContent = len > 400 ? `${len}/${MAX_CHARS_SOFT_LIMIT}` : '';
   const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
   if (textInput.value) localStorage.setItem(draftKey, textInput.value);
   else localStorage.removeItem(draftKey);
+  $('btnSend').disabled = !textInput.value.trim() || State.generating;
+  autoresizeTextarea();
 });
-
+ 
+textInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    if (!$('btnSend').disabled) sendCurrentMessage();
+  }
+});
+ 
 function restoreDraftForCurrentConversation(){
   const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
   const draft = localStorage.getItem(draftKey);
-  if (draft){
-    textInput.value = draft;
-    textInput.dispatchEvent(new Event('input'));
+  if (draft){ textInput.value = draft; textInput.dispatchEvent(new Event('input')); }
+}
+ 
+$('btnSend').onclick = () => { if (!$('btnSend').disabled) sendCurrentMessage(); };
+ 
+function sendCurrentMessage(){
+  const text = textInput.value.trim();
+  if (!text || State.generating) return;
+  const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
+  localStorage.removeItem(draftKey);
+  textInput.value = '';
+  textInput.dispatchEvent(new Event('input'));
+  streamAiReply(text);
+}
+ 
+$('btnStop').onclick = () => {
+  if (State.abortController) State.abortController.abort();
+};
+ 
+/* ========================================================================
+   STREAMING CHAT (this whole function was MISSING before — it was
+   referenced by the code at the bottom of the file but never defined,
+   which crashed the entire script on load)
+   ======================================================================== */
+async function streamAiReply(text){
+  appendMessage('user', text);
+  State.generating = true;
+  $('btnSend').style.display = 'none';
+  $('btnStop').style.display = 'flex';
+  $('btnSend').disabled = true;
+ 
+  const { bubble } = appendMessage('ai', '');
+  bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+ 
+  State.abortController = new AbortController();
+  let fullText = '';
+  let gotFirstToken = false;
+ 
+  try{
+    const res = await fetch(`${API_BASE}/chat-stream`, {
+      method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Authorization': `Bearer ${State.sessionToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: text, conversation_id: State.currentConvId }),
+      signal: State.abortController.signal
+    });
+ 
+    if (!res.ok || !res.body){
+      bubble.innerHTML = '<span style="color:var(--error)">Could not reach Pratham AI. Please try again.</span>';
+      showToast('Network error reaching backend', 'err');
+      return;
+    }
+ 
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+ 
+    while (true){
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop();
+ 
+      for (const line of lines){
+        if (!line.startsWith('data: ')) continue;
+        let payload;
+        try { payload = JSON.parse(line.slice(6)); } catch(e){ continue; }
+ 
+        if (payload.type === 'metadata'){
+          if (!State.currentConvId) State.currentConvId = payload.conversation_id;
+        } else if (payload.type === 'token'){
+          if (!gotFirstToken){ bubble.innerHTML = ''; gotFirstToken = true; }
+          fullText += payload.text;
+          bubble.innerHTML = renderMarkdown(fullText) + '<span class="cursor-blink"></span>';
+          scrollFeedToBottom();
+        } else if (payload.type === 'error'){
+          bubble.innerHTML = `<span style="color:var(--error)">${escapeHtml(payload.text)}</span>`;
+          showToast(payload.text, 'err');
+        } else if (payload.type === 'complete'){
+          bubble.innerHTML = renderMarkdown(fullText);
+          if (window.hljs) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+        }
+      }
+    }
+ 
+    loadConversations();
+  } catch(err){
+    if (err.name === 'AbortError'){
+      bubble.innerHTML = renderMarkdown(fullText) + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Stopped.</div>';
+    } else {
+      bubble.innerHTML = '<span style="color:var(--error)">Network error reaching backend.</span>';
+      showToast('Network error reaching backend', 'err');
+    }
+  } finally {
+    State.generating = false;
+    State.abortController = null;
+    $('btnStop').style.display = 'none';
+    $('btnSend').style.display = 'flex';
+    $('btnSend').disabled = !textInput.value.trim();
+    addRegenerateButtonToLastReply();
+    playCompletionChime();
+    announce('Pratham AI finished responding.');
   }
 }
-
-/* ==========================================================================
-   REGENERATE 
-   ========================================================================== */
+ 
+/* ========================================================================
+   REGENERATE
+   ======================================================================== */
 function addRegenerateButtonToLastReply(){
   const groups = feed.querySelectorAll('.msg-group[data-role="ai"]');
   const last = groups[groups.length - 1];
@@ -1218,10 +1366,10 @@ function addRegenerateButtonToLastReply(){
   };
   last.appendChild(btn);
 }
-
-/* ==========================================================================
+ 
+/* ========================================================================
    SEARCH WITHIN THE CURRENT CONVERSATION
-   ========================================================================== */
+   ======================================================================== */
 function toggleSearchInConvo(forceOpen){
   const bar = $('searchInConvo');
   const shouldOpen = forceOpen !== undefined ? forceOpen : !bar.classList.contains('show');
@@ -1230,16 +1378,16 @@ function toggleSearchInConvo(forceOpen){
 }
 $('btnSearchInConvo').onclick = () => toggleSearchInConvo();
 $('btnCloseSearchInConvo').onclick = () => toggleSearchInConvo(false);
-
+ 
 function clearSearchHighlights(){
   feed.querySelectorAll('mark.search-hit').forEach(m => { m.replaceWith(document.createTextNode(m.textContent)); });
   $('searchMatchCount').textContent = '';
 }
-
+ 
 $('searchInConvoInput').addEventListener('input', (e) => {
   clearSearchHighlights();
   const query = e.target.value.trim();
-  if (!query){ return; }
+  if (!query) return;
   let matches = 0;
   feed.querySelectorAll('.msg-content').forEach(node => {
     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
@@ -1260,19 +1408,231 @@ $('searchInConvoInput').addEventListener('input', (e) => {
   });
   $('searchMatchCount').textContent = matches ? `${matches} match${matches === 1 ? '' : 'es'}` : 'No matches';
 });
-
+ 
 window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !e.shiftKey){
     if (State.currentConvId){ e.preventDefault(); toggleSearchInConvo(true); }
   }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
+    e.preventDefault();
+    $('btnNewChat').click();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === '/'){
+    e.preventDefault();
+    toggleTerminal();
+  }
 });
-
-const _originalStreamAiReply = streamAiReply;
-streamAiReply = async function(text){
-  await _originalStreamAiReply(text);
-  addRegenerateButtonToLastReply();
-  playCompletionChime();
-  announce('Pratham AI finished responding.');
+ 
+/* ========================================================================
+   MOBILE SIDEBAR
+   ======================================================================== */
+function openMobileSidebar(){ $('sidebar').classList.add('open'); $('sidebarScrim').classList.add('show'); }
+function closeMobileSidebar(){ $('sidebar').classList.remove('open'); $('sidebarScrim').classList.remove('show'); }
+$('btnToggleSidebar').onclick = openMobileSidebar;
+$('btnSidebarClose').onclick = closeMobileSidebar;
+$('sidebarScrim').onclick = closeMobileSidebar;
+ 
+/* ========================================================================
+   PROFILE DROPDOWN
+   ======================================================================== */
+$('btnProfile').onclick = (e) => { e.stopPropagation(); $('dropdown').classList.toggle('open'); };
+document.addEventListener('click', (e) => {
+  if (!$('dropdown').contains(e.target) && e.target !== $('btnProfile')) $('dropdown').classList.remove('open');
+});
+ 
+/* ========================================================================
+   SETTINGS MODAL
+   ======================================================================== */
+function openSettings(){ $('settingsScrim').classList.add('show'); $('dropdown').classList.remove('open'); }
+function closeSettings(){ $('settingsScrim').classList.remove('show'); }
+$('btnOpenSettings').onclick = openSettings;
+$('btnCloseSettings').onclick = closeSettings;
+$('settingsScrim').addEventListener('click', (e) => { if (e.target === $('settingsScrim')) closeSettings(); });
+ 
+document.querySelectorAll('#themeSeg .seg-btn').forEach(btn => {
+  btn.onclick = () => applyTheme(btn.dataset.theme);
+});
+document.querySelectorAll('#densitySeg .seg-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('#densitySeg .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.documentElement.setAttribute('data-density', btn.dataset.density);
+    localStorage.setItem('pai_density', btn.dataset.density);
+  };
+});
+document.querySelectorAll('#fontscaleSeg .seg-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('#fontscaleSeg .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.documentElement.setAttribute('data-fontscale', btn.dataset.fontscale);
+    localStorage.setItem('pai_fontscale', btn.dataset.fontscale);
+  };
+});
+document.querySelectorAll('#soundSeg .seg-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('#soundSeg .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    localStorage.setItem('pai_sound', btn.dataset.sound);
+  };
+});
+ 
+(function restoreSettingsUi(){
+  const density = localStorage.getItem('pai_density');
+  if (density){ document.documentElement.setAttribute('data-density', density); document.querySelectorAll('#densitySeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.density === density)); }
+  const fontscale = localStorage.getItem('pai_fontscale');
+  if (fontscale){ document.documentElement.setAttribute('data-fontscale', fontscale); document.querySelectorAll('#fontscaleSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fontscale === fontscale)); }
+  const sound = localStorage.getItem('pai_sound');
+  if (sound){ document.querySelectorAll('#soundSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.sound === sound)); }
+})();
+ 
+/* ========================================================================
+   SHORTCUTS / ABOUT MODALS
+   ======================================================================== */
+function closeShortcuts(){ $('shortcutsScrim').classList.remove('show'); }
+$('btnOpenShortcuts').onclick = () => { $('shortcutsScrim').classList.add('show'); closeSettings(); };
+$('btnCloseShortcuts').onclick = closeShortcuts;
+$('shortcutsScrim').addEventListener('click', (e) => { if (e.target === $('shortcutsScrim')) closeShortcuts(); });
+ 
+function closeAbout(){ $('aboutScrim').classList.remove('show'); }
+$('btnOpenAbout').onclick = () => { $('aboutScrim').classList.add('show'); closeSettings(); };
+$('btnCloseAbout').onclick = closeAbout;
+$('aboutScrim').addEventListener('click', (e) => { if (e.target === $('aboutScrim')) closeAbout(); });
+ 
+/* ========================================================================
+   VIP MODAL
+   ======================================================================== */
+function closeVip(){ $('vipScrim').classList.remove('show'); }
+$('btnOpenVip').onclick = () => { $('vipScrim').classList.add('show'); $('dropdown').classList.remove('open'); };
+$('btnCloseVip').onclick = closeVip;
+$('vipScrim').addEventListener('click', (e) => { if (e.target === $('vipScrim')) closeVip(); });
+ 
+$('btnSubmitVip').onclick = async () => {
+  const code = $('vipCodeInput').value.trim();
+  if (!code){ showToast('Enter a code first', 'err'); return; }
+  try{
+    const res = await authFetch('/auth/vip-upgrade', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})
+    });
+    const data = await res.json();
+    if (res.ok){
+      State.user = data.user;
+      localStorage.setItem('pai_user', JSON.stringify(State.user));
+      refreshVipUi();
+      showToast('VIP unlocked', 'ok');
+      closeVip();
+    } else {
+      showToast(data.error || 'Invalid code', 'err');
+    }
+  } catch(e){ /* authFetch already toasts network errors */ }
+};
+ 
+/* ========================================================================
+   TERMINAL
+   ======================================================================== */
+function toggleTerminal(){ $('terminal').classList.toggle('open'); }
+$('btnTerminal').onclick = toggleTerminal;
+$('btnCloseTerm').onclick = () => $('terminal').classList.remove('open');
+$('btnClearTerm').onclick = () => { $('termOut').innerHTML = '<span class="t-sys">Cleared.</span>'; };
+ 
+function termAppend(text, cls){
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = text;
+  $('termOut').appendChild(line);
+  $('termOut').scrollTop = $('termOut').scrollHeight;
+}
+ 
+$('termInput').addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
+  const code = $('termInput').value;
+  if (!code.trim()) return;
+  termAppend('>>> ' + code, 't-cmd');
+  $('termInput').value = '';
+  try{
+    const res = await authFetch('/execute-python', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})
+    });
+    const data = await res.json();
+    if (data.stdout) termAppend(data.stdout, 't-ok');
+    if (data.stderr) termAppend(data.stderr, 't-err');
+    if (!data.stdout && !data.stderr) termAppend('(no output)', 't-sys');
+  } catch(e){ termAppend('Execution failed: ' + e.message, 't-err'); }
+});
+ 
+// Terminal resize
+(function setupTermResize(){
+  const handle = $('termResizeHandle');
+  const term = $('terminal');
+  let dragging = false;
+  handle.addEventListener('mousedown', () => { dragging = true; });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const newHeight = window.innerHeight - e.clientY;
+    if (newHeight > 120 && newHeight < window.innerHeight - 100) term.style.height = newHeight + 'px';
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+})();
+ 
+/* ========================================================================
+   FILE ATTACH / DRAG-DROP FOR @education MODE
+   ======================================================================== */
+$('btnAttach').onclick = () => $('fileInput').click();
+ 
+$('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  await uploadPdf(file);
+  e.target.value = '';
+});
+ 
+async function uploadPdf(file){
+  if (!file.name.toLowerCase().endsWith('.pdf')){ showToast('Only PDF files are supported', 'err'); return; }
+  const formData = new FormData();
+  formData.append('file', file);
+  showToast('Uploading ' + file.name + '...', '');
+  try{
+    const res = await authFetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok){
+      showToast(file.name + ' uploaded. Use @education in your message to reference it.', 'ok');
+      renderAttachChip(file.name);
+    } else {
+      showToast(data.error || 'Upload failed', 'err');
+    }
+  } catch(e){ /* authFetch already toasts */ }
+}
+ 
+function renderAttachChip(filename){
+  const rack = $('attachRack');
+  rack.style.display = 'flex';
+  const chip = document.createElement('span');
+  chip.className = 'attach-chip';
+  chip.innerHTML = `${escapeHtml(filename)} <button aria-label="Remove">&#10005;</button>`;
+  chip.querySelector('button').onclick = () => { chip.remove(); if (!rack.children.length) rack.style.display = 'none'; };
+  rack.appendChild(chip);
+}
+ 
+['dragenter', 'dragover'].forEach(evt => {
+  $('inputCard').addEventListener(evt, (e) => { e.preventDefault(); $('dropHint').classList.add('show'); });
+});
+['dragleave', 'drop'].forEach(evt => {
+  $('inputCard').addEventListener(evt, (e) => { e.preventDefault(); $('dropHint').classList.remove('show'); });
+});
+$('inputCard').addEventListener('drop', async (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file) await uploadPdf(file);
+});
+ 
+/* ========================================================================
+   EDUCATION MODE TOGGLE
+   ======================================================================== */
+$('btnEdu').onclick = () => {
+  State.eduMode = !State.eduMode;
+  $('btnEdu').classList.toggle('active', State.eduMode);
+  if (State.eduMode && !textInput.value.includes('@education')){
+    textInput.value = ('@education ' + textInput.value).trim();
+    textInput.dispatchEvent(new Event('input'));
+  }
 };
 </script>
 </body>
