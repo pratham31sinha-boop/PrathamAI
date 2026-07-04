@@ -44,7 +44,7 @@
         <div class="p-3 border-t border-[#262626] bg-[#171717] flex flex-col gap-2">
             <div class="p-2 bg-[#212121] rounded-xl border border-[#2f2f2f]">
                 <label class="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block mb-1">Target Host Gateway</label>
-                <input type="text" id="backend-host-url-config" value="http://127.0.0.1:5000" placeholder="e.g. http://192.168.1.5:5000" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-400" onchange="updateBackendHostContext()"/>
+                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic detection" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-400" onchange="updateBackendHostContext()"/>
             </div>
             <div class="flex items-center gap-3 p-2 rounded-xl bg-[#212121] border border-[#2f2f2f] shadow-xs">
                 <div class="w-8 h-8 rounded-full bg-[#3f3f3f] text-neutral-300 flex items-center justify-center font-bold text-xs">U</div>
@@ -80,7 +80,7 @@
             <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
                 <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
                 <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
-                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a message instruction to initialize the model matrix logic loops. Use <span class="font-mono bg-[#2d2d2d] px-1 py-0.5 rounded text-emerald-400">@education</span> context syntax tags to point processing over loaded PDF text vector files.</p>
+                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a message instruction to initialize the model matrix logic loops. Use <span class="font-mono bg-[#2d2d2d] px-1 py-0.5 rounded text-emerald-400">@education</span> context syntax tags to point processing directly over loaded PDF text vector files.</p>
             </div>
         </div>
 
@@ -173,24 +173,41 @@
         // Central UI Global Memory Footprint Variables
         let currentConversationId = null;
         let globalAuthorizationToken = "Bearer dev-session-active-token";
-        let SERVER_CONTEXT_HOST = "http://127.0.0.1:5000"; // Fallback path mapping pointer
+        let SERVER_CONTEXT_HOST = ""; 
 
-        // Automatic Host Discovery Protocol Strategy for local environments
+        // Initializer Routine to map standard cross-origin properties clean
         window.addEventListener('DOMContentLoaded', () => {
-            const runtimeOrigin = window.location.origin;
-            if (runtimeOrigin.includes('localhost') || runtimeOrigin.includes('127.0.0.1')) {
-                SERVER_CONTEXT_HOST = window.location.protocol + "//" + window.location.hostname + ":5000";
+            const currentOrigin = window.location.origin;
+            if (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) {
+                SERVER_CONTEXT_HOST = "http://127.0.0.1:5000";
             } else {
-                SERVER_CONTEXT_HOST = runtimeOrigin; // Maps production domains natively
+                SERVER_CONTEXT_HOST = currentOrigin;
             }
             backendHostConfig.value = SERVER_CONTEXT_HOST;
-            
             synchronizeConversationsHistoryIndex();
         });
 
         function updateBackendHostContext() {
-            SERVER_CONTEXT_HOST = backendHostConfig.value.trim();
+            SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
             synchronizeConversationsHistoryIndex();
+        }
+
+        // Adaptive Safe Pipeline Executor wrapper to absorb 404 proxy rewrites automatically
+        async function smartFetchRequest(endpointPath, options = {}) {
+            let directUrl = `${SERVER_CONTEXT_HOST}${endpointPath}`;
+            let fallbackUrl = `${SERVER_CONTEXT_HOST}/api${endpointPath}`;
+            
+            try {
+                let response = await fetch(directUrl, options);
+                if (response.status === 404) {
+                    console.warn(`Encountered 404 pathing rule at [${directUrl}]. Re-routing to [${fallbackUrl}]`);
+                    return await fetch(fallbackUrl, options);
+                }
+                return response;
+            } catch (err) {
+                console.error("Baseline transport error, executing secondary fallback attempt...", err);
+                return await fetch(fallbackUrl, options);
+            }
         }
 
         function toggleSidebarView() {
@@ -256,8 +273,7 @@
             const containerNode = document.createElement('div');
             containerNode.className = 'flex flex-col items-start w-full gap-1';
             
-            // Clear configuration trace alerts directly to bubble elements
-            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}). Please ensure your Flask backend server is actively running.` : 'Could not reach Pratham AI. Please try again.';
+            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}). Please ensure your backend is actively running.` : 'Could not reach Pratham AI. Please try again.';
             
             containerNode.innerHTML = `
                 <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
@@ -302,7 +318,7 @@
         // ══════════════════════════════════════════════════════════════════════
         async function synchronizeConversationsHistoryIndex() {
             try {
-                const response = await fetch(`${SERVER_CONTEXT_HOST}/conversations`, {
+                const response = await smartFetchRequest(`/conversations`, {
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
@@ -336,7 +352,7 @@
 
         async function loadConversationSession(conversationId) {
             try {
-                const response = await fetch(`${SERVER_CONTEXT_HOST}/conversations/${conversationId}/messages`, {
+                const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, {
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
@@ -369,7 +385,7 @@
         async function togglePinConversation(id, event) {
             event.stopPropagation();
             try {
-                await fetch(`${SERVER_CONTEXT_HOST}/conversations/${id}/pin`, {
+                await smartFetchRequest(`/conversations/${id}/pin`, {
                     method: 'POST',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
@@ -382,7 +398,7 @@
         async function triggerSessionDelete() {
             if (!currentConversationId) return;
             try {
-                await fetch(`${SERVER_CONTEXT_HOST}/conversations/${currentConversationId}`, {
+                await smartFetchRequest(`/conversations/${currentConversationId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
@@ -394,7 +410,7 @@
 
         function triggerSessionExport() {
             if(!currentConversationId) return;
-            window.open(`${SERVER_CONTEXT_HOST}/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
+            window.open(`${SERVER_CONTEXT_HOST}/api/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
         }
 
         async function dispatchPythonExecution() {
@@ -404,7 +420,7 @@
 
             outputFrame.innerText = "Spawning isolation execution block processing space...";
             try {
-                const response = await fetch(`${SERVER_CONTEXT_HOST}/execute-python`, {
+                const response = await smartFetchRequest(`/execute-python`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -427,7 +443,7 @@
             packet.append("file", selector.files[0]);
 
             try {
-                const response = await fetch(`${SERVER_CONTEXT_HOST}/upload`, {
+                const response = await smartFetchRequest(`/upload`, {
                     method: 'POST',
                     headers: { 'Authorization': globalAuthorizationToken },
                     body: packet
@@ -445,7 +461,7 @@
             if(!entryValue) return;
 
             try {
-                const response = await fetch(`${SERVER_CONTEXT_HOST}/auth/vip-upgrade`, {
+                const response = await smartFetchRequest(`/auth/vip-upgrade`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -467,7 +483,7 @@
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  CORE STREAMING DATA SUBMISSION CONTROLLER PIPELINE
+        //  CORE STREAMING DATA SUBMISSION CONTROLLER PIPELINE WITH AUTO-RETRY
         // ══════════════════════════════════════════════════════════════════════
         interactionSubmissionForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -485,24 +501,30 @@
             let combinedTextBuffer = "";
 
             try {
-                const response = await fetch(`${SERVER_CONTEXT_HOST}/chat-stream`, {
+                let response = await fetch(`${SERVER_CONTEXT_HOST}/chat-stream`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': globalAuthorizationToken
                     },
-                    body: JSON.stringify({
-                        message: textValue,
-                        conversation_id: currentConversationId
-                    })
+                    body: JSON.stringify({ message: textValue, conversation_id: currentConversationId })
                 });
 
+                // Automated Fallback Trigger Interceptor if the target route returns a 404
+                if (response.status === 404) {
+                    console.warn("Root endpoint missing. Re-routing streaming matrix data to /api/chat-stream...");
+                    response = await fetch(`${SERVER_CONTEXT_HOST}/api/chat-stream`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': globalAuthorizationToken
+                        },
+                        body: JSON.stringify({ message: textValue, conversation_id: currentConversationId })
+                    });
+                }
+
                 if(!response.ok) {
-                    let trackingString = `Connection Dropped. Status: ${response.status}`;
-                    try {
-                        const errorDetails = await response.json();
-                        if (errorDetails.error) trackingString += ` - ${errorDetails.error}`;
-                    } catch(e) {}
+                    let trackingString = `Dropped. Status Code: ${response.status}`;
                     throw new Error(trackingString);
                 }
 
@@ -540,7 +562,7 @@
                                 throw new Error(parsedJson.text);
                             }
                         } catch(exc) {
-                            // Suppress block verification tracking frames
+                            // Suppress block validation tracking frames
                         }
                     }
                 }
