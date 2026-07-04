@@ -7,7 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://accounts.google.com/gsi/client" onload="initializeGoogleOauthGate()" async defer></script>
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
     <style>
         :root {
             --bg: #f6f3ec;
@@ -66,9 +68,13 @@
             <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
             <p class="text-sm text-[var(--text-dim)]">Enterprise System Node Validation Portal</p>
             <hr class="border-[var(--border)]">
-            <div class="flex justify-center w-full py-2">
-                <div id="googleSignInGate" style="min-height: 44px; display: flex; align-items: center; justify-content: center;"></div>
+            
+            <div class="flex justify-center w-full py-2 min-h-[44px]">
+                <div id="googleSignInGate" class="w-full flex justify-center items-center">
+                    <div class="text-xs text-[var(--text-dim)] font-mono animate-pulse">Initializing Security Gateway...</div>
+                </div>
             </div>
+            
             <p class="text-[10px] text-[var(--text-dim)] font-mono">Workspace ID Context Reference: ksroorygbrhwpnqtjbxo</p>
         </div>
     </div>
@@ -86,7 +92,7 @@
                     <div id="user-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--border)] flex items-center justify-center font-bold text-xs overflow-hidden text-[var(--text)]">U</div>
                     <div class="flex-1 min-w-0">
                         <p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Resolving Identity...</p>
-                        <p id="role-badge-display" class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-dim)]">Evaluating...</p>
+                        <p id="role-badge-display" class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-dim)] font-mono">Evaluating...</p>
                     </div>
                     <button onclick="triggerIdentitySignout()" class="text-xs text-[var(--accent)] font-medium hover:underline">Exit</button>
                 </div>
@@ -205,6 +211,26 @@
         let activeUserIdentityEmail = "";
         let currentExtractedPreviewArtifactPayload = "";
 
+        // Safe polling handler function to check for global variable readiness
+        function initializeGoogleOauthGate() {
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                googleSignInGate.innerHTML = ""; // Clear loader pulse text
+                
+                google.accounts.id.initialize({
+                    client_id: "1098485250499-mockid.apps.googleusercontent.com", // Your Google OAuth Client ID
+                    callback: handleGoogleIdentityCallback,
+                    auto_select: false
+                });
+                
+                google.accounts.id.renderButton(
+                    googleSignInGate,
+                    { theme: "outline", size: "large", type: "standard", width: "240" }
+                );
+            } else {
+                setTimeout(initializeGoogleOauthGate, 100); // Polling iteration loop step
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
@@ -215,20 +241,6 @@
 
         function toggleColorTheme() {
             document.documentElement.classList.toggle('dark-mode');
-        }
-
-        function initializeGoogleOauthGate() {
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.initialize({
-                    client_id: "1098485250499-mockid.apps.googleusercontent.com", // Replace with your standard Google OAuth Client ID
-                    callback: handleGoogleIdentityCallback,
-                    auto_select: false
-                });
-                google.accounts.id.renderButton(googleSignInGate, { theme: "outline", size: "large", type: "standard" });
-            } else {
-                // Polling retry state block safely recovering asynchronous connection failures traces cleanly
-                setTimeout(initializeGoogleOauthGate, 200);
-            }
         }
 
         function handleGoogleIdentityCallback(response) {
@@ -265,7 +277,7 @@
                 
                 synchronizeConversationsHistoryIndex();
             } catch(e) {
-                console.error("[AUTH][FAILURE] Token mapping dynamic assertion failure loop: ", e);
+                console.error("[AUTH][FAILURE] Token matrix processing error: ", e);
             }
         }
 
@@ -286,7 +298,7 @@
                     }).then(res => res.json()).then(data => {
                         if(data.ok) {
                             roleBadgeDisplay.innerText = "Internal Core VIP Tier";
-                            roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded";
+                            roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded text-center";
                             alert("Identity context recorded into vault file workspace successfully.");
                         } else {
                             alert("Storage operation tracking fault.");
@@ -303,6 +315,7 @@
             activeUserIdentityEmail = "";
             loginOverlay.classList.remove('opacity-0', 'pointer-events-none');
             appShell.classList.add('opacity-0', 'pointer-events-none');
+            initializeGoogleOauthGate();
         }
 
         function updateBackendHostContext() {
