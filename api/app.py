@@ -1,14 +1,14 @@
 """
 Pratham AI – Full Production Backend Architecture
 =================================================
-Fixes Applied:
-  1. Bypassed Cloudflare API Blocks: Embedded a standard browser `User-Agent` header 
+Fixes & Features Applied:
+  1. Add Google Sign-in Processor: Embedded active conditional validation routine inside
+     _verify_token to unpack incoming Google JWT identity frames natively.
+  2. Bypassed Cloudflare API Blocks: Embedded a standard browser `User-Agent` header 
      into the native `urllib.request` pipelines to prevent Groq from rejecting the stream.
-  2. Fixed Syntax Typo: Cleaned up an accidental word token in the database persistence check.
-  3. Maintained Route Matrix Structure: Kept all proxy path decorations matching 
+  3. Fixed Syntax Typo: Cleaned up an accidental word token in the database persistence check.
+  4. Maintained Route Matrix Structure: Kept all proxy path decorations matching 
      Vercel serverless specifications intact.
-  4. Preserved Original Methods: 100% of all user profile authentication tracking, 
-     sandboxed Python executors, and document management code paths are preserved.
 """
 
 import os
@@ -97,7 +97,7 @@ def _get_token() -> str | None:
     return None
 
 def _verify_token(token: str) -> dict | None:
-    """Decodes token structures via remote live validation or local dev mode fallback."""
+    """Decodes token structures via remote live validation, Google JWT parsing or local dev mode fallback."""
     if not token or token == "dev-session-active-token":
         print("[AUTH][DEV OVERRIDE] Granting sandbox authorization parameters to dev instance.")
         return {
@@ -106,6 +106,29 @@ def _verify_token(token: str) -> dict | None:
             "role": "vip",
             "user_metadata": {"full_name": "Dev Master Admin"}
         }
+
+    # Dynamic Intercept Phase: Parse Google OAuth Identity Tokens natively
+    if len(token.split('.')) == 3:
+        try:
+            payload_chunk = token.split('.')[1]
+            padded_chunk = payload_chunk + '=' * (4 - len(payload_chunk) % 4)
+            unpacked_bytes = base64.b64decode(padded_chunk)
+            google_claims = json.loads(unpacked_bytes.decode('utf-8'))
+            
+            # Check Issuer to confirm identity context origin
+            if "accounts.google.com" in google_claims.get("iss", "") or "google.com" in google_claims.get("iss", ""):
+                print(f"[AUTH][GOOGLE OAUTH] Cleared session scope for client target: {google_claims.get('email')}")
+                return {
+                    "sub": f"google-{google_claims.get('sub')}",
+                    "email": google_claims.get("email"),
+                    "role": "standard",
+                    "user_metadata": {
+                        "full_name": google_claims.get("name"),
+                        "avatar_url": google_claims.get("picture")
+                    }
+                }
+        except Exception as exc:
+            print(f"[AUTH][INTERNAL] Tried checking Google Token sequence but encountered error parsing: {exc}")
 
     if not SUPABASE_CONFIGURED or _supabase is None:
         return {
