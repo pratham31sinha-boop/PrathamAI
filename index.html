@@ -54,11 +54,6 @@
 
         .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
         .workspace-scrollpane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9px; }
-        
-        #login-overlay {
-            background: var(--bg);
-            z-index: 100;
-        }
     </style>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
@@ -71,7 +66,7 @@
          data-auto_select="false">
     </div>
 
-    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 transition-all duration-500">
+    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl space-y-6">
             <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
             <p class="text-sm text-[var(--text-dim)]">Enterprise System Node Validation Portal</p>
@@ -95,7 +90,7 @@
         </div>
     </div>
 
-    <div id="app-shell" class="w-full h-full flex opacity-0 transition-opacity duration-500 pointer-events-none">
+    <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden">
         
         <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between z-30 transition-all duration-300">
             <div class="p-4 flex flex-col flex-1 overflow-hidden space-y-3">
@@ -199,7 +194,6 @@
     </div>
 
     <script>
-        const googleSignInGate = document.getElementById('googleSignInGate');
         const loginOverlay = document.getElementById('login-overlay');
         const appShell = document.getElementById('app-shell');
         
@@ -227,38 +221,9 @@
         let activeUserIdentityEmail = "";
         let currentExtractedPreviewArtifactPayload = "";
 
-        // Core redundant polling layer to force fallback drawing of GSI objects if DOM loading shifts
-        function initializeGoogleOauthGate() {
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.initialize({
-                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-                    callback: handleGoogleIdentityCallback,
-                    auto_select: false
-                });
-                
-                if (googleSignInGate && googleSignInGate.innerHTML.includes("Initializing")) {
-                    googleSignInGate.innerHTML = "";
-                    google.accounts.id.renderButton(googleSignInGate, { theme: "outline", size: "large", type: "standard", width: "240" });
-                }
-            } else {
-                setTimeout(initializeGoogleOauthGate, 100);
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const currentOrigin = window.location.origin;
-            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
-            backendHostConfig.value = SERVER_CONTEXT_HOST;
-            
-            initializeGoogleOauthGate();
-        });
-
-        function toggleColorTheme() {
-            document.documentElement.classList.toggle('dark-mode');
-        }
-
+        // Force function binding directly onto global window stack before library initialization loop
         function handleGoogleIdentityCallback(response) {
-            if (!response.credential) return;
+            if (!response || !response.credential) return;
             globalAuthorizationToken = `Bearer ${response.credential}`;
             
             try {
@@ -286,13 +251,41 @@
                     roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded";
                 }
                 
-                loginOverlay.classList.add('opacity-0', 'pointer-events-none');
-                appShell.classList.remove('opacity-0', 'pointer-events-none');
+                // Unconditional layout display swaps to drop gate view layer
+                loginOverlay.style.display = 'none';
+                appShell.style.display = 'flex';
                 
                 synchronizeConversationsHistoryIndex();
             } catch(e) {
-                console.error("[AUTH][FAILURE] Claims runtime context error: ", e);
+                console.error("[AUTH][FAILURE] Token mapping exception context: ", e);
             }
+        }
+        
+        // Pinned explicitly to current active window execution scope
+        window.handleGoogleIdentityCallback = handleGoogleIdentityCallback;
+
+        function initializeGoogleOauthGate() {
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.initialize({
+                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
+                    callback: window.handleGoogleIdentityCallback,
+                    auto_select: false
+                });
+            } else {
+                setTimeout(initializeGoogleOauthGate, 100);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const currentOrigin = window.location.origin;
+            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
+            backendHostConfig.value = SERVER_CONTEXT_HOST;
+            
+            initializeGoogleOauthGate();
+        });
+
+        function toggleColorTheme() {
+            document.documentElement.classList.toggle('dark-mode');
         }
 
         function triggerHiddenVipFormPrompt() {
@@ -327,17 +320,12 @@
         function triggerIdentitySignout() {
             globalAuthorizationToken = "";
             activeUserIdentityEmail = "";
-            loginOverlay.classList.remove('opacity-0', 'pointer-events-none');
-            appShell.classList.add('opacity-0', 'pointer-events-none');
-            
-            const gateEl = document.getElementById("googleSignInGate");
-            if (gateEl) {
-                gateEl.innerHTML = `<div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" data-width="240"></div>`;
-            }
+            appShell.style.display = 'none';
+            loginOverlay.style.display = 'flex';
             initializeGoogleOauthGate();
         }
 
-        function updateBackendHostContext() {
+        updateBackendHostContext = () => {
             SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
             synchronizeConversationsHistoryIndex();
         }
