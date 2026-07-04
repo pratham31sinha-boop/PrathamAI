@@ -1,3 +1,4 @@
+```python
 """
 Pratham AI – Full Production Backend Architecture
 =================================================
@@ -40,12 +41,12 @@ app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
         "origins": [
-            "[https://prathamai.vercel.app](https://prathamai.vercel.app)",
+            "https://prathamai.vercel.app",
             "http://localhost:3000",
             "http://localhost:5173",
-            "[http://127.0.0.1:5173](http://127.0.0.1:5173)",
+            "http://127.0.0.1:5173",
             "http://localhost:5000",
-            "[http://127.0.0.1:5000](http://127.0.0.1:5000)",
+            "http://127.0.0.1:5000",
             "*"
         ]
     }
@@ -53,7 +54,7 @@ CORS(app, resources={
 
 # ── CENTRALIZED ENVIRONMENT ATTRIBUTE PARSING ──
 GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
-SUPABASE_URL         = os.environ.get("SUPABASE_URL", "[https://ksroorygbrhwpnqtjbxo.supabase.co](https://ksroorygbrhwpnqtjbxo.supabase.co)").strip()
+SUPABASE_URL         = os.environ.get("SUPABASE_URL", "https://ksroorygbrhwpnqtjbxo.supabase.co").strip()
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 GITHUB_TOKEN         = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop").strip()
@@ -80,8 +81,8 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         print("[GITHUB][WARN] Environmental GITHUB_TOKEN context missing. Operations suspended.")
         return False
         
-    repo_clean = GITHUB_REPO.replace("[https://github.com/](https://github.com/)", "").strip("/")
-    endpoint_target_url = f"[https://api.github.com/repos/](https://api.github.com/repos/){repo_clean}/contents/{target_file_path}"
+    repo_clean = GITHUB_REPO.replace("https://github.com/", "").strip("/")
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{target_file_path}"
     
     sha_reference_token = None
     existing_content = ""
@@ -226,7 +227,7 @@ def _stream_groq(messages: list[dict]):
     }).encode()
 
     req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
         data=body,
         headers={
             "Authorization": f"Bearer {GROQ_API_KEY}",
