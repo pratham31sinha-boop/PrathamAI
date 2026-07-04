@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pratham AI">
 <meta name="format-detection" content="telephone=no">
-<meta name="description" content="Pratham AI - a private, multi-provider AI chat assistant with code preview, education mode, and a background Python terminal.">
+<meta name="description" content="Pratham AI – a private, multi-provider AI chat assistant.">
 <title>Pratham AI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,38 +22,37 @@
    0. DESIGN TOKENS
    ========================================================================== */
 :root{
-  --bg-main:#fbfaf7; --bg-sidebar:#f3f0e8; --bg-panel:#ffffff; --bg-hover:rgba(0,0,0,.04); --bg-active:rgba(0,0,0,.08);
-  --border-light:#e2e0d8; --border-heavy:#d1cfc7;
-  --text-primary:#191919; --text-secondary:#4a4a4a; --text-tertiary:#85837d; --text-inverse:#fff;
-  --accent:#cc6239; --accent-hover:#b35531; --accent-soft:rgba(204,98,57,.12);
-  --error:#d32f2f; --ok:#2e7d32; --warn:#b98900;
+  --bg-main:#fbfaf7;--bg-sidebar:#f3f0e8;--bg-panel:#ffffff;--bg-hover:rgba(0,0,0,.04);--bg-active:rgba(0,0,0,.08);
+  --border-light:#e2e0d8;--border-heavy:#d1cfc7;
+  --text-primary:#191919;--text-secondary:#4a4a4a;--text-tertiary:#85837d;--text-inverse:#fff;
+  --accent:#cc6239;--accent-hover:#b35531;--accent-soft:rgba(204,98,57,.12);
+  --error:#d32f2f;--ok:#2e7d32;--warn:#b98900;
   --font-sans:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --font-serif:'Source Serif 4',Georgia,serif;
   --font-mono:'Fira Code',Consolas,monospace;
-  --radius-sm:6px; --radius-md:12px; --radius-lg:16px; --radius-xl:22px; --radius-pill:9999px;
-  --sidebar-w:280px; --topbar-h:56px;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.08); --shadow-md:0 4px 12px rgba(0,0,0,.12); --shadow-lg:0 16px 36px rgba(0,0,0,.16);
-  --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px);
-  --safe-left:env(safe-area-inset-left,0px); --safe-right:env(safe-area-inset-right,0px);
-  --z-sidebar:60; --z-topbar:20; --z-dropdown:80; --z-terminal:70; --z-drawer:90; --z-scrim:85; --z-auth:500; --z-toast:9998; --z-banner:9999;
+  --radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:22px;--radius-pill:9999px;
+  --sidebar-w:280px;--topbar-h:56px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 12px rgba(0,0,0,.12);--shadow-lg:0 16px 36px rgba(0,0,0,.16);
+  --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px);
+  --z-sidebar:60;--z-topbar:20;--z-dropdown:80;--z-terminal:70;--z-drawer:90;--z-scrim:85;--z-auth:500;--z-toast:9998;--z-banner:9999;
 }
-@media (prefers-color-scheme: dark){
+@media(prefers-color-scheme:dark){
   :root{
-    --bg-main:#121212; --bg-sidebar:#1a1a1a; --bg-panel:#242424; --bg-hover:rgba(255,255,255,.08); --bg-active:rgba(255,255,255,.12);
-    --border-light:#333; --border-heavy:#444; --text-primary:#e6e6e6; --text-secondary:#a8a8a8; --text-tertiary:#787878;
-    --accent:#e87b51; --accent-hover:#ff8f66; --accent-soft:rgba(232,123,81,.16);
+    --bg-main:#121212;--bg-sidebar:#1a1a1a;--bg-panel:#242424;--bg-hover:rgba(255,255,255,.08);--bg-active:rgba(255,255,255,.12);
+    --border-light:#333;--border-heavy:#444;--text-primary:#e6e6e6;--text-secondary:#a8a8a8;--text-tertiary:#787878;
+    --accent:#e87b51;--accent-hover:#ff8f66;--accent-soft:rgba(232,123,81,.16);
   }
 }
-/* Manual theme overrides */
 html[data-theme="light"]{
-  --bg-main:#fbfaf7; --bg-sidebar:#f3f0e8; --bg-panel:#ffffff; --bg-hover:rgba(0,0,0,.04); --bg-active:rgba(0,0,0,.08);
-  --border-light:#e2e0d8; --border-heavy:#d1cfc7; --text-primary:#191919; --text-secondary:#4a4a4a; --text-tertiary:#85837d;
-  --accent:#cc6239; --accent-hover:#b35531; --accent-soft:rgba(204,98,57,.12);
+  --bg-main:#fbfaf7;--bg-sidebar:#f3f0e8;--bg-panel:#ffffff;--bg-hover:rgba(0,0,0,.04);--bg-active:rgba(0,0,0,.08);
+  --border-light:#e2e0d8;--border-heavy:#d1cfc7;--text-primary:#191919;--text-secondary:#4a4a4a;--text-tertiary:#85837d;
+  --accent:#cc6239;--accent-hover:#b35531;--accent-soft:rgba(204,98,57,.12);
 }
 html[data-theme="dark"]{
-  --bg-main:#121212; --bg-sidebar:#1a1a1a; --bg-panel:#242424; --bg-hover:rgba(255,255,255,.08); --bg-active:rgba(255,255,255,.12);
-  --border-light:#333; --border-heavy:#444; --text-primary:#e6e6e6; --text-secondary:#a8a8a8; --text-tertiary:#787878;
-  --accent:#e87b51; --accent-hover:#ff8f66; --accent-soft:rgba(232,123,81,.16);
+  --bg-main:#121212;--bg-sidebar:#1a1a1a;--bg-panel:#242424;--bg-hover:rgba(255,255,255,.08);--bg-active:rgba(255,255,255,.12);
+  --border-light:#333;--border-heavy:#444;--text-primary:#e6e6e6;--text-secondary:#a8a8a8;--text-tertiary:#787878;
+  --accent:#e87b51;--accent-hover:#ff8f66;--accent-soft:rgba(232,123,81,.16);
 }
 
 /* ==========================================================================
@@ -71,51 +70,43 @@ button{cursor:pointer;border:none;background:none;-webkit-appearance:none;touch-
 a{color:var(--accent)}
 h1,h2,h3{font-family:var(--font-serif);font-weight:600}
 img{max-width:100%;display:block}
-@media (prefers-reduced-motion: reduce){
-  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
-}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}}
 
 /* ==========================================================================
-   2. CONFIG / STATUS BANNERS & OVERLAYS
+   2. BANNERS
    ========================================================================== */
 #configBanner{position:fixed;top:0;left:0;right:0;background:var(--error);color:#fff;font-size:12.5px;padding:6px 14px;padding-top:calc(6px + var(--safe-top));text-align:center;z-index:var(--z-banner);display:none}
 #offlineBanner{position:fixed;top:0;left:0;right:0;background:var(--warn);color:#1c1200;font-size:12.5px;font-weight:600;padding:6px 14px;padding-top:calc(6px + var(--safe-top));text-align:center;z-index:var(--z-banner);display:none}
 
-#authLoadingOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 600; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; backdrop-filter: blur(4px); }
-.auth-spinner { width: 44px; height: 44px; border: 4px solid rgba(255,255,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px; }
-
 /* ==========================================================================
-   3. TOAST NOTIFICATIONS
+   3. TOAST
    ========================================================================== */
-.toast-stack{position:fixed;bottom:calc(16px + var(--safe-bottom));left:50%;transform:translateX(-50%);z-index:var(--z-toast);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:100%;padding:0 12px}
-.toast{pointer-events:auto;background:var(--text-primary);color:var(--bg-panel);font-size:12.5px;font-weight:500;padding:10px 16px;border-radius:var(--radius-pill);box-shadow:var(--shadow-lg);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:92vw;text-align:center}
+.toast-stack{position:fixed;bottom:calc(20px + var(--safe-bottom));left:50%;transform:translateX(-50%);z-index:var(--z-toast);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:100%;padding:0 12px}
+.toast{pointer-events:auto;background:var(--text-primary);color:var(--bg-panel);font-size:12.5px;font-weight:500;padding:10px 18px;border-radius:var(--radius-pill);box-shadow:var(--shadow-lg);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:92vw;text-align:center}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.err{background:var(--error);color:#fff}
 .toast.ok{background:var(--ok);color:#fff}
+.toast.warn{background:var(--warn);color:#1c1200}
 
 /* ==========================================================================
-   4. AUTH SCREEN & SMART ERROR CARDS
+   4. AUTH SCREEN
    ========================================================================== */
 #authWall{position:fixed;inset:0;z-index:var(--z-auth);background:var(--bg-main);display:flex;align-items:center;justify-content:center;padding:16px}
-.auth-box{background:var(--bg-panel);border:1px solid var(--border-heavy);padding:36px 30px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);text-align:center;max-width:400px;width:100%}
-.auth-box h2{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px}
-.auth-sub{font-size:13px;color:var(--text-secondary);margin-bottom:22px;line-height:1.5}
-#gsiBtn{display:flex;justify-content:center;min-height:44px}
-.auth-fallback{margin-top:14px;font-size:11.5px}
-.auth-fallback button{color:var(--text-tertiary);font-size:11.5px;}
-.auth-fallback button:hover { color:var(--text-primary); text-decoration:underline; }
-.privacy-note{margin-top:18px;font-size:11px;color:var(--text-tertiary);line-height:1.5}
-.privacy-note .lock{margin-right:4px}
-
-#authErrorCard { display: none; background: #ffebee; border: 1px solid #ffcdd2; color: #c62828; padding: 18px; border-radius: 8px; margin-top: 18px; text-align: left; font-size: 13px; line-height: 1.5; }
-#authErrorCard h4 { margin-bottom: 8px; font-size: 14px; font-weight:700; }
-#authErrorCard ul { margin-left: 20px; margin-bottom: 12px; }
-.auth-error-actions { display: flex; gap: 8px; margin-top:14px; }
-.auth-error-btn { flex: 1; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; border: 1px solid transparent; text-align:center; }
-.btn-retry { background: #c62828; color: white; }
-.btn-retry:hover { background: #b71c1c; }
-.btn-dismiss { background: transparent; color: #c62828; border-color: #c62828; }
-.btn-dismiss:hover { background: rgba(198, 40, 40, 0.05); }
+.auth-box{background:var(--bg-panel);border:1px solid var(--border-heavy);padding:36px 30px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);text-align:center;max-width:420px;width:100%}
+.auth-logo{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px;color:var(--accent)}
+.auth-sub{font-size:13px;color:var(--text-secondary);margin-bottom:24px;line-height:1.6}
+#gsiBtn{display:flex;justify-content:center;min-height:44px;margin-bottom:8px}
+.auth-google-btn{width:100%;max-width:300px;min-height:44px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill);background:var(--bg-panel);font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:var(--shadow-sm);transition:background .15s}
+.auth-google-btn:hover{background:var(--bg-hover)}
+#configNotice{margin-top:14px;background:#fff8e1;border:1px solid #ffe082;border-radius:var(--radius-md);padding:14px;font-size:12px;color:#5d4037;line-height:1.6;text-align:left;display:none}
+#configNotice h4{font-weight:700;margin-bottom:6px;font-size:13px}
+#configNotice code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:11px}
+.auth-fallback{margin-top:12px;font-size:11.5px}
+.auth-fallback button{color:var(--text-tertiary);font-size:11.5px}
+.auth-fallback button:hover{color:var(--text-primary);text-decoration:underline}
+.privacy-note{margin-top:16px;font-size:11px;color:var(--text-tertiary);line-height:1.5}
+#authLoadingOverlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:600;display:none;flex-direction:column;align-items:center;justify-content:center;color:white;backdrop-filter:blur(4px)}
+.auth-spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
 
 /* ==========================================================================
    5. SIDEBAR
@@ -167,7 +158,7 @@ img{max-width:100%;display:block}
 /* ==========================================================================
    6. MAIN LAYOUT
    ========================================================================== */
-.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100%;position:relative;transition:margin-right .3s cubic-bezier(.19,1,.22,1)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100%;position:relative}
 .topbar{height:calc(var(--topbar-h) + var(--safe-top));padding-top:var(--safe-top);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding-left:calc(18px + var(--safe-left));padding-right:calc(18px + var(--safe-right));border-bottom:1px solid var(--border-light);position:relative;z-index:var(--z-topbar);background:var(--bg-main)}
 .topbar-left{display:flex;align-items:center;gap:12px;min-width:0}
 .mobile-menu-btn{display:none;width:40px;height:40px;border-radius:50%;align-items:center;justify-content:center;flex-shrink:0}
@@ -177,7 +168,6 @@ img{max-width:100%;display:block}
 .tool-toggle{display:flex;align-items:center;gap:6px;background:var(--bg-sidebar);border:1px solid var(--border-heavy);padding:6px 13px;border-radius:var(--radius-pill);font-size:12.5px;font-weight:600;min-height:36px}
 .tool-toggle.active{background:var(--text-primary);color:var(--bg-panel)}
 .tool-toggle svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
-
 .viewport{flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:20px 16px 10px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;position:relative}
 .feed{width:100%;max-width:800px;display:flex;flex-direction:column;gap:22px}
 .hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:50px 0 20px}
@@ -187,10 +177,19 @@ img{max-width:100%;display:block}
 .hero-chip{border:1px solid var(--border-heavy);padding:8px 14px;border-radius:var(--radius-pill);font-size:12.5px;background:var(--bg-panel)}
 .hero-chip:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ── ERROR NOTICE banner inside chat ──────────────────────────────── */
+.config-notice-inline{background:#fff8e1;border:1px solid #ffe082;border-radius:var(--radius-md);padding:14px 16px;font-size:12.5px;color:#5d4037;line-height:1.7;margin-bottom:6px;width:100%;max-width:800px}
+.config-notice-inline h4{font-weight:700;margin-bottom:6px;font-size:13px;display:flex;align-items:center;gap:6px}
+.config-notice-inline code{background:rgba(0,0,0,.07);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:11px}
+.config-notice-inline ol{margin-left:16px;margin-top:6px}
+.config-notice-inline li{margin-bottom:4px}
+
+/* ==========================================================================
+   7. MESSAGES
+   ========================================================================== */
 .msg-group{display:flex;flex-direction:column;width:100%}
 .msg-meta{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;color:var(--text-tertiary);display:flex;align-items:center;gap:6px}
 .meta-user{text-align:right;justify-content:flex-end}
-.meta-provider{font-weight:500;text-transform:none;letter-spacing:0;opacity:.7}
 .msg-wrap{display:flex}
 .wrap-user{justify-content:flex-end}
 .msg-content{font-family:var(--font-serif);font-size:15.5px;line-height:1.65;max-width:100%;word-wrap:break-word;overflow-wrap:anywhere}
@@ -207,35 +206,30 @@ img{max-width:100%;display:block}
 .msg-content code{font-family:var(--font-mono);background:rgba(128,128,128,.15);padding:2px 5px;border-radius:4px;font-size:.88em;color:var(--accent);word-break:break-word}
 .msg-content pre{display:none}
 .msg-content a{word-break:break-all}
-.msg-retry{display:inline-flex;align-items:center;gap:6px;margin-top:8px;border:1px solid var(--border-heavy);padding:6px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
-.msg-retry:hover{border-color:var(--accent);color:var(--accent)}
-.msg-timestamp{font-size:10.5px;color:var(--text-tertiary);font-weight:500;text-transform:none;letter-spacing:0;margin-left:4px}
 .msg-actions{display:flex;gap:2px;margin-top:6px;opacity:0;transition:opacity .15s}
 .msg-group:hover .msg-actions,.msg-group:focus-within .msg-actions{opacity:1}
-.wrap-user + .msg-actions,.meta-user + .msg-wrap + .msg-actions{justify-content:flex-end}
 .msg-action-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:12px}
 .msg-action-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
-.msg-action-btn.active-up{color:var(--ok)}
-.msg-action-btn.active-down{color:var(--error)}
 .typing-dots{display:inline-flex;gap:4px;align-items:center;padding:6px 2px}
 .typing-dots span{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);animation:typing-bounce 1.2s infinite ease-in-out}
 .typing-dots span:nth-child(2){animation-delay:.15s}
 .typing-dots span:nth-child(3){animation-delay:.3s}
 @keyframes typing-bounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
-.edit-textarea{width:100%;background:var(--bg-panel);border:1px solid var(--accent);border-radius:var(--radius-md);padding:10px 12px;font-size:14.5px;font-family:var(--font-sans);resize:vertical;min-height:60px}
-.edit-actions{display:flex;gap:8px;margin-top:6px;justify-content:flex-end}
-.edit-actions button{font-size:12px;font-weight:600;padding:6px 12px;border-radius:var(--radius-pill);border:1px solid var(--border-heavy)}
-.edit-actions button.primary{background:var(--text-primary);color:var(--bg-panel);border-color:var(--text-primary)}
+.regen-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;border:1px solid var(--border-heavy);padding:6px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
+.regen-btn:hover{border-color:var(--accent);color:var(--accent)}
 .scroll-bottom-btn{position:absolute;bottom:14px;right:50%;transform:translateX(50%);width:38px;height:38px;border-radius:50%;background:var(--bg-panel);border:1px solid var(--border-heavy);box-shadow:var(--shadow-md);display:none;align-items:center;justify-content:center;z-index:15}
 .scroll-bottom-btn.show{display:flex}
 .scroll-bottom-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+.cursor-blink::after{content:"▋";animation:blink 1s step-end infinite;color:var(--accent);margin-left:2px}
+@keyframes blink{50%{opacity:0}}
+.spinner{width:11px;height:11px;border:2px solid var(--border-heavy);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ==========================================================================
-   7. FILE CHIPS 
+   8. FILE CHIPS
    ========================================================================== */
 .file-chip{display:flex;align-items:center;gap:10px;border:1px solid var(--border-heavy);background:var(--bg-panel);border-radius:var(--radius-md);padding:12px 14px;margin:8px 0;cursor:pointer;max-width:320px;transition:all .15s;min-height:56px}
 .file-chip:hover{border-color:var(--accent);box-shadow:var(--shadow-sm)}
-.file-chip:active{transform:scale(.98)}
 .file-chip-icon{width:34px;height:34px;border-radius:8px;background:var(--bg-sidebar);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .file-chip-icon svg{width:17px;height:17px;stroke:var(--text-secondary);fill:none;stroke-width:2}
 .file-chip-info{flex:1;min-width:0}
@@ -243,14 +237,8 @@ img{max-width:100%;display:block}
 .file-chip-sub{font-family:var(--font-sans);font-size:11.5px;color:var(--text-tertiary)}
 .file-chip-caret{color:var(--text-tertiary);font-size:14px;flex-shrink:0}
 
-.status-pill{display:inline-flex;align-items:center;gap:8px;background:var(--bg-sidebar);border:1px solid var(--border-heavy);padding:6px 14px;border-radius:var(--radius-pill);font-size:12.5px;color:var(--text-secondary)}
-.spinner{width:11px;height:11px;border:2px solid var(--border-heavy);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.cursor-blink::after{content:"▋";animation:blink 1s step-end infinite;color:var(--accent);margin-left:2px}
-@keyframes blink{50%{opacity:0}}
-
 /* ==========================================================================
-   8. COMPOSER / DOCK
+   9. COMPOSER / DOCK
    ========================================================================== */
 .dock{width:100%;padding:8px 16px calc(16px + var(--safe-bottom));padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right));display:flex;flex-direction:column;align-items:center;flex-shrink:0}
 .drop-hint{width:100%;max-width:800px;border:2px dashed var(--accent);background:var(--accent-soft);border-radius:var(--radius-lg);text-align:center;font-size:12.5px;color:var(--accent);padding:10px;margin-bottom:8px;display:none}
@@ -259,7 +247,6 @@ img{max-width:100%;display:block}
 .input-card:focus-within{border-color:var(--text-secondary)}
 .attach-rack{display:none;padding:8px 12px 0;flex-wrap:wrap;gap:6px}
 .attach-chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg-sidebar);border:1px solid var(--border-light);padding:4px 10px;border-radius:var(--radius-pill);font-size:11.5px}
-.attach-chip button{font-size:12px}
 .textarea-wrap{padding:10px 12px}
 .main-textarea{width:100%;background:transparent;border:none;outline:none;resize:none;font-size:16px;line-height:1.5;max-height:180px;min-height:22px}
 @media(min-width:640px){.main-textarea{font-size:14.5px}}
@@ -272,11 +259,11 @@ img{max-width:100%;display:block}
 .btn-send:disabled{background:var(--border-heavy);color:var(--text-tertiary)}
 .btn-send svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.5}
 .btn-stop{width:34px;height:34px;border-radius:50%;background:var(--error);color:#fff;display:none;align-items:center;justify-content:center}
+.char-counter{font-size:10.5px;color:var(--text-tertiary);margin-left:8px;white-space:nowrap}
 .disclaimer{text-align:center;font-size:10.5px;color:var(--text-tertiary);margin-top:8px}
-.disclaimer .lock{margin:0 3px}
 
 /* ==========================================================================
-   9. TERMINAL
+   10. TERMINAL
    ========================================================================== */
 .terminal{position:absolute;bottom:0;left:0;right:0;height:0;background:#1e1e1e;border-top:1px solid #333;z-index:var(--z-terminal);display:flex;flex-direction:column;overflow:hidden;transition:height .25s ease}
 .terminal.open{height:280px}
@@ -297,7 +284,7 @@ img{max-width:100%;display:block}
 .term-close{color:#999;font-size:16px;width:28px;height:28px}
 
 /* ==========================================================================
-   10. PREVIEW DRAWER
+   11. PREVIEW DRAWER
    ========================================================================== */
 .preview-drawer{position:fixed;top:0;right:-100%;width:46%;min-width:360px;max-width:760px;height:100%;background:var(--bg-panel);border-left:1px solid var(--border-heavy);z-index:var(--z-drawer);display:flex;flex-direction:column;box-shadow:var(--shadow-lg);transition:right .3s cubic-bezier(.19,1,.22,1)}
 .preview-drawer.open{right:0}
@@ -306,27 +293,26 @@ img{max-width:100%;display:block}
 .preview-tabs{display:flex;background:var(--bg-hover);padding:2px;border-radius:var(--radius-sm);gap:2px;flex-shrink:0}
 .ptab{padding:6px 11px;font-size:11px;font-weight:600;border-radius:4px;color:var(--text-secondary);min-height:30px}
 .ptab.active{background:var(--bg-panel);color:var(--text-primary)}
-.preview-toolbar{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.preview-toolbar{display:flex;gap:6px;flex-shrink:0}
 .ptool-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);font-size:11px;min-height:30px}
 .ptool-btn:hover{background:var(--bg-hover)}
-.preview-close{width:28px;height:28px;border-radius:50%;flex-shrink:0}
+.preview-close{width:28px;height:28px;border-radius:50%}
 .preview-close:hover{background:var(--bg-hover)}
 .preview-body{flex:1;overflow:auto;background:var(--bg-main);position:relative}
 .pview{display:none;width:100%;height:100%}
 .pview.active{display:block}
-.pcode pre{margin:0;height:100%;overflow:auto;font-size:12.5px;padding:16px;padding-bottom:calc(16px + var(--safe-bottom))}
+.pcode pre{margin:0;height:100%;overflow:auto;font-size:12.5px;padding:16px}
 .piframe{width:100%;height:100%;border:none;background:#fff}
 .overlay-scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:var(--z-scrim);display:none}
 .overlay-scrim.show{display:block}
 
 /* ==========================================================================
-   11. SETTINGS / VIP MODALS
+   12. MODALS
    ========================================================================== */
 .modal-scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:600;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-scrim.show{display:flex}
-.modal-box{background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:100%;max-width:400px;padding:24px;max-height:88vh;overflow-y:auto}
+.modal-box{background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:100%;max-width:400px;padding:24px;max-height:88vh;overflow-y:auto;position:relative}
 .modal-box h3{font-size:18px;margin-bottom:14px}
-.modal-box h2{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px}
 .modal-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light);font-size:13px;gap:10px}
 .modal-row:last-child{border-bottom:none}
 .seg-control{display:flex;background:var(--bg-sidebar);border-radius:var(--radius-pill);padding:2px;gap:2px}
@@ -339,8 +325,8 @@ img{max-width:100%;display:block}
 .provider-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:12.5px}
 .provider-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
 .provider-dot.cool{background:var(--warn)}
+.provider-dot.off{background:var(--border-heavy)}
 .close-x{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%}
-.modal-box{position:relative}
 .provider-select{width:100%;padding:8px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);background:var(--bg-main);font-size:12.5px;margin-top:6px}
 .shortcut-row{display:flex;justify-content:space-between;padding:7px 0;font-size:12.5px;border-bottom:1px solid var(--border-light)}
 .shortcut-row:last-child{border-bottom:none}
@@ -349,113 +335,78 @@ img{max-width:100%;display:block}
 .skip-link{position:absolute;left:-999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;z-index:9999;border-radius:0 0 8px 0}
 .skip-link:focus{left:0}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Search in convo */
+.search-in-convo{display:none;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-sidebar)}
+.search-in-convo.show{display:flex}
+.search-in-convo input{flex:1;background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-pill);padding:6px 12px;font-size:13px}
+mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 2px}
 
 /* ==========================================================================
-   12. RESPONSIVE / MOBILE COMPATIBILITY
+   13. RESPONSIVE
    ========================================================================== */
-@media (max-width:900px){
+@media(max-width:900px){
   .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);width:86vw;max-width:320px}
   .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-lg)}
   .sidebar-close-btn{display:flex}
   .mobile-menu-btn{display:flex}
   .preview-drawer{width:100%;min-width:0;max-width:none}
   .hero h1{font-size:24px}
-  .hero p{font-size:13.5px}
   .topbar{padding-left:calc(10px + var(--safe-left));padding-right:calc(10px + var(--safe-right))}
   .tool-toggle span{display:none}
   .tool-toggle{padding:8px;min-width:36px;justify-content:center}
   .terminal.open{height:62vh}
   .file-chip{max-width:100%}
   .wrap-user .msg-content{max-width:92%}
-  .preview-toolbar .ptool-btn span{display:none}
-  .modal-box{max-width:100%}
 }
-@media (max-width:480px){
+@media(max-width:480px){
   .hero{padding:30px 0 14px}
   .hero-chips{gap:6px}
   .hero-chip{font-size:11.5px;padding:7px 11px}
-  .brand-inner{font-size:17px}
   .dock{padding-left:calc(10px + var(--safe-left));padding-right:calc(10px + var(--safe-right))}
 }
-@media (hover:none) and (pointer:coarse){
-  .btn-icon,.mobile-menu-btn,.preview-close,.sidebar-close-btn,.convo-icon-btn{min-width:38px;min-height:38px}
-  .file-chip:hover{border-color:var(--border-heavy)}
-}
-@media (max-height:480px) and (orientation:landscape){
-  .hero{padding:14px 0 8px}
-  .terminal.open{height:80vh}
-}
-@media (max-width:768px) and (min-width:481px){
-  .sidebar{width:78vw;max-width:300px}
-  .hero h1{font-size:27px}
-}
-@media (min-width:1400px){
-  .feed{max-width:880px}
-  .preview-drawer{max-width:820px}
-}
-
-/* ==========================================================================
-   13. DENSITY + FONT-SIZE ACCESSIBILITY CONTROLS
-   ========================================================================== */
-html[data-density="compact"] .msg-group{gap:2px}
 html[data-density="compact"] .feed{gap:14px}
 html[data-density="compact"] .msg-content{line-height:1.45}
-html[data-density="compact"] .convo-item{padding:6px 10px;min-height:34px}
 html[data-fontscale="lg"] .msg-content{font-size:17px}
-html[data-fontscale="lg"] .wrap-user .msg-content{font-size:16px}
 html[data-fontscale="sm"] .msg-content{font-size:14px}
-html[data-fontscale="sm"] .wrap-user .msg-content{font-size:13px}
-.density-fontsize-row{display:flex;gap:8px;align-items:center;justify-content:space-between}
-.char-counter{font-size:10.5px;color:var(--text-tertiary);margin-left:8px;white-space:nowrap}
-.regen-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;border:1px solid var(--border-heavy);padding:6px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
-.regen-btn:hover{border-color:var(--accent);color:var(--accent)}
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.search-in-convo{display:none;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-sidebar)}
-.search-in-convo.show{display:flex}
-.search-in-convo input{flex:1;background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-pill);padding:6px 12px;font-size:13px}
-.search-in-convo button{font-size:12px;font-weight:600;color:var(--text-secondary)}
-mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 2px}
 </style>
 </head>
 <body>
 <a href="#textInput" class="skip-link">Skip to message box</a>
-
 <div id="configBanner"></div>
-<div id="offlineBanner">You are offline - messages will send once your connection returns.</div>
-
-<div id="authLoadingOverlay">
-  <div class="auth-spinner"></div>
-  <h3 id="authLoadingText">Connecting to backend...</h3>
-</div>
-
+<div id="offlineBanner">⚠ You are offline – messages will send once your connection returns.</div>
+<div id="authLoadingOverlay"><div class="auth-spinner"></div><p>Signing you in…</p></div>
 <div class="toast-stack" id="toastStack"></div>
+<div class="sr-only" aria-live="polite" id="ariaLiveRegion"></div>
 
+<!-- ═══════════════════════════  AUTH WALL  ══════════════════════════ -->
 <div id="authWall">
   <div class="auth-box">
     <div class="auth-logo">Pratham AI</div>
-    <div class="auth-sub">Sign in to start chatting. Your conversations are saved to a private, per-account log so you can pick up where you left off on any device.</div>
-    
+    <div class="auth-sub">Sign in to start chatting. Conversations are saved privately per account.</div>
     <div id="gsiBtn"></div>
-    
-    <div id="authErrorCard">
-        <h4 id="authErrorTitle">Connection Failed</h4>
-        <div id="authErrorDesc"></div>
-        <div class="auth-error-actions">
-            <button class="auth-error-btn btn-retry" id="btnAuthRetry">Retry Sign-in</button>
-            <button class="auth-error-btn btn-dismiss" onclick="document.getElementById('authErrorCard').style.display='none'">Dismiss</button>
-        </div>
+    <div id="configNotice">
+      <h4>⚠ Backend not fully configured</h4>
+      <p>The Vercel backend is reachable but <strong>GROQ_API_KEY</strong> is not set, so chat will not work. Add the missing environment variables in your <strong>Vercel dashboard → Project → Settings → Environment Variables</strong>:</p>
+      <ul style="margin:8px 0 0 14px">
+        <li><code>GROQ_API_KEY</code> – get one free at <a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a></li>
+        <li><code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_KEY</code> – from your Supabase project</li>
+      </ul>
     </div>
-
-    <div class="auth-fallback"><button id="btnHealthRetry" type="button">Having trouble? Re-check backend connection</button></div>
-    <div class="privacy-note"><span class="lock">&#128274;</span>Conversations are stored in a private GitHub repository, organized per account and per day, and are never publicly browsable.</div>
+    <div class="auth-fallback"><button id="btnHealthRetry" type="button">↺ Re-check backend connection</button></div>
+    <div class="privacy-note">🔒 Conversations are stored privately per account and never publicly browsable.</div>
   </div>
 </div>
 
+<!-- ═══════════════════════════  SIDEBAR  ════════════════════════════ -->
 <div class="sidebar-scrim" id="sidebarScrim"></div>
 <aside class="sidebar" id="sidebar">
   <div class="brand">
     <div class="brand-inner"><div class="brand-logo">P</div><span>Pratham AI</span></div>
-    <button class="sidebar-close-btn" id="btnSidebarClose"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <button class="sidebar-close-btn" id="btnSidebarClose" aria-label="Close sidebar">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
   <button class="btn-newchat" id="btnNewChat"><span>New chat</span><span>+</span></button>
   <div class="sidebar-search">
@@ -473,29 +424,32 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       </div>
     </button>
     <div class="dropdown" id="dropdown">
-      <button class="menu-item" id="btnOpenSettings">&#9881;&#65039; Settings</button>
-      <button class="menu-item" id="btnOpenVip">&#11088; Enter VIP code</button>
-      <button class="menu-item" id="btnExportChat">&#11014;&#65039; Export current chat (.txt)</button>
-      <button class="menu-item danger" id="btnLogout">&#128682; Sign out</button>
+      <button class="menu-item" id="btnOpenSettings">⚙️ Settings</button>
+      <button class="menu-item" id="btnOpenVip">⭐ Enter VIP code</button>
+      <button class="menu-item" id="btnExportChat">⬆️ Export current chat</button>
+      <button class="menu-item danger" id="btnLogout">🚪 Sign out</button>
     </div>
   </div>
 </aside>
 
+<!-- ═══════════════════════════  MAIN  ═══════════════════════════════ -->
 <main class="main" id="mainArea">
   <header class="topbar">
     <div class="topbar-left">
-      <button class="mobile-menu-btn" id="btnToggleSidebar"><svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <button class="mobile-menu-btn" id="btnToggleSidebar" aria-label="Open sidebar">
+        <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="chat-title" id="chatTitle">New chat</div>
     </div>
     <div class="topbar-tools">
-      <button class="tool-toggle" id="btnSearchInConvo" title="Search this conversation (Ctrl/&#8984; + F)">
+      <button class="tool-toggle" id="btnSearchInConvo" title="Search this conversation (Ctrl+F)">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
-      <button class="tool-toggle" id="btnEdu" title="@education mode: answers grounded in your uploaded PDFs">
+      <button class="tool-toggle" id="btnEdu" title="Education mode: answers from your uploaded PDFs">
         <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/></svg>
         <span>Education</span>
       </button>
-      <button class="tool-toggle" id="btnTerminal" title="Background Python terminal">
+      <button class="tool-toggle" id="btnTerminal" title="Python terminal (Ctrl+/)">
         <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         <span>Terminal</span>
       </button>
@@ -503,14 +457,14 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </header>
 
   <div class="search-in-convo" id="searchInConvo">
-    <input type="text" id="searchInConvoInput" placeholder="Search messages in this conversation...">
+    <input type="text" id="searchInConvoInput" placeholder="Search messages…">
     <span class="char-counter" id="searchMatchCount"></span>
-    <button id="btnCloseSearchInConvo">&#10005;</button>
+    <button id="btnCloseSearchInConvo">✕</button>
   </div>
 
   <div class="viewport" id="viewport">
     <div class="feed" id="feed"></div>
-    <button class="scroll-bottom-btn" id="btnScrollBottom" aria-label="Scroll to latest message">
+    <button class="scroll-bottom-btn" id="btnScrollBottom" aria-label="Scroll to latest">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
     </button>
   </div>
@@ -520,46 +474,54 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
     <div class="input-card" id="inputCard">
       <div class="attach-rack" id="attachRack"></div>
       <div class="textarea-wrap">
-        <textarea id="textInput" class="main-textarea" rows="1" placeholder="Message Pratham AI... use @education to ask about your uploaded PDFs" aria-label="Message Pratham AI"></textarea>
+        <textarea id="textInput" class="main-textarea" rows="1"
+          placeholder="Message Pratham AI… (use @education to reference uploaded PDFs)"
+          aria-label="Message input"></textarea>
         <div class="composer-toolbar">
           <div class="toolbar-left">
-            <button class="btn-icon" id="btnAttach" title="Attach PDF for @education mode" aria-label="Attach PDF">
+            <button class="btn-icon" id="btnAttach" title="Attach PDF" aria-label="Attach PDF">
               <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
             <input type="file" id="fileInput" accept="application/pdf" style="display:none">
           </div>
           <div class="toolbar-right">
             <span class="char-counter" id="charCounter"></span>
-            <button class="btn-stop" id="btnStop" title="Stop generating" aria-label="Stop generating">
+            <button class="btn-stop" id="btnStop" aria-label="Stop generating">
               <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
             </button>
             <button class="btn-send" id="btnSend" disabled aria-label="Send message">
-              <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 5 19 12"/></svg>
+              <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
             </button>
           </div>
         </div>
       </div>
     </div>
-    <p class="disclaimer">Pratham AI can make mistakes. Verify important information. <span class="lock">&#128274;</span>Private per-account history.</p>
+    <p class="disclaimer">Pratham AI can make mistakes. Verify important info. 🔒 Private per-account history.</p>
   </div>
 
+  <!-- Terminal -->
   <div class="terminal" id="terminal">
     <div class="term-resize-handle" id="termResizeHandle"></div>
     <div class="term-head">
-      <div class="term-title"><div class="dots"><div class="dot" style="background:#ff5f56"></div><div class="dot" style="background:#ffbd2e"></div><div class="dot" style="background:#27c93f"></div></div>Python sandbox (server-side)</div>
+      <div class="term-title">
+        <div class="dots"><div class="dot" style="background:#ff5f56"></div><div class="dot" style="background:#ffbd2e"></div><div class="dot" style="background:#27c93f"></div></div>
+        Python sandbox (server-side)
+      </div>
       <div class="term-head-actions">
         <button class="term-btn" id="btnClearTerm">clear</button>
-        <button class="term-close" id="btnCloseTerm">&#10005;</button>
+        <button class="term-close" id="btnCloseTerm">✕</button>
       </div>
     </div>
-    <div class="term-out" id="termOut"><span class="t-sys">Server-side Python sandbox ready. The AI can also run code here automatically in the background while answering.</span></div>
+    <div class="term-out" id="termOut"><span class="t-sys">Server-side Python sandbox ready.</span></div>
     <div class="term-input-row">
       <span class="term-prompt">&gt;&gt;&gt;</span>
-      <input type="text" id="termInput" class="term-input" placeholder="Write Python and press Enter" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="termInput" class="term-input" placeholder="Write Python and press Enter"
+             autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
   </div>
 </main>
 
+<!-- Preview drawer -->
 <div class="overlay-scrim" id="scrim"></div>
 <div class="preview-drawer" id="previewDrawer" role="dialog" aria-label="Code preview">
   <div class="preview-head">
@@ -569,9 +531,9 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       <button class="ptab" id="tabPreview">Preview</button>
     </div>
     <div class="preview-toolbar">
-      <button class="ptool-btn" id="btnCopy"><span>&#128203;</span>Copy</button>
-      <button class="ptool-btn" id="btnDownload"><span>&#11014;&#65039;</span>Download</button>
-      <button class="preview-close" id="btnClosePreview" aria-label="Close preview">&#10005;</button>
+      <button class="ptool-btn" id="btnCopy">📋 <span>Copy</span></button>
+      <button class="ptool-btn" id="btnDownload">⬇️ <span>Download</span></button>
+      <button class="preview-close" id="btnClosePreview" aria-label="Close">✕</button>
     </div>
   </div>
   <div class="preview-body">
@@ -580,9 +542,10 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </div>
 
+<!-- Settings modal -->
 <div class="modal-scrim" id="settingsScrim">
   <div class="modal-box">
-    <button class="close-x" id="btnCloseSettings">&#10005;</button>
+    <button class="close-x" id="btnCloseSettings">✕</button>
     <h3>Settings</h3>
     <div class="modal-row"><span>Theme</span>
       <div class="seg-control" id="themeSeg">
@@ -592,1078 +555,1010 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
       </div>
     </div>
     <div class="modal-row" style="flex-direction:column;align-items:stretch;gap:8px">
-      <span style="font-weight:600">Provider status (Groq is the default)</span>
-      <div id="providerStatusList"></div>
+      <span style="font-weight:600">Provider status</span>
+      <div id="providerStatusList"><span style="font-size:12px;color:var(--text-tertiary)">Loading…</span></div>
     </div>
     <div class="modal-row" style="flex-direction:column;align-items:stretch">
-      <span>Preferred provider (auto-falls-back if it hits a limit)</span>
+      <span>Preferred provider</span>
       <select class="provider-select" id="preferredProviderSelect">
-        <option value="">Auto (Groq default &#8594; fallback chain)</option>
+        <option value="">Auto (Groq → fallback chain)</option>
         <option value="groq">Groq</option>
         <option value="openrouter">OpenRouter</option>
         <option value="cerebras">Cerebras</option>
         <option value="mistral">Mistral</option>
       </select>
     </div>
-    <div class="modal-row"><span>Backend</span><span id="apiBaseLabel" style="font-size:11px;color:var(--text-tertiary);word-break:break-all;text-align:right">-</span></div>
-    <div class="modal-row density-fontsize-row"><span>Density</span>
+    <div class="modal-row"><span>Backend URL</span><span id="apiBaseLabel" style="font-size:11px;color:var(--text-tertiary);word-break:break-all;text-align:right">–</span></div>
+    <div class="modal-row"><span>Density</span>
       <div class="seg-control" id="densitySeg">
         <button class="seg-btn active" data-density="comfortable">Comfortable</button>
         <button class="seg-btn" data-density="compact">Compact</button>
       </div>
     </div>
-    <div class="modal-row density-fontsize-row"><span>Text size</span>
+    <div class="modal-row"><span>Text size</span>
       <div class="seg-control" id="fontscaleSeg">
         <button class="seg-btn" data-fontscale="sm">A-</button>
         <button class="seg-btn active" data-fontscale="md">A</button>
         <button class="seg-btn" data-fontscale="lg">A+</button>
       </div>
     </div>
-    <div class="modal-row"><span>Sound on reply complete</span>
+    <div class="modal-row"><span>Sound on reply</span>
       <div class="seg-control" id="soundSeg">
         <button class="seg-btn" data-sound="off">Off</button>
         <button class="seg-btn active" data-sound="on">On</button>
       </div>
     </div>
-    <div class="modal-row"><span>Keyboard shortcuts</span><button class="menu-item" id="btnOpenShortcuts" style="padding:4px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill)">View</button></div>
-    <div class="modal-row"><span>About Pratham AI</span><button class="menu-item" id="btnOpenAbout" style="padding:4px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill)">View</button></div>
-  </div>
-</div>
-<div class="sr-only" aria-live="polite" id="ariaLiveRegion"></div>
-
-<div class="modal-scrim" id="shortcutsScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseShortcuts">&#10005;</button>
-    <h3>Keyboard shortcuts</h3>
-    <div class="shortcut-row"><span>Send message</span><span class="kbd">Enter</span></div>
-    <div class="shortcut-row"><span>New line</span><span class="kbd">Shift + Enter</span></div>
-    <div class="shortcut-row"><span>New chat</span><span class="kbd">Ctrl/&#8984; + K</span></div>
-    <div class="shortcut-row"><span>Toggle terminal</span><span class="kbd">Ctrl/&#8984; + /</span></div>
-    <div class="shortcut-row"><span>Close any panel</span><span class="kbd">Esc</span></div>
-  </div>
-</div>
-
-<div class="modal-scrim" id="aboutScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseAbout">&#10005;</button>
-    <span class="about-badge">Pratham AI</span>
-    <h3>About this build</h3>
-    <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.6">
-      Multi-provider chat assistant (Groq default with OpenRouter, Cerebras and Mistral
-      fallback), @education RAG over your uploaded PDFs, a server-side Python terminal the
-      AI can also drive in the background, and private per-account conversation history
-      synced to a locked-down GitHub repository.
-    </p>
-  </div>
-</div>
-
-<div class="modal-scrim" id="vipScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseVip">&#10005;</button>
-    <h3>Enter VIP code</h3>
-    <p style="font-size:12.5px;color:var(--text-secondary)">Have a VIP access code? Enter it below to unlock the VIP badge and admin plan label.</p>
-    <input type="password" id="vipCodeInput" class="modal-input" placeholder="VIP code" autocomplete="off">
-    <div class="modal-actions">
-      <button class="modal-btn primary" id="btnSubmitVip">Unlock</button>
+    <div class="modal-row"><span>Keyboard shortcuts</span>
+      <button class="menu-item" id="btnOpenShortcuts" style="padding:4px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill)">View</button>
+    </div>
+    <div class="modal-row"><span>About</span>
+      <button class="menu-item" id="btnOpenAbout" style="padding:4px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill)">View</button>
     </div>
   </div>
 </div>
 
-<!-- Added: minimal Vercel backend test panel. Calls GET /api/app and
-     shows the raw JSON response so deployment can be verified quickly
-     without opening dev tools. -->
-<div id="vercelTestPanel" style="position:fixed;bottom:10px;left:10px;z-index:9997;background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-md);padding:10px;max-width:320px;box-shadow:var(--shadow-md);font-family:var(--font-sans);font-size:12px">
-  <div style="font-weight:700;margin-bottom:6px">Backend test (/api/app)</div>
-  <button id="btnTestApiApp" style="border:1px solid var(--border-heavy);border-radius:var(--radius-pill);padding:6px 12px;font-weight:600;margin-bottom:6px">Call /api/app</button>
-  <pre id="apiAppOutput" style="white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;background:var(--bg-sidebar);padding:8px;border-radius:6px;margin:0">No request sent yet.</pre>
+<!-- Shortcuts modal -->
+<div class="modal-scrim" id="shortcutsScrim">
+  <div class="modal-box">
+    <button class="close-x" id="btnCloseShortcuts">✕</button>
+    <h3>Keyboard shortcuts</h3>
+    <div class="shortcut-row"><span>Send message</span><span class="kbd">Enter</span></div>
+    <div class="shortcut-row"><span>New line</span><span class="kbd">Shift + Enter</span></div>
+    <div class="shortcut-row"><span>New chat</span><span class="kbd">Ctrl/⌘ + K</span></div>
+    <div class="shortcut-row"><span>Toggle terminal</span><span class="kbd">Ctrl/⌘ + /</span></div>
+    <div class="shortcut-row"><span>Search in chat</span><span class="kbd">Ctrl/⌘ + F</span></div>
+    <div class="shortcut-row"><span>Close any panel</span><span class="kbd">Esc</span></div>
+  </div>
 </div>
 
+<!-- About modal -->
+<div class="modal-scrim" id="aboutScrim">
+  <div class="modal-box">
+    <button class="close-x" id="btnCloseAbout">✕</button>
+    <span class="about-badge">Pratham AI</span>
+    <h3>About this build</h3>
+    <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;margin-top:8px">
+      Multi-provider chat assistant (Groq default with OpenRouter/Cerebras/Mistral fallback),
+      @education RAG over uploaded PDFs, a server-side Python terminal, and private per-account
+      conversation history.
+    </p>
+  </div>
+</div>
+
+<!-- VIP modal -->
+<div class="modal-scrim" id="vipScrim">
+  <div class="modal-box">
+    <button class="close-x" id="btnCloseVip">✕</button>
+    <h3>Enter VIP code</h3>
+    <p style="font-size:12.5px;color:var(--text-secondary)">Have a VIP access code? Enter it below.</p>
+    <input type="password" id="vipCodeInput" class="modal-input" placeholder="VIP code" autocomplete="off">
+    <div class="modal-actions"><button class="modal-btn primary" id="btnSubmitVip">Unlock</button></div>
+  </div>
+</div>
+
+<!-- ─── Scripts ─────────────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
 <script>
-/* ========================================================================
-   SERVICE WORKER BYPASS/CLEANUP
-   ======================================================================== */
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for (let registration of registrations) registration.unregister();
-  }).catch(function(err){ console.warn('SW unregister failed:', err); });
-}
- 
-/* ========================================================================
-   CONFIG
-   ======================================================================== */
+'use strict';
+/* ================================================================
+   CONFIG  — edit API_BASE and credentials to match your deployment
+   ================================================================ */
 const CONFIG = {
-  API_BASE: "https://prathamai.vercel.app",
-  GOOGLE_CLIENT_ID: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-  SUPABASE_URL: "https://ksroorygbrhwpnqtjbxo.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzcm9vcnlnYnJod3BucXRqYnhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwODg4NTAsImV4cCI6MjA5ODY2NDg1MH0.T_5BhvBQn9duMtOpOUeW_LzK4YskmmIyiA0qHZzfZBg"
+  API_BASE:           'https://prathamai.vercel.app',
+  SUPABASE_URL:       'https://ksroorygbrhwpnqtjbxo.supabase.co',
+  SUPABASE_ANON_KEY:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzcm9vcnlnYnJod3BucXRqYnhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwODg4NTAsImV4cCI6MjA5ODY2NDg1MH0.T_5BhvBQn9duMtOpOUeW_LzK4YskmmIyiA0qHZzfZBg'
 };
 const API_BASE = CONFIG.API_BASE;
-const MAX_CHARS_SOFT_LIMIT = 6000;
- 
-const supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
- 
-/* ========================================================================
-   DOM HELPERS
-   ======================================================================== */
-const $ = (id) => document.getElementById(id);
+const MAX_CHARS = 6000;
+
+/* ── Supabase client ─────────────────────────────────────────── */
+const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+/* ── DOM shorthand ───────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
 const feed = $('feed');
- 
-function onReady(fn){
-  if (document.readyState === 'interactive' || document.readyState === 'complete') fn();
-  else document.addEventListener('DOMContentLoaded', fn);
+
+/* ── State ───────────────────────────────────────────────────── */
+const State = {
+  sessionToken: localStorage.getItem('pai_session') || null,
+  user:         JSON.parse(localStorage.getItem('pai_user') || 'null'),
+  currentConvId: null,
+  eduMode:       false,
+  generating:    false,
+  abortCtrl:     null,
+  convosCache:   [],
+  groqConfigured: true,  // optimistic; corrected after /health
+};
+
+/* ================================================================
+   THEME
+   ================================================================ */
+(function applyStoredTheme(){
+  const t = localStorage.getItem('pai_theme') || 'system';
+  applyTheme(t);
+})();
+
+function applyTheme(t){
+  if (t === 'system') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  document.querySelectorAll('#themeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === t));
+  localStorage.setItem('pai_theme', t);
 }
- 
-function escapeHtml(str){
-  const div = document.createElement('div');
-  div.textContent = String(str == null ? '' : str);
-  return div.innerHTML;
-}
- 
-function showToast(message, kind){
+
+/* ================================================================
+   TOAST
+   ================================================================ */
+function showToast(msg, kind){
   const stack = $('toastStack');
   const el = document.createElement('div');
   el.className = 'toast' + (kind ? ' ' + kind : '');
-  el.textContent = message;
+  el.textContent = msg;
   stack.appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3200);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3500);
 }
 window.showToast = showToast;
- 
-function announce(text){
-  const region = $('ariaLiveRegion');
-  if (region) region.textContent = text;
-}
- 
-function playCompletionChime(){
+
+function announce(text){ const r=$('ariaLiveRegion'); if(r) r.textContent=text; }
+
+/* ================================================================
+   ONLINE / OFFLINE
+   ================================================================ */
+window.addEventListener('online',  () => { $('offlineBanner').style.display='none';  showToast('Back online','ok'); });
+window.addEventListener('offline', () => { $('offlineBanner').style.display='block'; });
+
+/* ================================================================
+   SOUND
+   ================================================================ */
+function playChime(){
   try{
-    if (localStorage.getItem('pai_sound') === 'off') return;
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc.start(); osc.stop(ctx.currentTime + 0.3);
-  } catch(e){ /* audio not available, ignore */ }
+    if(localStorage.getItem('pai_sound')==='off') return;
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=880;
+    g.gain.setValueAtTime(0.08,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
+    o.start(); o.stop(ctx.currentTime+0.3);
+  }catch(e){}
 }
- 
-window.addEventListener('online', () => { $('offlineBanner').style.display = 'none'; showToast('Back online', 'ok'); });
-window.addEventListener('offline', () => { $('offlineBanner').style.display = 'block'; });
- 
-/* ========================================================================
-   STATE
-   ======================================================================== */
-const State = {
-  sessionToken: localStorage.getItem('pai_session') || null,
-  user: JSON.parse(localStorage.getItem('pai_user') || 'null'),
-  currentConvId: null,
-  eduMode: false,
-  pendingFile: null,
-  generating: false,
-  abortController: null,
-  conversationsCache: [],
-  theme: localStorage.getItem('pai_theme') || 'system'
-};
- 
-applyTheme(State.theme);
- 
-function applyTheme(theme){
-  if (theme === 'system') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', theme);
-  document.querySelectorAll('#themeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
-  localStorage.setItem('pai_theme', theme);
+
+/* ================================================================
+   MARKDOWN + CODE CHIP EXTRACTION
+   ================================================================ */
+marked.setOptions({ breaks:true, gfm:true });
+let chipReg={}, chipCnt=0;
+
+function langExt(lang){
+  return {html:'.html',python:'.py',javascript:'.js',js:'.js',typescript:'.ts',css:'.css',
+          json:'.json',bash:'.sh',sh:'.sh',sql:'.sql',text:'.txt'}[lang]||'.txt';
 }
- 
-/* ========================================================================
-   MARKDOWN + FILE-CHIP EXTRACTION
-   ======================================================================== */
-marked.setOptions({ breaks: true, gfm: true });
-let chipRegistry = {};
-let chipCounter = 0;
- 
-function extractCodeBlocksToChips(markdownText){
-  const codeBlockRe = /```([\w-]+)?\n([\s\S]*?)```/g;
-  return markdownText.replace(codeBlockRe, (match, lang, code) => {
-    const normalizedLang = (lang || 'text').toLowerCase().replace('-exec', '');
-    const id = 'chip_' + (++chipCounter);
-    chipRegistry[id] = { code: code.trim(), lang: normalizedLang };
-    const ext = extForLang(normalizedLang);
-    const autoRun = /-exec$/i.test(lang || '') ? ' \u00b7 auto-run in terminal' : '';
+
+function extractChips(md){
+  return md.replace(/```([\w-]+)?\n([\s\S]*?)```/g, (_,lang,code)=>{
+    const l=(lang||'text').toLowerCase().replace(/-exec$/,'');
+    const id='chip_'+(++chipCnt);
+    chipReg[id]={code:code.trim(),lang:l};
+    const ext=langExt(l);
     return `\n<div class="file-chip" data-chip="${id}" onclick="openChip('${id}')" role="button" tabindex="0">
       <div class="file-chip-icon"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>
-      <div class="file-chip-info"><div class="file-chip-name">code${ext}</div><div class="file-chip-sub">${normalizedLang}${autoRun} \u00b7 click to preview</div></div>
-      <div class="file-chip-caret">\u203a</div>
+      <div class="file-chip-info"><div class="file-chip-name">code${ext}</div><div class="file-chip-sub">${l} · click to preview</div></div>
+      <div class="file-chip-caret">›</div>
     </div>\n`;
   });
 }
- 
-function extForLang(lang){
-  const map = {html:'.html', python:'.py', javascript:'.js', js:'.js', typescript:'.ts', css:'.css', json:'.json', bash:'.sh', sh:'.sh', sql:'.sql', text:'.txt'};
-  return map[lang] || '.txt';
+
+function renderMd(raw){
+  const html=marked.parse(extractChips(raw));
+  return DOMPurify.sanitize(html,{ADD_ATTR:['onclick','data-chip','target','rel','role','tabindex']});
 }
- 
-function renderMarkdown(raw){
-  const withChips = extractCodeBlocksToChips(raw);
-  return DOMPurify.sanitize(marked.parse(withChips), {ADD_ATTR: ['onclick', 'data-chip', 'target', 'rel', 'role', 'tabindex']});
-}
- 
-/* ========================================================================
-   MESSAGE RENDERING
-   ======================================================================== */
+
+/* ================================================================
+   MESSAGES
+   ================================================================ */
 function appendMessage(role, content){
-  const hero = feed.querySelector('.hero');
-  if (hero) feed.innerHTML = '';
- 
-  const group = document.createElement('div');
-  group.className = 'msg-group';
-  group.dataset.role = role;
-  if (role === 'user') group.dataset.rawText = content;
- 
-  const meta = document.createElement('div');
-  meta.className = 'msg-meta' + (role === 'user' ? ' meta-user' : '');
-  meta.textContent = role === 'user' ? 'You' : 'Pratham AI';
- 
-  const wrap = document.createElement('div');
-  wrap.className = 'msg-wrap' + (role === 'user' ? ' wrap-user' : '');
- 
-  const bubble = document.createElement('div');
-  bubble.className = 'msg-content';
-  if (role === 'user') {
-    bubble.textContent = content;
+  const hero=feed.querySelector('.hero');
+  if(hero) feed.innerHTML='';
+
+  const group=document.createElement('div');
+  group.className='msg-group';
+  group.dataset.role=role;
+  if(role==='user') group.dataset.rawText=content;
+
+  const meta=document.createElement('div');
+  meta.className='msg-meta'+(role==='user'?' meta-user':'');
+  meta.textContent=role==='user'?'You':'Pratham AI';
+
+  const wrap=document.createElement('div');
+  wrap.className='msg-wrap'+(role==='user'?' wrap-user':'');
+
+  const bubble=document.createElement('div');
+  bubble.className='msg-content';
+  if(role==='user'){
+    bubble.textContent=content;
   } else {
-    bubble.innerHTML = renderMarkdown(content);
-    if (window.hljs) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+    bubble.innerHTML=renderMd(content);
+    if(window.hljs) bubble.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
   }
- 
+
   wrap.appendChild(bubble);
   group.appendChild(meta);
   group.appendChild(wrap);
   feed.appendChild(group);
-  scrollFeedToBottom();
-  return { group, bubble };
+  scrollToBottom();
+  return {group,bubble};
 }
- 
-function scrollFeedToBottom(){
-  const vp = $('viewport');
-  vp.scrollTop = vp.scrollHeight;
+
+function scrollToBottom(){
+  const vp=$('viewport');
+  vp.scrollTop=vp.scrollHeight;
 }
- 
-$('viewport').addEventListener('scroll', () => {
-  const vp = $('viewport');
-  const nearBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80;
-  $('btnScrollBottom').classList.toggle('show', !nearBottom);
+
+$('viewport').addEventListener('scroll',()=>{
+  const vp=$('viewport');
+  $('btnScrollBottom').classList.toggle('show', vp.scrollHeight-vp.scrollTop-vp.clientHeight>80);
 });
-$('btnScrollBottom').onclick = scrollFeedToBottom;
- 
-/* ========================================================================
+$('btnScrollBottom').onclick=scrollToBottom;
+
+/* ================================================================
    PREVIEW DRAWER
-   ======================================================================== */
+   ================================================================ */
 function openChip(id){
-  const chip = chipRegistry[id];
-  if (!chip) return;
+  const chip=chipReg[id]; if(!chip) return;
   $('previewDrawer').classList.add('open');
   $('scrim').classList.add('show');
-  $('previewTitle').textContent = 'code' + extForLang(chip.lang);
-  $('pcodeContent').textContent = chip.code;
-  $('pcodeContent').className = 'language-' + chip.lang;
-  if (window.hljs) hljs.highlightElement($('pcodeContent'));
- 
-  const isHtml = chip.lang === 'html';
-  $('previewTabs').style.display = isHtml ? 'flex' : 'none';
-  showTab('code');
-  if (isHtml) $('pIframe').srcdoc = chip.code;
- 
-  $('previewDrawer')._activeChip = chip;
+  $('previewTitle').textContent='code'+langExt(chip.lang);
+  $('pcodeContent').textContent=chip.code;
+  $('pcodeContent').className='language-'+chip.lang;
+  if(window.hljs) hljs.highlightElement($('pcodeContent'));
+  const isHtml=chip.lang==='html';
+  $('previewTabs').style.display=isHtml?'flex':'none';
+  showPTab('code');
+  if(isHtml) $('pIframe').srcdoc=chip.code;
+  $('previewDrawer')._chip=chip;
 }
-window.openChip = openChip;
- 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' '){
-    const target = e.target;
-    if (target && target.classList && target.classList.contains('file-chip')){
-      e.preventDefault();
-      target.click();
-    }
+window.openChip=openChip;
+
+document.addEventListener('keydown',e=>{
+  if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('file-chip')){
+    e.preventDefault(); e.target.click();
   }
 });
- 
-function showTab(which){
-  $('tabCode').classList.toggle('active', which === 'code');
-  $('tabPreview').classList.toggle('active', which === 'preview');
-  $('pviewCode').classList.toggle('active', which === 'code');
-  $('pviewPreview').classList.toggle('active', which === 'preview');
+
+function showPTab(w){
+  $('tabCode').classList.toggle('active',w==='code');
+  $('tabPreview').classList.toggle('active',w==='preview');
+  $('pviewCode').classList.toggle('active',w==='code');
+  $('pviewPreview').classList.toggle('active',w==='preview');
 }
-$('tabCode').onclick = () => showTab('code');
-$('tabPreview').onclick = () => { showTab('preview'); const c = $('previewDrawer')._activeChip; if (c) $('pIframe').srcdoc = c.code; };
- 
+$('tabCode').onclick=()=>showPTab('code');
+$('tabPreview').onclick=()=>{ showPTab('preview'); const c=$('previewDrawer')._chip; if(c) $('pIframe').srcdoc=c.code; };
+
 function closePreview(){ $('previewDrawer').classList.remove('open'); $('scrim').classList.remove('show'); }
-$('btnClosePreview').onclick = closePreview;
-$('scrim').onclick = closePreview;
- 
-$('btnCopy').onclick = () => {
-  const c = $('previewDrawer')._activeChip;
-  if (!c) return;
-  navigator.clipboard.writeText(c.code).then(() => showToast('Copied to clipboard', 'ok')).catch(() => showToast('Copy failed', 'err'));
+$('btnClosePreview').onclick=closePreview;
+$('scrim').onclick=closePreview;
+
+$('btnCopy').onclick=()=>{
+  const c=$('previewDrawer')._chip; if(!c) return;
+  navigator.clipboard.writeText(c.code).then(()=>showToast('Copied','ok')).catch(()=>showToast('Copy failed','err'));
 };
-$('btnDownload').onclick = () => {
-  const c = $('previewDrawer')._activeChip;
-  if (!c) return;
-  const blob = new Blob([c.code], {type: 'text/plain'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'code' + extForLang(c.lang);
+$('btnDownload').onclick=()=>{
+  const c=$('previewDrawer')._chip; if(!c) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([c.code],{type:'text/plain'}));
+  a.download='code'+langExt(c.lang);
   document.body.appendChild(a); a.click(); a.remove();
-  showToast('Download started', 'ok');
+  showToast('Download started','ok');
 };
- 
-window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  if ($('previewDrawer').classList.contains('open')) closePreview();
-  else if ($('settingsScrim').classList.contains('show')) closeSettings();
-  else if ($('vipScrim').classList.contains('show')) closeVip();
-  else if ($('shortcutsScrim').classList.contains('show')) closeShortcuts();
-  else if ($('aboutScrim').classList.contains('show')) closeAbout();
-  else if ($('sidebar').classList.contains('open')) closeMobileSidebar();
-});
- 
-/* ========================================================================
+
+/* ================================================================
    AUTH
-   ======================================================================== */
-function checkUrlForAuthRedirect(){
-  supabaseClient.auth.getSession().then(({ data: { session } }) => {
-    if (session) {
-      State.sessionToken = session.access_token;
-      State.user = {
-        id: session.user.id,
-        name: session.user.user_metadata.full_name || session.user.email,
-        email: session.user.email,
-        picture: session.user.user_metadata.avatar_url,
-        role: 'standard'
+   ================================================================ */
+function initAuth(){
+  // Listen for Supabase auth state changes (handles OAuth redirect)
+  sb.auth.onAuthStateChange((event, session)=>{
+    if(event==='SIGNED_IN'&&session){
+      State.sessionToken=session.access_token;
+      const u=session.user;
+      State.user={
+        id:u.id, email:u.email,
+        name:u.user_metadata.full_name||u.email,
+        picture:u.user_metadata.avatar_url||'',
+        role:'standard'
       };
       localStorage.setItem('pai_session', State.sessionToken);
       localStorage.setItem('pai_user', JSON.stringify(State.user));
       enterApp();
     }
   });
- 
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session){
-      State.sessionToken = session.access_token;
-      localStorage.setItem('pai_session', State.sessionToken);
+
+  // Already have a valid session?
+  sb.auth.getSession().then(({data:{session}})=>{
+    if(session){
+      State.sessionToken=session.access_token;
+      if(!State.user){
+        const u=session.user;
+        State.user={id:u.id,email:u.email,name:u.user_metadata.full_name||u.email,picture:u.user_metadata.avatar_url||'',role:'standard'};
+        localStorage.setItem('pai_user',JSON.stringify(State.user));
+      }
+      enterApp();
     }
   });
 }
- 
-function initGoogleSignIn(){
-  const btn = $('gsiBtn');
-  if (!btn) return;
-  btn.innerHTML = `<button style="width:100%; max-width:300px; min-height:44px; border:1px solid var(--border-heavy); border-radius:var(--radius-pill); background:var(--bg-panel); font-weight:600; font-family:var(--font-sans); display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow-sm); margin: 0 auto;" id="btnSupabaseGoogleLogin">
-    <svg style="width:18px; height:18px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
-    Sign in with Google
-  </button>`;
- 
-  $('btnSupabaseGoogleLogin').onclick = async () => {
-    $('authLoadingOverlay').style.display = 'flex';
-    const { error } = await supabaseClient.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: 'https://prathamai.vercel.app' }
+
+function buildGoogleBtn(){
+  const btn=document.createElement('button');
+  btn.className='auth-google-btn';
+  btn.innerHTML=`<svg style="width:18px;height:18px" viewBox="0 0 24 24">
+    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/>
+    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+  </svg> Sign in with Google`;
+  btn.onclick=async()=>{
+    $('authLoadingOverlay').style.display='flex';
+    const {error}=await sb.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo: window.location.origin+window.location.pathname}
     });
-    if (error) {
-      $('authLoadingOverlay').style.display = 'none';
-      showAuthError(error);
-      showToast("Sign-in couldn't be completed. Please try again.", 'err');
+    if(error){
+      $('authLoadingOverlay').style.display='none';
+      showToast("Sign-in failed – please try again.", 'err');
     }
   };
+  $('gsiBtn').appendChild(btn);
 }
- 
-function showAuthError(err){
-  const card = $('authErrorCard');
-  const title = $('authErrorTitle');
-  const desc = $('authErrorDesc');
-  card.style.display = 'block';
-  title.textContent = 'Connection Issue';
-  // Show a clean, branded message instead of raw provider error text,
-  // which could otherwise leak internal vendor names to the user.
-  desc.innerHTML = `<p>We couldn't sign you in right now. Please try again in a moment.</p>`;
-}
- 
-$('btnAuthRetry').onclick = () => { if ($('btnSupabaseGoogleLogin')) $('btnSupabaseGoogleLogin').click(); };
- 
+
 function enterApp(){
-  $('authWall').style.display = 'none';
-  $('nameEl').textContent = State.user.name || State.user.email;
-  $('avatarEl').textContent = (State.user.name || State.user.email || 'U')[0].toUpperCase();
-  if (State.user.picture){ $('avatarEl').style.backgroundImage = `url(${State.user.picture})`; $('avatarEl').textContent = ''; }
+  $('authWall').style.display='none';
+  $('authLoadingOverlay').style.display='none';
+  $('nameEl').textContent=State.user.name||State.user.email;
+  $('avatarEl').textContent=(State.user.name||State.user.email||'U')[0].toUpperCase();
+  if(State.user.picture){
+    $('avatarEl').style.backgroundImage=`url(${State.user.picture})`;
+    $('avatarEl').style.backgroundSize='cover';
+    $('avatarEl').textContent='';
+  }
   refreshVipUi();
+  $('apiBaseLabel').textContent=API_BASE;
   loadConversations();
   renderWelcome();
   pollHealth();
-  setInterval(pollHealth, 30000);
+  setInterval(pollHealth,30000);
 }
- 
+
 function refreshVipUi(){
-  const isVip = State.user && State.user.role === 'vip';
-  $('vipBadge').style.display = isVip ? 'inline-block' : 'none';
-  $('avatarEl').classList.toggle('vip', isVip);
-  $('planEl').textContent = isVip ? 'VIP / Admin' : 'Standard';
+  const isVip=State.user&&State.user.role==='vip';
+  $('vipBadge').style.display=isVip?'inline-block':'none';
+  $('avatarEl').classList.toggle('vip',isVip);
+  $('planEl').textContent=isVip?'VIP / Admin':'Standard';
 }
- 
-$('btnLogout').onclick = async () => {
-  await supabaseClient.auth.signOut();
+
+$('btnLogout').onclick=async()=>{
+  await sb.auth.signOut();
   localStorage.removeItem('pai_session');
   localStorage.removeItem('pai_user');
   location.reload();
 };
- 
-$('btnHealthRetry').onclick = async () => {
-  try{
-    const res = await fetch(`${API_BASE}/health`, { mode: 'cors' });
-    if (res.ok) showToast('Backend reachable', 'ok');
-    else showToast('Backend responded with status ' + res.status, 'err');
-  } catch(e){ showToast('Backend unreachable. Check CONFIG.API_BASE.', 'err'); }
-};
- 
-async function authFetch(path, opts = {}){
-  opts.mode = 'cors';
-  opts.headers = Object.assign({}, opts.headers, {
-    'Authorization': `Bearer ${State.sessionToken}`,
-    'Accept': 'application/json'
-  });
+
+$('btnHealthRetry').onclick=checkHealth;
+
+/* ── Authenticated fetch ─────────────────────────────────────── */
+async function authFetch(path, opts={}){
+  opts.mode='cors';
+  opts.headers=Object.assign({},{
+    'Authorization':`Bearer ${State.sessionToken}`,
+    'Accept':'application/json'
+  }, opts.headers);
   let res;
-  try{
-    res = await fetch(`${API_BASE}${path}`, opts);
-  } catch(networkErr){
-    showToast('Network error reaching backend', 'err');
-    throw networkErr;
-  }
-  if (res.status === 401){
-    localStorage.removeItem('pai_session'); localStorage.removeItem('pai_user');
-    showToast('Session expired - please sign in again', 'err');
-    setTimeout(() => location.reload(), 1200);
+  try{ res=await fetch(API_BASE+path, opts); }
+  catch(e){ showToast('Network error reaching backend','err'); throw e; }
+  if(res.status===401){
+    localStorage.removeItem('pai_session');
+    localStorage.removeItem('pai_user');
+    showToast('Session expired – please sign in again','err');
+    setTimeout(()=>location.reload(),1500);
   }
   return res;
 }
- 
-async function pollHealth(){
+
+/* ── Health poll ─────────────────────────────────────────────── */
+async function checkHealth(){
   try{
-    const res = await fetch(`${API_BASE}/health`, { mode: 'cors' });
-    const dot = $('connDot');
-    if (res.ok){
-      const data = await res.json().catch(() => ({}));
-      dot.className = 'status-dot';
-      renderProviderStatus(data.providers || []);
-    } else dot.className = 'status-dot warn';
-  } catch(e){ $('connDot').className = 'status-dot bad'; }
+    const res=await fetch(API_BASE+'/health',{mode:'cors'});
+    const dot=$('connDot');
+    if(res.ok){
+      const data=await res.json().catch(()=>({}));
+      dot.className='status-dot';
+      State.groqConfigured=data.groq_configured||false;
+      renderProviderStatus(data.providers||[]);
+      // Show config notice if Groq key missing
+      if(!data.groq_configured){
+        $('configNotice').style.display='block';
+        showConfigBanner();
+      }
+    } else {
+      dot.className='status-dot warn';
+    }
+  } catch(e){
+    $('connDot').className='status-dot bad';
+  }
 }
- 
+async function pollHealth(){ await checkHealth(); }
+
+function showConfigBanner(){
+  const b=$('configBanner');
+  b.textContent='⚠ GROQ_API_KEY is not set on the backend — chat will not work. Add it in your Vercel Environment Variables.';
+  b.style.display='block';
+}
+
 function renderProviderStatus(providers){
-  const list = $('providerStatusList');
-  if (!list) return;
-  list.innerHTML = providers.map(p => `
+  const list=$('providerStatusList');
+  if(!list||!providers.length){ if(list) list.innerHTML='<span style="font-size:12px;color:var(--text-tertiary)">No provider data.</span>'; return; }
+  list.innerHTML=providers.map(p=>`
     <div class="provider-row">
-      <span><span class="provider-dot ${p.cooling_down ? 'cool' : ''}"></span>${escapeHtml(p.name)}${p.is_default ? ' (default)' : ''}</span>
-      <span style="color:var(--text-tertiary)">${p.configured ? (p.cooling_down ? 'cooling down' : 'ready') : 'not configured'}</span>
+      <span><span class="provider-dot ${!p.configured?'off':p.cooling_down?'cool':''}"></span>${p.name}${p.is_default?' (default)':''}</span>
+      <span style="color:var(--text-tertiary)">${p.configured?(p.cooling_down?'rate-limited':'ready'):'not configured'}</span>
     </div>`).join('');
 }
- 
-onReady(() => {
-  checkUrlForAuthRedirect();
-  if (State.sessionToken && State.user) enterApp();
-  initGoogleSignIn();
-  $('apiBaseLabel').textContent = API_BASE;
-});
- 
-/* ========================================================================
-   SIDEBAR / CONVERSATIONS
-   ======================================================================== */
+
+/* ================================================================
+   CONVERSATIONS
+   ================================================================ */
 async function loadConversations(){
   try{
-    const res = await authFetch('/conversations');
-    if (!res.ok) return;
-    State.conversationsCache = await res.json();
-    renderConvoList(State.conversationsCache);
+    const res=await authFetch('/conversations');
+    if(!res.ok) return;
+    State.convosCache=await res.json();
+    renderConvoList(State.convosCache);
   } catch(e){ console.error(e); }
 }
- 
+
 function renderConvoList(convos){
-  if (!convos.length){
-    $('convoList').innerHTML = '<div class="convo-empty-hint">No conversations yet.<br>Start typing below to create one.</div>';
+  if(!convos.length){
+    $('convoList').innerHTML='<div class="convo-empty-hint">No conversations yet.<br>Start typing below!</div>';
     return;
   }
-  $('convoList').innerHTML = convos.map(c => `
-    <div class="convo-item ${c.id === State.currentConvId ? 'active' : ''}" data-id="${escapeHtml(c.id)}" onclick="openConversation('${c.id}', this)">
-      <span class="convo-title">${c.pinned ? '\uD83D\uDCCC ' : ''}${escapeHtml(c.title || 'Untitled')}</span>
+  $('convoList').innerHTML=convos.map(c=>`
+    <div class="convo-item${c.id===State.currentConvId?' active':''}" data-id="${esc(c.id)}"
+         onclick="openConversation('${c.id}',this)">
+      <span class="convo-title">${c.pinned?'📌 ':''}${esc(c.title||'Untitled')}</span>
       <span class="convo-actions">
-        <span class="convo-icon-btn ${c.pinned ? 'convo-pin' : ''}" title="Pin" onclick="event.stopPropagation(); togglePin('${c.id}')">\uD83D\uDCCC</span>
-        <span class="convo-icon-btn" title="Rename" onclick="event.stopPropagation(); startRename('${c.id}', this)">\u270E</span>
-        <span class="convo-icon-btn" title="Export" onclick="event.stopPropagation(); exportConversation('${c.id}')">\u2B07</span>
-        <span class="convo-icon-btn danger" title="Delete" onclick="event.stopPropagation(); deleteConversation('${c.id}')">\u2715</span>
+        <span class="convo-icon-btn${c.pinned?' convo-pin':''}" title="Pin"
+              onclick="event.stopPropagation();togglePin('${c.id}')">📌</span>
+        <span class="convo-icon-btn" title="Rename"
+              onclick="event.stopPropagation();startRename('${c.id}',this)">✏</span>
+        <span class="convo-icon-btn danger" title="Delete"
+              onclick="event.stopPropagation();deleteConversation('${c.id}')">✕</span>
       </span>
     </div>`).join('');
 }
- 
-$('convoSearch').addEventListener('input', (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  const filtered = !q ? State.conversationsCache : State.conversationsCache.filter(c => (c.title || '').toLowerCase().includes(q));
-  renderConvoList(filtered);
+
+$('convoSearch').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  renderConvoList(!q?State.convosCache:State.convosCache.filter(c=>(c.title||'').toLowerCase().includes(q)));
 });
- 
+
 async function openConversation(id, el){
-  State.currentConvId = id;
-  document.querySelectorAll('.convo-item').forEach(n => n.classList.remove('active'));
-  if (el) el.classList.add('active');
-  const titleText = el ? el.querySelector('.convo-title').textContent : 'Chat';
-  $('chatTitle').textContent = titleText;
+  State.currentConvId=id;
+  document.querySelectorAll('.convo-item').forEach(n=>n.classList.remove('active'));
+  if(el) el.classList.add('active');
+  $('chatTitle').textContent=el?el.querySelector('.convo-title').textContent:'Chat';
   try{
-    const res = await authFetch(`/conversations/${id}/messages`);
-    if (!res.ok){
-      if (res.status === 404) showToast('That conversation no longer exists', 'err');
-      return;
-    }
-    const msgs = await res.json();
-    feed.innerHTML = '';
-    msgs.forEach(m => appendMessage(m.role === 'user' ? 'user' : 'ai', m.content));
-    addRegenerateButtonToLastReply();
+    const res=await authFetch(`/conversations/${id}/messages`);
+    if(!res.ok){ if(res.status===404) showToast('Conversation not found','err'); return; }
+    const msgs=await res.json();
+    feed.innerHTML='';
+    msgs.forEach(m=>appendMessage(m.role==='user'?'user':'ai',m.content));
+    addRegenBtn();
   } catch(e){ console.error(e); }
   closeMobileSidebar();
-  toggleSearchInConvo(false);
-  setTimeout(restoreDraftForCurrentConversation, 0);
+  toggleSearch(false);
+  restoreDraft();
 }
-window.openConversation = openConversation;
- 
+window.openConversation=openConversation;
+
 async function deleteConversation(id){
-  if (!confirm('Delete this conversation? This cannot be undone.')) return;
-  await authFetch(`/conversations/${id}`, {method:'DELETE'});
-  if (State.currentConvId === id){ State.currentConvId = null; renderWelcome(); }
-  showToast('Conversation deleted', 'ok');
+  if(!confirm('Delete this conversation?')) return;
+  await authFetch(`/conversations/${id}`,{method:'DELETE'});
+  if(State.currentConvId===id){ State.currentConvId=null; renderWelcome(); }
+  showToast('Deleted','ok');
   loadConversations();
 }
-window.deleteConversation = deleteConversation;
- 
-async function togglePin(id){ await authFetch(`/conversations/${id}/pin`, {method:'POST'}); loadConversations(); }
-window.togglePin = togglePin;
- 
+window.deleteConversation=deleteConversation;
+
+async function togglePin(id){
+  await authFetch(`/conversations/${id}/pin`,{method:'POST'});
+  loadConversations();
+}
+window.togglePin=togglePin;
+
 function startRename(id, el){
-  const item = el.closest('.convo-item');
-  const titleEl = item.querySelector('.convo-title');
-  const current = titleEl.textContent.replace('\uD83D\uDCCC ', '');
-  const input = document.createElement('input');
-  input.className = 'convo-title-input';
-  input.value = current;
-  titleEl.replaceWith(input);
-  input.focus(); input.select();
-  const commit = async () => {
-    const newTitle = input.value.trim() || current;
-    await authFetch(`/conversations/${id}/rename`, {
-      method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({title: newTitle})
-    });
-    if (id === State.currentConvId) $('chatTitle').textContent = newTitle;
+  const item=el.closest('.convo-item');
+  const titleEl=item.querySelector('.convo-title');
+  const cur=titleEl.textContent.replace('📌 ','');
+  const inp=document.createElement('input');
+  inp.className='convo-title-input'; inp.value=cur;
+  titleEl.replaceWith(inp); inp.focus(); inp.select();
+  const commit=async()=>{
+    const t=inp.value.trim()||cur;
+    await authFetch(`/conversations/${id}/rename`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t})});
+    if(id===State.currentConvId) $('chatTitle').textContent=t;
     loadConversations();
   };
-  input.addEventListener('blur', commit);
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur(); });
 }
-window.startRename = startRename;
- 
-async function exportConversation(id){
-  try{
-    const res = await authFetch(`/conversations/${id}/export`);
-    if (!res.ok){ showToast('Export failed', 'err'); return; }
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `conversation_${id}.txt`;
-    document.body.appendChild(a); a.click(); a.remove();
-    showToast('Conversation exported', 'ok');
-  } catch(e){ showToast('Export failed', 'err'); }
-}
-window.exportConversation = exportConversation;
- 
-$('btnExportChat').onclick = () => {
-  if (!State.currentConvId){ showToast('Open a conversation first', 'err'); return; }
+window.startRename=startRename;
+
+$('btnExportChat').onclick=()=>{
+  if(!State.currentConvId){ showToast('Open a conversation first','err'); return; }
   exportConversation(State.currentConvId);
 };
- 
-$('btnNewChat').onclick = () => {
-  State.currentConvId = null;
-  $('chatTitle').textContent = 'New chat';
-  document.querySelectorAll('.convo-item').forEach(n => n.classList.remove('active'));
+
+async function exportConversation(id){
+  try{
+    const res=await authFetch(`/conversations/${id}/export`);
+    if(!res.ok){ showToast('Export failed','err'); return; }
+    const blob=await res.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`conversation_${id.slice(0,8)}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    showToast('Exported','ok');
+  } catch(e){ showToast('Export failed','err'); }
+}
+
+$('btnNewChat').onclick=()=>{
+  State.currentConvId=null;
+  $('chatTitle').textContent='New chat';
+  document.querySelectorAll('.convo-item').forEach(n=>n.classList.remove('active'));
   renderWelcome();
   closeMobileSidebar();
-  toggleSearchInConvo(false);
-  setTimeout(restoreDraftForCurrentConversation, 0);
+  toggleSearch(false);
+  restoreDraft();
 };
- 
+
 function renderWelcome(){
-  feed.innerHTML = `<div class="hero">
+  feed.innerHTML=`<div class="hero">
     <h1>How can I help you today?</h1>
-    <p>Ask anything, or type <strong>@education</strong> after uploading a PDF to get answers grounded in that document.</p>
+    <p>Ask anything, or type <strong>@education</strong> after uploading a PDF for document-grounded answers.</p>
     <div class="hero-chips">
       <button class="hero-chip" onclick="quickFill('Build me a responsive HTML landing page')">Build a landing page</button>
       <button class="hero-chip" onclick="quickFill('@education Summarize the uploaded PDF')">Summarize my PDF</button>
       <button class="hero-chip" onclick="quickFill('Write a Python script that plots a sine wave')">Python + terminal demo</button>
+      <button class="hero-chip" onclick="quickFill('Explain quantum entanglement simply')">Explain quantum entanglement</button>
     </div>
   </div>`;
 }
- 
-function quickFill(text){
-  $('textInput').value = text;
-  $('textInput').dispatchEvent(new Event('input'));
-  $('textInput').focus();
+
+function quickFill(t){ $('textInput').value=t; $('textInput').dispatchEvent(new Event('input')); $('textInput').focus(); }
+window.quickFill=quickFill;
+
+/* ================================================================
+   COMPOSER
+   ================================================================ */
+const textInput=$('textInput');
+
+function autoresize(){
+  textInput.style.height='auto';
+  textInput.style.height=Math.min(textInput.scrollHeight,180)+'px';
 }
-window.quickFill = quickFill;
- 
-/* ========================================================================
-   COMPOSER + SEND
-   ======================================================================== */
-const textInput = $('textInput');
- 
-function autoresizeTextarea(){
-  textInput.style.height = 'auto';
-  textInput.style.height = Math.min(textInput.scrollHeight, 180) + 'px';
-}
- 
-textInput.addEventListener('input', () => {
-  const len = textInput.value.length;
-  $('charCounter').textContent = len > 400 ? `${len}/${MAX_CHARS_SOFT_LIMIT}` : '';
-  const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
-  if (textInput.value) localStorage.setItem(draftKey, textInput.value);
-  else localStorage.removeItem(draftKey);
-  $('btnSend').disabled = !textInput.value.trim() || State.generating;
-  autoresizeTextarea();
+
+textInput.addEventListener('input',()=>{
+  const len=textInput.value.length;
+  $('charCounter').textContent=len>400?`${len}/${MAX_CHARS}`:'';
+  $('btnSend').disabled=!textInput.value.trim()||State.generating;
+  localStorage.setItem('pai_draft_'+(State.currentConvId||'new'), textInput.value);
+  autoresize();
 });
- 
-textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey){
-    e.preventDefault();
-    if (!$('btnSend').disabled) sendCurrentMessage();
-  }
+
+textInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); if(!$('btnSend').disabled) send(); }
 });
- 
-function restoreDraftForCurrentConversation(){
-  const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
-  const draft = localStorage.getItem(draftKey);
-  if (draft){ textInput.value = draft; textInput.dispatchEvent(new Event('input')); }
+
+function restoreDraft(){
+  const d=localStorage.getItem('pai_draft_'+(State.currentConvId||'new'));
+  if(d){ textInput.value=d; textInput.dispatchEvent(new Event('input')); }
+  else { textInput.value=''; autoresize(); $('btnSend').disabled=true; }
 }
- 
-$('btnSend').onclick = () => { if (!$('btnSend').disabled) sendCurrentMessage(); };
- 
-function sendCurrentMessage(){
-  const text = textInput.value.trim();
-  if (!text || State.generating) return;
-  const draftKey = 'pai_draft_' + (State.currentConvId || 'new');
-  localStorage.removeItem(draftKey);
-  textInput.value = '';
-  textInput.dispatchEvent(new Event('input'));
-  streamAiReply(text);
+
+$('btnSend').onclick=()=>{ if(!$('btnSend').disabled) send(); };
+
+function send(){
+  const text=textInput.value.trim();
+  if(!text||State.generating) return;
+  localStorage.removeItem('pai_draft_'+(State.currentConvId||'new'));
+  textInput.value=''; autoresize(); $('btnSend').disabled=true;
+  streamReply(text);
 }
- 
-$('btnStop').onclick = () => {
-  if (State.abortController) State.abortController.abort();
-};
- 
-/* ========================================================================
-   STREAMING CHAT (this whole function was MISSING before — it was
-   referenced by the code at the bottom of the file but never defined,
-   which crashed the entire script on load)
-   ======================================================================== */
-async function streamAiReply(text){
+
+$('btnStop').onclick=()=>{ if(State.abortCtrl) State.abortCtrl.abort(); };
+
+/* ================================================================
+   STREAMING CHAT  — FIX: proper SSE parsing + clear error messages
+   ================================================================ */
+async function streamReply(text){
   appendMessage('user', text);
-  State.generating = true;
-  $('btnSend').style.display = 'none';
-  $('btnStop').style.display = 'flex';
-  $('btnSend').disabled = true;
- 
-  const { bubble } = appendMessage('ai', '');
-  bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
- 
-  State.abortController = new AbortController();
-  let fullText = '';
-  let gotFirstToken = false;
- 
+  State.generating=true;
+  $('btnSend').style.display='none';
+  $('btnStop').style.display='flex';
+
+  const {bubble}=appendMessage('ai','');
+  bubble.innerHTML='<span class="typing-dots"><span></span><span></span><span></span></span>';
+
+  State.abortCtrl=new AbortController();
+  let fullText='';
+  let gotFirstToken=false;
+
   try{
-    const res = await fetch(`${API_BASE}/chat-stream`, {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Authorization': `Bearer ${State.sessionToken}`,
-        'Content-Type': 'application/json'
+    const res=await fetch(API_BASE+'/chat-stream',{
+      method:'POST', mode:'cors', signal:State.abortCtrl.signal,
+      headers:{
+        'Authorization':`Bearer ${State.sessionToken}`,
+        'Content-Type':'application/json'
       },
-      body: JSON.stringify({ message: text, conversation_id: State.currentConvId }),
-      signal: State.abortController.signal
+      body:JSON.stringify({
+        message:text,
+        conversation_id:State.currentConvId||null,
+        preferred_provider:$('preferredProviderSelect').value||null
+      })
     });
- 
-    if (!res.ok || !res.body){
-      bubble.innerHTML = '<span style="color:var(--error)">Could not reach Pratham AI. Please try again.</span>';
-      showToast('Network error reaching backend', 'err');
+
+    /* ── Handle non-200 responses cleanly ─────────────────────── */
+    if(!res.ok){
+      let errMsg='Could not reach Pratham AI. Please try again.';
+      try{
+        const errData=await res.json();
+        if(errData.error) errMsg=errData.error;
+      } catch(_){}
+      if(res.status===401){
+        errMsg='Session expired – please sign in again.';
+        setTimeout(()=>location.reload(),2000);
+      } else if(res.status===400){
+        errMsg='Invalid request. Please try again.';
+      } else if(res.status>=500){
+        errMsg=`Server error (${res.status}). Check backend logs on Vercel.`;
+      }
+      bubble.innerHTML=`<span style="color:var(--error)">${esc(errMsg)}</span>
+        <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
+      showToast(errMsg,'err');
       return;
     }
- 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
- 
-    while (true){
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop();
- 
-      for (const line of lines){
-        if (!line.startsWith('data: ')) continue;
+
+    /* ── Handle missing body ───────────────────────────────────── */
+    if(!res.body){
+      bubble.innerHTML='<span style="color:var(--error)">Stream not supported by your browser. Please update it.</span>';
+      return;
+    }
+
+    /* ── Parse SSE stream ─────────────────────────────────────── */
+    const reader=res.body.getReader();
+    const decoder=new TextDecoder();
+    let buf='';
+
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buf+=decoder.decode(value,{stream:true});
+
+      // Split on double-newline (SSE event boundary)
+      const parts=buf.split('\n\n');
+      buf=parts.pop(); // last incomplete part stays in buffer
+
+      for(const part of parts){
+        const line=part.trim();
+        if(!line.startsWith('data:')) continue;
+        const raw=line.slice(5).trim();
+        if(raw==='[DONE]') break;
         let payload;
-        try { payload = JSON.parse(line.slice(6)); } catch(e){ continue; }
- 
-        if (payload.type === 'metadata'){
-          if (!State.currentConvId) State.currentConvId = payload.conversation_id;
-        } else if (payload.type === 'token'){
-          if (!gotFirstToken){ bubble.innerHTML = ''; gotFirstToken = true; }
-          fullText += payload.text;
-          bubble.innerHTML = renderMarkdown(fullText) + '<span class="cursor-blink"></span>';
-          scrollFeedToBottom();
-        } else if (payload.type === 'error'){
-          bubble.innerHTML = `<span style="color:var(--error)">${escapeHtml(payload.text)}</span>`;
-          showToast(payload.text, 'err');
-        } else if (payload.type === 'complete'){
-          bubble.innerHTML = renderMarkdown(fullText);
-          if (window.hljs) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+        try{ payload=JSON.parse(raw); } catch(_){ continue; }
+
+        if(payload.type==='metadata'){
+          if(payload.conversation_id) State.currentConvId=payload.conversation_id;
+        } else if(payload.type==='token'){
+          if(!gotFirstToken){ bubble.innerHTML=''; gotFirstToken=true; }
+          fullText+=payload.text;
+          bubble.innerHTML=renderMd(fullText)+'<span class="cursor-blink"></span>';
+          scrollToBottom();
+        } else if(payload.type==='error'){
+          const errText=payload.text||'An error occurred.';
+          bubble.innerHTML=`<span style="color:var(--error)">${esc(errText)}</span>
+            <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
+          showToast(errText,'err');
+          return; // stop reading
+        } else if(payload.type==='complete'){
+          bubble.innerHTML=renderMd(fullText);
+          if(window.hljs) bubble.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
         }
       }
     }
- 
+
+    /* ── Finalize if stream ended without 'complete' event ─────── */
+    if(fullText&&!bubble.querySelector('.regen-btn')){
+      bubble.innerHTML=renderMd(fullText);
+      if(window.hljs) bubble.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
+    }
+
+    /* ── If nothing was received at all ──────────────────────── */
+    if(!fullText&&!bubble.querySelector('[style*="color:var(--error)"]')){
+      bubble.innerHTML=`<span style="color:var(--error)">No response received. Is GROQ_API_KEY set on the backend?</span>
+        <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
+      showToast('No response – check GROQ_API_KEY in Vercel environment variables','err');
+    }
+
     loadConversations();
+
   } catch(err){
-    if (err.name === 'AbortError'){
-      bubble.innerHTML = renderMarkdown(fullText) + '<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Stopped.</div>';
+    if(err.name==='AbortError'){
+      if(fullText){
+        bubble.innerHTML=renderMd(fullText)+'<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Stopped by user.</div>';
+      } else {
+        bubble.innerHTML='<span style="color:var(--text-tertiary)">Stopped.</span>';
+      }
     } else {
-      bubble.innerHTML = '<span style="color:var(--error)">Network error reaching backend.</span>';
-      showToast('Network error reaching backend', 'err');
+      const errMsg=`Network error: ${err.message}`;
+      bubble.innerHTML=`<span style="color:var(--error)">${esc(errMsg)}</span>
+        <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
+      showToast('Network error reaching backend','err');
     }
   } finally {
-    State.generating = false;
-    State.abortController = null;
-    $('btnStop').style.display = 'none';
-    $('btnSend').style.display = 'flex';
-    $('btnSend').disabled = !textInput.value.trim();
-    addRegenerateButtonToLastReply();
-    playCompletionChime();
+    State.generating=false;
+    State.abortCtrl=null;
+    $('btnStop').style.display='none';
+    $('btnSend').style.display='flex';
+    $('btnSend').disabled=!textInput.value.trim();
+    addRegenBtn();
+    playChime();
     announce('Pratham AI finished responding.');
   }
 }
- 
-/* ========================================================================
-   REGENERATE
-   ======================================================================== */
-function addRegenerateButtonToLastReply(){
-  const groups = feed.querySelectorAll('.msg-group[data-role="ai"]');
-  const last = groups[groups.length - 1];
-  if (!last) return;
-  last.querySelectorAll('.regen-btn').forEach(b => b.remove());
-  const btn = document.createElement('button');
-  btn.className = 'regen-btn';
-  btn.textContent = '\u21BB Regenerate response';
-  btn.onclick = () => {
-    const userGroups = feed.querySelectorAll('.msg-group[data-role="user"]');
-    const lastUser = userGroups[userGroups.length - 1];
-    if (!lastUser) return;
-    streamAiReply(lastUser.dataset.rawText || '');
-  };
+
+function addRegenBtn(){
+  const groups=feed.querySelectorAll('.msg-group[data-role="ai"]');
+  const last=groups[groups.length-1]; if(!last) return;
+  last.querySelectorAll('.regen-btn').forEach(b=>b.remove());
+  const btn=document.createElement('button');
+  btn.className='regen-btn'; btn.textContent='↻ Regenerate response';
+  btn.onclick=regenLast;
   last.appendChild(btn);
 }
- 
-/* ========================================================================
-   SEARCH WITHIN THE CURRENT CONVERSATION
-   ======================================================================== */
-function toggleSearchInConvo(forceOpen){
-  const bar = $('searchInConvo');
-  const shouldOpen = forceOpen !== undefined ? forceOpen : !bar.classList.contains('show');
-  bar.classList.toggle('show', shouldOpen);
-  if (shouldOpen){ $('searchInConvoInput').focus(); } else { clearSearchHighlights(); $('searchInConvoInput').value=''; }
+
+function regenLast(){
+  const userGroups=feed.querySelectorAll('.msg-group[data-role="user"]');
+  const last=userGroups[userGroups.length-1]; if(!last) return;
+  streamReply(last.dataset.rawText||'');
 }
-$('btnSearchInConvo').onclick = () => toggleSearchInConvo();
-$('btnCloseSearchInConvo').onclick = () => toggleSearchInConvo(false);
- 
-function clearSearchHighlights(){
-  feed.querySelectorAll('mark.search-hit').forEach(m => { m.replaceWith(document.createTextNode(m.textContent)); });
-  $('searchMatchCount').textContent = '';
+window.regenLast=regenLast;
+
+/* ================================================================
+   SEARCH IN CONVERSATION
+   ================================================================ */
+function toggleSearch(force){
+  const bar=$('searchInConvo');
+  const open=force!==undefined?force:!bar.classList.contains('show');
+  bar.classList.toggle('show',open);
+  if(open) $('searchInConvoInput').focus(); else { clearHits(); $('searchInConvoInput').value=''; }
 }
- 
-$('searchInConvoInput').addEventListener('input', (e) => {
-  clearSearchHighlights();
-  const query = e.target.value.trim();
-  if (!query) return;
-  let matches = 0;
-  feed.querySelectorAll('.msg-content').forEach(node => {
-    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
-    const textNodes = [];
-    let n;
-    while ((n = walker.nextNode())) textNodes.push(n);
-    textNodes.forEach(textNode => {
-      const idx = textNode.textContent.toLowerCase().indexOf(query.toLowerCase());
-      if (idx === -1) return;
-      matches++;
-      const span = document.createElement('span');
-      const before = textNode.textContent.slice(0, idx);
-      const match = textNode.textContent.slice(idx, idx + query.length);
-      const after = textNode.textContent.slice(idx + query.length);
-      span.innerHTML = `${escapeHtml(before)}<mark class="search-hit">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
-      textNode.replaceWith(span);
+
+$('btnSearchInConvo').onclick=()=>toggleSearch();
+$('btnCloseSearchInConvo').onclick=()=>toggleSearch(false);
+
+function clearHits(){
+  feed.querySelectorAll('mark.search-hit').forEach(m=>m.replaceWith(document.createTextNode(m.textContent)));
+  $('searchMatchCount').textContent='';
+}
+
+$('searchInConvoInput').addEventListener('input',e=>{
+  clearHits();
+  const q=e.target.value.trim(); if(!q) return;
+  let n=0;
+  feed.querySelectorAll('.msg-content').forEach(node=>{
+    const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);
+    const texts=[]; let tn;
+    while((tn=walker.nextNode())) texts.push(tn);
+    texts.forEach(tn=>{
+      const idx=tn.textContent.toLowerCase().indexOf(q.toLowerCase()); if(idx===-1) return;
+      n++;
+      const span=document.createElement('span');
+      span.innerHTML=esc(tn.textContent.slice(0,idx))+`<mark class="search-hit">${esc(tn.textContent.slice(idx,idx+q.length))}</mark>`+esc(tn.textContent.slice(idx+q.length));
+      tn.replaceWith(span);
     });
   });
-  $('searchMatchCount').textContent = matches ? `${matches} match${matches === 1 ? '' : 'es'}` : 'No matches';
+  $('searchMatchCount').textContent=n?`${n} match${n===1?'':'es'}`:'No matches';
 });
- 
-window.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !e.shiftKey){
-    if (State.currentConvId){ e.preventDefault(); toggleSearchInConvo(true); }
+
+/* ================================================================
+   KEYBOARD SHORTCUTS
+   ================================================================ */
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if($('previewDrawer').classList.contains('open')) closePreview();
+    else if($('settingsScrim').classList.contains('show')) closeModal('settingsScrim');
+    else if($('vipScrim').classList.contains('show')) closeModal('vipScrim');
+    else if($('shortcutsScrim').classList.contains('show')) closeModal('shortcutsScrim');
+    else if($('aboutScrim').classList.contains('show')) closeModal('aboutScrim');
+    else if($('sidebar').classList.contains('open')) closeMobileSidebar();
   }
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
-    e.preventDefault();
-    $('btnNewChat').click();
-  }
-  if ((e.metaKey || e.ctrlKey) && e.key === '/'){
-    e.preventDefault();
-    toggleTerminal();
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); $('btnNewChat').click(); }
+  if((e.metaKey||e.ctrlKey)&&e.key==='/'){ e.preventDefault(); toggleTerminal(); }
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'&&!e.shiftKey){
+    if(State.currentConvId){ e.preventDefault(); toggleSearch(true); }
   }
 });
- 
-/* ========================================================================
+
+/* ================================================================
    MOBILE SIDEBAR
-   ======================================================================== */
+   ================================================================ */
 function openMobileSidebar(){ $('sidebar').classList.add('open'); $('sidebarScrim').classList.add('show'); }
 function closeMobileSidebar(){ $('sidebar').classList.remove('open'); $('sidebarScrim').classList.remove('show'); }
-$('btnToggleSidebar').onclick = openMobileSidebar;
-$('btnSidebarClose').onclick = closeMobileSidebar;
-$('sidebarScrim').onclick = closeMobileSidebar;
- 
-/* ========================================================================
+$('btnToggleSidebar').onclick=openMobileSidebar;
+$('btnSidebarClose').onclick=closeMobileSidebar;
+$('sidebarScrim').onclick=closeMobileSidebar;
+
+/* ================================================================
    PROFILE DROPDOWN
-   ======================================================================== */
-$('btnProfile').onclick = (e) => { e.stopPropagation(); $('dropdown').classList.toggle('open'); };
-document.addEventListener('click', (e) => {
-  if (!$('dropdown').contains(e.target) && e.target !== $('btnProfile')) $('dropdown').classList.remove('open');
-});
- 
-/* ========================================================================
-   SETTINGS MODAL
-   ======================================================================== */
-function openSettings(){ $('settingsScrim').classList.add('show'); $('dropdown').classList.remove('open'); }
-function closeSettings(){ $('settingsScrim').classList.remove('show'); }
-$('btnOpenSettings').onclick = openSettings;
-$('btnCloseSettings').onclick = closeSettings;
-$('settingsScrim').addEventListener('click', (e) => { if (e.target === $('settingsScrim')) closeSettings(); });
- 
-document.querySelectorAll('#themeSeg .seg-btn').forEach(btn => {
-  btn.onclick = () => applyTheme(btn.dataset.theme);
-});
-document.querySelectorAll('#densitySeg .seg-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('#densitySeg .seg-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.documentElement.setAttribute('data-density', btn.dataset.density);
-    localStorage.setItem('pai_density', btn.dataset.density);
-  };
-});
-document.querySelectorAll('#fontscaleSeg .seg-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('#fontscaleSeg .seg-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.documentElement.setAttribute('data-fontscale', btn.dataset.fontscale);
-    localStorage.setItem('pai_fontscale', btn.dataset.fontscale);
-  };
-});
-document.querySelectorAll('#soundSeg .seg-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('#soundSeg .seg-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    localStorage.setItem('pai_sound', btn.dataset.sound);
-  };
-});
- 
-(function restoreSettingsUi(){
-  const density = localStorage.getItem('pai_density');
-  if (density){ document.documentElement.setAttribute('data-density', density); document.querySelectorAll('#densitySeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.density === density)); }
-  const fontscale = localStorage.getItem('pai_fontscale');
-  if (fontscale){ document.documentElement.setAttribute('data-fontscale', fontscale); document.querySelectorAll('#fontscaleSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.fontscale === fontscale)); }
-  const sound = localStorage.getItem('pai_sound');
-  if (sound){ document.querySelectorAll('#soundSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.sound === sound)); }
-})();
- 
-/* ========================================================================
-   SHORTCUTS / ABOUT MODALS
-   ======================================================================== */
-function closeShortcuts(){ $('shortcutsScrim').classList.remove('show'); }
-$('btnOpenShortcuts').onclick = () => { $('shortcutsScrim').classList.add('show'); closeSettings(); };
-$('btnCloseShortcuts').onclick = closeShortcuts;
-$('shortcutsScrim').addEventListener('click', (e) => { if (e.target === $('shortcutsScrim')) closeShortcuts(); });
- 
-function closeAbout(){ $('aboutScrim').classList.remove('show'); }
-$('btnOpenAbout').onclick = () => { $('aboutScrim').classList.add('show'); closeSettings(); };
-$('btnCloseAbout').onclick = closeAbout;
-$('aboutScrim').addEventListener('click', (e) => { if (e.target === $('aboutScrim')) closeAbout(); });
- 
-/* ========================================================================
-   VIP MODAL
-   ======================================================================== */
-function closeVip(){ $('vipScrim').classList.remove('show'); }
-$('btnOpenVip').onclick = () => { $('vipScrim').classList.add('show'); $('dropdown').classList.remove('open'); };
-$('btnCloseVip').onclick = closeVip;
-$('vipScrim').addEventListener('click', (e) => { if (e.target === $('vipScrim')) closeVip(); });
- 
-$('btnSubmitVip').onclick = async () => {
-  const code = $('vipCodeInput').value.trim();
-  if (!code){ showToast('Enter a code first', 'err'); return; }
-  try{
-    const res = await authFetch('/auth/vip-upgrade', {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})
-    });
-    const data = await res.json();
-    if (res.ok){
-      State.user = data.user;
-      localStorage.setItem('pai_user', JSON.stringify(State.user));
-      refreshVipUi();
-      showToast('VIP unlocked', 'ok');
-      closeVip();
-    } else {
-      showToast(data.error || 'Invalid code', 'err');
-    }
-  } catch(e){ /* authFetch already toasts network errors */ }
-};
- 
-/* ========================================================================
-   TERMINAL
-   ======================================================================== */
-function toggleTerminal(){ $('terminal').classList.toggle('open'); }
-$('btnTerminal').onclick = toggleTerminal;
-$('btnCloseTerm').onclick = () => $('terminal').classList.remove('open');
-$('btnClearTerm').onclick = () => { $('termOut').innerHTML = '<span class="t-sys">Cleared.</span>'; };
- 
-function termAppend(text, cls){
-  const line = document.createElement('div');
-  if (cls) line.className = cls;
-  line.textContent = text;
-  $('termOut').appendChild(line);
-  $('termOut').scrollTop = $('termOut').scrollHeight;
-}
- 
-$('termInput').addEventListener('keydown', async (e) => {
-  if (e.key !== 'Enter') return;
-  const code = $('termInput').value;
-  if (!code.trim()) return;
-  termAppend('>>> ' + code, 't-cmd');
-  $('termInput').value = '';
-  try{
-    const res = await authFetch('/execute-python', {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})
-    });
-    const data = await res.json();
-    if (data.stdout) termAppend(data.stdout, 't-ok');
-    if (data.stderr) termAppend(data.stderr, 't-err');
-    if (!data.stdout && !data.stderr) termAppend('(no output)', 't-sys');
-  } catch(e){ termAppend('Execution failed: ' + e.message, 't-err'); }
-});
- 
-// Terminal resize
-(function setupTermResize(){
-  const handle = $('termResizeHandle');
-  const term = $('terminal');
-  let dragging = false;
-  handle.addEventListener('mousedown', () => { dragging = true; });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    const newHeight = window.innerHeight - e.clientY;
-    if (newHeight > 120 && newHeight < window.innerHeight - 100) term.style.height = newHeight + 'px';
+   ================================================================ */
+$('btnProfile').onclick=e=>{ e.stopPropagation(); $('dropdown').classList.toggle('open'); };
+document.addEventListener('click',e=>{ if(!$('dropdown').contains(e.target)&&e.target!==$('btnProfile')) $('dropdown').classList.remove('open'); });
+
+/* ================================================================
+   MODALS (settings, shortcuts, about, vip)
+   ================================================================ */
+function openModal(id){ $(id).classList.add('show'); $('dropdown').classList.remove('open'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+
+$('btnOpenSettings').onclick=()=>openModal('settingsScrim');
+$('btnCloseSettings').onclick=()=>closeModal('settingsScrim');
+$('settingsScrim').addEventListener('click',e=>{ if(e.target===$('settingsScrim')) closeModal('settingsScrim'); });
+
+$('btnOpenShortcuts').onclick=()=>{ openModal('shortcutsScrim'); closeModal('settingsScrim'); };
+$('btnCloseShortcuts').onclick=()=>closeModal('shortcutsScrim');
+$('shortcutsScrim').addEventListener('click',e=>{ if(e.target===$('shortcutsScrim')) closeModal('shortcutsScrim'); });
+
+$('btnOpenAbout').onclick=()=>{ openModal('aboutScrim'); closeModal('settingsScrim'); };
+$('btnCloseAbout').onclick=()=>closeModal('aboutScrim');
+$('aboutScrim').addEventListener('click',e=>{ if(e.target===$('aboutScrim')) closeModal('aboutScrim'); });
+
+$('btnOpenVip').onclick=()=>openModal('vipScrim');
+$('btnCloseVip').onclick=()=>closeModal('vipScrim');
+$('vipScrim').addEventListener('click',e=>{ if(e.target===$('vipScrim')) closeModal('vipScrim'); });
+
+/* theme seg */
+document.querySelectorAll('#themeSeg .seg-btn').forEach(b=>b.onclick=()=>applyTheme(b.dataset.theme));
+
+/* density + fontscale + sound */
+['densitySeg','fontscaleSeg','soundSeg'].forEach(segId=>{
+  document.querySelectorAll(`#${segId} .seg-btn`).forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll(`#${segId} .seg-btn`).forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const key=Object.keys(b.dataset)[0];
+      document.documentElement.setAttribute('data-'+key, b.dataset[key]);
+      localStorage.setItem('pai_'+key, b.dataset[key]);
+    };
   });
-  window.addEventListener('mouseup', () => { dragging = false; });
-})();
- 
-/* ========================================================================
-   FILE ATTACH / DRAG-DROP FOR @education MODE
-   ======================================================================== */
-$('btnAttach').onclick = () => $('fileInput').click();
- 
-$('fileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  await uploadPdf(file);
-  e.target.value = '';
 });
- 
-async function uploadPdf(file){
-  if (!file.name.toLowerCase().endsWith('.pdf')){ showToast('Only PDF files are supported', 'err'); return; }
-  const formData = new FormData();
-  formData.append('file', file);
-  showToast('Uploading ' + file.name + '...', '');
+
+/* restore persisted settings */
+['density','fontscale','sound'].forEach(k=>{
+  const v=localStorage.getItem('pai_'+k); if(!v) return;
+  document.documentElement.setAttribute('data-'+k,v);
+  document.querySelectorAll(`[data-${k}]`).forEach(b=>{
+    if(b.closest('.seg-control')) b.classList.toggle('active',b.dataset[k]===v);
+  });
+});
+
+/* VIP unlock */
+$('btnSubmitVip').onclick=async()=>{
+  const code=$('vipCodeInput').value.trim();
+  if(!code){ showToast('Enter a code first','err'); return; }
   try{
-    const res = await authFetch('/upload', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (res.ok){
-      showToast(file.name + ' uploaded. Use @education in your message to reference it.', 'ok');
-      renderAttachChip(file.name);
-    } else {
-      showToast(data.error || 'Upload failed', 'err');
-    }
-  } catch(e){ /* authFetch already toasts */ }
+    const res=await authFetch('/auth/vip-upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+    const data=await res.json();
+    if(res.ok){ State.user=data.user; localStorage.setItem('pai_user',JSON.stringify(State.user)); refreshVipUi(); showToast('VIP unlocked 🎉','ok'); closeModal('vipScrim'); }
+    else showToast(data.error||'Invalid code','err');
+  } catch(e){}
+};
+
+/* ================================================================
+   TERMINAL
+   ================================================================ */
+function toggleTerminal(){ $('terminal').classList.toggle('open'); }
+$('btnTerminal').onclick=toggleTerminal;
+$('btnCloseTerm').onclick=()=>$('terminal').classList.remove('open');
+$('btnClearTerm').onclick=()=>{ $('termOut').innerHTML='<span class="t-sys">Cleared.</span>'; };
+
+function termLine(text,cls){
+  const d=document.createElement('div');
+  if(cls) d.className=cls;
+  d.textContent=text;
+  $('termOut').appendChild(d);
+  $('termOut').scrollTop=$('termOut').scrollHeight;
 }
- 
-function renderAttachChip(filename){
-  const rack = $('attachRack');
-  rack.style.display = 'flex';
-  const chip = document.createElement('span');
-  chip.className = 'attach-chip';
-  chip.innerHTML = `${escapeHtml(filename)} <button aria-label="Remove">&#10005;</button>`;
-  chip.querySelector('button').onclick = () => { chip.remove(); if (!rack.children.length) rack.style.display = 'none'; };
+
+$('termInput').addEventListener('keydown',async e=>{
+  if(e.key!=='Enter') return;
+  const code=$('termInput').value; if(!code.trim()) return;
+  termLine('>>> '+code,'t-cmd'); $('termInput').value='';
+  try{
+    const res=await authFetch('/execute-python',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+    const data=await res.json();
+    if(data.stdout) termLine(data.stdout,'t-ok');
+    if(data.stderr) termLine(data.stderr,'t-err');
+    if(!data.stdout&&!data.stderr) termLine('(no output)','t-sys');
+  } catch(e){ termLine('Execution failed: '+e.message,'t-err'); }
+});
+
+/* terminal drag-resize */
+(()=>{
+  let dragging=false;
+  $('termResizeHandle').addEventListener('mousedown',()=>dragging=true);
+  window.addEventListener('mousemove',e=>{ if(!dragging) return; const h=window.innerHeight-e.clientY; if(h>120&&h<window.innerHeight-100) $('terminal').style.height=h+'px'; });
+  window.addEventListener('mouseup',()=>dragging=false);
+})();
+
+/* ================================================================
+   FILE ATTACH / PDF
+   ================================================================ */
+$('btnAttach').onclick=()=>$('fileInput').click();
+$('fileInput').addEventListener('change',async e=>{ const f=e.target.files[0]; if(f) await uploadPdf(f); e.target.value=''; });
+
+async function uploadPdf(file){
+  if(!file.name.toLowerCase().endsWith('.pdf')){ showToast('Only PDF files are supported','err'); return; }
+  const fd=new FormData(); fd.append('file',file);
+  showToast('Uploading '+file.name+'…','');
+  try{
+    const res=await authFetch('/upload',{method:'POST',body:fd});
+    const data=await res.json();
+    if(res.ok){ showToast(file.name+' uploaded. Use @education to reference it.','ok'); renderAttachChip(file.name); }
+    else showToast(data.error||'Upload failed','err');
+  } catch(e){}
+}
+
+function renderAttachChip(name){
+  const rack=$('attachRack'); rack.style.display='flex';
+  const chip=document.createElement('span'); chip.className='attach-chip';
+  chip.innerHTML=`${esc(name)} <button aria-label="Remove">✕</button>`;
+  chip.querySelector('button').onclick=()=>{ chip.remove(); if(!rack.children.length) rack.style.display='none'; };
   rack.appendChild(chip);
 }
- 
-['dragenter', 'dragover'].forEach(evt => {
-  $('inputCard').addEventListener(evt, (e) => { e.preventDefault(); $('dropHint').classList.add('show'); });
-});
-['dragleave', 'drop'].forEach(evt => {
-  $('inputCard').addEventListener(evt, (e) => { e.preventDefault(); $('dropHint').classList.remove('show'); });
-});
-$('inputCard').addEventListener('drop', async (e) => {
-  const file = e.dataTransfer.files[0];
-  if (file) await uploadPdf(file);
-});
- 
-/* ========================================================================
-   EDUCATION MODE TOGGLE
-   ======================================================================== */
-$('btnEdu').onclick = () => {
-  State.eduMode = !State.eduMode;
-  $('btnEdu').classList.toggle('active', State.eduMode);
-  if (State.eduMode && !textInput.value.includes('@education')){
-    textInput.value = ('@education ' + textInput.value).trim();
+
+['dragenter','dragover'].forEach(ev=>$('inputCard').addEventListener(ev,e=>{ e.preventDefault(); $('dropHint').classList.add('show'); }));
+['dragleave','drop'].forEach(ev=>$('inputCard').addEventListener(ev,e=>{ e.preventDefault(); $('dropHint').classList.remove('show'); }));
+$('inputCard').addEventListener('drop',async e=>{ const f=e.dataTransfer.files[0]; if(f) await uploadPdf(f); });
+
+/* ================================================================
+   EDUCATION MODE
+   ================================================================ */
+$('btnEdu').onclick=()=>{
+  State.eduMode=!State.eduMode;
+  $('btnEdu').classList.toggle('active',State.eduMode);
+  if(State.eduMode&&!textInput.value.includes('@education')){
+    textInput.value=('@education '+textInput.value).trim();
     textInput.dispatchEvent(new Event('input'));
   }
 };
 
-/* ========================================================================
-   VERCEL BACKEND TEST PANEL (added: calls GET /api/app and renders the
-   JSON response, so the Vercel deployment can be verified without auth)
-   ======================================================================== */
-$('btnTestApiApp').onclick = async () => {
-  const out = $('apiAppOutput');
-  out.textContent = 'Calling /api/app...';
-  try {
-    const res = await fetch(`${API_BASE}/api/app`, { mode: 'cors' });
-    const data = await res.json();
-    out.textContent = JSON.stringify(data, null, 2);
-    if (res.ok) showToast('/api/app responded successfully', 'ok');
-    else showToast('/api/app responded with status ' + res.status, 'err');
-  } catch (err) {
-    out.textContent = 'Request failed: ' + err.message;
-    showToast('Could not reach /api/app', 'err');
-  }
-};
+/* ================================================================
+   HELPERS
+   ================================================================ */
+function esc(str){
+  const d=document.createElement('div'); d.textContent=String(str==null?'':str); return d.innerHTML;
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+document.addEventListener('DOMContentLoaded',()=>{
+  buildGoogleBtn();
+  initAuth();
+  // If already logged in from localStorage (and Supabase will confirm):
+  if(State.sessionToken&&State.user) enterApp();
+});
 </script>
 </body>
 </html>
