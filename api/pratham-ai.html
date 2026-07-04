@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pratham AI — Enterprise Suite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f3ec;
+    --sidebar:#efe9dc;
+    --panel:#ffffff;
+    --border:#e3ddcc;
+    --text:#2c2a26;
+    --text-dim:#8a8478;
+    --accent:#c2613f;
+    --accent-soft:#e8d3c8;
+    --bubble-user:#efe6d8;
+    --bubble-model:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:'Inter', sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    display:flex;
+    min-height:100vh;
+  }
+
+  /* ---------- sidebar ---------- */
+  .sidebar{
+    width:280px;
+    flex-shrink:0;
+    background:var(--sidebar);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    padding:18px 14px;
+    transition:margin-left .2s ease;
+  }
+  .brand{
+    font-family:'Source Serif 4', serif;
+    font-size:19px;
+    font-weight:600;
+    padding:4px 8px 12px;
+  }
+  .auth-section {
+    padding: 4px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .user-profile img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+  }
+  .user-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .user-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .logout-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    font-weight: 500;
+  }
+  .new-chat{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:10px 12px;
+    border-radius:9px;
+    font-family:'Inter', sans-serif;
+    font-size:13.5px;
+    font-weight:500;
+    cursor:pointer;
+    margin-bottom:14px;
+    width: 100%;
+  }
+  .new-chat:hover{border-color:var(--accent); color:var(--accent);}
+  .convo-label{
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    padding:0 8px 8px;
+  }
+  .convo-list{flex:1; overflow-y:auto;}
+  .convo-item{
+    padding:9px 10px;
+    border-radius:8px;
+    font-size:13.5px;
+    color:var(--text);
+    cursor:pointer;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    margin-bottom:2px;
+  }
+  .convo-item:hover{background:var(--accent-soft);}
+  .convo-item.active{background:var(--accent-soft); color:var(--accent); font-weight:500;}
+
+  .sidebar-footer{
+    border-top:1px solid var(--border);
+    padding-top:12px;
+    margin-top:8px;
+  }
+  .connect-toggle{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    width:100%;
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-family:'Inter', sans-serif;
+    font-size:12.5px;
+    padding:8px;
+    cursor:pointer;
+    border-radius:8px;
+  }
+  .connect-toggle:hover{background:var(--accent-soft); color:var(--accent);}
+  .status-dot{width:7px; height:7px; border-radius:50%; background:var(--text-dim); margin-right:6px; display:inline-block;}
+  .status-dot.live{background:#5d8a5a;}
+  .connect-panel{
+    overflow:hidden;
+    max-height:0;
+    transition:max-height .2s ease;
+  }
+  .connect-panel.open{max-height:340px; overflow-y:auto;}
+  .connect-panel-inner{padding:8px;}
+  .connect-panel-inner input, .connect-panel-inner textarea {
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:7px;
+    font-family:'Inter', sans-serif;
+    font-size:12.5px;
+    margin-bottom:6px;
+    background:var(--panel);
+    color:var(--text);
+  }
+  .connect-panel-inner button{
+    width:100%;
+    padding:8px;
+    background:var(--accent);
+    border:none;
+    border-radius:7px;
+    color:#fff;
+    font-size:12.5px;
+    font-weight:600;
+    cursor:pointer;
+    margin-bottom:6px;
+  }
+
+  /* ---------- main ---------- */
+  .main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    position: relative;
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .menu-btn, .admin-toggle-btn {
+    background:none; border:1px solid var(--border); border-radius:7px;
+    height:32px; cursor:pointer; font-size:14px; color:var(--text); padding: 0 10px;
+  }
+
+  .chat-scroll{
+    flex:1;
+    overflow-y:auto;
+    display:flex;
+    justify-content:center;
+  }
+  .chat-col{
+    width:100%;
+    max-width:720px;
+    padding:32px 20px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .empty-state{
+    margin:auto;
+    text-align:center;
+    color:var(--text-dim);
+    padding:60px 20px;
+  }
+  .empty-state h1{
+    font-family:'Source Serif 4', serif;
+    font-weight:600;
+    font-size:26px;
+    color:var(--text);
+    margin:0 0 8px;
+  }
+  .empty-state p{font-size:14px; margin:0;}
+
+  .msg-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+  .msg-row{display:flex; width: 100%;}
+  .msg-row.user{justify-content:flex-end;}
+  .msg{
+    max-width:80%;
+    padding:11px 15px;
+    border-radius:14px;
+    font-size:15px;
+    line-height:1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    position: relative;
+  }
+  .msg p { margin: 0 0 8px 0; }
+  .msg p:last-child { margin-bottom: 0; }
+  
+  .msg table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+  .msg th, .msg td { border: 1px solid var(--border); padding: 8px; text-align: left; }
+  .msg th { background-color: var(--sidebar); font-weight: 600; }
+
+  .msg-row.user .msg{
+    background:var(--bubble-user);
+    border-bottom-right-radius:4px;
+  }
+  .msg-row.model .msg{
+    background:var(--bubble-model);
+    border:1px solid var(--border);
+    border-bottom-left-radius:4px;
+  }
+  .msg-row.system .msg{
+    background:#f6e7e0;
+    border:1px solid #e3c1ae;
+    color:#8a4a2e;
+    font-size:13px;
+  }
+  
+  .feedback-bar {
+    display: flex;
+    gap: 6px;
+    padding-left: 14px;
+    margin-top: -2px;
+  }
+  .feedback-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    opacity: 0.4;
+    padding: 2px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .feedback-btn:hover { opacity: 1; transform: scale(1.15); }
+  .feedback-btn.active { opacity: 1; }
+
+  .typing-dot{
+    display:inline-block;
+    width:6px; height:6px; border-radius:50%;
+    background:var(--text-dim);
+    margin-right:3px;
+    animation:pulse 1s infinite ease-in-out;
+  }
+  .typing-dot:nth-child(2){animation-delay:.15s;}
+  .typing-dot:nth-child(3){animation-delay:.3s;}
+  @keyframes pulse{0%,80%,100%{opacity:.25;} 40%{opacity:1;}}
+
+  .composer-wrap{
+    display:flex;
+    justify-content:center;
+    padding:14px 20px 22px;
+    background:linear-gradient(to top, var(--bg) 60%, transparent);
+  }
+  .composer{
+    width:100%;
+    max-width:720px;
+    display:flex;
+    align-items:flex-end;
+    gap:8px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:8px 8px 8px 16px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04);
+  }
+  .composer textarea{
+    flex:1;
+    border:none;
+    outline:none;
+    resize:none;
+    font-family:'Inter', sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    max-height:140px;
+    padding:7px 0;
+    background:transparent;
+    color:var(--text);
+  }
+  .composer button{
+    background:var(--accent);
+    border:none;
+    color:#fff;
+    width:36px; height:36px;
+    border-radius:50%;
+    font-size:15px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .composer button:disabled{background:#d8cfc0; cursor:not-allowed;}
+  .attach-btn{
+    background:none !important;
+    border:none;
+    color:var(--text-dim) !important;
+    width:32px; height:32px;
+    border-radius:50%;
+    font-size:16px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .attach-btn:hover{background:var(--accent-soft) !important; color:var(--accent) !important;}
+  .attachment-chip{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--accent-soft); color:var(--accent);
+    font-size:12px; padding:5px 10px; border-radius:20px;
+    margin:0 0 8px 16px;
+  }
+
+  /* Admin Dashboard View UI Grid */
+  .admin-view {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    z-index: 50;
+    display: none;
+    flex-direction: column;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .admin-view.open { display: flex; }
+  .admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 16px;
+    border-radius: 12px;
+  }
+  .stat-card h3 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; color: var(--text-dim); }
+  .stat-card div { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .table-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  .table-box h2 { font-size: 16px; margin: 0 0 12px 0; }
+  .admin-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+  .admin-table th, .admin-table td { padding: 10px; border-bottom: 1px solid var(--border); }
+  .admin-table th { background: var(--bg); font-weight: 600; }
+  
+  .status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-badge.online { background: #e2f0d9; color: #385723; }
+  .status-badge.offline { background: #fce4d6; color: #c65911; }
+
+  /* Engine Config Table Styles */
+  .health-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 6px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .health-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .health-dot.up { background: #5d8a5a; }
+  .health-dot.down { background: #c2613f; }
+
+  @media (max-width: 760px){
+    .sidebar{ position:fixed; inset:0 auto 0 0; z-index:40; margin-left:-280px; }
+    .sidebar.open{margin-left:0; box-shadow:0 0 30px rgba(0,0,0,.15);}
+  }
+</style>
+</head>
+<body>
+
+  <div class="sidebar" id="sidebar">
+    <div class="brand">Pratham AI</div>
+    
+    <div class="auth-section">
+      <div id="googleSignInContainer"></div>
+      <div id="userProfile" class="user-profile" style="display:none;">
+        <img id="userAvatar" src="" alt="Avatar">
+        <div class="user-info">
+          <div id="profileName" class="user-name">Guest Node</div>
+          <button id="logoutBtn" class="logout-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="new-chat" id="newChatBtn">＋ New conversation</button>
+    <div class="convo-label">Conversations</div>
+    <div class="convo-list" id="convoList"></div>
+    
+    <div class="sidebar-footer">
+      <button class="connect-toggle" id="connectToggle">
+        <span><span class="status-dot" id="statusDot"></span>Engine Cluster</span>
+        <span>⚙</span>
+      </button>
+      <div class="connect-panel" id="connectPanel">
+        <div class="connect-panel-inner">
+          <input type="text" id="endpointInput" placeholder="https://your-server.com">
+          <button id="connectBtn">Connect Backend</button>
+          
+          <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-dim); margin: 10px 0 6px 2px;">Active Cluster Rings</div>
+          <div id="sidebarHealthStatus" style="max-height: 120px; overflow-y: auto; margin-bottom:12px;"></div>
+
+          <textarea id="teachInput" rows="2" placeholder="Teach Pratham a specific fact..."></textarea>
+          <button id="teachBtn" style="background:#5d8a5a;">Teach AI</button>
+          
+          <textarea id="improveInput" rows="2" placeholder="Suggest pipeline extensions..."></textarea>
+          <button id="improveBtn" style="background:var(--text);">Submit Suggestion</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" id="menuBtn">☰</button>
+        <div class="brand" style="padding:0; font-size:16px;">Pratham AI Console</div>
+      </div>
+      <button class="admin-toggle-btn" id="adminToggleBtn" style="display:none;">Admin Cluster Control</button>
+    </div>
+
+    <div class="chat-scroll">
+      <div class="chat-col" id="chatCol">
+        <div class="empty-state">
+          <h1>What can I help with?</h1>
+          <p>Please log in or initialize backend nodes using the configuration interface panels.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <textarea id="input" rows="1" placeholder="Message Pratham AI…"></textarea>
+        <button class="attach-btn" id="attachBtn" type="button" title="Attach file">📎</button>
+        <input type="file" id="fileInput" accept=".txt,.md,.csv,.json,.pdf" style="display:none;" >
+        <button id="sendBtn">↑</button>
+      </div>
+    </div>
+
+    <div class="admin-view" id="adminView">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>System Monitoring Dashboard</h2>
+        <button class="admin-toggle-btn" id="closeAdminBtn">Close Monitor</button>
+      </div>
+      <div class="admin-grid" id="adminStats"></div>
+      
+      <div class="table-box">
+        <h2>Cluster Routing Engine Matrix</h2>
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>Provider Element</th><th>Status</th><th>Last Successful Context Link</th><th>Error Counter</th></tr></thead>
+          <tbody id="adminProviderHealthTable"></tbody>
+        </table>
+      </div>
+
+      <div class="table-box">
+        <h2>User Feedback Signal Log</h2>
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>User</th><th>Message Snippet</th><th>Rating</th><th>Timestamp</th></tr></thead>
+          <tbody id="adminFeedbackTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script>
+  let apiUrl = localStorage.getItem('pratham_api_url') || '';
+  let idToken = localStorage.getItem('pratham_id_token') || '';
+  let activeConvoId = null;
+  let busy = false;
+  let isAdmin = false;
+
+  if(apiUrl) document.getElementById('endpointInput').value = apiUrl;
+  if (typeof marked !== 'undefined') { marked.setOptions({ breaks: true, gfm: true }); }
+
+  window.onload = function () {
+    google.accounts.id.initialize({
+      client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com", 
+      callback: handleCredentialResponse
+    });
+    renderGoogleButton();
+    if(idToken) parseAndSetupUser(idToken);
+  };
+
+  function renderGoogleButton() {
+    google.accounts.id.renderButton(document.getElementById("googleSignInContainer"), { theme: "outline", size: "medium", text: "signin_with" });
+  }
+
+  async function handleCredentialResponse(response) {
+    idToken = response.credential;
+    localStorage.setItem('pratham_id_token', idToken);
+    await parseAndSetupUser(idToken);
+  }
+
+  async function parseAndSetupUser(token) {
+    try {
+      const base64Url = token.split('.')[1];
+      const payload = JSON.parse(atob(base64Url.replace(/-/g, '+').replace(/_/g, '/')));
+      document.getElementById('googleSignInContainer').style.display = 'none';
+      document.getElementById('userProfile').style.display = 'flex';
+      document.getElementById('userAvatar').src = payload.picture || '';
+      document.getElementById('profileName').textContent = payload.name || 'User';
+      setStatus(!!apiUrl);
+      if(apiUrl) {
+        await syncConversations();
+        await checkAdminPrivileges();
+        await loadSidebarHealthSummary();
+      }
+    } catch(e) { clearAuth(); }
+  }
+
+  function clearAuth() {
+    idToken = ''; isAdmin = false;
+    localStorage.removeItem('pratham_id_token');
+    document.getElementById('googleSignInContainer').style.display = 'block';
+    document.getElementById('userProfile').style.display = 'none';
+    document.getElementById('adminToggleBtn').style.display = 'none';
+    document.getElementById('convoList').innerHTML = '';
+    setStatus(false);
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    clearAuth();
+    google.accounts.id.disableAutoSelect();
+    renderGoogleButton();
+  });
+
+  function getHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    if(idToken) h['Authorization'] = `Bearer ${idToken}`;
+    return h;
+  }
+
+  async function makeRequest(url, options = {}, timeoutMs = 60000) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    options.headers = { ...getHeaders(), ...options.headers };
+    options.signal = controller.signal;
+    try {
+      const res = await fetch(url, options);
+      clearTimeout(t);
+      return res;
+    } catch(e) { clearTimeout(t); throw e; }
+  }
+
+  async function checkAdminPrivileges() {
+    if(!apiUrl) return;
+    try {
+      const res = await makeRequest(`${apiUrl}/admin/stats`);
+      if(res.ok) { isAdmin = true; document.getElementById('adminToggleBtn').style.display = 'block'; }
+    } catch(e){}
+  }
+
+  function setStatus(connected) {
+    const dot = document.getElementById('statusDot');
+    dot.className = (connected && idToken) ? "status-dot live" : "status-dot";
+  }
+
+  document.getElementById('connectBtn').addEventListener('click', async () => {
+    const val = document.getElementById('endpointInput').value.trim();
+    apiUrl = val.replace(/\/$/, '');
+    localStorage.setItem('pratham_api_url', apiUrl);
+    setStatus(!!apiUrl && !!idToken);
+    if(apiUrl && idToken) {
+      await syncConversations();
+      await checkAdminPrivileges();
+      await loadSidebarHealthSummary();
+    }
+  });
+
+  async function loadSidebarHealthSummary() {
+    try {
+      const res = await makeRequest(`${apiUrl}/providers/health`);
+      const data = await res.json();
+      const wrap = document.getElementById('sidebarHealthStatus');
+      wrap.innerHTML = data.map(p => `
+        <div class="health-row">
+          <span>${p.name}</span>
+          <span class="health-dot ${p.is_online ? 'up' : 'down'}"></span>
+        </div>
+      `).join('');
+    } catch(e){}
+  }
+
+  async function syncConversations() {
+    if(!apiUrl) return;
+    try {
+      const res = await makeRequest(`${apiUrl}/conversations`);
+      const data = await res.json();
+      const list = document.getElementById('convoList');
+      list.innerHTML = '';
+      data.forEach(c => {
+        const item = document.createElement('div');
+        item.className = `convo-item ${c.id === activeConvoId ? 'active' : ''}`;
+        item.textContent = c.title || `Conversation ${c.id}`;
+        item.addEventListener('click', () => loadConversation(c.id));
+        list.appendChild(item);
+      });
+    } catch(e){}
+  }
+
+  async function loadConversation(id) {
+    activeConvoId = id;
+    Array.from(document.getElementById('convoList').children).forEach(el => el.classList.remove('active'));
+    document.getElementById('chatCol').innerHTML = '';
+    try {
+      const res = await makeRequest(`${apiUrl}/conversations/${id}/messages`);
+      const data = await res.json();
+      data.forEach(m => { addMessage(m.role === 'assistant' ? 'model' : 'user', m.content, m.id, m.feedback_rating); });
+      syncConversations();
+    } catch(e){}
+  }
+
+  document.getElementById('newChatBtn').addEventListener('click', () => {
+    activeConvoId = null;
+    document.getElementById('chatCol').innerHTML = `
+      <div class="empty-state">
+        <h1>New Core Branch Node</h1>
+        <p>Send a message payload query to initialize context loop pipelines.</p>
+      </div>
+    `;
+    Array.from(document.getElementById('convoList').children).forEach(el => el.classList.remove('active'));
+  });
+
+  function addMessage(role, text, messageId = null, feedbackRating = null) {
+    const currentEmpty = chatCol.querySelector('.empty-state');
+    if (currentEmpty) currentEmpty.remove();
+    
+    const container = document.createElement('div');
+    container.className = 'msg-container';
+    const row = document.createElement('div');
+    row.className = `msg-row ${role}`;
+    const bubble = document.createElement('div');
+    bubble.className = 'msg';
+    
+    if (role === 'model' && typeof marked !== 'undefined') { 
+      const rawHtml = marked.parse(text);
+      bubble.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(rawHtml) : rawHtml;
+    } else { bubble.textContent = text; }
+    
+    row.appendChild(bubble);
+    container.appendChild(row);
+
+    if(role === 'model' && messageId) {
+      const bar = document.createElement('div');
+      bar.className = 'feedback-bar';
+      const up = document.createElement('button');
+      up.className = `feedback-btn ${feedbackRating === 1 ? 'active' : ''}`;
+      up.textContent = '👍';
+      up.addEventListener('click', () => sendFeedback(messageId, 1, up, down));
+      
+      const down = document.createElement('button');
+      down.className = `feedback-btn ${feedbackRating === -1 ? 'active' : ''}`;
+      down.textContent = '👎';
+      down.addEventListener('click', () => sendFeedback(messageId, -1, up, down));
+      
+      bar.appendChild(up); bar.appendChild(down);
+      container.appendChild(bar);
+    }
+    
+    chatCol.appendChild(container);
+    chatCol.parentElement.scrollTop = chatCol.parentElement.scrollHeight;
+    return bubble;
+  }
+
+  async function sendFeedback(msgId, score, upEl, downEl) {
+    if(!apiUrl) return;
+    try {
+      const res = await makeRequest(`${apiUrl}/learning/feedback`, { method: 'POST', body: JSON.stringify({ message_id: msgId, rating: score }) });
+      if(res.ok) {
+        upEl.classList.remove('active'); downEl.classList.remove('active');
+        if(score === 1) upEl.classList.add('active');
+        if(score === -1) downEl.classList.add('active');
+      }
+    } catch(e){}
+  }
+
+  async function handleSend() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    if (!idToken) { alert('Active user authentication profile identity node layer required.'); return; }
+    
+    busy = true; sendBtn.disabled = true;
+    input.value = ''; input.style.height = 'auto';
+    addMessage('user', text);
+    const typingRow = addTyping();
+
+    try {
+      let reply, msgId, provider;
+      if (apiUrl) {
+        const res = await makeRequest(`${apiUrl}/chat`, { method: 'POST', body: JSON.stringify({ message: text, conversation_id: activeConvoId }) });
+        if (!res.ok) throw new Error(`Execution error trace tracking code: ${res.status}`);
+        const data = await res.json();
+        reply = data.response; msgId = data.message_id; provider = data.provider;
+        if(!activeConvoId) activeConvoId = data.conversation_id;
+        await syncConversations();
+      } else { reply = "(Simulation configuration node offline mode link)"; }
+      typingRow.remove();
+      addMessage('model', reply, msgId);
+      if(provider) addMessage('system', `Routing Engine: ${provider}`);
+    } catch (err) {
+      typingRow.remove();
+      addMessage('system', `Cluster access connection interruption execution trace: ${err.message}`);
+    }
+    busy = false; sendBtn.disabled = false;
+  }
+
+  function addTyping() {
+    const row = document.createElement('div');
+    row.className = 'msg-row model';
+    row.innerHTML = `<div class="msg"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+    chatCol.appendChild(row);
+    chatCol.parentElement.scrollTop = chatCol.parentElement.scrollHeight;
+    return row;
+  }
+
+  document.getElementById('attachBtn').addEventListener('click', () => { if(apiUrl) fileInput.click(); });
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file || !activeConvoId) { alert('Establish structural conversation stream parameters before pushing files.'); return; }
+    const chip = document.createElement('div');
+    chip.className = 'attachment-chip';
+    chip.textContent = `📎 Injecting contextual block chunk: ${file.name}…`;
+    chatCol.appendChild(chip);
+
+    const form = new FormData();
+    form.append('file', file); form.append('conversation_id', activeConvoId);
+    try {
+      const res = await fetch(`${apiUrl}/upload`, { method: 'POST', body: form, headers: { 'Authorization': `Bearer ${idToken}` } });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error);
+      chip.textContent = `📎 Mounted block context stream reference element: ${data.filename}`;
+    } catch(e) { chip.textContent = `📎 Injection error exception matching trace: ${e.message}`; }
+  });
+
+  const adminToggle = document.getElementById('adminToggleBtn');
+  const adminView = document.getElementById('adminView');
+  adminToggle.addEventListener('click', async () => { adminView.classList.add('open'); await loadAdminTelemetry(); });
+  document.getElementById('closeAdminBtn').addEventListener('click', () => adminView.classList.remove('open'));
+
+  async function loadAdminTelemetry() {
+    try {
+      const resStats = await makeRequest(`${apiUrl}/admin/stats`);
+      const stats = await resStats.json();
+      document.getElementById('adminStats').innerHTML = `
+        <div class="stat-card"><h3>Active Cluster Users</h3><div>${stats.total_users}</div></div>
+        <div class="stat-card"><h3>Conversations Logged</h3><div>${stats.total_conversations}</div></div>
+        <div class="stat-card"><h3>Engine Mean Latency</h3><div>${stats.system_mean_latency_ms}ms</div></div>
+        <div class="stat-card"><h3>Total Token Volume</h3><div>${stats.aggregate_token_pipeline_throughput}</div></div>
+      `;
+      
+      const resHealth = await makeRequest(`${apiUrl}/providers/health`);
+      const healthData = await resHealth.json();
+      document.getElementById('adminProviderHealthTable').innerHTML = healthData.map(p => `
+        <tr>
+          <td><strong>${p.id}</strong></td>
+          <td>${p.name}</td>
+          <td><span class="status-badge ${p.is_online ? 'online' : 'offline'}">${p.is_online ? 'ONLINE' : 'OFFLINE'}</span></td>
+          <td>${p.last_success_at || 'Never'}</td>
+          <td>${p.error_count}</td>
+        </tr>
+      `).join('');
+
+      const resFeed = await makeRequest(`${apiUrl}/admin/feedback`);
+      const feedData = await resFeed.json();
+      document.getElementById('adminFeedbackTable').innerHTML = feedData.map(f => `
+        <tr><td>${f.id}</td><td>${f.email}</td><td>${f.content.substring(0,30)}...</td><td>${f.rating === 1 ? '👍' : '👎'}</td><td>${f.created_at}</td></tr>
+      `).join('');
+    } catch(e){}
+  }
+
+  sendBtn.addEventListener('click', handleSend);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
+  document.getElementById('sidebar').addEventListener('click', (e) => { if(e.target.id === 'sidebar') sidebar.classList.remove('open'); });
+  document.getElementById('menuBtn').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+  document.getElementById('connectToggle').addEventListener('click', () => document.getElementById('connectPanel').classList.toggle('open'));
+</script>
+</body>
+</html>
