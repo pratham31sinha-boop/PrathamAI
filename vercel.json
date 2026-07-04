@@ -7,5 +7,16 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "api/app.py" },
     { "src": "/(.*)", "dest": "/$1" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        }
+      ]
+    }
   ]
 }
