@@ -6,7 +6,6 @@
     <title>Pratham AI Workspace</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        /* Exact color matches from your latest dark mode application interface */
         body { background-color: #171717; color: #eceecf; }
         .user-bubble { background-color: #212121; color: #f4f4f4; border: 1px solid #2f2f2f; }
         .bot-text-color { color: #e3e3e3; }
@@ -14,7 +13,6 @@
         .error-banner-tint { background-color: #c93b3b; color: #ffffff; }
         .editor-bg { background-color: #121212; color: #d4d4d4; }
         
-        /* Custom UI Transitions and Layout Scroll Hide Elements */
         .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
         .workspace-scrollpane::-webkit-scrollbar-thumb { background: #3f3f3f; border-radius: 9px; }
         .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -44,7 +42,7 @@
         <div class="p-3 border-t border-[#262626] bg-[#171717] flex flex-col gap-2">
             <div class="p-2 bg-[#212121] rounded-xl border border-[#2f2f2f]">
                 <label class="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block mb-1">Target Host Gateway</label>
-                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
+                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic detection active" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
             </div>
             <div class="flex items-center gap-3 p-2 rounded-xl bg-[#212121] border border-[#2f2f2f] shadow-xs">
                 <div class="w-8 h-8 rounded-full bg-[#3f3f3f] text-neutral-300 flex items-center justify-center font-bold text-xs">U</div>
@@ -170,12 +168,10 @@
         const deleteActionTrigger = document.getElementById('delete-action-trigger');
         const backendHostConfig = document.getElementById('backend-host-url-config');
 
-        // Central UI Global Memory Footprint Variables
         let currentConversationId = null;
         let globalAuthorizationToken = "Bearer dev-session-active-token";
         let SERVER_CONTEXT_HOST = ""; 
 
-        // Auto-resolver sets standard locations cleanly upon bootup
         window.addEventListener('DOMContentLoaded', () => {
             const currentOrigin = window.location.origin;
             if (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) {
@@ -192,31 +188,31 @@
             synchronizeConversationsHistoryIndex();
         }
 
-        // Exhaustive Path Auto-Resolver Matrix to completely stop 404 faults
+        // Expanded Vercel Path Auto-Resolver Matrix
         async function smartFetchRequest(endpointPath, options = {}) {
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
             
-            // Generate all routing configurations
+            // Re-ordered to prioritize Vercel's serverless api directory map structure
             const pathPermutations = [
-                `${hostBase}${endpointPath}`,
-                `${hostBase}${endpointPath}/`,
+                `${hostBase}/api/app${endpointPath}`,
+                `${hostBase}/api/app${endpointPath}/`,
                 `${hostBase}/api${endpointPath}`,
-                `${hostBase}/api${endpointPath}/`,
-                `${endpointPath}`,
-                `/api${endpointPath}`
+                `${hostBase}${endpointPath}`,
+                `/api/app${endpointPath}`,
+                `/api${endpointPath}`,
+                `${endpointPath}`
             ];
 
             let lastResponse = null;
             for (const targetUrl of pathPermutations) {
                 try {
-                    console.log(`[DISCOVERY] Probing route: ${targetUrl}`);
                     const response = await fetch(targetUrl, options);
                     if (response.status !== 404) {
-                        return response; // Success, non-404 route discovered
+                        return response; 
                     }
                     lastResponse = response;
                 } catch (err) {
-                    console.warn(`[DISCOVERY] Path unreachable: ${targetUrl}`, err);
+                    // Fail silently and test the next permutation chain
                 }
             }
             return lastResponse || new Response(JSON.stringify({ error: "All route permutations exhausted (404)." }), { status: 404 });
@@ -251,7 +247,7 @@
                 <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
                     <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
                     <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
-                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a instruction prompt to initialize the pipeline loops.</p>
+                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit an instruction prompt to initialize the pipeline loops.</p>
                 </div>
             `;
             synchronizeConversationsHistoryIndex();
@@ -284,8 +280,7 @@
         function mountSystemFailureDisplayNode(customErrorText = '') {
             const containerNode = document.createElement('div');
             containerNode.className = 'flex flex-col items-start w-full gap-1';
-            
-            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}). Please ensure your backend is actively running.` : 'Could not reach Pratham AI. Please try again.';
+            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}). Please ensure your backend function handles routing properly.` : 'Could not reach Pratham AI. Please try again.';
             
             containerNode.innerHTML = `
                 <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
@@ -303,7 +298,6 @@
         function pushOverlayRedErrorToast(customErrorText = '') {
             const toastNode = document.createElement('div');
             toastNode.className = 'w-full error-banner-tint text-white py-3 px-4 rounded-xl font-medium text-xs text-center shadow-md transition-all duration-300 transform translate-y-2 opacity-0';
-            
             toastNode.innerText = customErrorText ? `Could not reach Pratham AI. [Diagnostic: ${customErrorText}]` : 'Could not reach Pratham AI. Please try again.';
             
             toastRenderingWrapper.appendChild(toastNode);
@@ -325,9 +319,6 @@
             }[char] || char));
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        //  ASYNCHRONOUS BACKEND PIPELINE TRANSLATION CONTROLS
-        // ══════════════════════════════════════════════════════════════════════
         async function synchronizeConversationsHistoryIndex() {
             try {
                 const response = await smartFetchRequest(`/conversations`, {
@@ -358,7 +349,7 @@
                     historyItemsBox.appendChild(row);
                 });
             } catch (err) {
-                console.error("History pane fetch synchronization drops:", err);
+                console.error("History pane fetch error:", err);
             }
         }
 
@@ -368,7 +359,7 @@
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
-                if(!response.ok) throw new Error("Load index sequence failure.");
+                if(!response.ok) throw new Error("Load sequence failure.");
                 const logs = await response.json();
                 
                 currentConversationId = conversationId;
@@ -390,7 +381,7 @@
                 autoScrollToViewportBottom();
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                pushOverlayRedErrorToast("Network mapping connection error.");
+                pushOverlayRedErrorToast("Network mapping error.");
             }
         }
 
@@ -422,7 +413,8 @@
 
         function triggerSessionExport() {
             if(!currentConversationId) return;
-            window.open(`${SERVER_CONTEXT_HOST}/api/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
+            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+            window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
         }
 
         async function dispatchPythonExecution() {
@@ -430,7 +422,7 @@
             const outputFrame = document.getElementById('python-console-output-frame');
             if(!codePayload) return;
 
-            outputFrame.innerText = "Spawning isolation execution block processing space...";
+            outputFrame.innerText = "Spawning virtual isolation block space...";
             try {
                 const response = await smartFetchRequest(`/execute-python`, {
                     method: 'POST',
@@ -441,9 +433,9 @@
                     body: JSON.stringify({ code: codePayload })
                 });
                 const data = await response.json();
-                outputFrame.innerText = data.stderr ? `Sandbox Exception Traceback Output:\n${data.stderr}` : data.stdout || "Script completed runtime parameters loop cleanly.";
+                outputFrame.innerText = data.stderr ? `Sandbox Traceback Output:\n${data.stderr}` : data.stdout || "Script completed runtime parameters cleanly.";
             } catch(err) {
-                outputFrame.innerText = "Sandbox pipeline connection timeout fault.";
+                outputFrame.innerText = "Sandbox pipeline connection timeout.";
             }
         }
 
@@ -464,7 +456,7 @@
                 alert(res.message || res.error);
                 toggleModal('pdf-modal');
             } catch(err) {
-                pushOverlayRedErrorToast("File storage distribution pipe down.");
+                pushOverlayRedErrorToast("Upload pipeline offline.");
             }
         }
 
@@ -495,7 +487,7 @@
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  CORE STREAMING DATA SUBMISSION CONTROLLER PIPELINE WITH AUTO-RETRY
+        //  CORE STREAMING PIPELINE WITH ADVANCED ROUTE RESOLUTION
         // ══════════════════════════════════════════════════════════════════════
         interactionSubmissionForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -513,7 +505,6 @@
             let combinedTextBuffer = "";
 
             try {
-                // Execute streaming sequence via dynamic Path Auto-Resolver Matrix
                 const response = await smartFetchRequest(`/chat-stream`, {
                     method: 'POST',
                     headers: {
@@ -527,8 +518,7 @@
                 });
 
                 if(!response.ok) {
-                    let trackingString = `Dropped. Status Code: ${response.status}`;
-                    throw new Error(trackingString);
+                    throw new Error(`Server returned error code status: ${response.status}`);
                 }
 
                 const reader = response.body.getReader();
@@ -565,13 +555,13 @@
                                 throw new Error(parsedJson.text);
                             }
                         } catch(exc) {
-                            // Suppress stream fragment parse ticks
+                            // Suppress partial fragment validation anomalies
                         }
                     }
                 }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                console.error("Transmission stack failure:", err);
+                console.error("Streaming failure occurred:", err);
                 mountSystemFailureDisplayNode(err.message);
                 pushOverlayRedErrorToast(err.message);
             }
