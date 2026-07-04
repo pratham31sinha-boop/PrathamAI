@@ -2,11 +2,14 @@
 Pratham AI – Full Production Backend Architecture
 =================================================
 Fixes Applied:
-  1. Automated Dev-Lenient Auth: Reconfigured verification decorators to allow local 
+  1. Resolved 404 Routing Conflict: Implemented structural dual-decorating routing 
+     parameters across all active endpoints to handle both standard root calls 
+     and proxy-prefixed configurations seamlessly.
+  2. Automated Dev-Lenient Auth: Reconfigured verification decorators to allow local 
      connections to communicate anonymously if Supabase keys aren't fully configured.
-  2. Robust Cross-Origin Policies: Standardized headers to allow smooth cross-origin 
+  3. Robust Cross-Origin Policies: Standardized headers to allow smooth cross-origin 
      requests from mobile browser interfaces.
-  3. Seamless Failover Infrastructure: Created a continuous fallback system 
+  4. Seamless Failover Infrastructure: Created a continuous fallback system 
      (Groq -> OpenRouter -> Cerebras -> Mistral) with explicit logging.
 """
 
@@ -97,7 +100,6 @@ def _get_token() -> str | None:
 
 def _verify_token(token: str) -> dict | None:
     """Decodes token structures via remote live validation or local dev mode fallback."""
-    # Allow anonymous access if no token is provided to fix connection loops during local testing
     if not token or token == "dev-session-active-token":
         print("[AUTH][DEV OVERRIDE] Granting sandbox authorization parameters to dev instance.")
         return {
@@ -393,13 +395,15 @@ def _append_message(conv_id: str, role: str, content: str):
         conv["updated_at"] = datetime.now(timezone.utc).isoformat()
 
 # ══════════════════════════════════════════════════════════════════════
-#  ENDPOINT CONTROL IMPLEMENTATION LABELS
+#  ENDPOINT CONTROL IMPLEMENTATION LABELS WITH DUAL ROUTING WRAPPERS
 # ══════════════════════════════════════════════════════════════════════
 @app.route("/", methods=["GET"])
+@app.route("/api", methods=["GET"])
 def index():
     return jsonify({"message": "Pratham AI API System Cluster Online", "status": "active"})
 
 @app.route("/health", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({
         "status": "ok",
@@ -415,6 +419,7 @@ def api_app():
     return health()
 
 @app.route("/chat-stream", methods=["POST", "OPTIONS"])
+@app.route("/api/chat-stream", methods=["POST", "OPTIONS"])
 @require_auth
 def chat_stream():
     if request.method == "OPTIONS":
@@ -479,6 +484,7 @@ def chat_stream():
     return resp
 
 @app.route("/conversations", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations", methods=["GET", "OPTIONS"])
 @require_auth
 def list_conversations():
     if request.method == "OPTIONS":
@@ -486,6 +492,7 @@ def list_conversations():
     return jsonify(_list_convos(_user_id()))
 
 @app.route("/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
 @require_auth
 def get_messages_route(conv_id: str):
     if request.method == "OPTIONS":
@@ -496,6 +503,7 @@ def get_messages_route(conv_id: str):
     return jsonify(_get_messages(conv_id))
 
 @app.route("/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
 @require_auth
 def delete_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -510,6 +518,7 @@ def delete_conversation(conv_id: str):
     return jsonify({"ok": True, "target_id": conv_id})
 
 @app.route("/conversations/<conv_id>/rename", methods=["PATCH", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/rename", methods=["PATCH", "OPTIONS"])
 @require_auth
 def rename_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -526,6 +535,7 @@ def rename_conversation(conv_id: str):
     return jsonify({"ok": True, "new_title": title})
 
 @app.route("/conversations/<conv_id>/pin", methods=["POST", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/pin", methods=["POST", "OPTIONS"])
 @require_auth
 def pin_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -544,6 +554,7 @@ def pin_conversation(conv_id: str):
     return jsonify({"ok": True, "pinned_state": new_val})
 
 @app.route("/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
 @require_auth
 def export_conversation(conv_id: str):
     if request.method == "OPTIONS":
@@ -564,6 +575,7 @@ def export_conversation(conv_id: str):
     )
 
 @app.route("/execute-python", methods=["POST", "OPTIONS"])
+@app.route("/api/execute-python", methods=["POST", "OPTIONS"])
 @require_auth
 def execute_python():
     if request.method == "OPTIONS":
@@ -590,6 +602,7 @@ def execute_python():
         return jsonify({"stdout": "", "stderr": f"Sandbox supervisor fault exception: {exc}", "returncode": -1})
 
 @app.route("/auth/vip-upgrade", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/vip-upgrade", methods=["POST", "OPTIONS"])
 @require_auth
 def vip_upgrade():
     if request.method == "OPTIONS":
@@ -603,6 +616,7 @@ def vip_upgrade():
     return jsonify({"ok": True, "message": "Access escalated successfully.", "user": user})
 
 @app.route("/upload", methods=["POST", "OPTIONS"])
+@app.route("/api/upload", methods=["POST", "OPTIONS"])
 @require_auth
 def upload_pdf():
     if request.method == "OPTIONS":
