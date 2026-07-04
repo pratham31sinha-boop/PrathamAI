@@ -1,13 +1,3 @@
-"""
-Pratham AI – Full Production Backend Architecture
-=================================================
-System Configuration Context Matrix:
-  - Repository Targeted Layer: pratham31sinha-boop
-  - Project Identifier Context Token: ksroorygbrhwpnqtjbxo
-  - Injected Operational Target Scope Pathing: [email_address]/[date_formatted].txt
-  - Security Tokens Handling Path: pratham31sinha-boop/data/vip.txt
-"""
-
 import os
 import json
 import time
@@ -204,9 +194,9 @@ def _cool(name: str):
 
 GROQ_MODELS = ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
 SYSTEM_PROMPT = (
-    "You are Pratham AI — an advanced full stack coding assistant core workspace engine node. "
-    "Always format file output generations or components cleanly within structural fenced blocks "
-    "using explicit language tags like ```html, ```javascript, or ```text to permit real-time canvas parsing previews."
+    "You are Pratham AI — an advanced enterprise computing core workflow engine node. "
+    "Always format code components precisely inside structural markdown blocks "
+    "using accurate tags (like ```html, ```javascript, or ```text) to prompt the web canvas previewer."
 )
 
 def _sse(payload: dict) -> str:
@@ -251,7 +241,7 @@ def _do_stream(messages: list[dict]):
         yield from _stream_groq(messages)
     except Exception as exc:
         print(f"[FAILOVER] Groq runtime context dropped out: {exc}")
-        yield _sse({"type": "token", "text": "✨ **[Pratham AI Workspace Engine Simulation Mode active]**\n\nI processed your interaction parameters inside local heaps. Check environment connection limits parameters."})
+        yield _sse({"type": "token", "text": "✨ **[Pratham AI Simulation Mode Active]**\n\nI processed your interaction parameters inside local heaps. Verify configuration limits parameters."})
     yield _sse({"type": "complete"})
 
 # ── DATA ROUTING INTERFACES ──
@@ -328,7 +318,7 @@ def register_vip_profile():
     email = body.get("email", _user_email()).strip()
     
     if not name or not relationship:
-        return jsonify({"error": "Incomplete parameter rows structural declaration mapping context."}), 400
+        return jsonify({"error": "Incomplete configuration parameters row schema."}), 400
         
     registration_row = f"Timestamp: {datetime.now(timezone.utc).isoformat()} | Email: {email} | Name: {name} | Relation Context: {relationship}\n"
     
