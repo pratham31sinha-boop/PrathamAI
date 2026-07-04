@@ -1,8 +1,4 @@
 {
-  "rewrites": [
-    { "source": "/api/app", "destination": "/api/app.py" },
-    { "source": "/api/app/(.*)", "destination": "/api/app.py" }
-  ],
   "headers": [
     {
       "source": "/(.*)",
