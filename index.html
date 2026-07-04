@@ -64,7 +64,7 @@
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
 
     <div id="g_id_onload"
-         data-client_id="1098485250499-mockid.apps.googleusercontent.com"
+         data-client_id="352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com"
          data-context="signin"
          data-ux_mode="popup"
          data-callback="handleGoogleIdentityCallback"
@@ -199,6 +199,7 @@
     </div>
 
     <script>
+        const googleSignInGate = document.getElementById('googleSignInGate');
         const loginOverlay = document.getElementById('login-overlay');
         const appShell = document.getElementById('app-shell');
         
@@ -226,20 +227,18 @@
         let activeUserIdentityEmail = "";
         let currentExtractedPreviewArtifactPayload = "";
 
-        // Safe programmatic polling loop to handle async loading fallbacks smoothly
+        // Core redundant polling layer to force fallback drawing of GSI objects if DOM loading shifts
         function initializeGoogleOauthGate() {
             if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                 google.accounts.id.initialize({
-                    client_id: "1098485250499-mockid.apps.googleusercontent.com", // Replace with your Google OAuth Client ID
+                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
                     callback: handleGoogleIdentityCallback,
                     auto_select: false
                 });
                 
-                // If the declarative element was missed, explicitly bind it programmatically
-                const gateEl = document.getElementById("googleSignInGate");
-                if (gateEl && gateEl.innerHTML.includes("Initializing")) {
-                    gateEl.innerHTML = "";
-                    google.accounts.id.renderButton(gateEl, { theme: "outline", size: "large", type: "standard", width: "240" });
+                if (googleSignInGate && googleSignInGate.innerHTML.includes("Initializing")) {
+                    googleSignInGate.innerHTML = "";
+                    google.accounts.id.renderButton(googleSignInGate, { theme: "outline", size: "large", type: "standard", width: "240" });
                 }
             } else {
                 setTimeout(initializeGoogleOauthGate, 100);
@@ -292,7 +291,7 @@
                 
                 synchronizeConversationsHistoryIndex();
             } catch(e) {
-                console.error("[AUTH][FAILURE] Token mapping exception context: ", e);
+                console.error("[AUTH][FAILURE] Claims runtime context error: ", e);
             }
         }
 
@@ -331,7 +330,6 @@
             loginOverlay.classList.remove('opacity-0', 'pointer-events-none');
             appShell.classList.add('opacity-0', 'pointer-events-none');
             
-            // Re-mount framework tracking references dynamically to catch consecutive signout loops
             const gateEl = document.getElementById("googleSignInGate");
             if (gateEl) {
                 gateEl.innerHTML = `<div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" data-width="240"></div>`;
