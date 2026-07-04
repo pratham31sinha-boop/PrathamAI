@@ -1,588 +1,969 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pratham AI Workspace</title>
+
+    <title>Pratham AI — Enterprise Suite</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <style>
-        body { background-color: #171717; color: #eceecf; }
-        .user-bubble { background-color: #212121; color: #f4f4f4; border: 1px solid #2f2f2f; }
-        .bot-text-color { color: #e3e3e3; }
-        .input-bar-bg { background-color: #2f2f2f; border: 1px solid #3f3f3f; }
-        .error-banner-tint { background-color: #c93b3b; color: #ffffff; }
-        .editor-bg { background-color: #121212; color: #d4d4d4; }
+
+        :root {
+
+            --bg: #f6f3ec;
+
+            --sidebar: #efe9dc;
+
+            --panel: #ffffff;
+
+            --border: #e3ddcc;
+
+            --text: #2c2a26;
+
+            --text-dim: #8a8478;
+
+            --accent: #c2613f;
+
+            --accent-soft: #e8d3c8;
+
+            --bubble-user: #efe6d8;
+
+            --bubble-model: #ffffff;
+
+            --terminal-bg: #1e1c19;
+
+            --terminal-text: #f4f0e6;
+
+        }
+
+
+
+        .dark-mode {
+
+            --bg: #12110f;
+
+            --sidebar: #1c1a17;
+
+            --panel: #1a1815;
+
+            --border: #2d2922;
+
+            --text: #e6e1d6;
+
+            --text-dim: #9c9587;
+
+            --accent: #d97450;
+
+            --accent-soft: #3d2b24;
+
+            --bubble-user: #2d2822;
+
+            --bubble-model: #1a1815;
+
+            --terminal-bg: #0b0a09;
+
+            --terminal-text: #4ade80;
+
+        }
+
+
+
+        body {
+
+            font-family: 'Inter', sans-serif;
+
+            background: var(--bg);
+
+            color: var(--text);
+
+            transition: background 0.3s, color 0.3s;
+
+        }
+
         
+
+        .brand-serif {
+
+            font-family: 'Source Serif 4', serif;
+
+        }
+
+
+
         .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
-        .workspace-scrollpane::-webkit-scrollbar-thumb { background: #3f3f3f; border-radius: 9px; }
-        .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        .workspace-scrollpane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9px; }
+
+        
+
+        #login-overlay {
+
+            background: var(--bg);
+
+            z-index: 100;
+
+        }
+
     </style>
+
 </head>
-<body class="h-screen w-screen flex overflow-hidden font-sans antialiased select-none">
 
-    <aside id="sidebar-panel" class="w-80 h-full border-r border-[#262626] bg-[#171717] flex flex-col justify-between z-30 sidebar-transition fixed md:relative transform -translate-x-full md:translate-x-0">
-        <div class="p-4 flex flex-col flex-1 overflow-hidden">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
-                    <span class="w-7 h-7 bg-[#eceecf] rounded-lg flex items-center justify-center text-black text-xs font-bold">P</span>
-                    <span class="font-semibold text-sm tracking-tight text-neutral-200">Pratham AI Hub</span>
-                </div>
-                <button onclick="createNewConversation()" class="p-1.5 hover:bg-[#262626] rounded-lg transition-colors cursor-pointer text-xs font-medium text-neutral-400">
-                    + New Chat
-                </button>
+<body class="h-screen w-screen flex overflow-hidden antialiased select-none">
+
+
+
+    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 transition-all duration-500">
+
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl space-y-6">
+
+            <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
+
+            <p class="text-sm text-[var(--text-dim)]">Enterprise System Node Validation Portal</p>
+
+            <hr class="border-[var(--border)]">
+
+            <div class="flex justify-center w-full py-2">
+
+                <div id="googleSignInGate"></div>
+
             </div>
-            <hr class="border-[#262626] mb-3">
-            <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5">
-                <p class="text-xs text-neutral-500 text-center py-4">Syncing workspace state...</p>
-            </div>
+
+            <p class="text-[10px] text-[var(--text-dim)] font-mono">Workspace ID Context Reference: ksroorygbrhwpnqtjbxo</p>
+
         </div>
 
-        <div class="p-3 border-t border-[#262626] bg-[#171717] flex flex-col gap-2">
-            <div id="google-signin-btn-container" class="w-full py-1"></div>
-
-            <div class="flex items-center gap-3 p-2 rounded-xl bg-[#212121] border border-[#2f2f2f] shadow-xs">
-                <div id="user-avatar-placeholder" class="w-8 h-8 rounded-full bg-[#3f3f3f] text-neutral-300 flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
-                <div class="flex-1 min-w-0">
-                    <p id="account-name-display" class="text-xs font-semibold truncate text-neutral-200">Developer Account</p>
-                    <p id="role-badge-display" class="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Standard Tier</p>
-                </div>
-            </div>
-
-            <div class="p-2 bg-[#212121] rounded-xl border border-[#2f2f2f]">
-                <label class="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block mb-1">Target Host Gateway</label>
-                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
-            </div>
-
-            <div class="grid grid-cols-2 gap-1 text-[11px]">
-                <button onclick="toggleModal('vip-modal')" class="py-1.5 bg-[#eceecf] text-black font-semibold rounded-lg transition-all text-center shadow-xs cursor-pointer">✨ Upgrade VIP</button>
-                <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[#212121] border border-[#3f3f3f] text-neutral-300 rounded-lg transition-all font-medium text-center shadow-xs cursor-pointer">📎 Upload PDF</button>
-            </div>
-        </div>
-    </aside>
-
-    <main class="flex-1 h-full flex flex-col relative bg-[#212121] justify-between min-w-0">
-        <header class="h-14 border-b border-[#2d2d2d] px-4 flex items-center justify-between bg-[#212121]/90 backdrop-blur-md z-20">
-            <div class="flex items-center gap-3.5">
-                <button onclick="toggleSidebarView()" class="p-1.5 text-neutral-400 hover:text-white hover:bg-[#2d2d2d] rounded-lg text-lg cursor-pointer md:hidden">☰</button>
-                <h2 id="active-chat-title-header" class="text-sm font-medium text-neutral-200 truncate max-w-xs md:max-w-md">New Conversation Thread</h2>
-            </div>
-            <div class="flex items-center gap-3">
-                <button onclick="toggleModal('sandbox-modal')" class="px-3 py-1 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-neutral-300 rounded-full font-mono text-xs flex items-center gap-1.5 transition-all cursor-pointer">
-                    &gt;_ Run Python
-                </button>
-                <button id="export-action-trigger" onclick="triggerSessionExport()" class="p-1.5 text-neutral-400 hover:text-white hover:bg-[#2d2d2d] rounded-lg text-sm cursor-pointer hidden">⬇ Export</button>
-                <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="p-1.5 text-neutral-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg text-sm cursor-pointer hidden">🗑 Drop</button>
-            </div>
-        </header>
-
-        <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-2xl mx-auto w-full pb-36 workspace-scrollpane">
-            <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
-                <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
-                <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
-                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a prompt to initialize parsing. Mention <span class="font-mono bg-[#2d2d2d] px-1 py-0.5 rounded text-emerald-400">@education</span> to search vectors.</p>
-            </div>
-        </div>
-
-        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#212121] via-[#212121] to-transparent pt-6 pb-4 px-4 z-20">
-            <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
-                <div id="toast-rendering-wrapper" class="w-full flex flex-col gap-1.5"></div>
-                <form id="interaction-submission-form" class="w-full relative flex items-center rounded-2xl input-bar-bg overflow-hidden focus-within:ring-2 focus-within:ring-neutral-600 transition-all">
-                    <button type="button" onclick="toggleModal('pdf-modal')" class="pl-3.5 pr-2 text-neutral-400 hover:text-white transition-colors cursor-pointer text-lg">📎</button>
-                    <input type="text" id="user-prompt-input-field" placeholder="Message Pratham AI... (use @education to reference uploaded PDFs)" class="w-full pr-12 py-3.5 bg-transparent border-none focus:outline-none text-[15px] text-white placeholder-neutral-500" autocomplete="off" required>
-                    <button type="submit" id="input-action-submit-btn" class="absolute right-3 w-8 h-8 flex items-center justify-center bg-[#eceecf] text-black rounded-full hover:bg-white transition-colors shadow-xs cursor-pointer text-sm font-bold">↑</button>
-                </form>
-                <p class="text-center text-[10px] text-neutral-500">Pratham AI can make mistakes. Verify important info. 🔒 Private per-account history.</p>
-            </div>
-        </div>
-    </main>
-
-    <div id="sandbox-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-[#212121] border border-[#2f2f2f] rounded-2xl w-full max-w-xl overflow-hidden shadow-xl flex flex-col">
-            <div class="p-4 border-b border-[#2d2d2d] flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-neutral-200 font-mono">&gt;_ Interactive Python Sandbox Terminal</h4>
-                <button onclick="toggleModal('sandbox-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
-            </div>
-            <div class="p-4 flex flex-col gap-3">
-                <textarea id="python-code-editor-area" rows="6" class="w-full font-mono text-xs p-3 editor-bg rounded-xl border border-[#3f3f3f] focus:outline-none focus:ring-1 focus:ring-neutral-500 shadow-inner" placeholder="print('Hello from the virtual execution sandbox!')"></textarea>
-                <button onclick="dispatchPythonExecution()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white shadow-xs cursor-pointer">Execute Script Frame</button>
-                <div class="flex flex-col gap-1">
-                    <span class="text-[10px] font-bold tracking-wider text-neutral-400 uppercase">Console Output Logs</span>
-                    <pre id="python-console-output-frame" class="w-full min-h-[80px] p-3 border border-[#3f3f3f] rounded-xl bg-[#171717] font-mono text-xs text-emerald-400 overflow-x-auto whitespace-pre-wrap">Terminal ready.</pre>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <div id="pdf-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-[#212121] border border-[#2f2f2f] rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
-            <div class="p-4 border-b border-[#2d2d2d] flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-neutral-200">Ingest PDF Context Vector</h4>
-                <button onclick="toggleModal('pdf-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
+
+
+    <div id="app-shell" class="w-full h-full flex opacity-0 transition-opacity duration-500 pointer-events-none">
+
+        
+
+        <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between z-30 transition-all duration-300">
+
+            <div class="p-4 flex flex-col flex-1 overflow-hidden space-y-3">
+
+                <div class="flex items-center justify-between">
+
+                    <span class="brand-serif text-xl font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
+
+                    <button onclick="toggleColorTheme()" class="p-1 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md hover:border-[var(--accent)] transition-colors cursor-pointer">🌗 Mode</button>
+
+                </div>
+
+                
+
+                <div class="flex items-center gap-3 p-2 rounded-xl bg-[var(--panel)] border border-[var(--border)] shadow-xs">
+
+                    <div id="user-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--border)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
+
+                    <div class="flex-1 min-w-0">
+
+                        <p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Resolving Identity...</p>
+
+                        <p id="role-badge-display" class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-dim)]">Evaluating...</p>
+
+                    </div>
+
+                    <button onclick="triggerIdentitySignout()" class="text-xs text-[var(--accent)] font-medium hover:underline">Exit</button>
+
+                </div>
+
+
+
+                <button onclick="createNewConversation()" class="w-full flex items-center justify-center gap-2 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] py-2.5 px-4 rounded-xl text-sm font-medium hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer shadow-xs">
+
+                    ＋ New Conversation
+
+                </button>
+
+                
+
+                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-1">Active Indexes</div>
+
+                <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5"></div>
+
             </div>
+
+
+
+            <div class="p-3 border-t border-[var(--border)] bg-[var(--sidebar)] flex flex-col gap-2">
+
+                <div class="p-2 bg-[var(--panel)] rounded-xl border border-[var(--border)]">
+
+                    <label class="text-[9px] uppercase font-bold text-[var(--text-dim)] tracking-wider block mb-1">Target Host Gateway</label>
+
+                    <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[var(--bg)] text-xs px-2 py-1 border border-[var(--border)] rounded-md text-[var(--accent)] font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
+
+                </div>
+
+                
+
+                <div class="grid grid-cols-2 gap-1 text-[11px]">
+
+                    <button onclick="triggerHiddenVipFormPrompt()" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center cursor-pointer shadow-xs">🔒 Secure Lock</button>
+
+                    <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text-dim)] rounded-lg hover:text-[var(--text)] transition-all font-medium text-center cursor-pointer shadow-xs">📎 Ingest Vectors</button>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+
+
+        <main class="flex-1 h-full flex flex-row min-w-0 bg-[var(--bg)]">
+
+            
+
+            <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
+
+                <header class="h-14 border-b border-[var(--border)] px-4 flex items-center justify-between bg-[var(--panel)] z-20">
+
+                    <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">Pipeline Channel Standard Core</h2>
+
+                    <div class="flex items-center gap-2">
+
+                        <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">Export</button>
+
+                        <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">Drop</button>
+
+                    </div>
+
+                </header>
+
+
+
+                <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
+
+                    <div class="m-auto text-center py-12 space-y-2">
+
+                        <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
+
+                        <p class="text-xs text-[var(--text-dim)] max-w-xs">Submit queries or request structured file components code execution frames.</p>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-4 z-20">
+
+                    <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
+
+                        <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all">
+
+                            <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
+
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI... (Ask for code artifacts to initialize preview panel)" class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+
+                            <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center bg-[var(--accent)] text-white rounded-full hover:opacity-90 transition-opacity shadow-xs cursor-pointer text-sm font-bold">↑</button>
+
+                        </form>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+
+            <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+
+                <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
+
+                    <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
+
+                        <span>&gt;_ Live Agent Terminal Output Logs</span>
+
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+
+                    </div>
+
+                    <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
+
+                </div>
+
+
+
+                <div class="flex-1 flex flex-col overflow-hidden">
+
+                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
+
+                        <span>⚡ Sandbox Preview Canvas Component</span>
+
+                        <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout View</button>
+
+                    </div>
+
+                    <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
+
+                        <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+
+
+    <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+
+                <h4 class="text-sm font-bold text-[var(--text)]">Ingest PDF Context Vector</h4>
+
+                <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+
+            </div>
+
             <div class="p-5 flex flex-col gap-4">
-                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#2d2d2d] file:text-neutral-200 hover:file:bg-[#3d3d3d] cursor-pointer"/>
-                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white shadow-xs transition-colors cursor-pointer">Initialize Document Index</button>
+
+                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
+
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-[var(--accent)] text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Initialize Document Index</button>
+
             </div>
+
         </div>
+
     </div>
 
-    <div id="vip-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-[#212121] border border-[#2f2f2f] rounded-2xl w-full max-w-xs overflow-hidden shadow-xl">
-            <div class="p-4 border-b border-[#2d2d2d] flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-neutral-200">Escalate VIP Authentication</h4>
-                <button onclick="toggleModal('vip-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
-            </div>
-            <div class="p-4 flex flex-col gap-3">
-                <input type="password" id="vip-secret-entry-input" placeholder="Enter VIP Secret Key" class="w-full text-xs p-2.5 bg-[#171717] border border-[#3f3f3f] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-neutral-500"/>
-                <button onclick="dispatchVipUpgrade()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white transition-colors shadow-xs cursor-pointer">Authorize Verification Token</button>
-            </div>
-        </div>
-    </div>
+
+
+    <script src="https://accounts.google.com/gsi/client"></script>
 
     <script>
+
+        const googleSignInGate = document.getElementById('googleSignInGate');
+
+        const loginOverlay = document.getElementById('login-overlay');
+
+        const appShell = document.getElementById('app-shell');
+
+        
+
         const sidebarPanel = document.getElementById('sidebar-panel');
+
         const historyItemsBox = document.getElementById('history-items-box');
+
         const activeChatTitleHeader = document.getElementById('active-chat-title-header');
+
         const conversationViewportPanel = document.getElementById('conversation-viewport-panel');
+
         const interactionSubmissionForm = document.getElementById('interaction-submission-form');
+
         const userPromptInputField = document.getElementById('user-prompt-input-field');
-        const toastRenderingWrapper = document.getElementById('toast-rendering-wrapper');
+
         const roleBadgeDisplay = document.getElementById('role-badge-display');
-        const accountNameDisplay = document.getElementById('account-name-display');
-        const userAvatarPlaceholder = document.getElementById('user-avatar-placeholder');
+
+        const profileNameDisplay = document.getElementById('profile-name-display');
+
+        const userAvatarFrame = document.getElementById('user-avatar-frame');
+
+        
+
         const exportActionTrigger = document.getElementById('export-action-trigger');
+
         const deleteActionTrigger = document.getElementById('delete-action-trigger');
+
         const backendHostConfig = document.getElementById('backend-host-url-config');
 
+        
+
+        const workbenchSplitPanel = document.getElementById('workbench-split-panel');
+
+        const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
+
+        const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
+
+
+
         let currentConversationId = null;
-        let globalAuthorizationToken = "Bearer dev-session-active-token";
-        let SERVER_CONTEXT_HOST = ""; 
+
+        let globalAuthorizationToken = "";
+
+        let SERVER_CONTEXT_HOST = "";
+
+        let activeUserIdentityEmail = "";
+
+        let currentExtractedPreviewArtifactPayload = "";
+
+
 
         window.addEventListener('DOMContentLoaded', () => {
+
             const currentOrigin = window.location.origin;
-            if (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) {
-                SERVER_CONTEXT_HOST = "http://127.0.0.1:5000";
-            } else {
-                SERVER_CONTEXT_HOST = currentOrigin;
-            }
+
+            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
+
             backendHostConfig.value = SERVER_CONTEXT_HOST;
+
             
-            // Core Initialization of Google Auth Element Matrix
-            initializeGoogleIdentityService();
-            synchronizeConversationsHistoryIndex();
+
+            initializeGoogleOauthGate();
+
         });
 
-        // Setup Client Side Google Authorization
-        function initializeGoogleIdentityService() {
-            if (typeof google !== 'undefined') {
-                google.accounts.id.initialize({
-                    client_id: "1098485250499-mockid.apps.googleusercontent.com", // Swap with your exact Google Cloud OAuth Client ID
-                    callback: handleGoogleAuthCallbackMatrix,
-                    auto_select: false
-                });
-                google.accounts.id.renderButton(
-                    document.getElementById("google-signin-btn-container"),
-                    { theme: "dark", size: "small", type: "standard", width: "100%" }
-                );
-            }
+
+
+        function toggleColorTheme() {
+
+            document.documentElement.classList.toggle('dark-mode');
+
         }
 
-        function handleGoogleAuthCallbackMatrix(response) {
-            if (!response.credential) return;
-            
-            // Override active Bearer context with Google Issued Identity Token
-            globalAuthorizationToken = `Bearer ${response.credential}`;
-            
-            try {
-                // Instantly parse information payload locally to build UI profile context
-                const base64Url = response.credential.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const decodedPayload = JSON.parse(window.atob(base64));
-                
-                accountNameDisplay.innerText = decodedPayload.name || decodedPayload.email;
-                roleBadgeDisplay.innerText = "Google Verified Profile";
-                roleBadgeDisplay.className = "text-[10px] font-bold uppercase tracking-wider text-emerald-400";
-                
-                if (decodedPayload.picture) {
-                    userAvatarPlaceholder.innerHTML = `<img src="${decodedPayload.picture}" class="w-full h-full object-cover" referrerpolicy="no-referrer">`;
-                }
-                
-                synchronizeConversationsHistoryIndex();
-            } catch (err) {
-                console.error("[AUTH][FRONTEND] Identity parsing extraction error: ", err);
-            }
+
+
+        function initializeGoogleOauthGate() {
+
+            google.accounts.id.initialize({
+
+                client_id: "1098485250499-mockid.apps.googleusercontent.com", // Your Google client ID
+
+                callback: handleGoogleIdentityCallback,
+
+                auto_select: false
+
+            });
+
+            google.accounts.id.renderButton(googleSignInGate, { theme: "outline", size: "large", type: "standard" });
+
         }
+
+
+
+        function handleGoogleIdentityCallback(response) {
+
+            if (!response.credential) return;
+
+            globalAuthorizationToken = `Bearer ${response.credential}`;
+
+            
+
+            try {
+
+                const base64Url = response.credential.split('.')[1];
+
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+
+                const claims = JSON.parse(window.atob(base64));
+
+                
+
+                activeUserIdentityEmail = claims.email.toLowerCase();
+
+                profileNameDisplay.innerText = claims.name || claims.email;
+
+                if(claims.picture) {
+
+                    userAvatarFrame.innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover" referrerpolicy="no-referrer">`;
+
+                }
+
+                
+
+                // Real-time Context Role Evaluation Routing Logic
+
+                const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
+
+                const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
+
+                
+
+                if (creators.includes(activeUserIdentityEmail)) {
+
+                    roleBadgeDisplay.innerText = "App Creator Profile";
+
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-1 rounded";
+
+                } else if (supervisors.includes(activeUserIdentityEmail)) {
+
+                    roleBadgeDisplay.innerText = "Supervisor Administrator";
+
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-1 rounded";
+
+                } else {
+
+                    roleBadgeDisplay.innerText = "Validated System User";
+
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1 rounded";
+
+                }
+
+                
+
+                // Unlock Workspace Interface Layout Canvas Transition
+
+                loginOverlay.classList.add('opacity-0', 'pointer-events-none');
+
+                appShell.classList.remove('opacity-0', 'pointer-events-none');
+
+                
+
+                synchronizeConversationsHistoryIndex();
+
+            } catch(e) {
+
+                console.error("[AUTH][FAILURE] Token structural assertion block exception: ", e);
+
+            }
+
+        }
+
+
+
+        function triggerHiddenVipFormPrompt() {
+
+            const entryCode = prompt("Enter Security Token Matrix Key:");
+
+            if (entryCode === "31082011") {
+
+                const companionName = prompt("Enter your Name:");
+
+                const affiliation = prompt("Specify relationship details context with Pratham:");
+
+                
+
+                if(companionName && affiliation) {
+
+                    smartFetchRequest('/auth/vip-register', {
+
+                        method: 'POST',
+
+                        headers: {
+
+                            'Content-Type': 'application/json',
+
+                            'Authorization': globalAuthorizationToken
+
+                        },
+
+                        body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
+
+                    }).then(res => res.json()).then(data => {
+
+                        if(data.ok) {
+
+                            roleBadgeDisplay.innerText = "Internal Core VIP Tier";
+
+                            roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1 rounded";
+
+                            alert("Identity context recorded into vault file workspace successfully.");
+
+                        } else {
+
+                            alert("Storage operation tracking fault.");
+
+                        }
+
+                    });
+
+                }
+
+            } else {
+
+                alert("Signature reject. Authentication cycle drop.");
+
+            }
+
+        }
+
+
+
+        function triggerIdentitySignout() {
+
+            globalAuthorizationToken = "";
+
+            activeUserIdentityEmail = "";
+
+            loginOverlay.classList.remove('opacity-0', 'pointer-events-none');
+
+            appShell.classList.add('opacity-0', 'pointer-events-none');
+
+        }
+
+
 
         function updateBackendHostContext() {
+
             SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
+
             synchronizeConversationsHistoryIndex();
+
         }
+
+
 
         async function smartFetchRequest(endpointPath, options = {}) {
+
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+
             const pathPermutations = [
+
                 `${hostBase}/api/app${endpointPath}`,
+
                 `${hostBase}/api/app${endpointPath}/`,
+
                 `${hostBase}/api${endpointPath}`,
+
                 `${hostBase}${endpointPath}`,
+
                 `/api/app${endpointPath}`,
+
                 `/api${endpointPath}`,
+
                 `${endpointPath}`
+
             ];
 
+
+
             let lastResponse = null;
+
             for (const targetUrl of pathPermutations) {
+
                 try {
+
                     const response = await fetch(targetUrl, options);
-                    if (response.status !== 404) {
-                        return response; 
-                    }
+
+                    if (response.status !== 404) return response; 
+
                     lastResponse = response;
+
                 } catch (err) {}
+
             }
-            return lastResponse || new Response(JSON.stringify({ error: "All route permutations exhausted (404)." }), { status: 404 });
+
+            return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
+
         }
 
-        function toggleSidebarView() {
-            if (sidebarPanel.classList.contains('-translate-x-full')) {
-                sidebarPanel.classList.remove('-translate-x-full');
-            } else {
-                sidebarPanel.classList.add('-translate-x-full');
-            }
-        }
+
 
         function toggleModal(modalTargetId) {
+
             const target = document.getElementById(modalTargetId);
-            if(target.classList.contains('hidden')) {
-                target.classList.remove('hidden');
-                target.classList.add('flex');
-            } else {
-                target.classList.remove('flex');
-                target.classList.add('hidden');
-            }
+
+            target.classList.toggle('hidden');
+
+            target.classList.toggle('flex');
+
         }
+
+
 
         function createNewConversation() {
+
             currentConversationId = null;
-            activeChatTitleHeader.innerText = "New Conversation Thread";
+
+            activeChatTitleHeader.innerText = "Pipeline Channel Standard Core";
+
             exportActionTrigger.classList.add('hidden');
+
             deleteActionTrigger.classList.add('hidden');
+
+            workbenchSplitPanel.classList.add('hidden');
+
             conversationViewportPanel.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
-                    <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
-                    <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
-                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a message instruction to begin.</p>
+
+                <div class="m-auto text-center py-12 space-y-2">
+
+                    <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
+
+                    <p class="text-xs text-[var(--text-dim)] max-w-xs">Submit queries or request structured file components code execution frames.</p>
+
                 </div>
+
             `;
+
             synchronizeConversationsHistoryIndex();
+
         }
+
+
 
         function renderUserPromptBubble(promptText) {
-            const messageRow = document.createElement('div');
-            messageRow.className = 'flex justify-end w-full';
-            messageRow.innerHTML = `
-                <div class="user-bubble px-4.5 py-2.5 rounded-2xl max-w-[85%] text-[15px] leading-relaxed break-words shadow-xs">
+
+            const row = document.createElement('div');
+
+            row.className = 'w-full flex justify-end';
+
+            row.innerHTML = `
+
+                <div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">
+
                     ${sanitizeOutputText(promptText)}
+
                 </div>
+
             `;
-            conversationViewportPanel.appendChild(messageRow);
-            autoScrollToViewportBottom();
+
+            conversationViewportPanel.appendChild(row);
+
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+
         }
+
+
 
         function mountModelOutputTargetShell() {
+
             const containerNode = document.createElement('div');
-            containerNode.className = 'flex flex-col items-start w-full gap-1';
+
+            containerNode.className = 'w-full flex flex-col items-start gap-1';
+
             containerNode.innerHTML = `
-                <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
-                <div class="model-stream-target-node bot-text-color text-[15px] max-w-[95%] px-0.5 leading-relaxed break-words"></div>
+
+                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
+
+                <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[90%] leading-relaxed break-words shadow-xs"></div>
+
             `;
+
             conversationViewportPanel.appendChild(containerNode);
-            autoScrollToViewportBottom();
-            return containerNode.querySelector('.model-stream-target-node');
-        }
 
-        function mountSystemFailureDisplayNode(customErrorText = '') {
-            const containerNode = document.createElement('div');
-            containerNode.className = 'flex flex-col items-start w-full gap-1';
-            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}).` : 'Could not reach Pratham AI. Please try again.';
-            containerNode.innerHTML = `
-                <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
-                <div class="text-red-400 font-medium text-[15px] px-0.5">${sanitizeOutputText(displayMessage)}</div>
-                <button type="button" onclick="window.location.reload();" class="mt-2 px-3.5 py-1.5 border border-[#3f3f3f] bg-[#2f2f2f] rounded-full text-xs text-neutral-300 hover:text-white cursor-pointer transition-colors shadow-xs">↻ Retry Connection</button>
-            `;
-            conversationViewportPanel.appendChild(containerNode);
-            autoScrollToViewportBottom();
-        }
-
-        function pushOverlayRedErrorToast(customErrorText = '') {
-            const toastNode = document.createElement('div');
-            toastNode.className = 'w-full error-banner-tint text-white py-3 px-4 rounded-xl font-medium text-xs text-center shadow-md transition-all duration-300 transform translate-y-2 opacity-0';
-            toastNode.innerText = customErrorText ? `Could not reach Pratham AI. [Diagnostic: ${customErrorText}]` : 'Could not reach Pratham AI. Please try again.';
-            toastRenderingWrapper.appendChild(toastNode);
-            setTimeout(() => { toastNode.classList.remove('translate-y-2', 'opacity-0'); }, 15);
-            setTimeout(() => {
-                toastNode.classList.add('opacity-0');
-                setTimeout(() => toastNode.remove(), 300);
-            }, 6500);
-        }
-
-        function autoScrollToViewportBottom() {
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+
+            return containerNode.querySelector('.model-stream-target-node');
+
         }
+
+
 
         function sanitizeOutputText(rawText) {
+
             return rawText.replace(/[&<>'"]/g, char => ({
+
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+
             }[char] || char));
+
         }
+
+
 
         async function synchronizeConversationsHistoryIndex() {
+
             try {
+
                 const response = await smartFetchRequest(`/conversations`, {
+
                     method: 'GET',
+
                     headers: { 'Authorization': globalAuthorizationToken }
+
                 });
+
                 if(!response.ok) return;
+
                 const items = await response.json();
+
                 
+
                 if (items.length === 0) {
-                    historyItemsBox.innerHTML = `<p class="text-[11px] text-neutral-500 text-center py-4">No active conversations found.</p>`;
+
+                    historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No logged history vectors found.</p>`;
+
                     return;
+
                 }
+
+
 
                 historyItemsBox.innerHTML = '';
+
                 items.forEach(item => {
+
                     const row = document.createElement('div');
-                    row.className = `flex items-center justify-between p-2 rounded-xl text-xs group transition-all cursor-pointer ${item.id === currentConversationId ? 'bg-[#2d2d2d] text-white font-medium' : 'text-neutral-400 hover:bg-[#2d2d2d]/60'}`;
+
+                    row.className = `flex items-center justify-between p-2 rounded-xl text-xs group transition-all cursor-pointer ${item.id === currentConversationId ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-semibold' : 'text-[var(--text)] hover:bg-[var(--accent-soft)]/40'}`;
+
                     row.innerHTML = `
+
                         <div class="flex items-center gap-2 truncate flex-1" onclick="loadConversationSession('${item.id}')">
-                            <span>${item.pinned ? '📌' : '💬'}</span>
+
+                            <span>💬</span>
+
                             <span class="truncate">${sanitizeOutputText(item.title)}</span>
+
                         </div>
-                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onclick="togglePinConversation('${item.id}', event)" class="p-0.5 hover:text-white">📍</button>
-                        </div>
+
                     `;
+
                     historyItemsBox.appendChild(row);
+
                 });
+
             } catch (err) {}
+
         }
+
+
 
         async function loadConversationSession(conversationId) {
+
             try {
+
                 const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, {
+
                     method: 'GET',
+
                     headers: { 'Authorization': globalAuthorizationToken }
+
                 });
-                if(!response.ok) throw new Error("Load failure.");
+
+                if(!response.ok) throw new Error("Load structural exception context.");
+
                 const logs = await response.json();
+
                 
+
                 currentConversationId = conversationId;
+
                 exportActionTrigger.classList.remove('hidden');
+
                 deleteActionTrigger.classList.remove('hidden');
+
                 
-                const matchedItem = Array.from(document.querySelectorAll('#history-items-box span.truncate')).find(el => el.innerText.startsWith(logs[0]?.content.substring(0,10) || ""));
-                activeChatTitleHeader.innerText = matchedItem ? matchedItem.innerText : "Active Session View";
 
                 conversationViewportPanel.innerHTML = '';
+
                 logs.forEach(log => {
+
                     if(log.role === 'user') {
+
                         renderUserPromptBubble(log.content);
+
                     } else if (log.role === 'assistant') {
+
                         const cell = mountModelOutputTargetShell();
+
                         cell.innerHTML = sanitizeOutputText(log.content).replace(/\n/g, "<br>");
+
+                        evaluateAndParsePreviewSandboxPayload(log.content);
+
                     }
+
                 });
-                autoScrollToViewportBottom();
+
                 synchronizeConversationsHistoryIndex();
-            } catch (err) {
-                pushOverlayRedErrorToast("Sync connection error.");
-            }
+
+            } catch (err) {}
+
         }
 
-        async function togglePinConversation(id, event) {
-            event.stopPropagation();
-            try {
-                await smartFetchRequest(`/conversations/${id}/pin`, {
-                    method: 'POST',
-                    headers: { 'Authorization': globalAuthorizationToken }
-                });
-                synchronizeConversationsHistoryIndex();
-            } catch (err) {
-                pushOverlayRedErrorToast();
-            }
-        }
+
 
         async function triggerSessionDelete() {
+
             if (!currentConversationId) return;
+
             try {
+
                 await smartFetchRequest(`/conversations/${currentConversationId}`, {
+
                     method: 'DELETE',
+
                     headers: { 'Authorization': globalAuthorizationToken }
+
                 });
+
                 createNewConversation();
-            } catch (err) {
-                pushOverlayRedErrorToast();
-            }
+
+            } catch (err) {}
+
         }
+
+
 
         function triggerSessionExport() {
+
             if(!currentConversationId) return;
+
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+
             window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
+
         }
 
-        async function dispatchPythonExecution() {
-            const codePayload = document.getElementById('python-code-editor-area').value.trim();
-            const outputFrame = document.getElementById('python-console-output-frame');
-            if(!codePayload) return;
-            outputFrame.innerText = "Executing in virtual environment...";
-            try {
-                const response = await smartFetchRequest(`/execute-python`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': globalAuthorizationToken
-                    },
-                    body: JSON.stringify({ code: codePayload })
-                });
-                const data = await response.json();
-                outputFrame.innerText = data.stderr ? `Sandbox Error:\n${data.stderr}` : data.stdout || "Script completed successfully.";
-            } catch(err) {
-                outputFrame.innerText = "Sandbox timeout.";
-            }
-        }
+
 
         async function dispatchPdfUpload() {
+
             const selector = document.getElementById('pdf-payload-file-element');
+
             if(selector.files.length === 0) return;
+
             const packet = new FormData();
+
             packet.append("file", selector.files[0]);
+
             try {
+
                 const response = await smartFetchRequest(`/upload`, {
+
                     method: 'POST',
+
                     headers: { 'Authorization': globalAuthorizationToken },
+
                     body: packet
+
                 });
+
                 const res = await response.json();
+
                 alert(res.message || res.error);
+
                 toggleModal('pdf-modal');
+
             } catch(err) {
-                pushOverlayRedErrorToast("Upload failed.");
+
+                alert("Vector mapping initialization fault standard trace drop.");
+
             }
+
         }
 
-        async function dispatchVipUpgrade() {
-            const entryValue = document.getElementById('vip-secret-entry-input').value.trim();
-            if(!entryValue) return;
-            try {
-                const response = await smartFetchRequest(`/auth/vip-upgrade`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': globalAuthorizationToken
-                    },
-                    body: JSON.stringify({ code: entryValue })
-                });
-                const res = await response.json();
-                if(res.ok) {
-                    roleBadgeDisplay.innerText = "VIP Tier Pro Profile";
-                    roleBadgeDisplay.className = "text-[10px] font-bold uppercase tracking-wider text-amber-400";
-                    toggleModal('vip-modal');
-                } else {
-                    alert(res.error);
-                }
-            } catch(err) {
-                pushOverlayRedErrorToast("Upgrade failed.");
-            }
-        }
 
-        interactionSubmissionForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const textValue = userPromptInputField.value.trim();
-            if(!textValue) return;
 
-            if(conversationViewportPanel.querySelector('.text-center')) {
-                conversationViewportPanel.innerHTML = '';
-            }
+        function evaluateAndParsePreviewSandboxPayload(textBlock) {
 
-            renderUserPromptBubble(textValue);
-            userPromptInputField.value = '';
+            // Evaluates code blocks inside the response array stream
 
-            let outputContainer = null;
-            let combinedTextBuffer = "";
+            const codeBlockRegex = /
 
-            try {
-                const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-                const targetUrls = [
-                    `${hostBase}/api/app/chat-stream`,
-                    `${hostBase}/api/app/chat-stream/`,
-                    `${hostBase}/api/chat-stream`,
-                    `${hostBase}/chat-stream`
-                ];
+http://googleusercontent.com/immersive_entry_chip/0
 
-                let response = null;
-                for (const url of targetUrls) {
-                    try {
-                        response = await fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': globalAuthorizationToken
-                            },
-                            body: JSON.stringify({ message: textValue, conversation_id: currentConversationId })
-                        });
-                        if (response.status !== 404) break;
-                    } catch (e) {}
-                }
 
-                if(!response || !response.ok) {
-                    throw new Error(`Dropped. Status: ${response ? response.status : 'Offline'}`);
-                }
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder("utf-8");
-                let storageChunkBuffer = "";
+---
 
-                while(true) {
-                    const { value, done } = await reader.read();
-                    if(done) break;
 
-                    storageChunkBuffer += decoder.decode(value, { stream: true });
-                    const elements = storageChunkBuffer.split("\n");
-                    storageChunkBuffer = elements.pop();
 
-                    for(const element of elements) {
-                        const rawContent = element.trim();
-                        if(!rawContent.startsWith("data: ")) continue;
+### 🛠️ Verification & Next Steps
 
-                        try {
-                            const parsedJson = JSON.parse(rawContent.substring(6));
-                            if(parsedJson.type === "metadata") {
-                                currentConversationId = parsedJson.conversation_id;
-                                exportActionTrigger.classList.remove('hidden');
-                                deleteActionTrigger.classList.remove('hidden');
-                            } else if (parsedJson.type === "token") {
-                                if(!outputContainer) {
-                                    outputContainer = mountModelOutputTargetShell();
-                                }
-                                combinedTextBuffer += parsedJson.text;
-                                outputContainer.innerHTML = sanitizeOutputText(combinedTextBuffer).replace(/\n/g, "<br>");
-                                autoScrollToViewportBottom();
-                            } else if (parsedJson.type === "error") {
-                                throw new Error(parsedJson.text);
-                            }
-                        } catch(exc) {}
-                    }
-                }
-                synchronizeConversationsHistoryIndex();
-            } catch (err) {
-                console.error(err);
-                mountSystemFailureDisplayNode(err.message);
-                pushOverlayRedErrorToast(err.message);
-            }
-        });
-    </script>
-</body>
-</html>
+1. Make sure your environment configurations parameters (`GITHUB_TOKEN` and `GROQ_API_KEY`) are correctly declared in your Vercel/Render hosting configurations panel variables dashboard.
+
+2. The user role stratification is fully handled dynamically directly upon sign-in. To trigger the VIP tracking logs save execution structure anywhere in the UI workspace panel layout context, click **"Secure Lock"** at the bottom left tracking control segment bar and type code `31082011`.
