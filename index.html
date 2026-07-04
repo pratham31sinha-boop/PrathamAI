@@ -65,9 +65,8 @@
             <hr class="border-[var(--border)]">
             
             <div class="flex justify-center w-full py-2 min-h-[44px]">
-               <div id="googleSignInGate" class="w-full flex justify-center items-center">
-                  <div id="googleSignInGate" class="w-full flex justify-center items-center">
-                      <div id="gsiButtonContainer"></div>
+                <div id="googleSignInGate" class="w-full flex justify-center items-center">
+                    <div id="gsiButtonContainer"></div>
                    </div>
                 </div>
             </div>
@@ -495,6 +494,30 @@ function initializeGoogleOauthGate() {
             }
         }
 
-        function evaluateAndParsePreviewSandboxPayload(textBlock) {
-            const codeBlockRegex = /
-http://googleusercontent.com/immersive_entry_chip/0
+function evaluateAndParsePreviewSandboxPayload(textBlock) {
+            const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+            let match;
+            let lastMatch = null;
+
+            while ((match = codeBlockRegex.exec(textBlock)) !== null) {
+                lastMatch = match;
+            }
+
+            if (lastMatch) {
+                const language = lastMatch[1] || 'text';
+                const code = lastMatch[2];
+                currentExtractedPreviewArtifactPayload = code;
+
+                workbenchSplitPanel.classList.remove('hidden');
+                agentBackgroundTerminalLogger.textContent = `Payload parsed: ${language} block (${code.length} chars)`;
+
+                if (language === 'html') {
+                    interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;" srcdoc="${sanitizeOutputText(code)}"></iframe>`;
+                } else {
+                    interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs whitespace-pre-wrap p-2">${sanitizeOutputText(code)}</pre>`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
