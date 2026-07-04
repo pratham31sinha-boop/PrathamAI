@@ -31,9 +31,7 @@
                     + New Chat
                 </button>
             </div>
-            
             <hr class="border-[#262626] mb-3">
-            
             <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5">
                 <p class="text-xs text-neutral-500 text-center py-4">Syncing workspace state...</p>
             </div>
@@ -42,7 +40,7 @@
         <div class="p-3 border-t border-[#262626] bg-[#171717] flex flex-col gap-2">
             <div class="p-2 bg-[#212121] rounded-xl border border-[#2f2f2f]">
                 <label class="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block mb-1">Target Host Gateway</label>
-                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic detection active" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
+                <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
             </div>
             <div class="flex items-center gap-3 p-2 rounded-xl bg-[#212121] border border-[#2f2f2f] shadow-xs">
                 <div class="w-8 h-8 rounded-full bg-[#3f3f3f] text-neutral-300 flex items-center justify-center font-bold text-xs">U</div>
@@ -59,7 +57,6 @@
     </aside>
 
     <main class="flex-1 h-full flex flex-col relative bg-[#212121] justify-between min-w-0">
-        
         <header class="h-14 border-b border-[#2d2d2d] px-4 flex items-center justify-between bg-[#212121]/90 backdrop-blur-md z-20">
             <div class="flex items-center gap-3.5">
                 <button onclick="toggleSidebarView()" class="p-1.5 text-neutral-400 hover:text-white hover:bg-[#2d2d2d] rounded-lg text-lg cursor-pointer md:hidden">☰</button>
@@ -78,34 +75,17 @@
             <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
                 <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
                 <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
-                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a message instruction to initialize the model matrix logic loops. Use <span class="font-mono bg-[#2d2d2d] px-1 py-0.5 rounded text-emerald-400">@education</span> context syntax tags to point processing directly over loaded PDF text vector files.</p>
+                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a prompt to initialize parsing. Mention <span class="font-mono bg-[#2d2d2d] px-1 py-0.5 rounded text-emerald-400">@education</span> to search vectors.</p>
             </div>
         </div>
 
         <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#212121] via-[#212121] to-transparent pt-6 pb-4 px-4 z-20">
             <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
-                
                 <div id="toast-rendering-wrapper" class="w-full flex flex-col gap-1.5"></div>
-
                 <form id="interaction-submission-form" class="w-full relative flex items-center rounded-2xl input-bar-bg overflow-hidden focus-within:ring-2 focus-within:ring-neutral-600 transition-all">
-                    <button type="button" onclick="toggleModal('pdf-modal')" class="pl-3.5 pr-2 text-neutral-400 hover:text-white transition-colors cursor-pointer text-lg">
-                        📎
-                    </button>
-                    <input 
-                        type="text" 
-                        id="user-prompt-input-field" 
-                        placeholder="Message Pratham AI... (use @education to reference uploaded PDFs)" 
-                        class="w-full pr-12 py-3.5 bg-transparent border-none focus:outline-none text-[15px] text-white placeholder-neutral-500"
-                        autocomplete="off"
-                        required
-                    >
-                    <button 
-                        type="submit" 
-                        id="input-action-submit-btn"
-                        class="absolute right-3 w-8 h-8 flex items-center justify-center bg-[#eceecf] text-black rounded-full hover:bg-white transition-colors shadow-xs cursor-pointer text-sm font-bold"
-                    >
-                        ↑
-                    </button>
+                    <button type="button" onclick="toggleModal('pdf-modal')" class="pl-3.5 pr-2 text-neutral-400 hover:text-white transition-colors cursor-pointer text-lg">📎</button>
+                    <input type="text" id="user-prompt-input-field" placeholder="Message Pratham AI... (use @education to reference uploaded PDFs)" class="w-full pr-12 py-3.5 bg-transparent border-none focus:outline-none text-[15px] text-white placeholder-neutral-500" autocomplete="off" required>
+                    <button type="submit" id="input-action-submit-btn" class="absolute right-3 w-8 h-8 flex items-center justify-center bg-[#eceecf] text-black rounded-full hover:bg-white transition-colors shadow-xs cursor-pointer text-sm font-bold">↑</button>
                 </form>
                 <p class="text-center text-[10px] text-neutral-500">Pratham AI can make mistakes. Verify important info. 🔒 Private per-account history.</p>
             </div>
@@ -119,7 +99,7 @@
                 <button onclick="toggleModal('sandbox-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-4 flex flex-col gap-3">
-                <textarea id="python-code-editor-area" rows="6" class="w-full font-mono text-xs p-3 editor-bg rounded-xl border border-[#3f3f3f] focus:outline-none focus:ring-1 focus:ring-neutral-500 shadow-inner" placeholder="print('Hello from the Pratham AI virtual execution sandbox layer!')"></textarea>
+                <textarea id="python-code-editor-area" rows="6" class="w-full font-mono text-xs p-3 editor-bg rounded-xl border border-[#3f3f3f] focus:outline-none focus:ring-1 focus:ring-neutral-500 shadow-inner" placeholder="print('Hello from the virtual execution sandbox!')"></textarea>
                 <button onclick="dispatchPythonExecution()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white shadow-xs cursor-pointer">Execute Script Frame</button>
                 <div class="flex flex-col gap-1">
                     <span class="text-[10px] font-bold tracking-wider text-neutral-400 uppercase">Console Output Logs</span>
@@ -188,11 +168,8 @@
             synchronizeConversationsHistoryIndex();
         }
 
-        // Expanded Vercel Path Auto-Resolver Matrix
         async function smartFetchRequest(endpointPath, options = {}) {
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            
-            // Re-ordered to prioritize Vercel's serverless api directory map structure
             const pathPermutations = [
                 `${hostBase}/api/app${endpointPath}`,
                 `${hostBase}/api/app${endpointPath}/`,
@@ -211,9 +188,7 @@
                         return response; 
                     }
                     lastResponse = response;
-                } catch (err) {
-                    // Fail silently and test the next permutation chain
-                }
+                } catch (err) {}
             }
             return lastResponse || new Response(JSON.stringify({ error: "All route permutations exhausted (404)." }), { status: 404 });
         }
@@ -242,12 +217,11 @@
             activeChatTitleHeader.innerText = "New Conversation Thread";
             exportActionTrigger.classList.add('hidden');
             deleteActionTrigger.classList.add('hidden');
-            
             conversationViewportPanel.innerHTML = `
                 <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
                     <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
                     <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
-                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit an instruction prompt to initialize the pipeline loops.</p>
+                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a message instruction to begin.</p>
                 </div>
             `;
             synchronizeConversationsHistoryIndex();
@@ -280,16 +254,11 @@
         function mountSystemFailureDisplayNode(customErrorText = '') {
             const containerNode = document.createElement('div');
             containerNode.className = 'flex flex-col items-start w-full gap-1';
-            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}). Please ensure your backend function handles routing properly.` : 'Could not reach Pratham AI. Please try again.';
-            
+            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}).` : 'Could not reach Pratham AI. Please try again.';
             containerNode.innerHTML = `
                 <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
-                <div class="text-red-400 font-medium text-[15px] px-0.5">
-                    ${sanitizeOutputText(displayMessage)}
-                </div>
-                <button type="button" onclick="window.location.reload();" class="mt-2 px-3.5 py-1.5 border border-[#3f3f3f] bg-[#2f2f2f] rounded-full text-xs text-neutral-300 hover:text-white cursor-pointer transition-colors shadow-xs">
-                    ↻ Retry Connection
-                </button>
+                <div class="text-red-400 font-medium text-[15px] px-0.5">${sanitizeOutputText(displayMessage)}</div>
+                <button type="button" onclick="window.location.reload();" class="mt-2 px-3.5 py-1.5 border border-[#3f3f3f] bg-[#2f2f2f] rounded-full text-xs text-neutral-300 hover:text-white cursor-pointer transition-colors shadow-xs">↻ Retry Connection</button>
             `;
             conversationViewportPanel.appendChild(containerNode);
             autoScrollToViewportBottom();
@@ -299,10 +268,8 @@
             const toastNode = document.createElement('div');
             toastNode.className = 'w-full error-banner-tint text-white py-3 px-4 rounded-xl font-medium text-xs text-center shadow-md transition-all duration-300 transform translate-y-2 opacity-0';
             toastNode.innerText = customErrorText ? `Could not reach Pratham AI. [Diagnostic: ${customErrorText}]` : 'Could not reach Pratham AI. Please try again.';
-            
             toastRenderingWrapper.appendChild(toastNode);
             setTimeout(() => { toastNode.classList.remove('translate-y-2', 'opacity-0'); }, 15);
-
             setTimeout(() => {
                 toastNode.classList.add('opacity-0');
                 setTimeout(() => toastNode.remove(), 300);
@@ -312,6 +279,10 @@
         function autoScrollToViewportBottom() {
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            setTimeout(autoScrollToViewportBottom, 200);
+        });
 
         function sanitizeOutputText(rawText) {
             return rawText.replace(/[&<>'"]/g, char => ({
@@ -348,9 +319,7 @@
                     `;
                     historyItemsBox.appendChild(row);
                 });
-            } catch (err) {
-                console.error("History pane fetch error:", err);
-            }
+            } catch (err) {}
         }
 
         async function loadConversationSession(conversationId) {
@@ -359,7 +328,7 @@
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
-                if(!response.ok) throw new Error("Load sequence failure.");
+                if(!response.ok) throw new Error("Load failure.");
                 const logs = await response.json();
                 
                 currentConversationId = conversationId;
@@ -381,7 +350,7 @@
                 autoScrollToViewportBottom();
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                pushOverlayRedErrorToast("Network mapping error.");
+                pushOverlayRedErrorToast("Sync connection error.");
             }
         }
 
@@ -421,8 +390,7 @@
             const codePayload = document.getElementById('python-code-editor-area').value.trim();
             const outputFrame = document.getElementById('python-console-output-frame');
             if(!codePayload) return;
-
-            outputFrame.innerText = "Spawning virtual isolation block space...";
+            outputFrame.innerText = "Executing in virtual environment...";
             try {
                 const response = await smartFetchRequest(`/execute-python`, {
                     method: 'POST',
@@ -433,19 +401,17 @@
                     body: JSON.stringify({ code: codePayload })
                 });
                 const data = await response.json();
-                outputFrame.innerText = data.stderr ? `Sandbox Traceback Output:\n${data.stderr}` : data.stdout || "Script completed runtime parameters cleanly.";
+                outputFrame.innerText = data.stderr ? `Sandbox Error:\n${data.stderr}` : data.stdout || "Script completed successfully.";
             } catch(err) {
-                outputFrame.innerText = "Sandbox pipeline connection timeout.";
+                outputFrame.innerText = "Sandbox timeout.";
             }
         }
 
         async function dispatchPdfUpload() {
             const selector = document.getElementById('pdf-payload-file-element');
             if(selector.files.length === 0) return;
-            
             const packet = new FormData();
             packet.append("file", selector.files[0]);
-
             try {
                 const response = await smartFetchRequest(`/upload`, {
                     method: 'POST',
@@ -456,14 +422,13 @@
                 alert(res.message || res.error);
                 toggleModal('pdf-modal');
             } catch(err) {
-                pushOverlayRedErrorToast("Upload pipeline offline.");
+                pushOverlayRedErrorToast("Upload failed.");
             }
         }
 
         async function dispatchVipUpgrade() {
             const entryValue = document.getElementById('vip-secret-entry-input').value.trim();
             if(!entryValue) return;
-
             try {
                 const response = await smartFetchRequest(`/auth/vip-upgrade`, {
                     method: 'POST',
@@ -482,13 +447,10 @@
                     alert(res.error);
                 }
             } catch(err) {
-                pushOverlayRedErrorToast("Escalation protocol failed.");
+                pushOverlayRedErrorToast("Upgrade failed.");
             }
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        //  CORE STREAMING PIPELINE WITH ADVANCED ROUTE RESOLUTION
-        // ══════════════════════════════════════════════════════════════════════
         interactionSubmissionForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const textValue = userPromptInputField.value.trim();
@@ -505,20 +467,31 @@
             let combinedTextBuffer = "";
 
             try {
-                const response = await smartFetchRequest(`/chat-stream`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': globalAuthorizationToken
-                    },
-                    body: JSON.stringify({
-                        message: textValue,
-                        conversation_id: currentConversationId
-                    })
-                });
+                const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+                const targetUrls = [
+                    `${hostBase}/api/app/chat-stream`,
+                    `${hostBase}/api/app/chat-stream/`,
+                    `${hostBase}/api/chat-stream`,
+                    `${hostBase}/chat-stream`
+                ];
 
-                if(!response.ok) {
-                    throw new Error(`Server returned error code status: ${response.status}`);
+                let response = null;
+                for (const url of targetUrls) {
+                    try {
+                        response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': globalAuthorizationToken
+                            },
+                            body: JSON.stringify({ message: textValue, conversation_id: currentConversationId })
+                        });
+                        if (response.status !== 404) break;
+                    } catch (e) {}
+                }
+
+                if(!response || !response.ok) {
+                    throw new Error(`Dropped. Status: ${response ? response.status : 'Offline'}`);
                 }
 
                 const reader = response.body.getReader();
@@ -539,7 +512,6 @@
 
                         try {
                             const parsedJson = JSON.parse(rawContent.substring(6));
-                            
                             if(parsedJson.type === "metadata") {
                                 currentConversationId = parsedJson.conversation_id;
                                 exportActionTrigger.classList.remove('hidden');
@@ -554,14 +526,12 @@
                             } else if (parsedJson.type === "error") {
                                 throw new Error(parsedJson.text);
                             }
-                        } catch(exc) {
-                            // Suppress partial fragment validation anomalies
-                        }
+                        } catch(exc) {}
                     }
                 }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                console.error("Streaming failure occurred:", err);
+                console.error(err);
                 mountSystemFailureDisplayNode(err.message);
                 pushOverlayRedErrorToast(err.message);
             }
