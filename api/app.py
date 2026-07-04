@@ -388,6 +388,21 @@ def health():
         ]
     })
  
+@app.route("/api/app", methods=["GET"])
+def api_app_root():
+    # Added for Vercel deployment: this is the endpoint the frontend's
+    # test button calls (fetch('/api/app')). Vercel's Python builder
+    # auto-detects the `app` Flask/WSGI object below and serves it as a
+    # serverless function, so no BaseHTTPRequestHandler class is needed -
+    # exporting `app` IS the Vercel-compatible "handler equivalent".
+    return jsonify({
+        "status": "ok",
+        "message": "Pratham AI backend is reachable on Vercel.",
+        "time": now_iso(),
+        "groq_configured": bool(GROQ_API_KEY),
+        "supabase_configured": bool(SUPABASE_URL and SUPABASE_ANON_KEY)
+    })
+
 @app.route("/upload", methods=["POST"])
 def upload():
     user = get_authenticated_user()
@@ -664,3 +679,26 @@ def chat_stream():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+# ==============================================================================
+# SECTION 10: VERCEL SERVERLESS COMPATIBILITY NOTES
+# ==============================================================================
+# Vercel's Python runtime (@vercel/python) auto-detects a WSGI-compatible
+# object named `app` in this file and wraps it as the serverless function
+# entrypoint - this is the officially supported "handler equivalent" for
+# Flask apps, so `app` above is left exported exactly as-is.
+#
+# Two things will NOT survive on Vercel the way they do on Railway, because
+# serverless functions are stateless and short-lived per invocation:
+#   1. SESSIONS / CONVERSATIONS / USER_FILES / STATE_FILE persistence - each
+#      cold start gets a fresh in-memory dict and an ephemeral filesystem, so
+#      conversation history will not reliably persist between requests. For
+#      real persistence on Vercel you would need an external store (e.g.
+#      Supabase Postgres, Redis) instead of the local JSON snapshot file.
+#   2. SSE streaming from /chat-stream and long-running /execute-python calls
+#      are subject to Vercel's per-invocation execution time limit, so very
+#      long generations or long-running Python snippets may be cut off.
+# Both routes are left fully intact above so behavior is unchanged when this
+# same file is run on Railway/Render; the constraints above only apply once
+# deployed on Vercel specifically.
+application = app
