@@ -977,7 +977,7 @@ function initGoogleSignIn(){
     if (error) {
       $('authLoadingOverlay').style.display = 'none';
       showAuthError(error);
-      showToast(error.message, 'err');
+      showToast("Sign-in couldn't be completed. Please try again.", 'err');
     }
   };
 }
@@ -988,7 +988,9 @@ function showAuthError(err){
   const desc = $('authErrorDesc');
   card.style.display = 'block';
   title.textContent = 'Connection Issue';
-  desc.innerHTML = `<p>${escapeHtml(err.message || err)}</p>`;
+  // Show a clean, branded message instead of raw provider error text,
+  // which could otherwise leak internal vendor names to the user.
+  desc.innerHTML = `<p>We couldn't sign you in right now. Please try again in a moment.</p>`;
 }
  
 $('btnAuthRetry').onclick = () => { if ($('btnSupabaseGoogleLogin')) $('btnSupabaseGoogleLogin').click(); };
