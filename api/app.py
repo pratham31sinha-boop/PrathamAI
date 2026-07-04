@@ -343,7 +343,96 @@ def extract_pdf_text(file_bytes, max_chars=20000):
         return ""
  
  
-def build_education_context(user_id, question, max_chars=6000):
+# ==============================================================================
+# SECTION 8.5: MULTI-PROVIDER CASCADE (Groq default -> fallback chain)
+# ==============================================================================
+# Each entry: name, base chat-completions URL (OpenAI-compatible shape),
+# the API key env value, and the model string to use for that provider.
+# Groq is tried first; if it errors, is rate-limited, or is on cooldown
+# from a recent failure, the next configured provider is tried instead.
+PROVIDER_CASCADE = [
+    {"name": "groq", "url": "https://api.groq.com/openai/v1/chat/completions", "key": GROQ_API_KEY, "model": "llama-3.3-70b-versatile"},
+    {"name": "openrouter", "url": "https://openrouter.ai/api/v1/chat/completions", "key": OPENROUTER_API_KEY, "model": "meta-llama/llama-3.3-70b-instruct:free"},
+    {"name": "cerebras", "url": "https://api.cerebras.ai/v1/chat/completions", "key": CEREBRAS_API_KEY, "model": "llama-3.3-70b"},
+    {"name": "mistral", "url": "https://api.mistral.ai/v1/chat/completions", "key": MISTRAL_API_KEY, "model": "mistral-large-latest"},
+]
+
+
+def provider_is_cooling_down(name):
+    until = PROVIDER_COOLDOWN.get(name)
+    return bool(until and time.time() < until)
+
+
+def mark_provider_cooldown(name):
+    PROVIDER_COOLDOWN[name] = time.time() + PROVIDER_COOLDOWN_SECONDS
+
+
+def get_available_providers():
+    """Returns the provider cascade in order, skipping unconfigured or
+    currently-cooling-down providers, Groq first as the default."""
+    return [p for p in PROVIDER_CASCADE if p["key"] and not provider_is_cooling_down(p["name"])]
+
+
+def stream_from_provider(provider, system_prompt, message_text):
+    """Yields (event_type, payload) tuples from a single provider attempt.
+    event_type is one of: 'token', 'done', 'failed'."""
+    headers = {"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"}
+    payload = {
+        "model": provider["model"],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message_text}
+        ],
+        "stream": True
+    }
+    try:
+        res = requests.post(provider["url"], json=payload, headers=headers, stream=True, timeout=REQUEST_TIMEOUT_STREAM)
+    except Exception as exc:
+        logger.warning("Provider %s request failed to start: %s", provider["name"], exc)
+        yield ("failed", str(exc))
+        return
+
+    if res.status_code == 429:
+        logger.warning("Provider %s rate-limited (429) - marking cooldown.", provider["name"])
+        mark_provider_cooldown(provider["name"])
+        yield ("failed", "rate_limited")
+        return
+    if res.status_code != 200:
+        logger.warning("Provider %s returned status %s: %s", provider["name"], res.status_code, truncate(res.text, 300))
+        mark_provider_cooldown(provider["name"])
+        yield ("failed", f"status_{res.status_code}")
+        return
+
+    collected = ""
+    try:
+        for line in res.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode("utf-8").strip()
+            if not line_str.startswith("data: ") or line_str.endswith("[DONE]"):
+                continue
+            try:
+                data_chunk = json.loads(line_str[6:])
+                token = data_chunk["choices"][0]["delta"].get("content", "")
+            except Exception:
+                continue
+            if token:
+                collected += token
+                yield ("token", token)
+    except Exception as exc:
+        logger.warning("Provider %s stream interrupted: %s", provider["name"], exc)
+        if not collected:
+            yield ("failed", str(exc))
+            return
+    yield ("done", collected)
+
+
+def now_iso_placeholder():
+    # kept for readability of the cascade section only; real now_iso() below
+    pass
+
+
+
     docs = USER_FILES.get(user_id, [])
     if not docs:
         return "", []
@@ -382,6 +471,17 @@ def build_education_context(user_id, question, max_chars=6000):
 # SECTION 9: APPLICATION API ROUTE DEFINITIONS
 # ==============================================================================
  
+@app.route("/", methods=["GET"])
+def root_index():
+    # Added: the API previously had no "/" route at all, so hitting the
+    # bare backend URL (or certain Vercel routing edge cases) returned a
+    # raw 404. Now it returns a small identifying JSON payload instead.
+    return jsonify({"service": "Pratham AI backend", "status": "running", "health_check": "/health"})
+
+@app.errorhandler(404)
+def handle_404(e):
+    return error_response("This endpoint does not exist.", 404)
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
