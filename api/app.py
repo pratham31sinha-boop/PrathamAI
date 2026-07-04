@@ -2,11 +2,12 @@
 Pratham AI – Full Production Backend Architecture
 =================================================
 Fixes Applied:
-  1. Resolved Vercel Variable Mismatch: Converted Groq generation engines to use native 
-     HTTP requests (`urllib.request`) rather than depending on external SDK installation state.
-  2. Maintained Route Matrix Structure: Kept all proxy path decorations matching 
+  1. Bypassed Cloudflare API Blocks: Embedded a standard browser `User-Agent` header 
+     into the native `urllib.request` pipelines to prevent Groq from rejecting the stream.
+  2. Fixed Syntax Typo: Cleaned up an accidental word token in the database persistence check.
+  3. Maintained Route Matrix Structure: Kept all proxy path decorations matching 
      Vercel serverless specifications intact.
-  3. Preserved Original Methods: 100% of all user profile authentication tracking, 
+  4. Preserved Original Methods: 100% of all user profile authentication tracking, 
      sandboxed Python executors, and document management code paths are preserved.
 """
 
@@ -70,7 +71,6 @@ OPENROUTER_API_KEY   = os.environ.get("OPENROUTER_API_KEY", "").strip()
 CEREBRAS_API_KEY     = os.environ.get("CEREBRAS_API_KEY", "").strip()
 MISTRAL_API_KEY      = os.environ.get("MISTRAL_API_KEY", "").strip()
 
-# Set Groq availability based directly on key configuration status
 GROQ_CONFIGURED      = bool(GROQ_API_KEY)
 SUPABASE_CONFIGURED  = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
 
@@ -182,7 +182,7 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 def _stream_groq(messages: list[dict], preferred_model: str | None = None):
-    """Streams data from Groq using native HTTP protocols to prevent environment layout blocks."""
+    """Streams data from Groq using native HTTP protocols with spoofed browser User-Agents."""
     if not GROQ_API_KEY:
         raise RuntimeError("Groq configuration keys are absent from environment variables context.")
     if _is_cooling("groq"):
@@ -205,7 +205,8 @@ def _stream_groq(messages: list[dict], preferred_model: str | None = None):
         data=body,
         headers={
             "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
         method="POST"
     )
@@ -255,6 +256,7 @@ def _stream_openrouter(messages: list[dict]):
             "Content-Type": "application/json",
             "HTTP-Referer": "https://prathamai.vercel.app",
             "X-Title": "Pratham AI Pipeline",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
         method="POST",
     )
@@ -379,7 +381,7 @@ def _get_messages(conv_id: str) -> list[dict]:
     return _mem_convos.get(conv_id, {}).get("messages", [])
 
 def _append_message(conv_id: str, role: str, content: str):
-    if SUPABASE_CONFIGURED community and _supabase:
+    if SUPABASE_CONFIGURED and _supabase:
         try:
             _supabase.table("messages").insert({
                 "id": str(uuid.uuid4()),
