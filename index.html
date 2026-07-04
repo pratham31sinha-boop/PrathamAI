@@ -1,1564 +1,519 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Pratham AI">
-<meta name="format-detection" content="telephone=no">
-<meta name="description" content="Pratham AI – a private, multi-provider AI chat assistant.">
-<title>Pratham AI</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-/* ==========================================================================
-   0. DESIGN TOKENS
-   ========================================================================== */
-:root{
-  --bg-main:#fbfaf7;--bg-sidebar:#f3f0e8;--bg-panel:#ffffff;--bg-hover:rgba(0,0,0,.04);--bg-active:rgba(0,0,0,.08);
-  --border-light:#e2e0d8;--border-heavy:#d1cfc7;
-  --text-primary:#191919;--text-secondary:#4a4a4a;--text-tertiary:#85837d;--text-inverse:#fff;
-  --accent:#cc6239;--accent-hover:#b35531;--accent-soft:rgba(204,98,57,.12);
-  --error:#d32f2f;--ok:#2e7d32;--warn:#b98900;
-  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  --font-serif:'Source Serif 4',Georgia,serif;
-  --font-mono:'Fira Code',Consolas,monospace;
-  --radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:22px;--radius-pill:9999px;
-  --sidebar-w:280px;--topbar-h:56px;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 12px rgba(0,0,0,.12);--shadow-lg:0 16px 36px rgba(0,0,0,.16);
-  --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
-  --safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px);
-  --z-sidebar:60;--z-topbar:20;--z-dropdown:80;--z-terminal:70;--z-drawer:90;--z-scrim:85;--z-auth:500;--z-toast:9998;--z-banner:9999;
-}
-@media(prefers-color-scheme:dark){
-  :root{
-    --bg-main:#121212;--bg-sidebar:#1a1a1a;--bg-panel:#242424;--bg-hover:rgba(255,255,255,.08);--bg-active:rgba(255,255,255,.12);
-    --border-light:#333;--border-heavy:#444;--text-primary:#e6e6e6;--text-secondary:#a8a8a8;--text-tertiary:#787878;
-    --accent:#e87b51;--accent-hover:#ff8f66;--accent-soft:rgba(232,123,81,.16);
-  }
-}
-html[data-theme="light"]{
-  --bg-main:#fbfaf7;--bg-sidebar:#f3f0e8;--bg-panel:#ffffff;--bg-hover:rgba(0,0,0,.04);--bg-active:rgba(0,0,0,.08);
-  --border-light:#e2e0d8;--border-heavy:#d1cfc7;--text-primary:#191919;--text-secondary:#4a4a4a;--text-tertiary:#85837d;
-  --accent:#cc6239;--accent-hover:#b35531;--accent-soft:rgba(204,98,57,.12);
-}
-html[data-theme="dark"]{
-  --bg-main:#121212;--bg-sidebar:#1a1a1a;--bg-panel:#242424;--bg-hover:rgba(255,255,255,.08);--bg-active:rgba(255,255,255,.12);
-  --border-light:#333;--border-heavy:#444;--text-primary:#e6e6e6;--text-secondary:#a8a8a8;--text-tertiary:#787878;
-  --accent:#e87b51;--accent-hover:#ff8f66;--accent-soft:rgba(232,123,81,.16);
-}
-
-/* ==========================================================================
-   1. RESET + BASE
-   ========================================================================== */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;width:100%;background:var(--bg-main);color:var(--text-primary);font-family:var(--font-sans);overflow:hidden;overscroll-behavior:none}
-body{display:flex}
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-thumb{background:var(--border-heavy);border-radius:var(--radius-pill)}
-::selection{background:var(--accent-soft)}
-button,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
-button{cursor:pointer;border:none;background:none;-webkit-appearance:none;touch-action:manipulation}
-a{color:var(--accent)}
-h1,h2,h3{font-family:var(--font-serif);font-weight:600}
-img{max-width:100%;display:block}
-@media(prefers-reduced-motion:reduce){*{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}}
-
-/* ==========================================================================
-   2. BANNERS
-   ========================================================================== */
-#configBanner{position:fixed;top:0;left:0;right:0;background:var(--error);color:#fff;font-size:12.5px;padding:6px 14px;padding-top:calc(6px + var(--safe-top));text-align:center;z-index:var(--z-banner);display:none}
-#offlineBanner{position:fixed;top:0;left:0;right:0;background:var(--warn);color:#1c1200;font-size:12.5px;font-weight:600;padding:6px 14px;padding-top:calc(6px + var(--safe-top));text-align:center;z-index:var(--z-banner);display:none}
-
-/* ==========================================================================
-   3. TOAST
-   ========================================================================== */
-.toast-stack{position:fixed;bottom:calc(20px + var(--safe-bottom));left:50%;transform:translateX(-50%);z-index:var(--z-toast);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:100%;padding:0 12px}
-.toast{pointer-events:auto;background:var(--text-primary);color:var(--bg-panel);font-size:12.5px;font-weight:500;padding:10px 18px;border-radius:var(--radius-pill);box-shadow:var(--shadow-lg);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:92vw;text-align:center}
-.toast.show{opacity:1;transform:translateY(0)}
-.toast.err{background:var(--error);color:#fff}
-.toast.ok{background:var(--ok);color:#fff}
-.toast.warn{background:var(--warn);color:#1c1200}
-
-/* ==========================================================================
-   4. AUTH SCREEN
-   ========================================================================== */
-#authWall{position:fixed;inset:0;z-index:var(--z-auth);background:var(--bg-main);display:flex;align-items:center;justify-content:center;padding:16px}
-.auth-box{background:var(--bg-panel);border:1px solid var(--border-heavy);padding:36px 30px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);text-align:center;max-width:420px;width:100%}
-.auth-logo{font-family:var(--font-serif);font-size:28px;font-weight:700;margin-bottom:6px;color:var(--accent)}
-.auth-sub{font-size:13px;color:var(--text-secondary);margin-bottom:24px;line-height:1.6}
-#gsiBtn{display:flex;justify-content:center;min-height:44px;margin-bottom:8px}
-.auth-google-btn{width:100%;max-width:300px;min-height:44px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill);background:var(--bg-panel);font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:var(--shadow-sm);transition:background .15s}
-.auth-google-btn:hover{background:var(--bg-hover)}
-#configNotice{margin-top:14px;background:#fff8e1;border:1px solid #ffe082;border-radius:var(--radius-md);padding:14px;font-size:12px;color:#5d4037;line-height:1.6;text-align:left;display:none}
-#configNotice h4{font-weight:700;margin-bottom:6px;font-size:13px}
-#configNotice code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:11px}
-.auth-fallback{margin-top:12px;font-size:11.5px}
-.auth-fallback button{color:var(--text-tertiary);font-size:11.5px}
-.auth-fallback button:hover{color:var(--text-primary);text-decoration:underline}
-.privacy-note{margin-top:16px;font-size:11px;color:var(--text-tertiary);line-height:1.5}
-#authLoadingOverlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:600;display:none;flex-direction:column;align-items:center;justify-content:center;color:white;backdrop-filter:blur(4px)}
-.auth-spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
-
-/* ==========================================================================
-   5. SIDEBAR
-   ========================================================================== */
-.sidebar-scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:calc(var(--z-sidebar) - 1);display:none}
-.sidebar-scrim.show{display:block}
-.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--bg-sidebar);border-right:1px solid var(--border-light);display:flex;flex-direction:column;padding:calc(16px + var(--safe-top)) 12px 12px;padding-left:calc(12px + var(--safe-left));height:100%;transition:transform .25s ease;z-index:var(--z-sidebar)}
-.brand{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px;padding:0 4px}
-.brand-inner{display:flex;align-items:center;gap:10px;font-family:var(--font-serif);font-size:19px;font-weight:700}
-.brand-logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-.sidebar-close-btn{display:none;width:32px;height:32px;border-radius:50%;align-items:center;justify-content:center}
-.sidebar-close-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
-.btn-newchat{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border-heavy);padding:10px 14px;border-radius:var(--radius-pill);font-size:13.5px;font-weight:500;width:100%;margin-bottom:10px;min-height:44px}
-.btn-newchat:hover{background:var(--bg-hover)}
-.sidebar-search{display:flex;align-items:center;gap:8px;background:var(--bg-panel);border:1px solid var(--border-light);border-radius:var(--radius-pill);padding:7px 12px;margin-bottom:14px}
-.sidebar-search svg{width:14px;height:14px;stroke:var(--text-tertiary);fill:none;stroke-width:2;flex-shrink:0}
-.sidebar-search input{flex:1;background:transparent;border:none;outline:none;font-size:12.5px;min-width:0}
-.convo-section-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);font-weight:700;padding:8px 10px 4px}
-.convo-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;-webkit-overflow-scrolling:touch}
-.convo-item{padding:9px 10px;border-radius:var(--radius-sm);font-size:13.5px;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:center;gap:6px;cursor:pointer;min-height:40px;position:relative}
-.convo-item:hover{background:var(--bg-hover);color:var(--text-primary)}
-.convo-item.active{background:var(--bg-panel);color:var(--text-primary);border:1px solid var(--border-light)}
-.convo-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.convo-title-input{flex:1;background:var(--bg-panel);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;font-size:13px;min-width:0}
-.convo-actions{display:flex;align-items:center;gap:2px;flex-shrink:0}
-.convo-icon-btn{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;opacity:.55;font-size:12px}
-.convo-icon-btn:hover{opacity:1;background:var(--bg-active)}
-.convo-icon-btn.danger:hover{color:var(--error)}
-.convo-pin{color:var(--accent)}
-.convo-empty-hint{font-size:12px;color:var(--text-tertiary);padding:14px 10px;text-align:center;line-height:1.5}
-.sidebar-footer{margin-top:auto;padding-top:12px;border-top:1px solid var(--border-light);position:relative}
-.profile-trigger{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:var(--radius-md);min-height:48px}
-.profile-trigger:hover{background:var(--bg-hover)}
-.avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex-shrink:0;object-fit:cover;background-size:cover;background-position:center}
-.avatar.vip{background:#d4af37;box-shadow:0 0 10px rgba(212,175,55,.5)}
-.profile-info{flex:1;min-width:0;text-align:left}
-.profile-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center}
-.vip-badge{font-size:9px;color:#d4af37;font-weight:700;background:var(--bg-active);padding:1px 5px;border-radius:4px}
-.profile-plan{font-size:11px;color:var(--text-tertiary);display:flex;align-items:center;gap:4px}
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
-.status-dot.bad{background:var(--error)}
-.status-dot.warn{background:var(--warn)}
-.dropdown{position:absolute;bottom:60px;left:0;right:0;background:var(--bg-panel);border:1px solid var(--border-light);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:6px;display:none;flex-direction:column;z-index:var(--z-dropdown)}
-.dropdown.open{display:flex}
-.menu-item{padding:9px 10px;font-size:13px;border-radius:var(--radius-sm);text-align:left;display:flex;align-items:center;gap:8px;min-height:38px}
-.menu-item:hover{background:var(--bg-hover)}
-.menu-item.danger{color:var(--error)}
-
-/* ==========================================================================
-   6. MAIN LAYOUT
-   ========================================================================== */
-.main{flex:1;display:flex;flex-direction:column;min-width:0;height:100%;position:relative}
-.topbar{height:calc(var(--topbar-h) + var(--safe-top));padding-top:var(--safe-top);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding-left:calc(18px + var(--safe-left));padding-right:calc(18px + var(--safe-right));border-bottom:1px solid var(--border-light);position:relative;z-index:var(--z-topbar);background:var(--bg-main)}
-.topbar-left{display:flex;align-items:center;gap:12px;min-width:0}
-.mobile-menu-btn{display:none;width:40px;height:40px;border-radius:50%;align-items:center;justify-content:center;flex-shrink:0}
-.mobile-menu-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2}
-.chat-title{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.topbar-tools{display:flex;gap:8px;flex-shrink:0}
-.tool-toggle{display:flex;align-items:center;gap:6px;background:var(--bg-sidebar);border:1px solid var(--border-heavy);padding:6px 13px;border-radius:var(--radius-pill);font-size:12.5px;font-weight:600;min-height:36px}
-.tool-toggle.active{background:var(--text-primary);color:var(--bg-panel)}
-.tool-toggle svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
-.viewport{flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:20px 16px 10px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;position:relative}
-.feed{width:100%;max-width:800px;display:flex;flex-direction:column;gap:22px}
-.hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:50px 0 20px}
-.hero h1{font-size:32px;font-weight:400;margin-bottom:8px}
-.hero p{font-size:14.5px;color:var(--text-secondary);max-width:440px}
-.hero-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:22px}
-.hero-chip{border:1px solid var(--border-heavy);padding:8px 14px;border-radius:var(--radius-pill);font-size:12.5px;background:var(--bg-panel)}
-.hero-chip:hover{border-color:var(--accent);color:var(--accent)}
-
-/* ── ERROR NOTICE banner inside chat ──────────────────────────────── */
-.config-notice-inline{background:#fff8e1;border:1px solid #ffe082;border-radius:var(--radius-md);padding:14px 16px;font-size:12.5px;color:#5d4037;line-height:1.7;margin-bottom:6px;width:100%;max-width:800px}
-.config-notice-inline h4{font-weight:700;margin-bottom:6px;font-size:13px;display:flex;align-items:center;gap:6px}
-.config-notice-inline code{background:rgba(0,0,0,.07);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:11px}
-.config-notice-inline ol{margin-left:16px;margin-top:6px}
-.config-notice-inline li{margin-bottom:4px}
-
-/* ==========================================================================
-   7. MESSAGES
-   ========================================================================== */
-.msg-group{display:flex;flex-direction:column;width:100%}
-.msg-meta{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;color:var(--text-tertiary);display:flex;align-items:center;gap:6px}
-.meta-user{text-align:right;justify-content:flex-end}
-.msg-wrap{display:flex}
-.wrap-user{justify-content:flex-end}
-.msg-content{font-family:var(--font-serif);font-size:15.5px;line-height:1.65;max-width:100%;word-wrap:break-word;overflow-wrap:anywhere}
-.wrap-user .msg-content{max-width:86%;font-family:var(--font-sans);font-size:14.5px;background:var(--bg-sidebar);padding:12px 16px;border-radius:var(--radius-lg);border-bottom-right-radius:4px}
-.msg-content p{margin-bottom:.9em}
-.msg-content p:last-child{margin-bottom:0}
-.msg-content ul,.msg-content ol{margin:0 0 .9em 1.4em}
-.msg-content li{margin-bottom:.3em}
-.msg-content blockquote{border-left:3px solid var(--accent);padding-left:12px;color:var(--text-secondary);margin:0 0 .9em}
-.msg-content hr{border:none;border-top:1px solid var(--border-light);margin:1em 0}
-.msg-content table{border-collapse:collapse;width:100%;margin-bottom:.9em;font-size:13.5px;font-family:var(--font-sans)}
-.msg-content th,.msg-content td{border:1px solid var(--border-light);padding:6px 10px;text-align:left}
-.msg-content th{background:var(--bg-sidebar)}
-.msg-content code{font-family:var(--font-mono);background:rgba(128,128,128,.15);padding:2px 5px;border-radius:4px;font-size:.88em;color:var(--accent);word-break:break-word}
-.msg-content pre{display:none}
-.msg-content a{word-break:break-all}
-.msg-actions{display:flex;gap:2px;margin-top:6px;opacity:0;transition:opacity .15s}
-.msg-group:hover .msg-actions,.msg-group:focus-within .msg-actions{opacity:1}
-.msg-action-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:12px}
-.msg-action-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
-.typing-dots{display:inline-flex;gap:4px;align-items:center;padding:6px 2px}
-.typing-dots span{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);animation:typing-bounce 1.2s infinite ease-in-out}
-.typing-dots span:nth-child(2){animation-delay:.15s}
-.typing-dots span:nth-child(3){animation-delay:.3s}
-@keyframes typing-bounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
-.regen-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;border:1px solid var(--border-heavy);padding:6px 12px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
-.regen-btn:hover{border-color:var(--accent);color:var(--accent)}
-.scroll-bottom-btn{position:absolute;bottom:14px;right:50%;transform:translateX(50%);width:38px;height:38px;border-radius:50%;background:var(--bg-panel);border:1px solid var(--border-heavy);box-shadow:var(--shadow-md);display:none;align-items:center;justify-content:center;z-index:15}
-.scroll-bottom-btn.show{display:flex}
-.scroll-bottom-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
-.cursor-blink::after{content:"▋";animation:blink 1s step-end infinite;color:var(--accent);margin-left:2px}
-@keyframes blink{50%{opacity:0}}
-.spinner{width:11px;height:11px;border:2px solid var(--border-heavy);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* ==========================================================================
-   8. FILE CHIPS
-   ========================================================================== */
-.file-chip{display:flex;align-items:center;gap:10px;border:1px solid var(--border-heavy);background:var(--bg-panel);border-radius:var(--radius-md);padding:12px 14px;margin:8px 0;cursor:pointer;max-width:320px;transition:all .15s;min-height:56px}
-.file-chip:hover{border-color:var(--accent);box-shadow:var(--shadow-sm)}
-.file-chip-icon{width:34px;height:34px;border-radius:8px;background:var(--bg-sidebar);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.file-chip-icon svg{width:17px;height:17px;stroke:var(--text-secondary);fill:none;stroke-width:2}
-.file-chip-info{flex:1;min-width:0}
-.file-chip-name{font-family:var(--font-sans);font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.file-chip-sub{font-family:var(--font-sans);font-size:11.5px;color:var(--text-tertiary)}
-.file-chip-caret{color:var(--text-tertiary);font-size:14px;flex-shrink:0}
-
-/* ==========================================================================
-   9. COMPOSER / DOCK
-   ========================================================================== */
-.dock{width:100%;padding:8px 16px calc(16px + var(--safe-bottom));padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right));display:flex;flex-direction:column;align-items:center;flex-shrink:0}
-.drop-hint{width:100%;max-width:800px;border:2px dashed var(--accent);background:var(--accent-soft);border-radius:var(--radius-lg);text-align:center;font-size:12.5px;color:var(--accent);padding:10px;margin-bottom:8px;display:none}
-.drop-hint.show{display:block}
-.input-card{width:100%;max-width:800px;background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}
-.input-card:focus-within{border-color:var(--text-secondary)}
-.attach-rack{display:none;padding:8px 12px 0;flex-wrap:wrap;gap:6px}
-.attach-chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg-sidebar);border:1px solid var(--border-light);padding:4px 10px;border-radius:var(--radius-pill);font-size:11.5px}
-.textarea-wrap{padding:10px 12px}
-.main-textarea{width:100%;background:transparent;border:none;outline:none;resize:none;font-size:16px;line-height:1.5;max-height:180px;min-height:22px}
-@media(min-width:640px){.main-textarea{font-size:14.5px}}
-.composer-toolbar{display:flex;justify-content:space-between;align-items:center;padding-top:8px}
-.toolbar-left,.toolbar-right{display:flex;align-items:center;gap:2px}
-.btn-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary)}
-.btn-icon:hover{background:var(--bg-hover)}
-.btn-icon svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2}
-.btn-send{width:34px;height:34px;border-radius:50%;background:var(--text-primary);color:var(--bg-panel);display:flex;align-items:center;justify-content:center}
-.btn-send:disabled{background:var(--border-heavy);color:var(--text-tertiary)}
-.btn-send svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.5}
-.btn-stop{width:34px;height:34px;border-radius:50%;background:var(--error);color:#fff;display:none;align-items:center;justify-content:center}
-.char-counter{font-size:10.5px;color:var(--text-tertiary);margin-left:8px;white-space:nowrap}
-.disclaimer{text-align:center;font-size:10.5px;color:var(--text-tertiary);margin-top:8px}
-
-/* ==========================================================================
-   10. TERMINAL
-   ========================================================================== */
-.terminal{position:absolute;bottom:0;left:0;right:0;height:0;background:#1e1e1e;border-top:1px solid #333;z-index:var(--z-terminal);display:flex;flex-direction:column;overflow:hidden;transition:height .25s ease}
-.terminal.open{height:280px}
-.term-resize-handle{height:5px;cursor:ns-resize;background:#2b2b2b}
-.term-head{background:#252526;padding:6px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
-.term-title{font-family:var(--font-mono);font-size:11.5px;color:#999;display:flex;align-items:center;gap:8px}
-.dots{display:flex;gap:4px}
-.dot{width:8px;height:8px;border-radius:50%}
-.term-head-actions{display:flex;gap:10px;align-items:center}
-.term-btn{color:#999;font-size:11px;font-family:var(--font-mono)}
-.term-btn:hover{color:#fff}
-.term-out{flex:1;padding:10px 14px;overflow-y:auto;font-family:var(--font-mono);font-size:12px;line-height:1.5;color:#ccc;white-space:pre-wrap;-webkit-overflow-scrolling:touch}
-.t-sys{color:#888;font-style:italic}.t-cmd{color:#569cd6}.t-ok{color:#b5cea8}.t-err{color:#f44747}.t-ai{color:#dcdcaa}
-.term-input-row{display:flex;align-items:center;padding:8px 14px;border-top:1px solid #333;padding-bottom:calc(8px + var(--safe-bottom))}
-.term-prompt{color:#4ec9b0;font-family:var(--font-mono);margin-right:8px;font-size:12.5px}
-.term-input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-family:var(--font-mono);font-size:16px}
-@media(min-width:640px){.term-input{font-size:12.5px}}
-.term-close{color:#999;font-size:16px;width:28px;height:28px}
-
-/* ==========================================================================
-   11. PREVIEW DRAWER
-   ========================================================================== */
-.preview-drawer{position:fixed;top:0;right:-100%;width:46%;min-width:360px;max-width:760px;height:100%;background:var(--bg-panel);border-left:1px solid var(--border-heavy);z-index:var(--z-drawer);display:flex;flex-direction:column;box-shadow:var(--shadow-lg);transition:right .3s cubic-bezier(.19,1,.22,1)}
-.preview-drawer.open{right:0}
-.preview-head{background:var(--bg-sidebar);padding:calc(10px + var(--safe-top)) 16px 10px;padding-right:calc(16px + var(--safe-right));border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:10px;flex-wrap:wrap}
-.preview-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.preview-tabs{display:flex;background:var(--bg-hover);padding:2px;border-radius:var(--radius-sm);gap:2px;flex-shrink:0}
-.ptab{padding:6px 11px;font-size:11px;font-weight:600;border-radius:4px;color:var(--text-secondary);min-height:30px}
-.ptab.active{background:var(--bg-panel);color:var(--text-primary)}
-.preview-toolbar{display:flex;gap:6px;flex-shrink:0}
-.ptool-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);font-size:11px;min-height:30px}
-.ptool-btn:hover{background:var(--bg-hover)}
-.preview-close{width:28px;height:28px;border-radius:50%}
-.preview-close:hover{background:var(--bg-hover)}
-.preview-body{flex:1;overflow:auto;background:var(--bg-main);position:relative}
-.pview{display:none;width:100%;height:100%}
-.pview.active{display:block}
-.pcode pre{margin:0;height:100%;overflow:auto;font-size:12.5px;padding:16px}
-.piframe{width:100%;height:100%;border:none;background:#fff}
-.overlay-scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:var(--z-scrim);display:none}
-.overlay-scrim.show{display:block}
-
-/* ==========================================================================
-   12. MODALS
-   ========================================================================== */
-.modal-scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:600;display:none;align-items:center;justify-content:center;padding:16px}
-.modal-scrim.show{display:flex}
-.modal-box{background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:100%;max-width:400px;padding:24px;max-height:88vh;overflow-y:auto;position:relative}
-.modal-box h3{font-size:18px;margin-bottom:14px}
-.modal-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light);font-size:13px;gap:10px}
-.modal-row:last-child{border-bottom:none}
-.seg-control{display:flex;background:var(--bg-sidebar);border-radius:var(--radius-pill);padding:2px;gap:2px}
-.seg-btn{padding:5px 12px;font-size:11.5px;border-radius:var(--radius-pill);font-weight:600}
-.seg-btn.active{background:var(--bg-panel);box-shadow:var(--shadow-sm)}
-.modal-input{width:100%;padding:9px 12px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);background:var(--bg-main);margin:10px 0;font-size:16px}
-.modal-actions{display:flex;gap:8px;margin-top:16px}
-.modal-btn{flex:1;padding:10px;border-radius:var(--radius-pill);font-size:13px;font-weight:600;border:1px solid var(--border-heavy);min-height:42px}
-.modal-btn.primary{background:var(--text-primary);color:var(--bg-panel);border-color:var(--text-primary)}
-.provider-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:12.5px}
-.provider-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
-.provider-dot.cool{background:var(--warn)}
-.provider-dot.off{background:var(--border-heavy)}
-.close-x{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%}
-.provider-select{width:100%;padding:8px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-sm);background:var(--bg-main);font-size:12.5px;margin-top:6px}
-.shortcut-row{display:flex;justify-content:space-between;padding:7px 0;font-size:12.5px;border-bottom:1px solid var(--border-light)}
-.shortcut-row:last-child{border-bottom:none}
-.kbd{background:var(--bg-sidebar);border:1px solid var(--border-heavy);border-radius:5px;padding:2px 7px;font-family:var(--font-mono);font-size:11px}
-.about-badge{display:inline-block;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--radius-pill);margin-bottom:10px}
-.skip-link{position:absolute;left:-999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;z-index:9999;border-radius:0 0 8px 0}
-.skip-link:focus{left:0}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-
-/* Search in convo */
-.search-in-convo{display:none;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-sidebar)}
-.search-in-convo.show{display:flex}
-.search-in-convo input{flex:1;background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-pill);padding:6px 12px;font-size:13px}
-mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 2px}
-
-/* ==========================================================================
-   13. RESPONSIVE
-   ========================================================================== */
-@media(max-width:900px){
-  .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);width:86vw;max-width:320px}
-  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-lg)}
-  .sidebar-close-btn{display:flex}
-  .mobile-menu-btn{display:flex}
-  .preview-drawer{width:100%;min-width:0;max-width:none}
-  .hero h1{font-size:24px}
-  .topbar{padding-left:calc(10px + var(--safe-left));padding-right:calc(10px + var(--safe-right))}
-  .tool-toggle span{display:none}
-  .tool-toggle{padding:8px;min-width:36px;justify-content:center}
-  .terminal.open{height:62vh}
-  .file-chip{max-width:100%}
-  .wrap-user .msg-content{max-width:92%}
-}
-@media(max-width:480px){
-  .hero{padding:30px 0 14px}
-  .hero-chips{gap:6px}
-  .hero-chip{font-size:11.5px;padding:7px 11px}
-  .dock{padding-left:calc(10px + var(--safe-left));padding-right:calc(10px + var(--safe-right))}
-}
-html[data-density="compact"] .feed{gap:14px}
-html[data-density="compact"] .msg-content{line-height:1.45}
-html[data-fontscale="lg"] .msg-content{font-size:17px}
-html[data-fontscale="sm"] .msg-content{font-size:14px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pratham AI Workspace Studio</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        .user-bubble { background-color: #f4f0ea; color: #1c1917; }
+        .error-banner-tint { background-color: #dc2626; color: #ffffff; }
+        .editor-bg { background-color: #1e1e1e; color: #d4d4d4; }
+        
+        /* Custom UI Transitions and Layout Scroll Hide Elements */
+        .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
+        .workspace-scrollpane::-webkit-scrollbar-thumb { background: #e4e4e7; border-radius: 9px; }
+        .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
 </head>
-<body>
-<a href="#textInput" class="skip-link">Skip to message box</a>
-<div id="configBanner"></div>
-<div id="offlineBanner">⚠ You are offline – messages will send once your connection returns.</div>
-<div id="authLoadingOverlay"><div class="auth-spinner"></div><p>Signing you in…</p></div>
-<div class="toast-stack" id="toastStack"></div>
-<div class="sr-only" aria-live="polite" id="ariaLiveRegion"></div>
+<body class="bg-stone-50 text-neutral-800 h-screen w-screen flex overflow-hidden font-sans antialiased select-none">
 
-<!-- ═══════════════════════════  AUTH WALL  ══════════════════════════ -->
-<div id="authWall">
-  <div class="auth-box">
-    <div class="auth-logo">Pratham AI</div>
-    <div class="auth-sub">Sign in to start chatting. Conversations are saved privately per account.</div>
-    <div id="gsiBtn"></div>
-    <div id="configNotice">
-      <h4>⚠ Backend not fully configured</h4>
-      <p>The Vercel backend is reachable but <strong>GROQ_API_KEY</strong> is not set, so chat will not work. Add the missing environment variables in your <strong>Vercel dashboard → Project → Settings → Environment Variables</strong>:</p>
-      <ul style="margin:8px 0 0 14px">
-        <li><code>GROQ_API_KEY</code> – get one free at <a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a></li>
-        <li><code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_KEY</code> – from your Supabase project</li>
-      </ul>
-    </div>
-    <div class="auth-fallback"><button id="btnHealthRetry" type="button">↺ Re-check backend connection</button></div>
-    <div class="privacy-note">🔒 Conversations are stored privately per account and never publicly browsable.</div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════  SIDEBAR  ════════════════════════════ -->
-<div class="sidebar-scrim" id="sidebarScrim"></div>
-<aside class="sidebar" id="sidebar">
-  <div class="brand">
-    <div class="brand-inner"><div class="brand-logo">P</div><span>Pratham AI</span></div>
-    <button class="sidebar-close-btn" id="btnSidebarClose" aria-label="Close sidebar">
-      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-  </div>
-  <button class="btn-newchat" id="btnNewChat"><span>New chat</span><span>+</span></button>
-  <div class="sidebar-search">
-    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" id="convoSearch" placeholder="Search conversations">
-  </div>
-  <div class="convo-section-label">Conversations</div>
-  <div class="convo-list" id="convoList"></div>
-  <div class="sidebar-footer">
-    <button class="profile-trigger" id="btnProfile">
-      <div class="avatar" id="avatarEl">U</div>
-      <div class="profile-info">
-        <div class="profile-name"><span id="nameEl">User</span><span class="vip-badge" id="vipBadge" style="display:none">VIP</span></div>
-        <div class="profile-plan"><span class="status-dot" id="connDot"></span><span id="planEl">Standard</span></div>
-      </div>
-    </button>
-    <div class="dropdown" id="dropdown">
-      <button class="menu-item" id="btnOpenSettings">⚙️ Settings</button>
-      <button class="menu-item" id="btnOpenVip">⭐ Enter VIP code</button>
-      <button class="menu-item" id="btnExportChat">⬆️ Export current chat</button>
-      <button class="menu-item danger" id="btnLogout">🚪 Sign out</button>
-    </div>
-  </div>
-</aside>
-
-<!-- ═══════════════════════════  MAIN  ═══════════════════════════════ -->
-<main class="main" id="mainArea">
-  <header class="topbar">
-    <div class="topbar-left">
-      <button class="mobile-menu-btn" id="btnToggleSidebar" aria-label="Open sidebar">
-        <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      <div class="chat-title" id="chatTitle">New chat</div>
-    </div>
-    <div class="topbar-tools">
-      <button class="tool-toggle" id="btnSearchInConvo" title="Search this conversation (Ctrl+F)">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      </button>
-      <button class="tool-toggle" id="btnEdu" title="Education mode: answers from your uploaded PDFs">
-        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/></svg>
-        <span>Education</span>
-      </button>
-      <button class="tool-toggle" id="btnTerminal" title="Python terminal (Ctrl+/)">
-        <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-        <span>Terminal</span>
-      </button>
-    </div>
-  </header>
-
-  <div class="search-in-convo" id="searchInConvo">
-    <input type="text" id="searchInConvoInput" placeholder="Search messages…">
-    <span class="char-counter" id="searchMatchCount"></span>
-    <button id="btnCloseSearchInConvo">✕</button>
-  </div>
-
-  <div class="viewport" id="viewport">
-    <div class="feed" id="feed"></div>
-    <button class="scroll-bottom-btn" id="btnScrollBottom" aria-label="Scroll to latest">
-      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
-    </button>
-  </div>
-
-  <div class="dock">
-    <div class="drop-hint" id="dropHint">Drop a PDF here to attach it for @education mode</div>
-    <div class="input-card" id="inputCard">
-      <div class="attach-rack" id="attachRack"></div>
-      <div class="textarea-wrap">
-        <textarea id="textInput" class="main-textarea" rows="1"
-          placeholder="Message Pratham AI… (use @education to reference uploaded PDFs)"
-          aria-label="Message input"></textarea>
-        <div class="composer-toolbar">
-          <div class="toolbar-left">
-            <button class="btn-icon" id="btnAttach" title="Attach PDF" aria-label="Attach PDF">
-              <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            </button>
-            <input type="file" id="fileInput" accept="application/pdf" style="display:none">
-          </div>
-          <div class="toolbar-right">
-            <span class="char-counter" id="charCounter"></span>
-            <button class="btn-stop" id="btnStop" aria-label="Stop generating">
-              <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-            </button>
-            <button class="btn-send" id="btnSend" disabled aria-label="Send message">
-              <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-            </button>
-          </div>
+    <aside id="sidebar-panel" class="w-80 h-full border-r border-stone-200 bg-stone-100 flex flex-col justify-between z-30 sidebar-transition fixed md:relative transform -translate-x-full md:translate-x-0">
+        <div class="p-4 flex flex-col flex-1 overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 bg-stone-900 rounded-lg flex items-center justify-center text-white text-xs font-bold">P</span>
+                    <span class="font-semibold text-sm tracking-tight text-neutral-700">Pratham AI Hub</span>
+                </div>
+                <button onclick="createNewConversation()" class="p-1.5 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer text-xs font-medium text-stone-600">
+                    + New Chat
+                </button>
+            </div>
+            
+            <hr class="border-stone-200 mb-3">
+            
+            <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5">
+                <p class="text-xs text-neutral-400 text-center py-4">Loading application sync profile data...</p>
+            </div>
         </div>
-      </div>
+
+        <div class="p-3 border-t border-stone-200 bg-stone-100/80 flex flex-col gap-2">
+            <div class="flex items-center gap-3 p-2 rounded-xl bg-white border border-stone-200/60 shadow-xs">
+                <div class="w-8 h-8 rounded-full bg-stone-300 text-stone-700 flex items-center justify-center font-bold text-xs">U</div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-semibold truncate text-neutral-700">Developer Account</p>
+                    <p id="role-badge-display" class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Standard Tier</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-1 text-[11px]">
+                <button onclick="toggleModal('vip-modal')" class="py-1.5 bg-stone-800 hover:bg-stone-950 text-white rounded-lg transition-all font-medium text-center shadow-xs cursor-pointer">✨ Upgrade VIP</button>
+                <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg transition-all font-medium text-center shadow-xs cursor-pointer">📎 Upload PDF</button>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 h-full flex flex-col relative bg-white justify-between min-w-0">
+        
+        <header class="h-14 border-b border-stone-100 px-4 flex items-center justify-between bg-white/90 backdrop-blur-md z-20">
+            <div class="flex items-center gap-3.5">
+                <button onclick="toggleSidebarView()" class="p-1.5 text-stone-400 hover:text-black hover:bg-stone-50 rounded-lg text-lg cursor-pointer md:hidden">☰</button>
+                <h2 id="active-chat-title-header" class="text-sm font-medium text-stone-700 truncate max-w-xs md:max-w-md">New Conversation Thread</h2>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="toggleModal('sandbox-modal')" class="px-3 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-full font-mono text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+                    &gt;_ Run Python
+                </button>
+                <button id="export-action-trigger" onclick="triggerSessionExport()" class="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-50 rounded-lg text-sm cursor-pointer hidden">⬇ Export</button>
+                <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm cursor-pointer hidden">🗑 Drop</button>
+            </div>
+        </header>
+
+        <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-2xl mx-auto w-full pb-36 workspace-scrollpane">
+            <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
+                <div class="w-12 h-12 bg-stone-100 rounded-2xl flex items-center justify-center font-bold text-stone-800 text-lg shadow-inner">P</div>
+                <h3 class="text-base font-medium text-stone-700">Welcome to Pratham AI Studio</h3>
+                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a context line instruction to initialize the model matrix logic loops. Use <span class="font-mono bg-stone-100 px-1 py-0.5 rounded text-stone-600">@education</span> context syntax tags to point processing directly over loaded PDF text vector files.</p>
+            </div>
+        </div>
+
+        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white to-transparent pt-6 pb-4 px-4 z-20">
+            <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
+                
+                <div id="toast-rendering-wrapper" class="w-full flex flex-col gap-1.5"></div>
+
+                <form id="interaction-submission-form" class="w-full relative flex items-center shadow-xs rounded-2xl border border-stone-200/80 overflow-hidden bg-stone-50 focus-within:ring-2 focus-within:ring-stone-400/30 focus-within:border-stone-400 focus-within:bg-white transition-all">
+                    <input 
+                        type="text" 
+                        id="user-prompt-input-field" 
+                        placeholder="Message Pratham AI... (use @education to search)" 
+                        class="w-full pl-4 pr-12 py-3.5 bg-transparent border-none focus:outline-none text-[15px] text-neutral-800"
+                        autocomplete="off"
+                        required
+                    >
+                    <button 
+                        type="submit" 
+                        id="input-action-submit-btn"
+                        class="absolute right-3 w-8 h-8 flex items-center justify-center bg-stone-900 text-white rounded-full hover:bg-black transition-colors shadow-xs cursor-pointer text-sm font-bold"
+                    >
+                        ↑
+                    </button>
+                </form>
+                <p class="text-center text-[10px] text-stone-400">Pratham AI can make mistakes. Verify important account history details.</p>
+            </div>
+        </div>
+    </main>
+
+    <div id="sandbox-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl w-full max-w-xl overflow-hidden shadow-xl flex flex-col">
+            <div class="p-4 border-b border-stone-100 flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-stone-700 font-mono">&gt;_ Interactive Python Sandbox Terminal</h4>
+                <button onclick="toggleModal('sandbox-modal')" class="text-stone-400 hover:text-black font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div class="p-4 flex flex-col gap-3">
+                <textarea id="python-code-editor-area" rows="6" class="w-full font-mono text-xs p-3 editor-bg rounded-xl border-none focus:outline-none focus:ring-1 focus:ring-stone-400 shadow-inner" placeholder="print('Hello from the Pratham AI virtual execution sandbox layer!')"></textarea>
+                <button onclick="dispatchPythonExecution()" class="w-full py-2 bg-stone-900 text-white font-mono text-xs font-medium rounded-lg hover:bg-black shadow-xs cursor-pointer">Execute Script Frame</button>
+                <div class="flex flex-col gap-1">
+                    <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase">Console Output Logs</span>
+                    <pre id="python-console-output-frame" class="w-full min-h-[80px] p-3 border border-stone-200 rounded-xl bg-stone-50 font-mono text-xs text-stone-700 overflow-x-auto whitespace-pre-wrap">Terminal ready.</pre>
+                </div>
+            </div>
+        </div>
     </div>
-    <p class="disclaimer">Pratham AI can make mistakes. Verify important info. 🔒 Private per-account history.</p>
-  </div>
 
-  <!-- Terminal -->
-  <div class="terminal" id="terminal">
-    <div class="term-resize-handle" id="termResizeHandle"></div>
-    <div class="term-head">
-      <div class="term-title">
-        <div class="dots"><div class="dot" style="background:#ff5f56"></div><div class="dot" style="background:#ffbd2e"></div><div class="dot" style="background:#27c93f"></div></div>
-        Python sandbox (server-side)
-      </div>
-      <div class="term-head-actions">
-        <button class="term-btn" id="btnClearTerm">clear</button>
-        <button class="term-close" id="btnCloseTerm">✕</button>
-      </div>
+    <div id="pdf-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-stone-100 flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-stone-700">Ingest PDF Context Vector</h4>
+                <button onclick="toggleModal('pdf-modal')" class="text-stone-400 hover:text-black font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div class="p-5 flex flex-col gap-4">
+                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-stone-100 file:text-stone-700 hover:file:bg-stone-200 cursor-pointer"/>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-stone-800 text-white text-xs font-semibold rounded-lg hover:bg-black shadow-xs transition-colors cursor-pointer">Initialize Document Index</button>
+            </div>
+        </div>
     </div>
-    <div class="term-out" id="termOut"><span class="t-sys">Server-side Python sandbox ready.</span></div>
-    <div class="term-input-row">
-      <span class="term-prompt">&gt;&gt;&gt;</span>
-      <input type="text" id="termInput" class="term-input" placeholder="Write Python and press Enter"
-             autocomplete="off" autocapitalize="off" spellcheck="false">
+
+    <div id="vip-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl w-full max-w-xs overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-stone-100 flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-stone-700">Escalate VIP Authentication</h4>
+                <button onclick="toggleModal('vip-modal')" class="text-stone-400 hover:text-black font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div class="p-4 flex flex-col gap-3">
+                <input type="password" id="vip-secret-entry-input" placeholder="Enter VIP Secret Key" class="w-full text-xs p-2.5 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-stone-400 bg-stone-50"/>
+                <button onclick="dispatchVipUpgrade()" class="w-full py-2 bg-stone-900 text-white text-xs font-semibold rounded-lg hover:bg-black transition-colors shadow-xs cursor-pointer">Authorize Verification Token</button>
+            </div>
+        </div>
     </div>
-  </div>
-</main>
 
-<!-- Preview drawer -->
-<div class="overlay-scrim" id="scrim"></div>
-<div class="preview-drawer" id="previewDrawer" role="dialog" aria-label="Code preview">
-  <div class="preview-head">
-    <div class="preview-title" id="previewTitle">Preview</div>
-    <div class="preview-tabs" id="previewTabs" style="display:none">
-      <button class="ptab active" id="tabCode">Code</button>
-      <button class="ptab" id="tabPreview">Preview</button>
-    </div>
-    <div class="preview-toolbar">
-      <button class="ptool-btn" id="btnCopy">📋 <span>Copy</span></button>
-      <button class="ptool-btn" id="btnDownload">⬇️ <span>Download</span></button>
-      <button class="preview-close" id="btnClosePreview" aria-label="Close">✕</button>
-    </div>
-  </div>
-  <div class="preview-body">
-    <div class="pview pcode active" id="pviewCode"><pre><code id="pcodeContent"></code></pre></div>
-    <div class="pview" id="pviewPreview"><iframe class="piframe" id="pIframe" title="HTML preview" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe></div>
-  </div>
-</div>
-
-<!-- Settings modal -->
-<div class="modal-scrim" id="settingsScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseSettings">✕</button>
-    <h3>Settings</h3>
-    <div class="modal-row"><span>Theme</span>
-      <div class="seg-control" id="themeSeg">
-        <button class="seg-btn" data-theme="light">Light</button>
-        <button class="seg-btn" data-theme="dark">Dark</button>
-        <button class="seg-btn active" data-theme="system">Auto</button>
-      </div>
-    </div>
-    <div class="modal-row" style="flex-direction:column;align-items:stretch;gap:8px">
-      <span style="font-weight:600">Provider status</span>
-      <div id="providerStatusList"><span style="font-size:12px;color:var(--text-tertiary)">Loading…</span></div>
-    </div>
-    <div class="modal-row" style="flex-direction:column;align-items:stretch">
-      <span>Preferred provider</span>
-      <select class="provider-select" id="preferredProviderSelect">
-        <option value="">Auto (Groq → fallback chain)</option>
-        <option value="groq">Groq</option>
-        <option value="openrouter">OpenRouter</option>
-        <option value="cerebras">Cerebras</option>
-        <option value="mistral">Mistral</option>
-      </select>
-    </div>
-    <div class="modal-row"><span>Backend URL</span><span id="apiBaseLabel" style="font-size:11px;color:var(--text-tertiary);word-break:break-all;text-align:right">–</span></div>
-    <div class="modal-row"><span>Density</span>
-      <div class="seg-control" id="densitySeg">
-        <button class="seg-btn active" data-density="comfortable">Comfortable</button>
-        <button class="seg-btn" data-density="compact">Compact</button>
-      </div>
-    </div>
-    <div class="modal-row"><span>Text size</span>
-      <div class="seg-control" id="fontscaleSeg">
-        <button class="seg-btn" data-fontscale="sm">A-</button>
-        <button class="seg-btn active" data-fontscale="md">A</button>
-        <button class="seg-btn" data-fontscale="lg">A+</button>
-      </div>
-    </div>
-    <div class="modal-row"><span>Sound on reply</span>
-      <div class="seg-control" id="soundSeg">
-        <button class="seg-btn" data-sound="off">Off</button>
-        <button class="seg-btn active" data-sound="on">On</button>
-      </div>
-    </div>
-    <div class="modal-row"><span>Keyboard shortcuts</span>
-      <button class="menu-item" id="btnOpenShortcuts" style="padding:4px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill)">View</button>
-    </div>
-    <div class="modal-row"><span>About</span>
-      <button class="menu-item" id="btnOpenAbout" style="padding:4px 10px;border:1px solid var(--border-heavy);border-radius:var(--radius-pill)">View</button>
-    </div>
-  </div>
-</div>
-
-<!-- Shortcuts modal -->
-<div class="modal-scrim" id="shortcutsScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseShortcuts">✕</button>
-    <h3>Keyboard shortcuts</h3>
-    <div class="shortcut-row"><span>Send message</span><span class="kbd">Enter</span></div>
-    <div class="shortcut-row"><span>New line</span><span class="kbd">Shift + Enter</span></div>
-    <div class="shortcut-row"><span>New chat</span><span class="kbd">Ctrl/⌘ + K</span></div>
-    <div class="shortcut-row"><span>Toggle terminal</span><span class="kbd">Ctrl/⌘ + /</span></div>
-    <div class="shortcut-row"><span>Search in chat</span><span class="kbd">Ctrl/⌘ + F</span></div>
-    <div class="shortcut-row"><span>Close any panel</span><span class="kbd">Esc</span></div>
-  </div>
-</div>
-
-<!-- About modal -->
-<div class="modal-scrim" id="aboutScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseAbout">✕</button>
-    <span class="about-badge">Pratham AI</span>
-    <h3>About this build</h3>
-    <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;margin-top:8px">
-      Multi-provider chat assistant (Groq default with OpenRouter/Cerebras/Mistral fallback),
-      @education RAG over uploaded PDFs, a server-side Python terminal, and private per-account
-      conversation history.
-    </p>
-  </div>
-</div>
-
-<!-- VIP modal -->
-<div class="modal-scrim" id="vipScrim">
-  <div class="modal-box">
-    <button class="close-x" id="btnCloseVip">✕</button>
-    <h3>Enter VIP code</h3>
-    <p style="font-size:12.5px;color:var(--text-secondary)">Have a VIP access code? Enter it below.</p>
-    <input type="password" id="vipCodeInput" class="modal-input" placeholder="VIP code" autocomplete="off">
-    <div class="modal-actions"><button class="modal-btn primary" id="btnSubmitVip">Unlock</button></div>
-  </div>
-</div>
-
-<!-- ─── Scripts ─────────────────────────────────────────────────────── -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-
-<script>
-'use strict';
-/* ================================================================
-   CONFIG  — edit API_BASE and credentials to match your deployment
-   ================================================================ */
-const CONFIG = {
-  API_BASE:           'https://prathamai.vercel.app',
-  SUPABASE_URL:       'https://ksroorygbrhwpnqtjbxo.supabase.co',
-  SUPABASE_ANON_KEY:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzcm9vcnlnYnJod3BucXRqYnhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwODg4NTAsImV4cCI6MjA5ODY2NDg1MH0.T_5BhvBQn9duMtOpOUeW_LzK4YskmmIyiA0qHZzfZBg'
-};
-const API_BASE = CONFIG.API_BASE;
-const MAX_CHARS = 6000;
-
-/* ── Supabase client ─────────────────────────────────────────── */
-const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-
-/* ── DOM shorthand ───────────────────────────────────────────── */
-const $ = id => document.getElementById(id);
-const feed = $('feed');
-
-/* ── State ───────────────────────────────────────────────────── */
-const State = {
-  sessionToken: localStorage.getItem('pai_session') || null,
-  user:         JSON.parse(localStorage.getItem('pai_user') || 'null'),
-  currentConvId: null,
-  eduMode:       false,
-  generating:    false,
-  abortCtrl:     null,
-  convosCache:   [],
-  groqConfigured: true,  // optimistic; corrected after /health
-};
-
-/* ================================================================
-   THEME
-   ================================================================ */
-(function applyStoredTheme(){
-  const t = localStorage.getItem('pai_theme') || 'system';
-  applyTheme(t);
-})();
-
-function applyTheme(t){
-  if (t === 'system') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', t);
-  document.querySelectorAll('#themeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === t));
-  localStorage.setItem('pai_theme', t);
-}
-
-/* ================================================================
-   TOAST
-   ================================================================ */
-function showToast(msg, kind){
-  const stack = $('toastStack');
-  const el = document.createElement('div');
-  el.className = 'toast' + (kind ? ' ' + kind : '');
-  el.textContent = msg;
-  stack.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3500);
-}
-window.showToast = showToast;
-
-function announce(text){ const r=$('ariaLiveRegion'); if(r) r.textContent=text; }
-
-/* ================================================================
-   ONLINE / OFFLINE
-   ================================================================ */
-window.addEventListener('online',  () => { $('offlineBanner').style.display='none';  showToast('Back online','ok'); });
-window.addEventListener('offline', () => { $('offlineBanner').style.display='block'; });
-
-/* ================================================================
-   SOUND
-   ================================================================ */
-function playChime(){
-  try{
-    if(localStorage.getItem('pai_sound')==='off') return;
-    const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator(), g=ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value=880;
-    g.gain.setValueAtTime(0.08,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
-    o.start(); o.stop(ctx.currentTime+0.3);
-  }catch(e){}
-}
-
-/* ================================================================
-   MARKDOWN + CODE CHIP EXTRACTION
-   ================================================================ */
-marked.setOptions({ breaks:true, gfm:true });
-let chipReg={}, chipCnt=0;
-
-function langExt(lang){
-  return {html:'.html',python:'.py',javascript:'.js',js:'.js',typescript:'.ts',css:'.css',
-          json:'.json',bash:'.sh',sh:'.sh',sql:'.sql',text:'.txt'}[lang]||'.txt';
-}
-
-function extractChips(md){
-  return md.replace(/```([\w-]+)?\n([\s\S]*?)```/g, (_,lang,code)=>{
-    const l=(lang||'text').toLowerCase().replace(/-exec$/,'');
-    const id='chip_'+(++chipCnt);
-    chipReg[id]={code:code.trim(),lang:l};
-    const ext=langExt(l);
-    return `\n<div class="file-chip" data-chip="${id}" onclick="openChip('${id}')" role="button" tabindex="0">
-      <div class="file-chip-icon"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>
-      <div class="file-chip-info"><div class="file-chip-name">code${ext}</div><div class="file-chip-sub">${l} · click to preview</div></div>
-      <div class="file-chip-caret">›</div>
-    </div>\n`;
-  });
-}
-
-function renderMd(raw){
-  const html=marked.parse(extractChips(raw));
-  return DOMPurify.sanitize(html,{ADD_ATTR:['onclick','data-chip','target','rel','role','tabindex']});
-}
-
-/* ================================================================
-   MESSAGES
-   ================================================================ */
-function appendMessage(role, content){
-  const hero=feed.querySelector('.hero');
-  if(hero) feed.innerHTML='';
-
-  const group=document.createElement('div');
-  group.className='msg-group';
-  group.dataset.role=role;
-  if(role==='user') group.dataset.rawText=content;
-
-  const meta=document.createElement('div');
-  meta.className='msg-meta'+(role==='user'?' meta-user':'');
-  meta.textContent=role==='user'?'You':'Pratham AI';
-
-  const wrap=document.createElement('div');
-  wrap.className='msg-wrap'+(role==='user'?' wrap-user':'');
-
-  const bubble=document.createElement('div');
-  bubble.className='msg-content';
-  if(role==='user'){
-    bubble.textContent=content;
-  } else {
-    bubble.innerHTML=renderMd(content);
-    if(window.hljs) bubble.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
-  }
-
-  wrap.appendChild(bubble);
-  group.appendChild(meta);
-  group.appendChild(wrap);
-  feed.appendChild(group);
-  scrollToBottom();
-  return {group,bubble};
-}
-
-function scrollToBottom(){
-  const vp=$('viewport');
-  vp.scrollTop=vp.scrollHeight;
-}
-
-$('viewport').addEventListener('scroll',()=>{
-  const vp=$('viewport');
-  $('btnScrollBottom').classList.toggle('show', vp.scrollHeight-vp.scrollTop-vp.clientHeight>80);
-});
-$('btnScrollBottom').onclick=scrollToBottom;
-
-/* ================================================================
-   PREVIEW DRAWER
-   ================================================================ */
-function openChip(id){
-  const chip=chipReg[id]; if(!chip) return;
-  $('previewDrawer').classList.add('open');
-  $('scrim').classList.add('show');
-  $('previewTitle').textContent='code'+langExt(chip.lang);
-  $('pcodeContent').textContent=chip.code;
-  $('pcodeContent').className='language-'+chip.lang;
-  if(window.hljs) hljs.highlightElement($('pcodeContent'));
-  const isHtml=chip.lang==='html';
-  $('previewTabs').style.display=isHtml?'flex':'none';
-  showPTab('code');
-  if(isHtml) $('pIframe').srcdoc=chip.code;
-  $('previewDrawer')._chip=chip;
-}
-window.openChip=openChip;
-
-document.addEventListener('keydown',e=>{
-  if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('file-chip')){
-    e.preventDefault(); e.target.click();
-  }
-});
-
-function showPTab(w){
-  $('tabCode').classList.toggle('active',w==='code');
-  $('tabPreview').classList.toggle('active',w==='preview');
-  $('pviewCode').classList.toggle('active',w==='code');
-  $('pviewPreview').classList.toggle('active',w==='preview');
-}
-$('tabCode').onclick=()=>showPTab('code');
-$('tabPreview').onclick=()=>{ showPTab('preview'); const c=$('previewDrawer')._chip; if(c) $('pIframe').srcdoc=c.code; };
-
-function closePreview(){ $('previewDrawer').classList.remove('open'); $('scrim').classList.remove('show'); }
-$('btnClosePreview').onclick=closePreview;
-$('scrim').onclick=closePreview;
-
-$('btnCopy').onclick=()=>{
-  const c=$('previewDrawer')._chip; if(!c) return;
-  navigator.clipboard.writeText(c.code).then(()=>showToast('Copied','ok')).catch(()=>showToast('Copy failed','err'));
-};
-$('btnDownload').onclick=()=>{
-  const c=$('previewDrawer')._chip; if(!c) return;
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([c.code],{type:'text/plain'}));
-  a.download='code'+langExt(c.lang);
-  document.body.appendChild(a); a.click(); a.remove();
-  showToast('Download started','ok');
-};
-
-/* ================================================================
-   AUTH
-   ================================================================ */
-function initAuth(){
-  // Listen for Supabase auth state changes (handles OAuth redirect)
-  sb.auth.onAuthStateChange((event, session)=>{
-    if(event==='SIGNED_IN'&&session){
-      State.sessionToken=session.access_token;
-      const u=session.user;
-      State.user={
-        id:u.id, email:u.email,
-        name:u.user_metadata.full_name||u.email,
-        picture:u.user_metadata.avatar_url||'',
-        role:'standard'
-      };
-      localStorage.setItem('pai_session', State.sessionToken);
-      localStorage.setItem('pai_user', JSON.stringify(State.user));
-      enterApp();
-    }
-  });
-
-  // Already have a valid session?
-  sb.auth.getSession().then(({data:{session}})=>{
-    if(session){
-      State.sessionToken=session.access_token;
-      if(!State.user){
-        const u=session.user;
-        State.user={id:u.id,email:u.email,name:u.user_metadata.full_name||u.email,picture:u.user_metadata.avatar_url||'',role:'standard'};
-        localStorage.setItem('pai_user',JSON.stringify(State.user));
-      }
-      enterApp();
-    }
-  });
-}
-
-function buildGoogleBtn(){
-  const btn=document.createElement('button');
-  btn.className='auth-google-btn';
-  btn.innerHTML=`<svg style="width:18px;height:18px" viewBox="0 0 24 24">
-    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"/>
-    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-  </svg> Sign in with Google`;
-  btn.onclick=async()=>{
-    $('authLoadingOverlay').style.display='flex';
-    const {error}=await sb.auth.signInWithOAuth({
-      provider:'google',
-      options:{redirectTo: window.location.origin+window.location.pathname}
-    });
-    if(error){
-      $('authLoadingOverlay').style.display='none';
-      showToast("Sign-in failed – please try again.", 'err');
-    }
-  };
-  $('gsiBtn').appendChild(btn);
-}
-
-function enterApp(){
-  $('authWall').style.display='none';
-  $('authLoadingOverlay').style.display='none';
-  $('nameEl').textContent=State.user.name||State.user.email;
-  $('avatarEl').textContent=(State.user.name||State.user.email||'U')[0].toUpperCase();
-  if(State.user.picture){
-    $('avatarEl').style.backgroundImage=`url(${State.user.picture})`;
-    $('avatarEl').style.backgroundSize='cover';
-    $('avatarEl').textContent='';
-  }
-  refreshVipUi();
-  $('apiBaseLabel').textContent=API_BASE;
-  loadConversations();
-  renderWelcome();
-  pollHealth();
-  setInterval(pollHealth,30000);
-}
-
-function refreshVipUi(){
-  const isVip=State.user&&State.user.role==='vip';
-  $('vipBadge').style.display=isVip?'inline-block':'none';
-  $('avatarEl').classList.toggle('vip',isVip);
-  $('planEl').textContent=isVip?'VIP / Admin':'Standard';
-}
-
-$('btnLogout').onclick=async()=>{
-  await sb.auth.signOut();
-  localStorage.removeItem('pai_session');
-  localStorage.removeItem('pai_user');
-  location.reload();
-};
-
-$('btnHealthRetry').onclick=checkHealth;
-
-/* ── Authenticated fetch ─────────────────────────────────────── */
-async function authFetch(path, opts={}){
-  opts.mode='cors';
-  opts.headers=Object.assign({},{
-    'Authorization':`Bearer ${State.sessionToken}`,
-    'Accept':'application/json'
-  }, opts.headers);
-  let res;
-  try{ res=await fetch(API_BASE+path, opts); }
-  catch(e){ showToast('Network error reaching backend','err'); throw e; }
-  if(res.status===401){
-    localStorage.removeItem('pai_session');
-    localStorage.removeItem('pai_user');
-    showToast('Session expired – please sign in again','err');
-    setTimeout(()=>location.reload(),1500);
-  }
-  return res;
-}
-
-/* ── Health poll ─────────────────────────────────────────────── */
-async function checkHealth(){
-  try{
-    const res=await fetch(API_BASE+'/health',{mode:'cors'});
-    const dot=$('connDot');
-    if(res.ok){
-      const data=await res.json().catch(()=>({}));
-      dot.className='status-dot';
-      State.groqConfigured=data.groq_configured||false;
-      renderProviderStatus(data.providers||[]);
-      // Show config notice if Groq key missing
-      if(!data.groq_configured){
-        $('configNotice').style.display='block';
-        showConfigBanner();
-      }
-    } else {
-      dot.className='status-dot warn';
-    }
-  } catch(e){
-    $('connDot').className='status-dot bad';
-  }
-}
-async function pollHealth(){ await checkHealth(); }
-
-function showConfigBanner(){
-  const b=$('configBanner');
-  b.textContent='⚠ GROQ_API_KEY is not set on the backend — chat will not work. Add it in your Vercel Environment Variables.';
-  b.style.display='block';
-}
-
-function renderProviderStatus(providers){
-  const list=$('providerStatusList');
-  if(!list||!providers.length){ if(list) list.innerHTML='<span style="font-size:12px;color:var(--text-tertiary)">No provider data.</span>'; return; }
-  list.innerHTML=providers.map(p=>`
-    <div class="provider-row">
-      <span><span class="provider-dot ${!p.configured?'off':p.cooling_down?'cool':''}"></span>${p.name}${p.is_default?' (default)':''}</span>
-      <span style="color:var(--text-tertiary)">${p.configured?(p.cooling_down?'rate-limited':'ready'):'not configured'}</span>
-    </div>`).join('');
-}
-
-/* ================================================================
-   CONVERSATIONS
-   ================================================================ */
-async function loadConversations(){
-  try{
-    const res=await authFetch('/conversations');
-    if(!res.ok) return;
-    State.convosCache=await res.json();
-    renderConvoList(State.convosCache);
-  } catch(e){ console.error(e); }
-}
-
-function renderConvoList(convos){
-  if(!convos.length){
-    $('convoList').innerHTML='<div class="convo-empty-hint">No conversations yet.<br>Start typing below!</div>';
-    return;
-  }
-  $('convoList').innerHTML=convos.map(c=>`
-    <div class="convo-item${c.id===State.currentConvId?' active':''}" data-id="${esc(c.id)}"
-         onclick="openConversation('${c.id}',this)">
-      <span class="convo-title">${c.pinned?'📌 ':''}${esc(c.title||'Untitled')}</span>
-      <span class="convo-actions">
-        <span class="convo-icon-btn${c.pinned?' convo-pin':''}" title="Pin"
-              onclick="event.stopPropagation();togglePin('${c.id}')">📌</span>
-        <span class="convo-icon-btn" title="Rename"
-              onclick="event.stopPropagation();startRename('${c.id}',this)">✏</span>
-        <span class="convo-icon-btn danger" title="Delete"
-              onclick="event.stopPropagation();deleteConversation('${c.id}')">✕</span>
-      </span>
-    </div>`).join('');
-}
-
-$('convoSearch').addEventListener('input',e=>{
-  const q=e.target.value.trim().toLowerCase();
-  renderConvoList(!q?State.convosCache:State.convosCache.filter(c=>(c.title||'').toLowerCase().includes(q)));
-});
-
-async function openConversation(id, el){
-  State.currentConvId=id;
-  document.querySelectorAll('.convo-item').forEach(n=>n.classList.remove('active'));
-  if(el) el.classList.add('active');
-  $('chatTitle').textContent=el?el.querySelector('.convo-title').textContent:'Chat';
-  try{
-    const res=await authFetch(`/conversations/${id}/messages`);
-    if(!res.ok){ if(res.status===404) showToast('Conversation not found','err'); return; }
-    const msgs=await res.json();
-    feed.innerHTML='';
-    msgs.forEach(m=>appendMessage(m.role==='user'?'user':'ai',m.content));
-    addRegenBtn();
-  } catch(e){ console.error(e); }
-  closeMobileSidebar();
-  toggleSearch(false);
-  restoreDraft();
-}
-window.openConversation=openConversation;
-
-async function deleteConversation(id){
-  if(!confirm('Delete this conversation?')) return;
-  await authFetch(`/conversations/${id}`,{method:'DELETE'});
-  if(State.currentConvId===id){ State.currentConvId=null; renderWelcome(); }
-  showToast('Deleted','ok');
-  loadConversations();
-}
-window.deleteConversation=deleteConversation;
-
-async function togglePin(id){
-  await authFetch(`/conversations/${id}/pin`,{method:'POST'});
-  loadConversations();
-}
-window.togglePin=togglePin;
-
-function startRename(id, el){
-  const item=el.closest('.convo-item');
-  const titleEl=item.querySelector('.convo-title');
-  const cur=titleEl.textContent.replace('📌 ','');
-  const inp=document.createElement('input');
-  inp.className='convo-title-input'; inp.value=cur;
-  titleEl.replaceWith(inp); inp.focus(); inp.select();
-  const commit=async()=>{
-    const t=inp.value.trim()||cur;
-    await authFetch(`/conversations/${id}/rename`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t})});
-    if(id===State.currentConvId) $('chatTitle').textContent=t;
-    loadConversations();
-  };
-  inp.addEventListener('blur',commit);
-  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur(); });
-}
-window.startRename=startRename;
-
-$('btnExportChat').onclick=()=>{
-  if(!State.currentConvId){ showToast('Open a conversation first','err'); return; }
-  exportConversation(State.currentConvId);
-};
-
-async function exportConversation(id){
-  try{
-    const res=await authFetch(`/conversations/${id}/export`);
-    if(!res.ok){ showToast('Export failed','err'); return; }
-    const blob=await res.blob();
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=`conversation_${id.slice(0,8)}.txt`;
-    document.body.appendChild(a); a.click(); a.remove();
-    showToast('Exported','ok');
-  } catch(e){ showToast('Export failed','err'); }
-}
-
-$('btnNewChat').onclick=()=>{
-  State.currentConvId=null;
-  $('chatTitle').textContent='New chat';
-  document.querySelectorAll('.convo-item').forEach(n=>n.classList.remove('active'));
-  renderWelcome();
-  closeMobileSidebar();
-  toggleSearch(false);
-  restoreDraft();
-};
-
-function renderWelcome(){
-  feed.innerHTML=`<div class="hero">
-    <h1>How can I help you today?</h1>
-    <p>Ask anything, or type <strong>@education</strong> after uploading a PDF for document-grounded answers.</p>
-    <div class="hero-chips">
-      <button class="hero-chip" onclick="quickFill('Build me a responsive HTML landing page')">Build a landing page</button>
-      <button class="hero-chip" onclick="quickFill('@education Summarize the uploaded PDF')">Summarize my PDF</button>
-      <button class="hero-chip" onclick="quickFill('Write a Python script that plots a sine wave')">Python + terminal demo</button>
-      <button class="hero-chip" onclick="quickFill('Explain quantum entanglement simply')">Explain quantum entanglement</button>
-    </div>
-  </div>`;
-}
-
-function quickFill(t){ $('textInput').value=t; $('textInput').dispatchEvent(new Event('input')); $('textInput').focus(); }
-window.quickFill=quickFill;
-
-/* ================================================================
-   COMPOSER
-   ================================================================ */
-const textInput=$('textInput');
-
-function autoresize(){
-  textInput.style.height='auto';
-  textInput.style.height=Math.min(textInput.scrollHeight,180)+'px';
-}
-
-textInput.addEventListener('input',()=>{
-  const len=textInput.value.length;
-  $('charCounter').textContent=len>400?`${len}/${MAX_CHARS}`:'';
-  $('btnSend').disabled=!textInput.value.trim()||State.generating;
-  localStorage.setItem('pai_draft_'+(State.currentConvId||'new'), textInput.value);
-  autoresize();
-});
-
-textInput.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); if(!$('btnSend').disabled) send(); }
-});
-
-function restoreDraft(){
-  const d=localStorage.getItem('pai_draft_'+(State.currentConvId||'new'));
-  if(d){ textInput.value=d; textInput.dispatchEvent(new Event('input')); }
-  else { textInput.value=''; autoresize(); $('btnSend').disabled=true; }
-}
-
-$('btnSend').onclick=()=>{ if(!$('btnSend').disabled) send(); };
-
-function send(){
-  const text=textInput.value.trim();
-  if(!text||State.generating) return;
-  localStorage.removeItem('pai_draft_'+(State.currentConvId||'new'));
-  textInput.value=''; autoresize(); $('btnSend').disabled=true;
-  streamReply(text);
-}
-
-$('btnStop').onclick=()=>{ if(State.abortCtrl) State.abortCtrl.abort(); };
-
-/* ================================================================
-   STREAMING CHAT  — FIX: proper SSE parsing + clear error messages
-   ================================================================ */
-async function streamReply(text){
-  appendMessage('user', text);
-  State.generating=true;
-  $('btnSend').style.display='none';
-  $('btnStop').style.display='flex';
-
-  const {bubble}=appendMessage('ai','');
-  bubble.innerHTML='<span class="typing-dots"><span></span><span></span><span></span></span>';
-
-  State.abortCtrl=new AbortController();
-  let fullText='';
-  let gotFirstToken=false;
-
-  try{
-    const res=await fetch(API_BASE+'/chat-stream',{
-      method:'POST', mode:'cors', signal:State.abortCtrl.signal,
-      headers:{
-        'Authorization':`Bearer ${State.sessionToken}`,
-        'Content-Type':'application/json'
-      },
-      body:JSON.stringify({
-        message:text,
-        conversation_id:State.currentConvId||null,
-        preferred_provider:$('preferredProviderSelect').value||null
-      })
-    });
-
-    /* ── Handle non-200 responses cleanly ─────────────────────── */
-    if(!res.ok){
-      let errMsg='Could not reach Pratham AI. Please try again.';
-      try{
-        const errData=await res.json();
-        if(errData.error) errMsg=errData.error;
-      } catch(_){}
-      if(res.status===401){
-        errMsg='Session expired – please sign in again.';
-        setTimeout(()=>location.reload(),2000);
-      } else if(res.status===400){
-        errMsg='Invalid request. Please try again.';
-      } else if(res.status>=500){
-        errMsg=`Server error (${res.status}). Check backend logs on Vercel.`;
-      }
-      bubble.innerHTML=`<span style="color:var(--error)">${esc(errMsg)}</span>
-        <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
-      showToast(errMsg,'err');
-      return;
-    }
-
-    /* ── Handle missing body ───────────────────────────────────── */
-    if(!res.body){
-      bubble.innerHTML='<span style="color:var(--error)">Stream not supported by your browser. Please update it.</span>';
-      return;
-    }
-
-    /* ── Parse SSE stream ─────────────────────────────────────── */
-    const reader=res.body.getReader();
-    const decoder=new TextDecoder();
-    let buf='';
-
-    while(true){
-      const {done,value}=await reader.read();
-      if(done) break;
-      buf+=decoder.decode(value,{stream:true});
-
-      // Split on double-newline (SSE event boundary)
-      const parts=buf.split('\n\n');
-      buf=parts.pop(); // last incomplete part stays in buffer
-
-      for(const part of parts){
-        const line=part.trim();
-        if(!line.startsWith('data:')) continue;
-        const raw=line.slice(5).trim();
-        if(raw==='[DONE]') break;
-        let payload;
-        try{ payload=JSON.parse(raw); } catch(_){ continue; }
-
-        if(payload.type==='metadata'){
-          if(payload.conversation_id) State.currentConvId=payload.conversation_id;
-        } else if(payload.type==='token'){
-          if(!gotFirstToken){ bubble.innerHTML=''; gotFirstToken=true; }
-          fullText+=payload.text;
-          bubble.innerHTML=renderMd(fullText)+'<span class="cursor-blink"></span>';
-          scrollToBottom();
-        } else if(payload.type==='error'){
-          const errText=payload.text||'An error occurred.';
-          bubble.innerHTML=`<span style="color:var(--error)">${esc(errText)}</span>
-            <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
-          showToast(errText,'err');
-          return; // stop reading
-        } else if(payload.type==='complete'){
-          bubble.innerHTML=renderMd(fullText);
-          if(window.hljs) bubble.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
+    <script>
+        const sidebarPanel = document.getElementById('sidebar-panel');
+        const historyItemsBox = document.getElementById('history-items-box');
+        const activeChatTitleHeader = document.getElementById('active-chat-title-header');
+        const conversationViewportPanel = document.getElementById('conversation-viewport-panel');
+        const interactionSubmissionForm = document.getElementById('interaction-submission-form');
+        const userPromptInputField = document.getElementById('user-prompt-input-field');
+        const toastRenderingWrapper = document.getElementById('toast-rendering-wrapper');
+        const roleBadgeDisplay = document.getElementById('role-badge-display');
+        const exportActionTrigger = document.getElementById('export-action-trigger');
+        const deleteActionTrigger = document.getElementById('delete-action-trigger');
+
+        // Central UI Global Memory Footprint Variables
+        let currentConversationId = null;
+        let globalAuthorizationToken = "Bearer dev-session-active-token"; // Default fallback bypass sequence
+        const SERVER_CONTEXT_HOST = ""; // Relative target routing configurations
+
+        // Core App Lifecycle Bootstrap Hook
+        window.addEventListener('DOMContentLoaded', () => {
+            synchronizeConversationsHistoryIndex();
+        });
+
+        function toggleSidebarView() {
+            if (sidebarPanel.classList.contains('-translate-x-full')) {
+                sidebarPanel.classList.remove('-translate-x-full');
+            } else {
+                sidebarPanel.classList.add('-translate-x-full');
+            }
         }
-      }
-    }
 
-    /* ── Finalize if stream ended without 'complete' event ─────── */
-    if(fullText&&!bubble.querySelector('.regen-btn')){
-      bubble.innerHTML=renderMd(fullText);
-      if(window.hljs) bubble.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
-    }
+        function toggleModal(modalTargetId) {
+            const target = document.getElementById(modalTargetId);
+            if(target.classList.contains('hidden')) {
+                target.classList.remove('hidden');
+                target.classList.add('flex');
+            } else {
+                target.classList.remove('flex');
+                target.classList.add('hidden');
+            }
+        }
 
-    /* ── If nothing was received at all ──────────────────────── */
-    if(!fullText&&!bubble.querySelector('[style*="color:var(--error)"]')){
-      bubble.innerHTML=`<span style="color:var(--error)">No response received. Is GROQ_API_KEY set on the backend?</span>
-        <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
-      showToast('No response – check GROQ_API_KEY in Vercel environment variables','err');
-    }
+        function createNewConversation() {
+            currentConversationId = null;
+            activeChatTitleHeader.innerText = "New Conversation Thread";
+            exportActionTrigger.classList.add('hidden');
+            deleteActionTrigger.classList.add('hidden');
+            
+            conversationViewportPanel.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4 animate-fade-in">
+                    <div class="w-12 h-12 bg-stone-100 rounded-2xl flex items-center justify-center font-bold text-stone-800 text-lg shadow-inner">P</div>
+                    <h3 class="text-base font-medium text-stone-700">Welcome to Pratham AI Studio</h3>
+                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a context line instruction to initialize the model matrix logic loops.</p>
+                </div>
+            `;
+            synchronizeConversationsHistoryIndex();
+        }
 
-    loadConversations();
+        function renderUserPromptBubble(promptText) {
+            const messageRow = document.createElement('div');
+            messageRow.className = 'flex justify-end w-full animate-fade-in';
+            messageRow.innerHTML = `
+                <div class="user-bubble px-4.5 py-2.5 rounded-2xl max-w-[85%] text-[15px] leading-relaxed break-words shadow-xs">
+                    ${sanitizeOutputText(promptText)}
+                </div>
+            `;
+            conversationViewportPanel.appendChild(messageRow);
+            autoScrollToViewportBottom();
+        }
 
-  } catch(err){
-    if(err.name==='AbortError'){
-      if(fullText){
-        bubble.innerHTML=renderMd(fullText)+'<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Stopped by user.</div>';
-      } else {
-        bubble.innerHTML='<span style="color:var(--text-tertiary)">Stopped.</span>';
-      }
-    } else {
-      const errMsg=`Network error: ${err.message}`;
-      bubble.innerHTML=`<span style="color:var(--error)">${esc(errMsg)}</span>
-        <button class="regen-btn" onclick="regenLast()">↻ Retry</button>`;
-      showToast('Network error reaching backend','err');
-    }
-  } finally {
-    State.generating=false;
-    State.abortCtrl=null;
-    $('btnStop').style.display='none';
-    $('btnSend').style.display='flex';
-    $('btnSend').disabled=!textInput.value.trim();
-    addRegenBtn();
-    playChime();
-    announce('Pratham AI finished responding.');
-  }
-}
+        function mountModelOutputTargetShell() {
+            const containerNode = document.createElement('div');
+            containerNode.className = 'flex flex-col items-start w-full gap-1 animate-fade-in';
+            containerNode.innerHTML = `
+                <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase px-0.5">PRATHAM AI</span>
+                <div class="model-stream-target-node text-neutral-800 text-[15px] max-w-[95%] px-0.5 leading-relaxed break-words"></div>
+            `;
+            conversationViewportPanel.appendChild(containerNode);
+            autoScrollToViewportBottom();
+            return containerNode.querySelector('.model-stream-target-node');
+        }
 
-function addRegenBtn(){
-  const groups=feed.querySelectorAll('.msg-group[data-role="ai"]');
-  const last=groups[groups.length-1]; if(!last) return;
-  last.querySelectorAll('.regen-btn').forEach(b=>b.remove());
-  const btn=document.createElement('button');
-  btn.className='regen-btn'; btn.textContent='↻ Regenerate response';
-  btn.onclick=regenLast;
-  last.appendChild(btn);
-}
+        function mountSystemFailureDisplayNode() {
+            const containerNode = document.createElement('div');
+            containerNode.className = 'flex flex-col items-start w-full gap-1';
+            containerNode.innerHTML = `
+                <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase px-0.5">PRATHAM AI</span>
+                <div class="text-red-600 font-medium text-[15px] px-0.5">
+                    Could not reach Pratham AI. Please try again.
+                </div>
+                <button type="button" onclick="window.location.reload();" class="regenerate-action-btn mt-2 px-3.5 py-1.5 border border-stone-200 rounded-full text-xs flex items-center gap-1.5 font-normal shadow-xs bg-white text-stone-700 cursor-pointer">
+                    ↻ Regenerate response
+                </button>
+            `;
+            conversationViewportPanel.appendChild(containerNode);
+            autoScrollToViewportBottom();
+        }
 
-function regenLast(){
-  const userGroups=feed.querySelectorAll('.msg-group[data-role="user"]');
-  const last=userGroups[userGroups.length-1]; if(!last) return;
-  streamReply(last.dataset.rawText||'');
-}
-window.regenLast=regenLast;
+        function pushOverlayRedErrorToast() {
+            const toastNode = document.createElement('div');
+            toastNode.className = 'w-full error-banner-tint text-white py-3 px-4 rounded-xl font-medium text-xs text-center shadow-md transition-all duration-300 transform translate-y-2 opacity-0';
+            toastNode.innerText = 'Could not reach Pratham AI. Please try again.';
+            
+            toastRenderingWrapper.appendChild(toastNode);
+            setTimeout(() => { toastNode.classList.remove('translate-y-2', 'opacity-0'); }, 15);
 
-/* ================================================================
-   SEARCH IN CONVERSATION
-   ================================================================ */
-function toggleSearch(force){
-  const bar=$('searchInConvo');
-  const open=force!==undefined?force:!bar.classList.contains('show');
-  bar.classList.toggle('show',open);
-  if(open) $('searchInConvoInput').focus(); else { clearHits(); $('searchInConvoInput').value=''; }
-}
+            setTimeout(() => {
+                toastNode.classList.add('opacity-0');
+                setTimeout(() => toastNode.remove(), 300);
+            }, 5500);
+        }
 
-$('btnSearchInConvo').onclick=()=>toggleSearch();
-$('btnCloseSearchInConvo').onclick=()=>toggleSearch(false);
+        function autoScrollToViewportBottom() {
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
 
-function clearHits(){
-  feed.querySelectorAll('mark.search-hit').forEach(m=>m.replaceWith(document.createTextNode(m.textContent)));
-  $('searchMatchCount').textContent='';
-}
+        function sanitizeOutputText(rawText) {
+            return rawText.replace(/[&<>'"]/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[char] || char));
+        }
 
-$('searchInConvoInput').addEventListener('input',e=>{
-  clearHits();
-  const q=e.target.value.trim(); if(!q) return;
-  let n=0;
-  feed.querySelectorAll('.msg-content').forEach(node=>{
-    const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);
-    const texts=[]; let tn;
-    while((tn=walker.nextNode())) texts.push(tn);
-    texts.forEach(tn=>{
-      const idx=tn.textContent.toLowerCase().indexOf(q.toLowerCase()); if(idx===-1) return;
-      n++;
-      const span=document.createElement('span');
-      span.innerHTML=esc(tn.textContent.slice(0,idx))+`<mark class="search-hit">${esc(tn.textContent.slice(idx,idx+q.length))}</mark>`+esc(tn.textContent.slice(idx+q.length));
-      tn.replaceWith(span);
-    });
-  });
-  $('searchMatchCount').textContent=n?`${n} match${n===1?'':'es'}`:'No matches';
-});
+        // ══════════════════════════════════════════════════════════════════════
+        //  ASYNCHRONOUS BACKEND PIPELINE TRANSLATION CONTROLS
+        // ══════════════════════════════════════════════════════════════════════
+        async function synchronizeConversationsHistoryIndex() {
+            try {
+                const response = await fetch(`${SERVER_CONTEXT_HOST}/conversations`, {
+                    method: 'GET',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                if(!response.ok) return;
+                const items = await response.json();
+                
+                if (items.length === 0) {
+                    historyItemsBox.innerHTML = `<p class="text-[11px] text-stone-400 text-center py-4">No active conversations found.</p>`;
+                    return;
+                }
 
-/* ================================================================
-   KEYBOARD SHORTCUTS
-   ================================================================ */
-window.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){
-    if($('previewDrawer').classList.contains('open')) closePreview();
-    else if($('settingsScrim').classList.contains('show')) closeModal('settingsScrim');
-    else if($('vipScrim').classList.contains('show')) closeModal('vipScrim');
-    else if($('shortcutsScrim').classList.contains('show')) closeModal('shortcutsScrim');
-    else if($('aboutScrim').classList.contains('show')) closeModal('aboutScrim');
-    else if($('sidebar').classList.contains('open')) closeMobileSidebar();
-  }
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); $('btnNewChat').click(); }
-  if((e.metaKey||e.ctrlKey)&&e.key==='/'){ e.preventDefault(); toggleTerminal(); }
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'&&!e.shiftKey){
-    if(State.currentConvId){ e.preventDefault(); toggleSearch(true); }
-  }
-});
+                historyItemsBox.innerHTML = '';
+                items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = `flex items-center justify-between p-2 rounded-xl text-xs group transition-all cursor-pointer ${item.id === currentConversationId ? 'bg-stone-200 text-black font-medium' : 'text-stone-600 hover:bg-stone-200/50'}`;
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2 truncate flex-1" onclick="loadConversationSession('${item.id}')">
+                            <span>${item.pinned ? '📌' : '💬'}</span>
+                            <span class="truncate">${sanitizeOutputText(item.title)}</span>
+                        </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="togglePinConversation('${item.id}', event)" class="p-0.5 hover:text-black">📍</button>
+                        </div>
+                    `;
+                    historyItemsBox.appendChild(row);
+                });
+            } catch (err) {
+                console.error("Context stack rendering interface failure:", err);
+            }
+        }
 
-/* ================================================================
-   MOBILE SIDEBAR
-   ================================================================ */
-function openMobileSidebar(){ $('sidebar').classList.add('open'); $('sidebarScrim').classList.add('show'); }
-function closeMobileSidebar(){ $('sidebar').classList.remove('open'); $('sidebarScrim').classList.remove('show'); }
-$('btnToggleSidebar').onclick=openMobileSidebar;
-$('btnSidebarClose').onclick=closeMobileSidebar;
-$('sidebarScrim').onclick=closeMobileSidebar;
+        async function loadConversationSession(conversationId) {
+            try {
+                const response = await fetch(`${SERVER_CONTEXT_HOST}/conversations/${conversationId}/messages`, {
+                    method: 'GET',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                if(!response.ok) throw new Error("Load target index fault.");
+                const logs = await response.json();
+                
+                currentConversationId = conversationId;
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
+                
+                const matchedItem = Array.from(document.querySelectorAll('#history-items-box span.truncate')).find(el => el.innerText.startsWith(logs[0]?.content.substring(0,10) || ""));
+                activeChatTitleHeader.innerText = matchedItem ? matchedItem.innerText : "Active Session View";
 
-/* ================================================================
-   PROFILE DROPDOWN
-   ================================================================ */
-$('btnProfile').onclick=e=>{ e.stopPropagation(); $('dropdown').classList.toggle('open'); };
-document.addEventListener('click',e=>{ if(!$('dropdown').contains(e.target)&&e.target!==$('btnProfile')) $('dropdown').classList.remove('open'); });
+                conversationViewportPanel.innerHTML = '';
+                logs.forEach(log => {
+                    if(log.role === 'user') {
+                        renderUserPromptBubble(log.content);
+                    } else if (log.role === 'assistant') {
+                        const cell = mountModelOutputTargetShell();
+                        cell.innerHTML = sanitizeOutputText(log.content).replace(/\n/g, "<br>");
+                    }
+                });
+                autoScrollToViewportBottom();
+                synchronizeConversationsHistoryIndex();
+            } catch (err) {
+                pushOverlayRedErrorToast();
+            }
+        }
 
-/* ================================================================
-   MODALS (settings, shortcuts, about, vip)
-   ================================================================ */
-function openModal(id){ $(id).classList.add('show'); $('dropdown').classList.remove('open'); }
-function closeModal(id){ $(id).classList.remove('show'); }
+        async function togglePinConversation(id, event) {
+            event.stopPropagation();
+            try {
+                await fetch(`${SERVER_CONTEXT_HOST}/conversations/${id}/pin`, {
+                    method: 'POST',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                synchronizeConversationsHistoryIndex();
+            } catch (err) {
+                pushOverlayRedErrorToast();
+            }
+        }
 
-$('btnOpenSettings').onclick=()=>openModal('settingsScrim');
-$('btnCloseSettings').onclick=()=>closeModal('settingsScrim');
-$('settingsScrim').addEventListener('click',e=>{ if(e.target===$('settingsScrim')) closeModal('settingsScrim'); });
+        async function triggerSessionDelete() {
+            if (!currentConversationId) return;
+            try {
+                await fetch(`${SERVER_CONTEXT_HOST}/conversations/${currentConversationId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                createNewConversation();
+            } catch (err) {
+                pushOverlayRedErrorToast();
+            }
+        }
 
-$('btnOpenShortcuts').onclick=()=>{ openModal('shortcutsScrim'); closeModal('settingsScrim'); };
-$('btnCloseShortcuts').onclick=()=>closeModal('shortcutsScrim');
-$('shortcutsScrim').addEventListener('click',e=>{ if(e.target===$('shortcutsScrim')) closeModal('shortcutsScrim'); });
+        function triggerSessionExport() {
+            if(!currentConversationId) return;
+            window.open(`${SERVER_CONTEXT_HOST}/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
+        }
 
-$('btnOpenAbout').onclick=()=>{ openModal('aboutScrim'); closeModal('settingsScrim'); };
-$('btnCloseAbout').onclick=()=>closeModal('aboutScrim');
-$('aboutScrim').addEventListener('click',e=>{ if(e.target===$('aboutScrim')) closeModal('aboutScrim'); });
+        async function dispatchPythonExecution() {
+            const codePayload = document.getElementById('python-code-editor-area').value.trim();
+            const outputFrame = document.getElementById('python-console-output-frame');
+            if(!codePayload) return;
 
-$('btnOpenVip').onclick=()=>openModal('vipScrim');
-$('btnCloseVip').onclick=()=>closeModal('vipScrim');
-$('vipScrim').addEventListener('click',e=>{ if(e.target===$('vipScrim')) closeModal('vipScrim'); });
+            outputFrame.innerText = "Spawning compilation processing isolation matrix...";
+            try {
+                const response = await fetch(`${SERVER_CONTEXT_HOST}/execute-python`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': globalAuthorizationToken
+                    },
+                    body: JSON.stringify({ code: codePayload })
+                });
+                const data = await response.json();
+                outputFrame.innerText = data.stderr ? `Process Fault Exception Traceback:\n${data.stderr}` : data.stdout || "Script completed runtime parameters loop with status: Return Code 0";
+            } catch(err) {
+                outputFrame.innerText = "Sandbox infrastructure network connection timeout fault.";
+            }
+        }
 
-/* theme seg */
-document.querySelectorAll('#themeSeg .seg-btn').forEach(b=>b.onclick=()=>applyTheme(b.dataset.theme));
+        async function dispatchPdfUpload() {
+            const selector = document.getElementById('pdf-payload-file-element');
+            if(selector.files.length === 0) return;
+            
+            const packet = new FormData();
+            packet.append("file", selector.files[0]);
 
-/* density + fontscale + sound */
-['densitySeg','fontscaleSeg','soundSeg'].forEach(segId=>{
-  document.querySelectorAll(`#${segId} .seg-btn`).forEach(b=>{
-    b.onclick=()=>{
-      document.querySelectorAll(`#${segId} .seg-btn`).forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      const key=Object.keys(b.dataset)[0];
-      document.documentElement.setAttribute('data-'+key, b.dataset[key]);
-      localStorage.setItem('pai_'+key, b.dataset[key]);
-    };
-  });
-});
+            try {
+                const response = await fetch(`${SERVER_CONTEXT_HOST}/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': globalAuthorizationToken },
+                    body: packet
+                });
+                const res = await response.json();
+                alert(res.message || res.error);
+                toggleModal('pdf-modal');
+            } catch(err) {
+                pushOverlayRedErrorToast();
+            }
+        }
 
-/* restore persisted settings */
-['density','fontscale','sound'].forEach(k=>{
-  const v=localStorage.getItem('pai_'+k); if(!v) return;
-  document.documentElement.setAttribute('data-'+k,v);
-  document.querySelectorAll(`[data-${k}]`).forEach(b=>{
-    if(b.closest('.seg-control')) b.classList.toggle('active',b.dataset[k]===v);
-  });
-});
+        async function dispatchVipUpgrade() {
+            const entryValue = document.getElementById('vip-secret-entry-input').value.trim();
+            if(!entryValue) return;
 
-/* VIP unlock */
-$('btnSubmitVip').onclick=async()=>{
-  const code=$('vipCodeInput').value.trim();
-  if(!code){ showToast('Enter a code first','err'); return; }
-  try{
-    const res=await authFetch('/auth/vip-upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
-    const data=await res.json();
-    if(res.ok){ State.user=data.user; localStorage.setItem('pai_user',JSON.stringify(State.user)); refreshVipUi(); showToast('VIP unlocked 🎉','ok'); closeModal('vipScrim'); }
-    else showToast(data.error||'Invalid code','err');
-  } catch(e){}
-};
+            try {
+                const response = await fetch(`${SERVER_CONTEXT_HOST}/auth/vip-upgrade`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': globalAuthorizationToken
+                    },
+                    body: JSON.stringify({ code: entryValue })
+                });
+                const res = await response.json();
+                if(res.ok) {
+                    roleBadgeDisplay.innerText = "VIP Tier Pro Profile";
+                    roleBadgeDisplay.className = "text-[10px] font-bold uppercase tracking-wider text-amber-500 animate-pulse";
+                    toggleModal('vip-modal');
+                } else {
+                    alert(res.error);
+                }
+            } catch(err) {
+                pushOverlayRedErrorToast();
+            }
+        }
 
-/* ================================================================
-   TERMINAL
-   ================================================================ */
-function toggleTerminal(){ $('terminal').classList.toggle('open'); }
-$('btnTerminal').onclick=toggleTerminal;
-$('btnCloseTerm').onclick=()=>$('terminal').classList.remove('open');
-$('btnClearTerm').onclick=()=>{ $('termOut').innerHTML='<span class="t-sys">Cleared.</span>'; };
+        // ══════════════════════════════════════════════════════════════════════
+        //  CORE STREAMING DATA SUBMISSION CONTROLLER PIPELINE
+        // ══════════════════════════════════════════════════════════════════════
+        interactionSubmissionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const textValue = userPromptInputField.value.trim();
+            if(!textValue) return;
 
-function termLine(text,cls){
-  const d=document.createElement('div');
-  if(cls) d.className=cls;
-  d.textContent=text;
-  $('termOut').appendChild(d);
-  $('termOut').scrollTop=$('termOut').scrollHeight;
-}
+            if(conversationViewportPanel.querySelector('.text-center')) {
+                conversationViewportPanel.innerHTML = '';
+            }
 
-$('termInput').addEventListener('keydown',async e=>{
-  if(e.key!=='Enter') return;
-  const code=$('termInput').value; if(!code.trim()) return;
-  termLine('>>> '+code,'t-cmd'); $('termInput').value='';
-  try{
-    const res=await authFetch('/execute-python',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
-    const data=await res.json();
-    if(data.stdout) termLine(data.stdout,'t-ok');
-    if(data.stderr) termLine(data.stderr,'t-err');
-    if(!data.stdout&&!data.stderr) termLine('(no output)','t-sys');
-  } catch(e){ termLine('Execution failed: '+e.message,'t-err'); }
-});
+            renderUserPromptBubble(textValue);
+            userPromptInputField.value = '';
 
-/* terminal drag-resize */
-(()=>{
-  let dragging=false;
-  $('termResizeHandle').addEventListener('mousedown',()=>dragging=true);
-  window.addEventListener('mousemove',e=>{ if(!dragging) return; const h=window.innerHeight-e.clientY; if(h>120&&h<window.innerHeight-100) $('terminal').style.height=h+'px'; });
-  window.addEventListener('mouseup',()=>dragging=false);
-})();
+            let outputContainer = null;
+            let combinedTextBuffer = "";
 
-/* ================================================================
-   FILE ATTACH / PDF
-   ================================================================ */
-$('btnAttach').onclick=()=>$('fileInput').click();
-$('fileInput').addEventListener('change',async e=>{ const f=e.target.files[0]; if(f) await uploadPdf(f); e.target.value=''; });
+            try {
+                const response = await fetch(`${SERVER_CONTEXT_HOST}/chat-stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': globalAuthorizationToken
+                    },
+                    body: JSON.stringify({
+                        message: textValue,
+                        conversation_id: currentConversationId
+                    })
+                });
 
-async function uploadPdf(file){
-  if(!file.name.toLowerCase().endsWith('.pdf')){ showToast('Only PDF files are supported','err'); return; }
-  const fd=new FormData(); fd.append('file',file);
-  showToast('Uploading '+file.name+'…','');
-  try{
-    const res=await authFetch('/upload',{method:'POST',body:fd});
-    const data=await res.json();
-    if(res.ok){ showToast(file.name+' uploaded. Use @education to reference it.','ok'); renderAttachChip(file.name); }
-    else showToast(data.error||'Upload failed','err');
-  } catch(e){}
-}
+                if(!response.ok) throw new Error("Stream baseline connection interface rejected request.");
 
-function renderAttachChip(name){
-  const rack=$('attachRack'); rack.style.display='flex';
-  const chip=document.createElement('span'); chip.className='attach-chip';
-  chip.innerHTML=`${esc(name)} <button aria-label="Remove">✕</button>`;
-  chip.querySelector('button').onclick=()=>{ chip.remove(); if(!rack.children.length) rack.style.display='none'; };
-  rack.appendChild(chip);
-}
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let storageChunkBuffer = "";
 
-['dragenter','dragover'].forEach(ev=>$('inputCard').addEventListener(ev,e=>{ e.preventDefault(); $('dropHint').classList.add('show'); }));
-['dragleave','drop'].forEach(ev=>$('inputCard').addEventListener(ev,e=>{ e.preventDefault(); $('dropHint').classList.remove('show'); }));
-$('inputCard').addEventListener('drop',async e=>{ const f=e.dataTransfer.files[0]; if(f) await uploadPdf(f); });
+                while(true) {
+                    const { value, done } = await reader.read();
+                    if(done) break;
 
-/* ================================================================
-   EDUCATION MODE
-   ================================================================ */
-$('btnEdu').onclick=()=>{
-  State.eduMode=!State.eduMode;
-  $('btnEdu').classList.toggle('active',State.eduMode);
-  if(State.eduMode&&!textInput.value.includes('@education')){
-    textInput.value=('@education '+textInput.value).trim();
-    textInput.dispatchEvent(new Event('input'));
-  }
-};
+                    storageChunkBuffer += decoder.decode(value, { stream: true });
+                    const elements = storageChunkBuffer.split("\n");
+                    storageChunkBuffer = elements.pop();
 
-/* ================================================================
-   HELPERS
-   ================================================================ */
-function esc(str){
-  const d=document.createElement('div'); d.textContent=String(str==null?'':str); return d.innerHTML;
-}
+                    for(const element of elements) {
+                        const rawContent = element.trim();
+                        if(!rawContent.startsWith("data: ")) continue;
 
-/* ================================================================
-   INIT
-   ================================================================ */
-document.addEventListener('DOMContentLoaded',()=>{
-  buildGoogleBtn();
-  initAuth();
-  // If already logged in from localStorage (and Supabase will confirm):
-  if(State.sessionToken&&State.user) enterApp();
-});
-</script>
+                        try {
+                            const parsedJson = JSON.parse(rawContent.substring(6));
+                            
+                            if(parsedJson.type === "metadata") {
+                                currentConversationId = parsedJson.conversation_id;
+                                exportActionTrigger.classList.remove('hidden');
+                                deleteActionTrigger.classList.remove('hidden');
+                            } else if (parsedJson.type === "token") {
+                                if(!outputContainer) {
+                                    outputContainer = mountModelOutputTargetShell();
+                                }
+                                combinedTextBuffer += parsedJson.text;
+                                outputContainer.innerHTML = sanitizeOutputText(combinedTextBuffer).replace(/\n/g, "<br>");
+                                autoScrollToViewportBottom();
+                            } else if (parsedJson.type === "error") {
+                                throw new Error(parsedJson.text);
+                            }
+                        } catch(exc) {
+                            // Suppress block syntax validation logs
+                        }
+                    }
+                }
+                synchronizeConversationsHistoryIndex();
+            } catch (err) {
+                console.error("Transmission stack structural failure:", err);
+                mountSystemFailureDisplayNode();
+                pushOverlayRedErrorToast();
+            }
+        });
+    </script>
 </body>
 </html>
