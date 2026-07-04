@@ -65,9 +65,15 @@ MAX_CONTENT_LENGTH_BYTES = 20 * 1024 * 1024
 PROVIDER_COOLDOWN_SECONDS = 90
 SANDBOX_EXEC_TIMEOUT_SECONDS = 8
  
-DATA_DIR = Path(os.environ.get("PRATHAM_DATA_DIR", "./pratham_data"))
+DATA_DIR = Path(os.environ.get("PRATHAM_DATA_DIR", "/tmp/pratham_data"))
 STATE_FILE = DATA_DIR / "state.json"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except Exception as _data_dir_exc:
+    # On some serverless platforms only /tmp is writable; if even that
+    # fails, don't crash the whole module import - just run without local
+    # disk persistence for this invocation.
+    logger.warning("Could not create DATA_DIR (%s): %s - continuing without local persistence.", DATA_DIR, _data_dir_exc)
  
 if not GROQ_API_KEY:
     logger.warning("GROQ_API_KEY is not set. /chat-stream will return a config error until it is set in the environment.")
