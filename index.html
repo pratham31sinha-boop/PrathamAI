@@ -3,145 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pratham AI Workspace Studio</title>
+    <title>Pratham AI Workspace</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        .user-bubble { background-color: #f4f0ea; color: #1c1917; }
-        .error-banner-tint { background-color: #dc2626; color: #ffffff; }
-        .editor-bg { background-color: #1e1e1e; color: #d4d4d4; }
+        /* Exact color matches from your latest dark mode application interface */
+        body { background-color: #171717; color: #eceecf; }
+        .user-bubble { background-color: #212121; color: #f4f4f4; border: 1px solid #2f2f2f; }
+        .bot-text-color { color: #e3e3e3; }
+        .input-bar-bg { background-color: #2f2f2f; border: 1px solid #3f3f3f; }
+        .error-banner-tint { background-color: #c93b3b; color: #ffffff; }
+        .editor-bg { background-color: #121212; color: #d4d4d4; }
         
         /* Custom UI Transitions and Layout Scroll Hide Elements */
         .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
-        .workspace-scrollpane::-webkit-scrollbar-thumb { background: #e4e4e7; border-radius: 9px; }
+        .workspace-scrollpane::-webkit-scrollbar-thumb { background: #3f3f3f; border-radius: 9px; }
         .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
-<body class="bg-stone-50 text-neutral-800 h-screen w-screen flex overflow-hidden font-sans antialiased select-none">
+<body class="h-screen w-screen flex overflow-hidden font-sans antialiased select-none">
 
-    <aside id="sidebar-panel" class="w-80 h-full border-r border-stone-200 bg-stone-100 flex flex-col justify-between z-30 sidebar-transition fixed md:relative transform -translate-x-full md:translate-x-0">
+    <aside id="sidebar-panel" class="w-80 h-full border-r border-[#262626] bg-[#171717] flex flex-col justify-between z-30 sidebar-transition fixed md:relative transform -translate-x-full md:translate-x-0">
         <div class="p-4 flex flex-col flex-1 overflow-hidden">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
-                    <span class="w-7 h-7 bg-stone-900 rounded-lg flex items-center justify-center text-white text-xs font-bold">P</span>
-                    <span class="font-semibold text-sm tracking-tight text-neutral-700">Pratham AI Hub</span>
+                    <span class="w-7 h-7 bg-[#eceecf] rounded-lg flex items-center justify-center text-black text-xs font-bold">P</span>
+                    <span class="font-semibold text-sm tracking-tight text-neutral-200">Pratham AI Hub</span>
                 </div>
-                <button onclick="createNewConversation()" class="p-1.5 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer text-xs font-medium text-stone-600">
+                <button onclick="createNewConversation()" class="p-1.5 hover:bg-[#262626] rounded-lg transition-colors cursor-pointer text-xs font-medium text-neutral-400">
                     + New Chat
                 </button>
             </div>
             
-            <hr class="border-stone-200 mb-3">
+            <hr class="border-[#262626] mb-3">
             
             <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5">
-                <p class="text-xs text-neutral-400 text-center py-4">Loading application sync profile data...</p>
+                <p class="text-xs text-neutral-500 text-center py-4">Syncing workspace state...</p>
             </div>
         </div>
 
-        <div class="p-3 border-t border-stone-200 bg-stone-100/80 flex flex-col gap-2">
-            <div class="flex items-center gap-3 p-2 rounded-xl bg-white border border-stone-200/60 shadow-xs">
-                <div class="w-8 h-8 rounded-full bg-stone-300 text-stone-700 flex items-center justify-center font-bold text-xs">U</div>
+        <div class="p-3 border-t border-[#262626] bg-[#171717] flex flex-col gap-2">
+            <div class="p-2 bg-[#212121] rounded-xl border border-[#2f2f2f]">
+                <label class="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block mb-1">Target Host Gateway</label>
+                <input type="text" id="backend-host-url-config" value="http://127.0.0.1:5000" placeholder="e.g. http://192.168.1.5:5000" class="w-full bg-[#171717] text-xs px-2 py-1 border border-[#3f3f3f] rounded-md text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-400" onchange="updateBackendHostContext()"/>
+            </div>
+            <div class="flex items-center gap-3 p-2 rounded-xl bg-[#212121] border border-[#2f2f2f] shadow-xs">
+                <div class="w-8 h-8 rounded-full bg-[#3f3f3f] text-neutral-300 flex items-center justify-center font-bold text-xs">U</div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-xs font-semibold truncate text-neutral-700">Developer Account</p>
-                    <p id="role-badge-display" class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Standard Tier</p>
+                    <p class="text-xs font-semibold truncate text-neutral-200">Developer Account</p>
+                    <p id="role-badge-display" class="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Standard Tier</p>
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-1 text-[11px]">
-                <button onclick="toggleModal('vip-modal')" class="py-1.5 bg-stone-800 hover:bg-stone-950 text-white rounded-lg transition-all font-medium text-center shadow-xs cursor-pointer">✨ Upgrade VIP</button>
-                <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg transition-all font-medium text-center shadow-xs cursor-pointer">📎 Upload PDF</button>
+                <button onclick="toggleModal('vip-modal')" class="py-1.5 bg-[#eceecf] text-black font-semibold rounded-lg transition-all text-center shadow-xs cursor-pointer">✨ Upgrade VIP</button>
+                <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[#212121] border border-[#3f3f3f] text-neutral-300 rounded-lg transition-all font-medium text-center shadow-xs cursor-pointer">📎 Upload PDF</button>
             </div>
         </div>
     </aside>
 
-    <main class="flex-1 h-full flex flex-col relative bg-white justify-between min-w-0">
+    <main class="flex-1 h-full flex flex-col relative bg-[#212121] justify-between min-w-0">
         
-        <header class="h-14 border-b border-stone-100 px-4 flex items-center justify-between bg-white/90 backdrop-blur-md z-20">
+        <header class="h-14 border-b border-[#2d2d2d] px-4 flex items-center justify-between bg-[#212121]/90 backdrop-blur-md z-20">
             <div class="flex items-center gap-3.5">
-                <button onclick="toggleSidebarView()" class="p-1.5 text-stone-400 hover:text-black hover:bg-stone-50 rounded-lg text-lg cursor-pointer md:hidden">☰</button>
-                <h2 id="active-chat-title-header" class="text-sm font-medium text-stone-700 truncate max-w-xs md:max-w-md">New Conversation Thread</h2>
+                <button onclick="toggleSidebarView()" class="p-1.5 text-neutral-400 hover:text-white hover:bg-[#2d2d2d] rounded-lg text-lg cursor-pointer md:hidden">☰</button>
+                <h2 id="active-chat-title-header" class="text-sm font-medium text-neutral-200 truncate max-w-xs md:max-w-md">New Conversation Thread</h2>
             </div>
             <div class="flex items-center gap-3">
-                <button onclick="toggleModal('sandbox-modal')" class="px-3 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-full font-mono text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+                <button onclick="toggleModal('sandbox-modal')" class="px-3 py-1 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-neutral-300 rounded-full font-mono text-xs flex items-center gap-1.5 transition-all cursor-pointer">
                     &gt;_ Run Python
                 </button>
-                <button id="export-action-trigger" onclick="triggerSessionExport()" class="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-50 rounded-lg text-sm cursor-pointer hidden">⬇ Export</button>
-                <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm cursor-pointer hidden">🗑 Drop</button>
+                <button id="export-action-trigger" onclick="triggerSessionExport()" class="p-1.5 text-neutral-400 hover:text-white hover:bg-[#2d2d2d] rounded-lg text-sm cursor-pointer hidden">⬇ Export</button>
+                <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="p-1.5 text-neutral-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg text-sm cursor-pointer hidden">🗑 Drop</button>
             </div>
         </header>
 
         <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-2xl mx-auto w-full pb-36 workspace-scrollpane">
             <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
-                <div class="w-12 h-12 bg-stone-100 rounded-2xl flex items-center justify-center font-bold text-stone-800 text-lg shadow-inner">P</div>
-                <h3 class="text-base font-medium text-stone-700">Welcome to Pratham AI Studio</h3>
-                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a context line instruction to initialize the model matrix logic loops. Use <span class="font-mono bg-stone-100 px-1 py-0.5 rounded text-stone-600">@education</span> context syntax tags to point processing directly over loaded PDF text vector files.</p>
+                <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
+                <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
+                <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a message instruction to initialize the model matrix logic loops. Use <span class="font-mono bg-[#2d2d2d] px-1 py-0.5 rounded text-emerald-400">@education</span> context syntax tags to point processing over loaded PDF text vector files.</p>
             </div>
         </div>
 
-        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white to-transparent pt-6 pb-4 px-4 z-20">
+        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#212121] via-[#212121] to-transparent pt-6 pb-4 px-4 z-20">
             <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
                 
                 <div id="toast-rendering-wrapper" class="w-full flex flex-col gap-1.5"></div>
 
-                <form id="interaction-submission-form" class="w-full relative flex items-center shadow-xs rounded-2xl border border-stone-200/80 overflow-hidden bg-stone-50 focus-within:ring-2 focus-within:ring-stone-400/30 focus-within:border-stone-400 focus-within:bg-white transition-all">
+                <form id="interaction-submission-form" class="w-full relative flex items-center rounded-2xl input-bar-bg overflow-hidden focus-within:ring-2 focus-within:ring-neutral-600 transition-all">
+                    <button type="button" onclick="toggleModal('pdf-modal')" class="pl-3.5 pr-2 text-neutral-400 hover:text-white transition-colors cursor-pointer text-lg">
+                        📎
+                    </button>
                     <input 
                         type="text" 
                         id="user-prompt-input-field" 
-                        placeholder="Message Pratham AI... (use @education to search)" 
-                        class="w-full pl-4 pr-12 py-3.5 bg-transparent border-none focus:outline-none text-[15px] text-neutral-800"
+                        placeholder="Message Pratham AI... (use @education to reference uploaded PDFs)" 
+                        class="w-full pr-12 py-3.5 bg-transparent border-none focus:outline-none text-[15px] text-white placeholder-neutral-500"
                         autocomplete="off"
                         required
                     >
                     <button 
                         type="submit" 
                         id="input-action-submit-btn"
-                        class="absolute right-3 w-8 h-8 flex items-center justify-center bg-stone-900 text-white rounded-full hover:bg-black transition-colors shadow-xs cursor-pointer text-sm font-bold"
+                        class="absolute right-3 w-8 h-8 flex items-center justify-center bg-[#eceecf] text-black rounded-full hover:bg-white transition-colors shadow-xs cursor-pointer text-sm font-bold"
                     >
                         ↑
                     </button>
                 </form>
-                <p class="text-center text-[10px] text-stone-400">Pratham AI can make mistakes. Verify important account history details.</p>
+                <p class="text-center text-[10px] text-neutral-500">Pratham AI can make mistakes. Verify important info. 🔒 Private per-account history.</p>
             </div>
         </div>
     </main>
 
-    <div id="sandbox-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl w-full max-w-xl overflow-hidden shadow-xl flex flex-col">
-            <div class="p-4 border-b border-stone-100 flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-stone-700 font-mono">&gt;_ Interactive Python Sandbox Terminal</h4>
-                <button onclick="toggleModal('sandbox-modal')" class="text-stone-400 hover:text-black font-bold text-sm cursor-pointer">✕</button>
+    <div id="sandbox-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[#212121] border border-[#2f2f2f] rounded-2xl w-full max-w-xl overflow-hidden shadow-xl flex flex-col">
+            <div class="p-4 border-b border-[#2d2d2d] flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-neutral-200 font-mono">&gt;_ Interactive Python Sandbox Terminal</h4>
+                <button onclick="toggleModal('sandbox-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-4 flex flex-col gap-3">
-                <textarea id="python-code-editor-area" rows="6" class="w-full font-mono text-xs p-3 editor-bg rounded-xl border-none focus:outline-none focus:ring-1 focus:ring-stone-400 shadow-inner" placeholder="print('Hello from the Pratham AI virtual execution sandbox layer!')"></textarea>
-                <button onclick="dispatchPythonExecution()" class="w-full py-2 bg-stone-900 text-white font-mono text-xs font-medium rounded-lg hover:bg-black shadow-xs cursor-pointer">Execute Script Frame</button>
+                <textarea id="python-code-editor-area" rows="6" class="w-full font-mono text-xs p-3 editor-bg rounded-xl border border-[#3f3f3f] focus:outline-none focus:ring-1 focus:ring-neutral-500 shadow-inner" placeholder="print('Hello from the Pratham AI virtual execution sandbox layer!')"></textarea>
+                <button onclick="dispatchPythonExecution()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white shadow-xs cursor-pointer">Execute Script Frame</button>
                 <div class="flex flex-col gap-1">
-                    <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase">Console Output Logs</span>
-                    <pre id="python-console-output-frame" class="w-full min-h-[80px] p-3 border border-stone-200 rounded-xl bg-stone-50 font-mono text-xs text-stone-700 overflow-x-auto whitespace-pre-wrap">Terminal ready.</pre>
+                    <span class="text-[10px] font-bold tracking-wider text-neutral-400 uppercase">Console Output Logs</span>
+                    <pre id="python-console-output-frame" class="w-full min-h-[80px] p-3 border border-[#3f3f3f] rounded-xl bg-[#171717] font-mono text-xs text-emerald-400 overflow-x-auto whitespace-pre-wrap">Terminal ready.</pre>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="pdf-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
-            <div class="p-4 border-b border-stone-100 flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-stone-700">Ingest PDF Context Vector</h4>
-                <button onclick="toggleModal('pdf-modal')" class="text-stone-400 hover:text-black font-bold text-sm cursor-pointer">✕</button>
+    <div id="pdf-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[#212121] border border-[#2f2f2f] rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-[#2d2d2d] flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-neutral-200">Ingest PDF Context Vector</h4>
+                <button onclick="toggleModal('pdf-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-5 flex flex-col gap-4">
-                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-stone-100 file:text-stone-700 hover:file:bg-stone-200 cursor-pointer"/>
-                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-stone-800 text-white text-xs font-semibold rounded-lg hover:bg-black shadow-xs transition-colors cursor-pointer">Initialize Document Index</button>
+                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#2d2d2d] file:text-neutral-200 hover:file:bg-[#3d3d3d] cursor-pointer"/>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white shadow-xs transition-colors cursor-pointer">Initialize Document Index</button>
             </div>
         </div>
     </div>
 
-    <div id="vip-modal" class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl w-full max-w-xs overflow-hidden shadow-xl">
-            <div class="p-4 border-b border-stone-100 flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-stone-700">Escalate VIP Authentication</h4>
-                <button onclick="toggleModal('vip-modal')" class="text-stone-400 hover:text-black font-bold text-sm cursor-pointer">✕</button>
+    <div id="vip-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[#212121] border border-[#2f2f2f] rounded-2xl w-full max-w-xs overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-[#2d2d2d] flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-neutral-200">Escalate VIP Authentication</h4>
+                <button onclick="toggleModal('vip-modal')" class="text-neutral-400 hover:text-white font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-4 flex flex-col gap-3">
-                <input type="password" id="vip-secret-entry-input" placeholder="Enter VIP Secret Key" class="w-full text-xs p-2.5 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-stone-400 bg-stone-50"/>
-                <button onclick="dispatchVipUpgrade()" class="w-full py-2 bg-stone-900 text-white text-xs font-semibold rounded-lg hover:bg-black transition-colors shadow-xs cursor-pointer">Authorize Verification Token</button>
+                <input type="password" id="vip-secret-entry-input" placeholder="Enter VIP Secret Key" class="w-full text-xs p-2.5 bg-[#171717] border border-[#3f3f3f] rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-neutral-500"/>
+                <button onclick="dispatchVipUpgrade()" class="w-full py-2 bg-[#eceecf] text-black font-semibold text-xs rounded-lg hover:bg-white transition-colors shadow-xs cursor-pointer">Authorize Verification Token</button>
             </div>
         </div>
     </div>
@@ -157,16 +168,30 @@
         const roleBadgeDisplay = document.getElementById('role-badge-display');
         const exportActionTrigger = document.getElementById('export-action-trigger');
         const deleteActionTrigger = document.getElementById('delete-action-trigger');
+        const backendHostConfig = document.getElementById('backend-host-url-config');
 
         // Central UI Global Memory Footprint Variables
         let currentConversationId = null;
-        let globalAuthorizationToken = "Bearer dev-session-active-token"; // Default fallback bypass sequence
-        const SERVER_CONTEXT_HOST = ""; // Relative target routing configurations
+        let globalAuthorizationToken = "Bearer dev-session-active-token";
+        let SERVER_CONTEXT_HOST = "http://127.0.0.1:5000"; // Fallback path mapping pointer
 
-        // Core App Lifecycle Bootstrap Hook
+        // Automatic Host Discovery Protocol Strategy for local environments
         window.addEventListener('DOMContentLoaded', () => {
+            const runtimeOrigin = window.location.origin;
+            if (runtimeOrigin.includes('localhost') || runtimeOrigin.includes('127.0.0.1')) {
+                SERVER_CONTEXT_HOST = window.location.protocol + "//" + window.location.hostname + ":5000";
+            } else {
+                SERVER_CONTEXT_HOST = runtimeOrigin; // Maps production domains natively
+            }
+            backendHostConfig.value = SERVER_CONTEXT_HOST;
+            
             synchronizeConversationsHistoryIndex();
         });
+
+        function updateBackendHostContext() {
+            SERVER_CONTEXT_HOST = backendHostConfig.value.trim();
+            synchronizeConversationsHistoryIndex();
+        }
 
         function toggleSidebarView() {
             if (sidebarPanel.classList.contains('-translate-x-full')) {
@@ -194,10 +219,10 @@
             deleteActionTrigger.classList.add('hidden');
             
             conversationViewportPanel.innerHTML = `
-                <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4 animate-fade-in">
-                    <div class="w-12 h-12 bg-stone-100 rounded-2xl flex items-center justify-center font-bold text-stone-800 text-lg shadow-inner">P</div>
-                    <h3 class="text-base font-medium text-stone-700">Welcome to Pratham AI Studio</h3>
-                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a context line instruction to initialize the model matrix logic loops.</p>
+                <div class="h-full flex flex-col items-center justify-center text-center space-y-3 px-4">
+                    <div class="w-12 h-12 bg-[#2d2d2d] rounded-2xl flex items-center justify-center font-bold text-[#eceecf] text-lg shadow-inner">P</div>
+                    <h3 class="text-base font-medium text-neutral-200">Welcome to Pratham AI Studio</h3>
+                    <p class="text-xs text-neutral-400 max-w-sm leading-relaxed">Submit a instruction prompt to initialize the pipeline loops.</p>
                 </div>
             `;
             synchronizeConversationsHistoryIndex();
@@ -205,7 +230,7 @@
 
         function renderUserPromptBubble(promptText) {
             const messageRow = document.createElement('div');
-            messageRow.className = 'flex justify-end w-full animate-fade-in';
+            messageRow.className = 'flex justify-end w-full';
             messageRow.innerHTML = `
                 <div class="user-bubble px-4.5 py-2.5 rounded-2xl max-w-[85%] text-[15px] leading-relaxed break-words shadow-xs">
                     ${sanitizeOutputText(promptText)}
@@ -217,10 +242,10 @@
 
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
-            containerNode.className = 'flex flex-col items-start w-full gap-1 animate-fade-in';
+            containerNode.className = 'flex flex-col items-start w-full gap-1';
             containerNode.innerHTML = `
-                <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase px-0.5">PRATHAM AI</span>
-                <div class="model-stream-target-node text-neutral-800 text-[15px] max-w-[95%] px-0.5 leading-relaxed break-words"></div>
+                <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
+                <div class="model-stream-target-node bot-text-color text-[15px] max-w-[95%] px-0.5 leading-relaxed break-words"></div>
             `;
             conversationViewportPanel.appendChild(containerNode);
             autoScrollToViewportBottom();
@@ -231,15 +256,16 @@
             const containerNode = document.createElement('div');
             containerNode.className = 'flex flex-col items-start w-full gap-1';
             
-            const displayMessage = customErrorText || 'Could not reach Pratham AI. Please try again.';
+            // Clear configuration trace alerts directly to bubble elements
+            const displayMessage = customErrorText ? `Could not reach Pratham AI (${customErrorText}). Please ensure your Flask backend server is actively running.` : 'Could not reach Pratham AI. Please try again.';
             
             containerNode.innerHTML = `
-                <span class="text-[10px] font-bold tracking-wider text-stone-400 uppercase px-0.5">PRATHAM AI</span>
-                <div class="text-red-600 font-medium text-[15px] px-0.5">
+                <span class="text-[10px] font-bold tracking-wider text-neutral-500 uppercase px-0.5">PRATHAM AI</span>
+                <div class="text-red-400 font-medium text-[15px] px-0.5">
                     ${sanitizeOutputText(displayMessage)}
                 </div>
-                <button type="button" onclick="window.location.reload();" class="regenerate-action-btn mt-2 px-3.5 py-1.5 border border-stone-200 rounded-full text-xs flex items-center gap-1.5 font-normal shadow-xs bg-white text-stone-700 cursor-pointer">
-                    ↻ Regenerate response
+                <button type="button" onclick="window.location.reload();" class="mt-2 px-3.5 py-1.5 border border-[#3f3f3f] bg-[#2f2f2f] rounded-full text-xs text-neutral-300 hover:text-white cursor-pointer transition-colors shadow-xs">
+                    ↻ Retry Connection
                 </button>
             `;
             conversationViewportPanel.appendChild(containerNode);
@@ -250,7 +276,7 @@
             const toastNode = document.createElement('div');
             toastNode.className = 'w-full error-banner-tint text-white py-3 px-4 rounded-xl font-medium text-xs text-center shadow-md transition-all duration-300 transform translate-y-2 opacity-0';
             
-            toastNode.innerText = customErrorText || 'Could not reach Pratham AI. Please try again.';
+            toastNode.innerText = customErrorText ? `Could not reach Pratham AI. [Diagnostic: ${customErrorText}]` : 'Could not reach Pratham AI. Please try again.';
             
             toastRenderingWrapper.appendChild(toastNode);
             setTimeout(() => { toastNode.classList.remove('translate-y-2', 'opacity-0'); }, 15);
@@ -284,27 +310,27 @@
                 const items = await response.json();
                 
                 if (items.length === 0) {
-                    historyItemsBox.innerHTML = `<p class="text-[11px] text-stone-400 text-center py-4">No active conversations found.</p>`;
+                    historyItemsBox.innerHTML = `<p class="text-[11px] text-neutral-500 text-center py-4">No active conversations found.</p>`;
                     return;
                 }
 
                 historyItemsBox.innerHTML = '';
                 items.forEach(item => {
                     const row = document.createElement('div');
-                    row.className = `flex items-center justify-between p-2 rounded-xl text-xs group transition-all cursor-pointer ${item.id === currentConversationId ? 'bg-stone-200 text-black font-medium' : 'text-stone-600 hover:bg-stone-200/50'}`;
+                    row.className = `flex items-center justify-between p-2 rounded-xl text-xs group transition-all cursor-pointer ${item.id === currentConversationId ? 'bg-[#2d2d2d] text-white font-medium' : 'text-neutral-400 hover:bg-[#2d2d2d]/60'}`;
                     row.innerHTML = `
                         <div class="flex items-center gap-2 truncate flex-1" onclick="loadConversationSession('${item.id}')">
                             <span>${item.pinned ? '📌' : '💬'}</span>
                             <span class="truncate">${sanitizeOutputText(item.title)}</span>
                         </div>
                         <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onclick="togglePinConversation('${item.id}', event)" class="p-0.5 hover:text-black">📍</button>
+                            <button onclick="togglePinConversation('${item.id}', event)" class="p-0.5 hover:text-white">📍</button>
                         </div>
                     `;
                     historyItemsBox.appendChild(row);
                 });
             } catch (err) {
-                console.error("Context stack rendering interface failure:", err);
+                console.error("History pane fetch synchronization drops:", err);
             }
         }
 
@@ -314,7 +340,7 @@
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
-                if(!response.ok) throw new Error("Load target index fault.");
+                if(!response.ok) throw new Error("Load index sequence failure.");
                 const logs = await response.json();
                 
                 currentConversationId = conversationId;
@@ -336,7 +362,7 @@
                 autoScrollToViewportBottom();
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                pushOverlayRedErrorToast("Failed to sync conversations logs.");
+                pushOverlayRedErrorToast("Network mapping connection error.");
             }
         }
 
@@ -376,7 +402,7 @@
             const outputFrame = document.getElementById('python-console-output-frame');
             if(!codePayload) return;
 
-            outputFrame.innerText = "Spawning compilation processing isolation matrix...";
+            outputFrame.innerText = "Spawning isolation execution block processing space...";
             try {
                 const response = await fetch(`${SERVER_CONTEXT_HOST}/execute-python`, {
                     method: 'POST',
@@ -387,9 +413,9 @@
                     body: JSON.stringify({ code: codePayload })
                 });
                 const data = await response.json();
-                outputFrame.innerText = data.stderr ? `Process Fault Exception Traceback:\n${data.stderr}` : data.stdout || "Script completed runtime parameters loop with status: Return Code 0";
+                outputFrame.innerText = data.stderr ? `Sandbox Exception Traceback Output:\n${data.stderr}` : data.stdout || "Script completed runtime parameters loop cleanly.";
             } catch(err) {
-                outputFrame.innerText = "Sandbox infrastructure network connection timeout fault.";
+                outputFrame.innerText = "Sandbox pipeline connection timeout fault.";
             }
         }
 
@@ -410,7 +436,7 @@
                 alert(res.message || res.error);
                 toggleModal('pdf-modal');
             } catch(err) {
-                pushOverlayRedErrorToast("Upload pipeline failure.");
+                pushOverlayRedErrorToast("File storage distribution pipe down.");
             }
         }
 
@@ -430,13 +456,13 @@
                 const res = await response.json();
                 if(res.ok) {
                     roleBadgeDisplay.innerText = "VIP Tier Pro Profile";
-                    roleBadgeDisplay.className = "text-[10px] font-bold uppercase tracking-wider text-amber-500 animate-pulse";
+                    roleBadgeDisplay.className = "text-[10px] font-bold uppercase tracking-wider text-amber-400";
                     toggleModal('vip-modal');
                 } else {
                     alert(res.error);
                 }
             } catch(err) {
-                pushOverlayRedErrorToast("Upgrade logic loop dropped parameters.");
+                pushOverlayRedErrorToast("Escalation protocol failed.");
             }
         }
 
@@ -472,11 +498,10 @@
                 });
 
                 if(!response.ok) {
-                    // Extract real error reasons from the response JSON body if possible
-                    let trackingString = `HTTP Error Code status: ${response.status}`;
+                    let trackingString = `Connection Dropped. Status: ${response.status}`;
                     try {
                         const errorDetails = await response.json();
-                        if (errorDetails.error) trackingString += ` (${errorDetails.error})`;
+                        if (errorDetails.error) trackingString += ` - ${errorDetails.error}`;
                     } catch(e) {}
                     throw new Error(trackingString);
                 }
@@ -515,13 +540,13 @@
                                 throw new Error(parsedJson.text);
                             }
                         } catch(exc) {
-                            // Suppress stream fragment parse logs
+                            // Suppress block verification tracking frames
                         }
                     }
                 }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                console.error("Transmission stack structural failure:", err);
+                console.error("Transmission stack failure:", err);
                 mountSystemFailureDisplayNode(err.message);
                 pushOverlayRedErrorToast(err.message);
             }
