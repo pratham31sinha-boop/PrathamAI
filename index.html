@@ -669,6 +669,15 @@ mark.search-hit{background:var(--accent-soft);color:var(--accent);border-radius:
   </div>
 </div>
 
+<!-- Added: minimal Vercel backend test panel. Calls GET /api/app and
+     shows the raw JSON response so deployment can be verified quickly
+     without opening dev tools. -->
+<div id="vercelTestPanel" style="position:fixed;bottom:10px;left:10px;z-index:9997;background:var(--bg-panel);border:1px solid var(--border-heavy);border-radius:var(--radius-md);padding:10px;max-width:320px;box-shadow:var(--shadow-md);font-family:var(--font-sans);font-size:12px">
+  <div style="font-weight:700;margin-bottom:6px">Backend test (/api/app)</div>
+  <button id="btnTestApiApp" style="border:1px solid var(--border-heavy);border-radius:var(--radius-pill);padding:6px 12px;font-weight:600;margin-bottom:6px">Call /api/app</button>
+  <pre id="apiAppOutput" style="white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;background:var(--bg-sidebar);padding:8px;border-radius:6px;margin:0">No request sent yet.</pre>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -1632,6 +1641,25 @@ $('btnEdu').onclick = () => {
   if (State.eduMode && !textInput.value.includes('@education')){
     textInput.value = ('@education ' + textInput.value).trim();
     textInput.dispatchEvent(new Event('input'));
+  }
+};
+
+/* ========================================================================
+   VERCEL BACKEND TEST PANEL (added: calls GET /api/app and renders the
+   JSON response, so the Vercel deployment can be verified without auth)
+   ======================================================================== */
+$('btnTestApiApp').onclick = async () => {
+  const out = $('apiAppOutput');
+  out.textContent = 'Calling /api/app...';
+  try {
+    const res = await fetch(`${API_BASE}/api/app`, { mode: 'cors' });
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+    if (res.ok) showToast('/api/app responded successfully', 'ok');
+    else showToast('/api/app responded with status ' + res.status, 'err');
+  } catch (err) {
+    out.textContent = 'Request failed: ' + err.message;
+    showToast('Could not reach /api/app', 'err');
   }
 };
 </script>
