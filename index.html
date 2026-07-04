@@ -65,16 +65,10 @@
             <hr class="border-[var(--border)]">
             
             <div class="flex justify-center w-full py-2 min-h-[44px]">
-                <div id="googleSignInGate" class="w-full flex justify-center items-center">
-                    <div class="g_id_signin"
-                         data-type="standard"
-                         data-shape="rectangular"
-                         data-theme="outline"
-                         data-text="signin_with"
-                         data-size="large"
-                         data-logo_alignment="left"
-                         data-width="240">
-                    </div>
+               <div id="googleSignInGate" class="w-full flex justify-center items-center">
+                  <div id="googleSignInGate" class="w-full flex justify-center items-center">
+                      <div id="gsiButtonContainer"></div>
+                   </div>
                 </div>
             </div>
             
@@ -256,17 +250,30 @@
         // Pinned explicitly to current active window execution scope
         window.handleGoogleIdentityCallback = handleGoogleIdentityCallback;
 
-        function initializeGoogleOauthGate() {
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.initialize({
-                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-                    callback: window.handleGoogleIdentityCallback,
-                    auto_select: false
-                });
-            } else {
-                setTimeout(initializeGoogleOauthGate, 100);
+function initializeGoogleOauthGate() {
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+        google.accounts.id.initialize({
+            client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
+            callback: window.handleGoogleIdentityCallback,
+            auto_select: false
+        });
+
+        google.accounts.id.renderButton(
+            document.getElementById("gsiButtonContainer"),
+            {
+                type: "standard",
+                shape: "rectangular",
+                theme: "outline",
+                text: "signin_with",
+                size: "large",
+                logo_alignment: "left",
+                width: 240
             }
-        }
+        );
+    } else {
+        setTimeout(initializeGoogleOauthGate, 100);
+    }
+}
 
         window.addEventListener('DOMContentLoaded', () => {
             const currentOrigin = window.location.origin;
