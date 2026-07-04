@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Google Identity Services script with onload handler and async/defer -->
+    <script src="https://accounts.google.com/gsi/client" onload="initializeGoogleOauthGate()" async defer></script>
     <style>
         :root {
             --bg: #f6f3ec;
@@ -24,16 +26,16 @@
         }
 
         .dark-mode {
-            --bg: #12110f;
-            --sidebar: #1c1a17;
-            --panel: #1a1815;
-            --border: #2d2922;
-            --text: #e6e1d6;
-            --text-dim: #9c9587;
-            --accent: #d97450;
-            --accent-soft: #3d2b24;
-            --bubble-user: #2d2822;
-            --bubble-model: #1a1815;
+            --bg: #151412;
+            --sidebar: #1e1b18;
+            --panel: #22201c;
+            --border: #332f2a;
+            --text: #f0ede4;
+            --text-dim: #999185;
+            --accent: #e07a5f;
+            --accent-soft: #4a352f;
+            --bubble-user: #2d2a25;
+            --bubble-model: #22201c;
             --terminal-bg: #0b0a09;
             --terminal-text: #4ade80;
         }
@@ -60,20 +62,24 @@
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
 
+    <!-- Auth Gateway Screen Protection Layer -->
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 transition-all duration-500">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl space-y-6">
             <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
             <p class="text-sm text-[var(--text-dim)]">Enterprise System Node Validation Portal</p>
             <hr class="border-[var(--border)]">
             <div class="flex justify-center w-full py-2">
-                <div id="googleSignInGate"></div>
+                <!-- Target container where Google Sign-In button renders -->
+                <div id="googleSignInGate" style="min-height: 40px; display: flex; align-items: center; justify-content: center;"></div>
             </div>
             <p class="text-[10px] text-[var(--text-dim)] font-mono">Workspace ID Context Reference: ksroorygbrhwpnqtjbxo</p>
         </div>
     </div>
 
+    <!-- Application Shell (Visible After Identity Context Established) -->
     <div id="app-shell" class="w-full h-full flex opacity-0 transition-opacity duration-500 pointer-events-none">
         
+        <!-- Left Workspace Control Sidebar -->
         <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between z-30 transition-all duration-300">
             <div class="p-4 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between">
@@ -81,6 +87,7 @@
                     <button onclick="toggleColorTheme()" class="p-1 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md hover:border-[var(--accent)] transition-colors cursor-pointer">🌗 Mode</button>
                 </div>
                 
+                <!-- Active User Account Profile Card -->
                 <div class="flex items-center gap-3 p-2 rounded-xl bg-[var(--panel)] border border-[var(--border)] shadow-xs">
                     <div id="user-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--border)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
                     <div class="flex-1 min-w-0">
@@ -98,6 +105,7 @@
                 <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5"></div>
             </div>
 
+            <!-- Injected System Configurations Controls -->
             <div class="p-3 border-t border-[var(--border)] bg-[var(--sidebar)] flex flex-col gap-2">
                 <div class="p-2 bg-[var(--panel)] rounded-xl border border-[var(--border)]">
                     <label class="text-[9px] uppercase font-bold text-[var(--text-dim)] tracking-wider block mb-1">Target Host Gateway</label>
@@ -111,8 +119,10 @@
             </div>
         </aside>
 
+        <!-- Main Execution Content Panel Grid split natively -->
         <main class="flex-1 h-full flex flex-row min-w-0 bg-[var(--bg)]">
             
+            <!-- Mid Panel: Active Chat Interaction Column -->
             <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
                 <header class="h-14 border-b border-[var(--border)] px-4 flex items-center justify-between bg-[var(--panel)] z-20">
                     <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">Pipeline Channel Standard Core</h2>
@@ -129,6 +139,7 @@
                     </div>
                 </div>
 
+                <!-- Input Composer Anchor Dock -->
                 <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-4 z-20">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all">
@@ -140,7 +151,9 @@
                 </div>
             </div>
 
+            <!-- Right Panel Workspace Component: Live Terminal Logs and Dynamic Target Preview Workbench Panel Split Layout -->
             <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+                <!-- Live Terminal System Trace Inspector (Visible to User) -->
                 <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
                     <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
                         <span>&gt;_ Live Agent Terminal Output Logs</span>
@@ -149,6 +162,7 @@
                     <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
                 </div>
 
+                <!-- Live Interface Interactive Target Preview Workbench Component Area -->
                 <div class="flex-1 flex flex-col overflow-hidden">
                     <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
                         <span>⚡ Sandbox Preview Canvas Component</span>
@@ -162,6 +176,7 @@
         </main>
     </div>
 
+    <!-- PDF Vector Context Ingestion Framework Modal -->
     <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
             <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
@@ -175,7 +190,7 @@
         </div>
     </div>
 
-    <script src="https://accounts.google.com/gsi/client"></script>
+    <!-- Script Layer Framework Hooks Declarations Matrix Setup -->
     <script>
         const googleSignInGate = document.getElementById('googleSignInGate');
         const loginOverlay = document.getElementById('login-overlay');
@@ -210,6 +225,7 @@
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
             backendHostConfig.value = SERVER_CONTEXT_HOST;
             
+            // In case Google script finishes loading before DOMContentLoaded
             initializeGoogleOauthGate();
         });
 
@@ -217,13 +233,22 @@
             document.documentElement.classList.toggle('dark-mode');
         }
 
+        // Highly robust initialization logic to guarantee button loads regardless of network speed
         function initializeGoogleOauthGate() {
-            google.accounts.id.initialize({
-                client_id: "1098485250499-mockid.apps.googleusercontent.com", // Your Google client ID
-                callback: handleGoogleIdentityCallback,
-                auto_select: false
-            });
-            google.accounts.id.renderButton(googleSignInGate, { theme: "outline", size: "large", type: "standard" });
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.initialize({
+                    client_id: "1098485250499-mockid.apps.googleusercontent.com", // Your Google client ID
+                    callback: handleGoogleIdentityCallback,
+                    auto_select: false
+                });
+                google.accounts.id.renderButton(
+                    document.getElementById("googleSignInGate"), 
+                    { theme: "outline", size: "large", type: "standard" }
+                );
+            } else {
+                // If script hasn't fully loaded yet, check again in 250 milliseconds
+                setTimeout(initializeGoogleOauthGate, 250);
+            }
         }
 
         function handleGoogleIdentityCallback(response) {
@@ -247,13 +272,13 @@
                 
                 if (creators.includes(activeUserIdentityEmail)) {
                     roleBadgeDisplay.innerText = "App Creator Profile";
-                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-1 rounded";
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded";
                 } else if (supervisors.includes(activeUserIdentityEmail)) {
                     roleBadgeDisplay.innerText = "Supervisor Administrator";
-                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-1 rounded";
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded";
                 } else {
                     roleBadgeDisplay.innerText = "Validated System User";
-                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1 rounded";
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded";
                 }
                 
                 // Unlock Workspace Interface Layout Canvas Transition
@@ -283,7 +308,7 @@
                     }).then(res => res.json()).then(data => {
                         if(data.ok) {
                             roleBadgeDisplay.innerText = "Internal Core VIP Tier";
-                            roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1 rounded";
+                            roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded";
                             alert("Identity context recorded into vault file workspace successfully.");
                         } else {
                             alert("Storage operation tracking fault.");
@@ -474,12 +499,4 @@
         }
 
         function evaluateAndParsePreviewSandboxPayload(textBlock) {
-            // Evaluates code blocks inside the response array stream
             const codeBlockRegex = /
-http://googleusercontent.com/immersive_entry_chip/0
-
----
-
-### 🛠️ Verification & Next Steps
-1. Make sure your environment configurations parameters (`GITHUB_TOKEN` and `GROQ_API_KEY`) are correctly declared in your Vercel/Render hosting configurations panel variables dashboard.
-2. The user role stratification is fully handled dynamically directly upon sign-in. To trigger the VIP tracking logs save execution structure anywhere in the UI workspace panel layout context, click **"Secure Lock"** at the bottom left tracking control segment bar and type code `31082011`.
