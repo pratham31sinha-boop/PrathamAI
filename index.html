@@ -130,6 +130,56 @@
         }
         .theme-choice-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
 
+        /* ===== File-creation progress card (Claude-artifact style) ===== */
+        .file-creation-card {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 12px; max-width: 320px;
+            cursor: pointer; transition: border-color .15s ease, background .15s ease;
+            position: relative; overflow: hidden;
+        }
+        .file-creation-card:hover { border-color: var(--accent); background: var(--hover); }
+        .file-creation-card .fcc-icon {
+            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--accent-soft); color: var(--accent); font-size: 15px; font-weight: 700;
+        }
+        .file-creation-card .fcc-meta { min-width: 0; flex: 1; }
+        .file-creation-card .fcc-name { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-creation-card .fcc-sub { font-size: 10.5px; color: var(--text-dim); margin-top: 1px; display: flex; align-items: center; gap: 5px; }
+        .file-creation-card .fcc-status-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+        .file-creation-card.in-progress .fcc-status-dot { animation: glowPulse 1s ease-in-out infinite; }
+        .file-creation-card.done .fcc-status-dot { background: #4ade80; animation: none; }
+        .file-creation-card .fcc-progress-track {
+            position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+            background: var(--border); overflow: hidden;
+        }
+        .file-creation-card .fcc-progress-fill {
+            position: absolute; left: -40%; top: 0; bottom: 0; width: 40%;
+            background: var(--accent); border-radius: 2px;
+        }
+        .file-creation-card.in-progress .fcc-progress-fill { animation: fccShimmer 1.1s ease-in-out infinite; }
+        .file-creation-card.done .fcc-progress-track { display: none; }
+        @keyframes fccShimmer {
+            0% { left: -40%; }
+            100% { left: 100%; }
+        }
+        .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+        /* Background agent-activity strip shown above the composer while a
+           response is streaming, so the person can see what the assistant is
+           doing (planning, writing a file, reading terminal output, etc.) */
+        #agent-activity-strip {
+            display: none; align-items: center; gap: 7px;
+            font-size: 11px; color: var(--text-dim); padding: 0 4px 6px;
+        }
+        #agent-activity-strip.active { display: flex; }
+        #agent-activity-strip .aas-spinner {
+            width: 11px; height: 11px; border-radius: 999px;
+            border: 2px solid var(--accent-soft); border-top-color: var(--accent);
+            animation: bootSpin .7s linear infinite; flex-shrink: 0;
+        }
+
         /* Boot / session-restoring splash (avoids a flash of the login screen
            while we silently check localStorage for a still-valid session) */
         #boot-splash {
@@ -276,6 +326,7 @@
 
                 <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
+                        <div id="agent-activity-strip"><span class="aas-spinner"></span><span id="agent-activity-strip-text">Thinking...</span></div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
                             <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
@@ -394,6 +445,8 @@
         const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
         const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
         const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
+        const agentActivityStrip = document.getElementById('agent-activity-strip');
+        const agentActivityStripText = document.getElementById('agent-activity-strip-text');
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
@@ -636,6 +689,8 @@
             deleteActionTrigger.classList.add('hidden');
             workbenchSplitPanel.classList.add('hidden');
             workbenchSplitPanel.classList.remove('workbench-open');
+            document.getElementById('workbench-toggle-mobile').classList.add('hidden');
+            clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
                     <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
@@ -655,16 +710,171 @@
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
+        // Maps a fenced-code-block language tag to a plausible file extension
+        // and a short badge label used on the file-creation card's icon.
+        const LANG_EXT_MAP = {
+            html: 'html', htm: 'html', javascript: 'js', js: 'js', jsx: 'jsx',
+            typescript: 'ts', ts: 'ts', python: 'py', py: 'py', css: 'css',
+            json: 'json', bash: 'sh', sh: 'sh', shell: 'sh', text: 'txt',
+            xml: 'xml', markdown: 'md', md: 'md', sql: 'sql', yaml: 'yml',
+            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs'
+        };
+
+        function guessFileName(lang, ordinal) {
+            const ext = LANG_EXT_MAP[(lang || '').toLowerCase()] || 'txt';
+            return ordinal === 1 ? `generated.${ext}` : `generated_${ordinal}.${ext}`;
+        }
+
+        // Appends a timestamped line to the background terminal logger panel
+        // so the person can see, in real time, what the assistant is doing
+        // (planning, writing a file, finishing up) even for tasks that don't
+        // otherwise show visible progress.
+        function pushTerminalLog(message) {
+            const stamp = new Date().toLocaleTimeString([], { hour12: false });
+            const line = `[${stamp}] ${message}\n`;
+            if (agentBackgroundTerminalLogger.textContent === 'System waiting for generation directives...') {
+                agentBackgroundTerminalLogger.textContent = '';
+            }
+            agentBackgroundTerminalLogger.textContent += line;
+            agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
+        }
+
+        function setAgentActivity(text) {
+            agentActivityStripText.innerText = text;
+            agentActivityStrip.classList.add('active');
+        }
+        function clearAgentActivity() {
+            agentActivityStrip.classList.remove('active');
+        }
+
+        // Splits streamed assistant text into an ordered list of plain-text
+        // and fenced-code segments. The final code segment may still be
+        // "open" (no closing fence yet) while tokens are still arriving —
+        // that partial segment is what drives the in-progress file card.
+        function parseAssistantSegments(text) {
+            const segments = [];
+            const fenceOpenRe = /```(\w+)?\n/g;
+            let idx = 0;
+            while (idx < text.length) {
+                fenceOpenRe.lastIndex = idx;
+                const m = fenceOpenRe.exec(text);
+                if (!m) { segments.push({ type: 'text', content: text.slice(idx) }); break; }
+                if (m.index > idx) segments.push({ type: 'text', content: text.slice(idx, m.index) });
+                const lang = (m[1] || 'text').toLowerCase();
+                const codeStart = m.index + m[0].length;
+                const closeIdx = text.indexOf('```', codeStart);
+                if (closeIdx === -1) {
+                    segments.push({ type: 'code', lang, content: text.slice(codeStart), closed: false });
+                    idx = text.length;
+                } else {
+                    segments.push({ type: 'code', lang, content: text.slice(codeStart, closeIdx), closed: true });
+                    idx = closeIdx + 3;
+                }
+            }
+            return segments;
+        }
+
+        function buildFileCreationCard(lang, content, closed, ordinal) {
+            const card = document.createElement('div');
+            card.className = `file-creation-card ${closed ? 'done' : 'in-progress'}`;
+            const filename = guessFileName(lang, ordinal);
+            card.dataset.filename = filename;
+            card.dataset.lang = lang;
+            card._code = content;
+            card._lang = lang;
+            const ext = (LANG_EXT_MAP[lang] || 'txt').toUpperCase();
+            card.innerHTML = `
+                <div class="fcc-icon">${ext.slice(0, 2)}</div>
+                <div class="fcc-meta">
+                    <div class="fcc-name">${filename}</div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : 'Writing file...'}</span></div>
+                </div>
+                <span class="fcc-openhint">${closed ? 'Open' : ''}</span>
+                <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
+            `;
+            card.onclick = () => openFilePreviewFromCard(card);
+            return card;
+        }
+
+        function updateFileCreationCard(card, content, closed) {
+            card._code = content;
+            const statusText = card.querySelector('.fcc-status-text');
+            const openHint = card.querySelector('.fcc-openhint');
+            if (closed && card.classList.contains('in-progress')) {
+                card.classList.remove('in-progress');
+                card.classList.add('done');
+                statusText.innerText = 'Ready to preview';
+                openHint.innerText = 'Open';
+                pushTerminalLog(`File created: ${card.dataset.filename} (${content.length} chars)`);
+            } else if (!closed) {
+                statusText.innerText = `Writing file... (${content.length} chars)`;
+            }
+        }
+
+        function openFilePreviewFromCard(card) {
+            if (!card._code) return;
+            currentExtractedPreviewArtifactPayload = card._code;
+            workbenchSplitPanel.classList.remove('hidden');
+            document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
+            agentBackgroundTerminalLogger.textContent += `[${new Date().toLocaleTimeString([], { hour12: false })}] Preview opened: ${card.dataset.filename}\n`;
+            agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
+            if (card._lang === 'html' || card._lang === 'htm') {
+                interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;" srcdoc="${sanitizeOutputText(card._code)}"></iframe>`;
+            } else {
+                interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs whitespace-pre-wrap p-2">${sanitizeOutputText(card._code)}</pre>`;
+            }
+            if (window.innerWidth <= 820) workbenchSplitPanel.classList.add('workbench-open');
+        }
+
+        // Renders/updates an assistant message's segments (text bubbles +
+        // file-creation cards) in place, reusing existing DOM nodes where
+        // possible so in-progress cards keep their shimmer animation instead
+        // of flashing on every token.
+        function updateAssistantMessageDOM(wrapper, fullText) {
+            const segments = parseAssistantSegments(fullText);
+            if (!wrapper._segNodes) wrapper._segNodes = [];
+            if (!wrapper._fileOrdinal) wrapper._fileOrdinal = 0;
+            segments.forEach((seg, i) => {
+                let node = wrapper._segNodes[i];
+                if (seg.type === 'text') {
+                    if (!node || node.dataset.segType !== 'text') {
+                        node = document.createElement('div');
+                        node.dataset.segType = 'text';
+                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                    }
+                    if (seg.content.trim().length > 0) {
+                        node.style.display = '';
+                        node.innerHTML = sanitizeOutputText(seg.content).replace(/\n/g, '<br>');
+                    } else {
+                        node.style.display = 'none';
+                    }
+                } else {
+                    if (!node || node.dataset.segType !== 'code') {
+                        wrapper._fileOrdinal += 1;
+                        node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
+                        node.dataset.segType = 'code';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                        setAgentActivity(`Writing ${node.dataset.filename}...`);
+                        pushTerminalLog(`Creating ${node.dataset.filename}...`);
+                    } else {
+                        updateFileCreationCard(node, seg.content, seg.closed);
+                        if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
+                    }
+                }
+            });
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
+
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
-            containerNode.className = 'w-full flex flex-col items-start gap-1';
-            containerNode.innerHTML = `
-                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
-                <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs"></div>
-            `;
+            containerNode.className = 'w-full flex flex-col items-start gap-1.5';
+            containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
             conversationViewportPanel.appendChild(containerNode);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-            return containerNode.querySelector('.model-stream-target-node');
+            return containerNode;
         }
 
         function mountTypingIndicator() {
@@ -706,6 +916,8 @@
             userPromptInputField.value = '';
             userPromptInputField.style.height = 'auto';
             mountTypingIndicator();
+            setAgentActivity('Thinking...');
+            pushTerminalLog(`Received request: "${message.slice(0, 60)}"`);
 
             try {
                 const response = await smartFetchRequest('/chat-stream', {
@@ -716,19 +928,29 @@
 
                 if (!response.ok) {
                     removeTypingIndicator();
+                    clearAgentActivity();
                     if (response.status === 401) {
                         alert("Session expired. Please sign in again.");
                         triggerIdentitySignout();
                     } else {
-                        const cell = mountModelOutputTargetShell();
+                        const wrapper = mountModelOutputTargetShell();
+                        const cell = document.createElement('div');
+                        cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
                         cell.innerText = "Something went wrong reaching the server. Please try again.";
+                        wrapper.appendChild(cell);
                     }
                     return;
                 }
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-                let buffer = '', modelCell = null, fullText = '';
+                let buffer = '', modelWrapper = null, fullText = '';
+                let renderQueued = false;
+
+                const flushRender = () => {
+                    renderQueued = false;
+                    if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+                };
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -744,25 +966,36 @@
                         if (payload.type === 'metadata') {
                             currentConversationId = payload.conversation_id;
                         } else if (payload.type === 'token') {
-                            if (!modelCell) { removeTypingIndicator(); modelCell = mountModelOutputTargetShell(); }
+                            if (!modelWrapper) {
+                                removeTypingIndicator();
+                                modelWrapper = mountModelOutputTargetShell();
+                                setAgentActivity('Writing response...');
+                            }
                             fullText += payload.text;
-                            modelCell.innerHTML = sanitizeOutputText(fullText).replace(/\n/g, '<br>');
-                            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                            // Throttle DOM rebuilding to once per animation frame so
+                            // fast token streams stay smooth instead of lagging.
+                            if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
                         } else if (payload.type === 'complete') {
-                            if (fullText) evaluateAndParsePreviewSandboxPayload(fullText);
+                            if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+                            pushTerminalLog('Response complete.');
                         }
                     }
                 }
 
                 removeTypingIndicator();
+                clearAgentActivity();
                 activeChatTitleHeader.innerText = message.slice(0, 60);
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
                 removeTypingIndicator();
-                const cell = mountModelOutputTargetShell();
+                clearAgentActivity();
+                const wrapper = mountModelOutputTargetShell();
+                const cell = document.createElement('div');
+                cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
                 cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
+                wrapper.appendChild(cell);
                 console.error("[CHAT][STREAM ERROR]", err);
             } finally {
                 isGenerating = false;
@@ -811,12 +1044,13 @@
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
                 conversationViewportPanel.innerHTML = '';
+                workbenchSplitPanel.classList.add('hidden');
+                document.getElementById('workbench-toggle-mobile').classList.add('hidden');
                 logs.forEach(log => {
                     if (log.role === 'user') renderUserPromptBubble(log.content);
                     else if (log.role === 'assistant') {
-                        const cell = mountModelOutputTargetShell();
-                        cell.innerHTML = sanitizeOutputText(log.content).replace(/\n/g, "<br>");
-                        evaluateAndParsePreviewSandboxPayload(log.content);
+                        const wrapper = mountModelOutputTargetShell();
+                        updateAssistantMessageDOM(wrapper, log.content);
                     }
                 });
                 synchronizeConversationsHistoryIndex();
@@ -851,24 +1085,12 @@
             } catch (err) { alert("Vector mapping initialization fault standard trace drop."); }
         }
 
-        function evaluateAndParsePreviewSandboxPayload(textBlock) {
-            const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-            let match, lastMatch = null;
-            while ((match = codeBlockRegex.exec(textBlock)) !== null) lastMatch = match;
-            if (lastMatch) {
-                const language = lastMatch[1] || 'text';
-                const code = lastMatch[2];
-                currentExtractedPreviewArtifactPayload = code;
-                workbenchSplitPanel.classList.remove('hidden');
-                document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
-                agentBackgroundTerminalLogger.textContent = `Payload parsed: ${language} block (${code.length} chars)`;
-                if (language === 'html') {
-                    interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;" srcdoc="${sanitizeOutputText(code)}"></iframe>`;
-                } else {
-                    interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs whitespace-pre-wrap p-2">${sanitizeOutputText(code)}</pre>`;
-                }
-            }
-        }
+        // Legacy note: file preview + progress used to be driven by a single
+        // end-of-stream regex pass (evaluateAndParsePreviewSandboxPayload).
+        // That has been replaced by the live, per-file "file-creation-card"
+        // system above (buildFileCreationCard / updateFileCreationCard /
+        // openFilePreviewFromCard), which tracks each fenced code block as it
+        // streams in and lets the person open any of them, not just the last.
 
         function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
 
