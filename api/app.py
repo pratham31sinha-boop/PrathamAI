@@ -1,54 +1,19 @@
 """
 Pratham AI - Full Production Backend Architecture
 =================================================
-Corrected + optimized version.
-
-Fixes included in this pass:
-  1. GitHub conversation logs now save under: data/<email>/<date>.txt
-     (previously saved at repo root as "<email>/<date>.txt").
-  2. VIP registrations now save under: data/vip.txt (root-level file inside
-     the "data" folder, as requested), with append-safe read-modify-write.
-  3. Added a lightweight illegal-content guard that runs before every
-     chat-stream request. If a message matches a blocked-intent pattern,
-     the assistant refuses politely and the refusal + the flagged message
-     is still logged to GitHub for audit purposes (data/flagged/<date>.txt).
-  4. Added a `/auth/refresh-check` endpoint so the frontend can silently
-     validate a stored token on page load/refresh without forcing a fresh
-     Google popup every time (fixes "have to sign in again after refresh").
-  5. Performance: reused a single urllib opener with keep-alive-friendly
-     timeouts, shortened provider timeouts for faster failover, added a
-     small response cache for the GitHub "lookup sha" call so rapid
-     consecutive writes to the same file path don't re-fetch metadata
-     every single time within a short window.
-  6. Streaming: added incremental flush hints and a smaller network read
-     size so tokens reach the browser faster (reduces perceived latency).
-  7. General hardening: extra input validation, clearer error payloads,
-     more defensive exception handling, and additional inline comments.
-
-Second pass — new features (nothing above was removed):
-  8. General-purpose assistant: the system prompt is no longer coding-only;
-     Pratham AI now answers any topic like a normal chatbot, while still
-     being great at code when asked.
-  9. Image generation via Pollinations AI (no API key required): a message
-     like "generate an image of a red fox in snow" or "/image a red fox in
-     snow" now returns a real rendered image instead of text.
- 10. "@education" tag: lists PDFs stored under data/education/ in the GitHub
-     repo, extracts their text (best-effort, requires the optional `pypdf`
-     package), scores paragraphs for relevance against the question, and
-     feeds the best-matching excerpt to the model so it can answer citing
-     which PDF it used — even if the wording isn't an exact match.
- 11. "@web" tag: does a best-effort live DuckDuckGo lookup and feeds the
-     results into the model's context, so it can answer with current
-     information instead of only training-time knowledge.
- 12. File generation via a background Python "terminal": if a message asks
-     to turn the reply into a zip or a PDF, the backend actually builds that
-     file server-side (zipfile from stdlib; PDF via the optional `fpdf2`
-     package, or a plain-text fallback if that package isn't installed) and
-     returns a download link.
- 13. Upload endpoint now accepts (and best-effort decodes) many file types,
-     not just PDF: txt/csv/json/md are read directly; .pdf via `pypdf` if
-     installed; anything else gets a basic binary/text sniff instead of a
-     hard rejection.
+All features included:
+  ✅ GitHub conversation logs: data/<email>/<date>.txt
+  ✅ VIP registrations: data/vip.txt
+  ✅ Content safety guard with flagging: data/flagged/<date>.txt
+  ✅ Session tokens (no sign-out after closing browser)
+  ✅ Image generation (Pollinations AI)
+  ✅ @education (hidden feature, PDF-backed Q&A from data/education/)
+  ✅ Auto @web search (runs automatically, no need to type @web every time)
+  ✅ ZIP/PDF generation via background Python terminal
+  ✅ Real Python code execution with terminal output
+  ✅ Public memory: prompt engineering teachings → public_data.txt (repo root)
+  ✅ Multi-provider LLM failover: Groq → OpenRouter → Cerebras → Mistral
+  ✅ Multi-file upload support (PDF, DOCX, TXT, CSV, JSON, ZIP, etc.)
 """
 
 import os
@@ -134,21 +99,13 @@ if SUPABASE_CONFIGURED:
 _mem_convos: dict = {}
 
 # ── GITHUB LOG PERSISTENCE ──
-# Small short-lived cache so we don't hammer the GitHub API's "get sha"
-# lookup when several appends happen back to back for the same file path.
 _gh_sha_cache: dict = {}
-_GH_CACHE_TTL = 8  # seconds
+_GH_CACHE_TTL = 8
 
 def _github_repo_slug() -> str:
     return GITHUB_REPO.replace("https://github.com/", "").strip("/")
 
 def _write_to_github_repository(target_file_path: str, contents_payload: str) -> bool:
-    """
-    Appends `contents_payload` to `target_file_path` inside the configured
-    GitHub repository. Creates the file (and implicitly the folder path,
-    since GitHub's contents API creates intermediate folders automatically)
-    if it does not already exist.
-    """
     if not GITHUB_TOKEN:
         return False
 
@@ -214,12 +171,9 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         print(f"[GITHUB][FAULT] {exc}")
         return False
 
-# ── VIP RECOGNITION (reads back data/vip.txt so the bot can recognize a
-#    registered VIP contact by email and greet/treat them accordingly) ──
+# ── VIP RECOGNITION ──
 _vip_cache = {"entries": {}, "t": 0}
-_VIP_CACHE_TTL = 30  # seconds; short enough that a fresh registration is
-                      # picked up almost immediately, long enough to avoid
-                      # hitting GitHub on every single chat message.
+_VIP_CACHE_TTL = 30
 
 def _fetch_vip_directory() -> dict:
     now_ts = time.time()
@@ -269,13 +223,9 @@ def _lookup_vip(email: str):
         return None
     return _fetch_vip_directory().get(email.lower())
 
-# ── BACKGROUND FILE GENERATION ("the AI uses a Python terminal") ──
-# This is the real, executing counterpart to the frontend's animated file
-# cards: when the person's message asks for a zip or a PDF, the backend
-# actually builds that file in Python (zipfile from stdlib; PDF via the
-# optional fpdf2 package) and hands back a one-time download link.
+# ── BACKGROUND FILE GENERATION ──
 _generated_files_store: dict = {}
-_GENERATED_FILE_TTL = 3600  # 1 hour
+_GENERATED_FILE_TTL = 3600
 
 _ZIP_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export|zip)\b.{0,20}\bzip\b", re.IGNORECASE)
 _PDF_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export)\b.{0,20}\bpdf\b", re.IGNORECASE)
@@ -293,8 +243,6 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     return token
 
 def _build_zip_from_response(assistant_text: str) -> bytes:
-    """Packs every fenced code block in the reply into a zip; if there are
-    none, zips the plain reply text as response.txt instead."""
     buf = io.BytesIO()
     blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -311,9 +259,6 @@ def _build_zip_from_response(assistant_text: str) -> bytes:
     return buf.read()
 
 def _build_pdf_from_response(assistant_text: str):
-    """Returns (bytes, filename, mimetype). Uses fpdf2 if installed; falls
-    back to a plain .txt file (with a clear filename) if it isn't, so the
-    person still gets *something* downloadable rather than a hard failure."""
     if _PDF_WRITE_SUPPORTED:
         pdf = _FPDF()
         pdf.add_page()
@@ -335,9 +280,9 @@ def download_generated_file(token):
     resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
     return resp
 
-# ── "@education" PDF-backed Q&A ──
+# ── @education PDF-backed Q&A (HIDDEN FEATURE) ──
 _education_cache = {"files": {}, "listing_t": 0}
-_EDUCATION_LISTING_TTL = 120  # seconds
+_EDUCATION_LISTING_TTL = 120
 
 def _github_list_dir(path: str):
     if not GITHUB_TOKEN:
@@ -387,7 +332,7 @@ def _refresh_education_library():
         name = entry.get("name")
         cached = _education_cache["files"].get(name)
         if cached and cached.get("sha") == sha:
-            continue  # unchanged, keep existing extracted text
+            continue
         raw = _github_fetch_file_bytes(entry.get("download_url"))
         if raw is None:
             continue
@@ -396,12 +341,6 @@ def _refresh_education_library():
     _education_cache["listing_t"] = now_ts
 
 def _find_best_education_excerpt(question: str):
-    """
-    Very lightweight relevance scoring: splits every cached PDF's text into
-    paragraphs and scores each paragraph by how many question keywords it
-    contains. This intentionally does NOT require an exact phrase match —
-    the goal is "most relevant", not "identical text".
-    """
     _refresh_education_library()
     if not _education_cache["files"]:
         return None
@@ -423,7 +362,7 @@ def _find_best_education_excerpt(question: str):
                 best = {"score": score, "filename": filename, "excerpt": para[:1800]}
     return best if best["filename"] else None
 
-# ── "@web" best-effort live search (DuckDuckGo HTML, no API key) ──
+# ── AUTO @web SEARCH (runs automatically on every message > 5 chars) ──
 def _web_search_snippets(query: str, max_results: int = 4):
     try:
         encoded = urllib.parse.quote(query)
@@ -447,7 +386,6 @@ def _web_search_snippets(query: str, max_results: int = 4):
         print(f"[WEB][SEARCH FAULT] {exc}")
         return []
 
-
 def _get_token():
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
@@ -455,7 +393,6 @@ def _get_token():
     return None
 
 def _decode_google_claims(token: str):
-    """Decode (without re-verifying signature) a Google-issued JWT's payload."""
     try:
         payload_chunk = token.split('.')[1]
         padded_chunk = payload_chunk + '=' * (-len(payload_chunk) % 4)
@@ -463,12 +400,7 @@ def _decode_google_claims(token: str):
     except Exception:
         return None
 
-# ── Backend-issued long-lived session tokens ──
-# Google ID tokens only live ~1 hour, which is why signing back in kept
-# happening after the browser was closed for a while. Once a Google sign-in
-# succeeds, the frontend exchanges that short-lived token for one of these
-# (via /auth/exchange), which is good for SESSION_TOKEN_TTL_DAYS and doesn't
-# depend on Google's own token lifetime at all.
+# ── SESSION TOKENS (fixes sign-out after browser close) ──
 _SESSION_TOKEN_PREFIX = "PAI1"
 
 def _issue_session_token(user: dict) -> str:
@@ -514,18 +446,12 @@ def _verify_token(token: str):
             "user_metadata": {"full_name": "Dev Master Creator"}
         }
 
-    # Our own backend-issued long-lived session tokens (see /auth/exchange).
-    # These are checked first since they're the primary auth mechanism the
-    # frontend uses after the initial Google sign-in.
     if token.startswith(f"{_SESSION_TOKEN_PREFIX}."):
         session_user = _verify_session_token(token)
         if session_user:
             return session_user
         return None
 
-    # Google ID tokens: verify structure and, importantly, expiry (exp claim)
-    # so a stored/replayed token can't be used forever, but we DO allow the
-    # frontend to silently refresh via Google's own session before expiry.
     if len(token.split('.')) == 3:
         claims = _decode_google_claims(token)
         if claims and ("accounts.google.com" in claims.get("iss", "") or "google.com" in claims.get("iss", "")):
@@ -573,10 +499,7 @@ def require_auth(f):
         return f(*args, **kwargs)
     return wrapper
 
-# ── LIGHTWEIGHT CONTENT SAFETY GUARD ──
-# This does NOT try to be a full moderation system, but it catches a set of
-# obviously illegal-intent patterns so the assistant can refuse rather than
-# helping, and so the interaction gets flagged in the GitHub audit log.
+# ── CONTENT SAFETY GUARD ──
 _BLOCKED_PATTERNS = [
     r"\bmake\s+a\s+bomb\b", r"\bbuild\s+a\s+bomb\b", r"\bhow\s+to\s+hack\b",
     r"\bchild\s+(sexual|porn|abuse)\b", r"\bkill\s+(myself|someone|him|her|them)\b",
@@ -588,6 +511,7 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
+# ── PUBLIC MEMORY (prompt engineering teachings → public_data.txt at repo root) ──
 _TEACHING_INTENT_RE = re.compile(
     r"\b(remember that|remember this|note this|note that|save this|learn this|keep in mind|"
     r"for future reference|always do|from now on|don't forget|never forget)\b",
@@ -595,13 +519,6 @@ _TEACHING_INTENT_RE = re.compile(
 )
 
 def _maybe_capture_public_teaching(user_email: str, message: str):
-    """
-    If a message looks like the person is teaching/instructing the assistant
-    something worth remembering (prompt-engineering style guidance), it gets
-    appended to a PUBLIC file at the repo root: public_data.txt. This is
-    intentionally repo-root (not under data/) since it's meant to be shared
-    knowledge, not per-user private history.
-    """
     if not _TEACHING_INTENT_RE.search(message):
         return
     entry = (
@@ -612,7 +529,7 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
     )
     _write_to_github_repository("public_data.txt", entry)
 
-# ── LLM MULTI-PROVIDER FAILOVER: Groq -> OpenRouter -> Cerebras -> Mistral ──
+# ── LLM MULTI-PROVIDER FAILOVER ──
 _provider_cooldowns: dict = {}
 COOLDOWN_SECONDS = 60
 
@@ -623,26 +540,22 @@ def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
 SYSTEM_PROMPT = (
-    "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
-    "questions, writing, learning, advice, and analysis, not just coding. When a task does "
-    "involve code or file output, format it cleanly in fenced code blocks with explicit "
-    "language tags like ```html, ```javascript, or ```text so it can be rendered live. "
-    "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
-    "someone; politely refuse those requests instead."
+    "You are Pratham AI, an elite software engineering system designed to produce production-ready "
+    "software, not prototypes or templates. Core principles: never return placeholder code, never "
+    "leave empty methods or TODO comments, never generate mock implementations unless explicitly "
+    "requested. Every feature must exist in working code. For large HTML files, if you must split "
+    "the output, clearly mark continuation points. Always think, review, and optimize before "
+    "responding. You must never help with illegal activity, weapons, malware, or seriously harmful "
+    "content; politely refuse those requests instead."
 )
 
-# ── IMAGE GENERATION (Pollinations AI — no API key required) ──
+# ── IMAGE GENERATION ──
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|\b(?:generate|create|draw|make|paint)\b.{0,20}\b(?:image|picture|photo|art|illustration|drawing)\b(?:\s+(?:of|showing|depicting))?\s*(.*)$",
     re.IGNORECASE
 )
 
 def _detect_image_prompt(message: str):
-    """
-    Returns a plain-language image description if `message` looks like an
-    image-generation request, else None. Kept intentionally simple (regex
-    heuristic) rather than a full intent classifier, to stay fast.
-    """
     m = _IMAGE_INTENT_RE.search(message.strip())
     if not m:
         return None
@@ -651,8 +564,6 @@ def _detect_image_prompt(message: str):
 
 def _pollinations_image_url(prompt_text: str) -> str:
     encoded = urllib.parse.quote(prompt_text)
-    # width/height/seed kept default-ish; nologo=true removes the Pollinations
-    # watermark bar when supported.
     return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
 
 def _sse(payload: dict) -> str:
@@ -663,7 +574,7 @@ def _stream_openai_compatible(url, api_key, model, messages):
         "model": model,
         "messages": messages,
         "stream": True,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "temperature": 0.5,
     }).encode()
 
@@ -676,8 +587,6 @@ def _stream_openai_compatible(url, api_key, model, messages):
         },
         method="POST"
     )
-    # Shorter connect/read timeout so a dead provider fails over faster
-    # instead of making the user wait the full minute before a fallback.
     with urllib.request.urlopen(req, timeout=25) as resp:
         for raw_line in resp:
             line = raw_line.decode("utf-8", errors="replace").strip()
@@ -827,13 +736,6 @@ def index_root():
 @app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/exchange", methods=["POST", "OPTIONS"])
 def auth_exchange():
-    """
-    Takes the Authorization header (expected to be the raw Google ID token
-    from the just-completed sign-in) and exchanges it for a long-lived
-    backend session token. This is the real fix for "signed out again after
-    closing the browser": Google's own ID token only lasts about an hour,
-    but the token this returns lasts SESSION_TOKEN_TTL_DAYS days.
-    """
     if request.method == "OPTIONS":
         return _cors_preflight()
     token = _get_token()
@@ -847,12 +749,6 @@ def auth_exchange():
 @app.route("/api/auth/refresh-check", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/refresh-check", methods=["POST", "OPTIONS"])
 def refresh_check():
-    """
-    Lets the frontend silently verify a token it kept in localStorage after
-    a page refresh, WITHOUT forcing the user through the Google popup again.
-    Returns the same user profile shape the frontend already knows how to
-    render, or 401 if the stored token has actually expired.
-    """
     if request.method == "OPTIONS":
         return _cors_preflight()
     token = _get_token()
@@ -889,10 +785,9 @@ def register_vip_profile():
         return jsonify({"error": "Missing required fields."}), 400
 
     registration_row = f"Timestamp: {datetime.now(timezone.utc).isoformat()} | Email: {email} | Name: {name} | Relation: {relationship}\n"
-    # Saved inside the "data" folder of the repo, at data/vip.txt as requested.
     success = _write_to_github_repository("data/vip.txt", registration_row)
     if success:
-        _vip_cache["t"] = 0  # force the next lookup to refetch immediately
+        _vip_cache["t"] = 0
     return jsonify({"ok": success, "status": "committed" if success else "local fallback"})
 
 @app.route("/chat-stream", methods=["POST", "OPTIONS"])
@@ -958,7 +853,7 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # ── Image generation short-circuit (Pollinations AI, no key needed) ──
+    # ── Image generation ──
     image_prompt = _detect_image_prompt(message)
     if image_prompt:
         _append_message(conv_id, "user", message)
@@ -1001,40 +896,33 @@ def chat_stream():
         api_messages.append({"role": m["role"], "content": m["content"]})
 
     outgoing_user_message = message
+    
+    # ── @education (HIDDEN FEATURE) ──
     if "@education" in message.lower():
         outgoing_user_message = re.sub(r"@education", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         best = _find_best_education_excerpt(outgoing_user_message or message)
         if best:
             api_messages[0]["content"] += (
-                f" The user tagged @education, meaning they want an answer sourced from the PDF "
-                f"library. The most relevant excerpt found was from the PDF file '{best['filename']}'. "
-                f"Use it to answer, refine it into a clear answer (don't just quote it verbatim), "
-                f"note it doesn't need to be an exact textual match, and explicitly mention which PDF "
-                f"file you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
+                f" The user tagged @education (a hidden feature for studying). The most relevant "
+                f"excerpt found was from the PDF file '{best['filename']}'. Use it to answer, "
+                f"refine it into a clear answer, and explicitly mention which PDF you used. "
+                f"Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
             )
         else:
             api_messages[0]["content"] += (
                 " The user tagged @education but no relevant PDF content could be found in the "
-                "data/education library (it may be empty, or the pypdf package may not be installed "
-                "on the server). Say so plainly instead of guessing."
+                "data/education library. Say so plainly instead of guessing."
             )
-    elif re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5:
-        # Web search now runs automatically on essentially every message
-        # (the person no longer has to type "@web" each time). It's skipped
-        # only for very short/trivial messages (greetings, "ok", etc.) to
-        # avoid wasted latency on requests that clearly don't need it.
+    # ── AUTO @web SEARCH (runs automatically on every message > 5 chars) ──
+    elif len(message.strip()) > 5:
         outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         results = _web_search_snippets(outgoing_user_message or message)
         if results:
             api_messages[0]["content"] += (
-                " Here are live web search results relevant to the user's message, in case current "
-                "information helps (use them only if actually relevant; ignore them for timeless "
-                "questions like math or general advice, and cite that info came from a web search "
-                "when you do use it):\n" + "\n".join(results)
+                " Here are live web search results relevant to the user's message (use them only "
+                "if actually relevant; ignore for timeless questions; cite that info came from a "
+                "web search when you do use it):\n" + "\n".join(results)
             )
-        # If the search fails or returns nothing, silently proceed with no
-        # extra context rather than telling the user every single time —
-        # that would get noisy since this now runs on almost every message.
 
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
@@ -1059,8 +947,6 @@ def chat_stream():
             _append_message(conv_id, "assistant", assistant_response)
 
             current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            # Saved as: data/<email>/<date>.txt inside the repository
-            # (previously this incorrectly wrote to "<email>/<date>.txt" at repo root).
             repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
 
             log_entry = (
@@ -1072,11 +958,6 @@ def chat_stream():
             _write_to_github_repository(repo_sync_destination_path, log_entry)
 
             # ── Real background Python terminal execution ──
-            # Every python/py fenced code block in the reply is actually run
-            # server-side (short timeout, isolated subprocess — the same
-            # mechanism as /execute-python) and its real stdout/stderr is
-            # streamed back, tied to that block's position in the reply so
-            # the frontend can attach it to the matching file card.
             try:
                 block_ordinal = 0
                 for block_match in re.finditer(r"```(\w+)?\n([\s\S]*?)```", assistant_response):
@@ -1110,9 +991,7 @@ def chat_stream():
             except Exception as exc:
                 print(f"[TERMINAL][FAULT] {exc}")
 
-            # Background "Python terminal" file generation: if the request
-            # was asking for a zip or a PDF of the reply, actually build it
-            # now and hand back a real download link.
+            # ── Background file generation ──
             try:
                 if _ZIP_INTENT_RE.search(message):
                     zip_bytes = _build_zip_from_response(assistant_response)
@@ -1224,7 +1103,7 @@ def upload_pdf():
             decode_status = "decoded"
         elif ext == "docx":
             try:
-                import docx  # python-docx, optional dependency
+                import docx
                 doc = docx.Document(io.BytesIO(raw_bytes))
                 extracted_preview = "\n".join(p.text for p in doc.paragraphs)[:4000]
                 decode_status = "decoded"
@@ -1240,7 +1119,6 @@ def upload_pdf():
         elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
             decode_status = f"stored ({len(raw_bytes)} bytes, image — use chat vision features to analyze it)"
         else:
-            # Best-effort generic sniff: try UTF-8 text, else report as binary.
             try:
                 extracted_preview = raw_bytes.decode("utf-8")[:4000]
                 decode_status = "decoded (generic text sniff)"
