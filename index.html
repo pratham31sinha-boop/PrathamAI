@@ -329,7 +329,7 @@
                         <div id="agent-activity-strip"><span class="aas-spinner"></span><span id="agent-activity-strip-text">Thinking...</span></div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
-                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI... (try @education or @web)" class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
                             <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
                         </form>
                     </div>
@@ -364,12 +364,13 @@
     <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
             <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                <h4 class="text-sm font-bold text-[var(--text)]">Ingest PDF Context Vector</h4>
+                <h4 class="text-sm font-bold text-[var(--text)]">Ingest File</h4>
                 <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-5 flex flex-col gap-4">
-                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
-                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Initialize Document Index</button>
+                <p class="text-[10.5px] text-[var(--text-dim)] -mt-2">Any file type is accepted. Text, PDF, DOCX, JSON, CSV, and ZIP get their content decoded automatically on the server; other types are stored as-is.</p>
+                <input type="file" id="pdf-payload-file-element" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Upload &amp; Decode</button>
             </div>
         </div>
     </div>
@@ -684,6 +685,18 @@
             const modal = document.getElementById('vip-modal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        }
+        function openVipDetailsStepDirectly() {
+            document.getElementById('vip-name-input').value = '';
+            document.getElementById('vip-relationship-input').value = '';
+            document.getElementById('vip-step-code').classList.add('hidden');
+            document.getElementById('vip-step-code').classList.remove('flex');
+            document.getElementById('vip-step-details').classList.remove('hidden');
+            document.getElementById('vip-step-details').classList.add('flex');
+            const modal = document.getElementById('vip-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => document.getElementById('vip-name-input').focus(), 50);
         }
         function submitVipCode() {
             const entryCode = document.getElementById('vip-code-input').value.trim();
@@ -1066,6 +1079,33 @@
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
+        function appendGeneratedImage(wrapper, url, promptText) {
+            const holder = document.createElement('div');
+            holder.className = 'rounded-2xl overflow-hidden border border-[var(--border)] max-w-[85%] shadow-xs';
+            holder.innerHTML = `<img src="${url}" alt="${sanitizeOutputText(promptText || 'Generated image')}" style="width:100%;display:block;" loading="lazy">`;
+            wrapper.appendChild(holder);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
+
+        function appendDownloadCard(wrapper, relativeUrl, filename) {
+            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+            const fullUrl = `${hostBase}${relativeUrl}`;
+            const card = document.createElement('a');
+            card.href = fullUrl;
+            card.target = '_blank';
+            card.rel = 'noopener';
+            card.className = 'file-creation-card done';
+            card.innerHTML = `
+                <div class="fcc-icon">⭳</div>
+                <div class="fcc-meta">
+                    <div class="fcc-name">${sanitizeOutputText(filename)}</div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Built in background terminal — ready</span></div>
+                </div>
+                <span class="fcc-openhint">Download</span>
+            `;
+            wrapper.appendChild(card);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
             containerNode.className = 'w-full flex flex-col items-start gap-1.5';
@@ -1102,6 +1142,19 @@
         async function dispatchChatMessage() {
             const message = userPromptInputField.value.trim();
             if (!message || isGenerating) return;
+
+            // If the person types the VIP secret code straight into the chat
+            // box (instead of using the 🔒 Secure Lock button), intercept it
+            // here and open the proper VIP modal instead of sending it to the
+            // model — this is what was happening before: "31082011" was being
+            // treated as ordinary chat text and answered as if it were a date.
+            if (message === "31082011") {
+                userPromptInputField.value = '';
+                userPromptInputField.style.height = 'auto';
+                openVipDetailsStepDirectly();
+                return;
+            }
+
             isGenerating = true;
             inputActionSubmitBtn.disabled = true;
             inputActionSubmitBtn.classList.add('opacity-60');
@@ -1173,6 +1226,15 @@
                             // Throttle DOM rebuilding to once per animation frame so
                             // fast token streams stay smooth instead of lagging.
                             if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
+                        } else if (payload.type === 'image') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            setAgentActivity('Rendering image...');
+                            pushTerminalLog(`Requesting image from Pollinations AI: "${payload.prompt}"`);
+                            appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
+                        } else if (payload.type === 'file_ready') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
+                            appendDownloadCard(modelWrapper, payload.url, payload.filename);
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
                             pushTerminalLog('Response complete.');
@@ -1311,9 +1373,14 @@
             try {
                 const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
                 const res = await response.json();
-                alert(res.message || res.error);
+                if (res.ok) {
+                    alert(`${res.filename} — ${res.status}`);
+                    pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
+                } else {
+                    alert(res.error || "Upload failed.");
+                }
                 toggleModal('pdf-modal');
-            } catch (err) { alert("Vector mapping initialization fault standard trace drop."); }
+            } catch (err) { alert("Upload failed. Check your connection and try again."); }
         }
 
         // Legacy note: file preview + progress used to be driven by a single
