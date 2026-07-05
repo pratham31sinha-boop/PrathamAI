@@ -213,6 +213,23 @@
             .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
             .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
         }
+
+        /* Continuation button styling */
+        .continuation-btn {
+            margin-top: 12px;
+            padding: 10px 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: opacity 0.2s ease;
+            max-width: 200px;
+            text-align: center;
+        }
+        .continuation-btn:hover { opacity: 0.9; }
     </style>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
@@ -734,7 +751,8 @@
             typescript: 'ts', ts: 'ts', python: 'py', py: 'py', css: 'css',
             json: 'json', bash: 'sh', sh: 'sh', shell: 'sh', text: 'txt',
             xml: 'xml', markdown: 'md', md: 'md', sql: 'sql', yaml: 'yml',
-            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs'
+            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs',
+            tsx: 'tsx', lua: 'lua', swift: 'swift', kotlin: 'kt'
         };
 
         function guessFileName(lang, ordinal) {
@@ -903,6 +921,11 @@
             const segments = parseAssistantSegments(fullText);
             if (!wrapper._segNodes) wrapper._segNodes = [];
             if (!wrapper._fileOrdinal) wrapper._fileOrdinal = 0;
+            
+            const isContinuation = fullText.toLowerCase().includes('continue') && 
+                                  fullText.toLowerCase().includes('where') &&
+                                  wrapper._segNodes.length > 0;
+            
             segments.forEach((seg, i) => {
                 let node = wrapper._segNodes[i];
                 if (seg.type === 'text') {
@@ -920,6 +943,18 @@
                         node.style.display = 'none';
                     }
                 } else {
+                    if (isContinuation && wrapper._segNodes.length > 0) {
+                        const lastCodeCard = Array.from(wrapper.querySelectorAll('.file-creation-card[data-seg-type="code"]')).pop();
+                        if (lastCodeCard && !lastCodeCard.classList.contains('done')) {
+                            const mergedContent = lastCodeCard._code + '\n' + seg.content;
+                            updateFileCreationCard(lastCodeCard, mergedContent, seg.closed);
+                            if (seg.closed) {
+                                pushTerminalLog(`Continuation merged: ${lastCodeCard.dataset.filename} now complete.`);
+                            }
+                            return;
+                        }
+                    }
+                    
                     if (!node || node.dataset.segType !== 'code') {
                         wrapper._fileOrdinal += 1;
                         node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
@@ -964,6 +999,7 @@
             wrapper.appendChild(card);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
+
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
             containerNode.className = 'w-full flex flex-col items-start gap-1.5';
@@ -1081,7 +1117,7 @@
                         } else if (payload.type === 'image') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             setAgentActivity('Rendering image...');
-                            pushTerminalLog(`Requesting image from Pollinations AI: "${payload.prompt}"`);
+                            pushTerminalLog(`Image generated: "${payload.prompt}"`);
                             appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
                         } else if (payload.type === 'file_ready') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
@@ -1101,7 +1137,21 @@
                             }
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
-                            pushTerminalLog('Response complete.');
+                            
+                            // Check for continuation marker
+                            if (fullText.includes('<!-- CONTINUATION NEEDED:')) {
+                                const continueBtn = document.createElement('button');
+                                continueBtn.className = 'continuation-btn';
+                                continueBtn.innerText = '⚠️ Continue generation...';
+                                continueBtn.onclick = () => {
+                                    userPromptInputField.value = 'Continue completing the previous file from where you stopped.';
+                                    interactionSubmissionForm.requestSubmit();
+                                };
+                                modelWrapper.appendChild(continueBtn);
+                                pushTerminalLog('Large file detected - continuation available.');
+                            } else {
+                                pushTerminalLog('Response complete.');
+                            }
                         }
                     }
                 }
