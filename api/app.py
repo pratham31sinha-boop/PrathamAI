@@ -58,6 +58,8 @@ import json
 import time
 import uuid
 import base64
+import hmac
+import hashlib
 import zipfile
 import urllib.request
 import urllib.parse
@@ -116,6 +118,8 @@ SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 GITHUB_TOKEN         = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/data").strip()
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
+SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
+SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
 
 SUPABASE_CONFIGURED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
 
@@ -427,7 +431,7 @@ def _web_search_snippets(query: str, max_results: int = 4):
             f"https://html.duckduckgo.com/html/?q={encoded}",
             headers={"User-Agent": "Mozilla/5.0 (PrathamAI Search Agent)"}
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=6) as resp:
             html_body = resp.read().decode('utf-8', errors='ignore')
         titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html_body, re.DOTALL)
         snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html_body, re.DOTALL)
@@ -459,6 +463,48 @@ def _decode_google_claims(token: str):
     except Exception:
         return None
 
+# ── Backend-issued long-lived session tokens ──
+# Google ID tokens only live ~1 hour, which is why signing back in kept
+# happening after the browser was closed for a while. Once a Google sign-in
+# succeeds, the frontend exchanges that short-lived token for one of these
+# (via /auth/exchange), which is good for SESSION_TOKEN_TTL_DAYS and doesn't
+# depend on Google's own token lifetime at all.
+_SESSION_TOKEN_PREFIX = "PAI1"
+
+def _issue_session_token(user: dict) -> str:
+    payload = {
+        "sub": user.get("sub"),
+        "email": user.get("email"),
+        "role": user.get("role", "standard"),
+        "full_name": (user.get("user_metadata") or {}).get("full_name"),
+        "picture": (user.get("user_metadata") or {}).get("picture"),
+        "exp": int(time.time()) + (SESSION_TOKEN_TTL_DAYS * 86400)
+    }
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode('utf-8')).decode('utf-8').rstrip('=')
+    signature = hmac.new(SESSION_SECRET.encode('utf-8'), payload_b64.encode('utf-8'), hashlib.sha256).hexdigest()
+    return f"{_SESSION_TOKEN_PREFIX}.{payload_b64}.{signature}"
+
+def _verify_session_token(token: str):
+    try:
+        prefix, payload_b64, signature = token.split('.')
+        if prefix != _SESSION_TOKEN_PREFIX:
+            return None
+        expected_sig = hmac.new(SESSION_SECRET.encode('utf-8'), payload_b64.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_sig, signature):
+            return None
+        padded = payload_b64 + '=' * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode('utf-8'))
+        if payload.get("exp", 0) < time.time():
+            return None
+        return {
+            "sub": payload.get("sub"),
+            "email": payload.get("email"),
+            "role": payload.get("role", "standard"),
+            "user_metadata": {"full_name": payload.get("full_name"), "picture": payload.get("picture")}
+        }
+    except Exception:
+        return None
+
 def _verify_token(token: str):
     if not token or token == "dev-session-active-token":
         return {
@@ -467,6 +513,15 @@ def _verify_token(token: str):
             "role": "creator",
             "user_metadata": {"full_name": "Dev Master Creator"}
         }
+
+    # Our own backend-issued long-lived session tokens (see /auth/exchange).
+    # These are checked first since they're the primary auth mechanism the
+    # frontend uses after the initial Google sign-in.
+    if token.startswith(f"{_SESSION_TOKEN_PREFIX}."):
+        session_user = _verify_session_token(token)
+        if session_user:
+            return session_user
+        return None
 
     # Google ID tokens: verify structure and, importantly, expiry (exp claim)
     # so a stored/replayed token can't be used forever, but we DO allow the
@@ -532,6 +587,30 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
+
+_TEACHING_INTENT_RE = re.compile(
+    r"\b(remember that|remember this|note this|note that|save this|learn this|keep in mind|"
+    r"for future reference|always do|from now on|don't forget|never forget)\b",
+    re.IGNORECASE
+)
+
+def _maybe_capture_public_teaching(user_email: str, message: str):
+    """
+    If a message looks like the person is teaching/instructing the assistant
+    something worth remembering (prompt-engineering style guidance), it gets
+    appended to a PUBLIC file at the repo root: public_data.txt. This is
+    intentionally repo-root (not under data/) since it's meant to be shared
+    knowledge, not per-user private history.
+    """
+    if not _TEACHING_INTENT_RE.search(message):
+        return
+    entry = (
+        f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
+        f"Taught by: {user_email}\n"
+        f"Content: {message}\n"
+        f"{'=' * 80}\n"
+    )
+    _write_to_github_repository("public_data.txt", entry)
 
 # ── LLM MULTI-PROVIDER FAILOVER: Groq -> OpenRouter -> Cerebras -> Mistral ──
 _provider_cooldowns: dict = {}
@@ -744,6 +823,26 @@ def _append_message(conv_id, role, content):
 def index_root():
     return jsonify({"message": "Pratham AI backend active"})
 
+@app.route("/auth/exchange", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/exchange", methods=["POST", "OPTIONS"])
+def auth_exchange():
+    """
+    Takes the Authorization header (expected to be the raw Google ID token
+    from the just-completed sign-in) and exchanges it for a long-lived
+    backend session token. This is the real fix for "signed out again after
+    closing the browser": Google's own ID token only lasts about an hour,
+    but the token this returns lasts SESSION_TOKEN_TTL_DAYS days.
+    """
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    token = _get_token()
+    user = _verify_token(token)
+    if not user:
+        return jsonify({"error": "Could not verify the provided sign-in token."}), 401
+    session_token = _issue_session_token(user)
+    return jsonify({"ok": True, "session_token": session_token, "user": user, "expires_in_days": SESSION_TOKEN_TTL_DAYS})
+
 @app.route("/auth/refresh-check", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/refresh-check", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/refresh-check", methods=["POST", "OPTIONS"])
@@ -919,24 +1018,28 @@ def chat_stream():
                 "data/education library (it may be empty, or the pypdf package may not be installed "
                 "on the server). Say so plainly instead of guessing."
             )
-    elif "@web" in message.lower():
-        outgoing_user_message = re.sub(r"@web", "", outgoing_user_message, flags=re.IGNORECASE).strip()
+    elif re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5:
+        # Web search now runs automatically on essentially every message
+        # (the person no longer has to type "@web" each time). It's skipped
+        # only for very short/trivial messages (greetings, "ok", etc.) to
+        # avoid wasted latency on requests that clearly don't need it.
+        outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         results = _web_search_snippets(outgoing_user_message or message)
         if results:
             api_messages[0]["content"] += (
-                " The user tagged @web, meaning they want current information. Here are live search "
-                "results to ground your answer (cite that the info came from a web search):\n"
-                + "\n".join(results)
+                " Here are live web search results relevant to the user's message, in case current "
+                "information helps (use them only if actually relevant; ignore them for timeless "
+                "questions like math or general advice, and cite that info came from a web search "
+                "when you do use it):\n" + "\n".join(results)
             )
-        else:
-            api_messages[0]["content"] += (
-                " The user tagged @web but the live search did not return usable results right now; "
-                "say so and answer from general knowledge instead."
-            )
+        # If the search fails or returns nothing, silently proceed with no
+        # extra context rather than telling the user every single time —
+        # that would get noisy since this now runs on almost every message.
 
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
     _append_message(conv_id, "user", message)
+    _maybe_capture_public_teaching(user_email, message)
 
     def generate():
         yield _sse({"type": "metadata", "conversation_id": conv_id})
@@ -967,6 +1070,45 @@ def chat_stream():
                 f"{'=' * 80}\n"
             )
             _write_to_github_repository(repo_sync_destination_path, log_entry)
+
+            # ── Real background Python terminal execution ──
+            # Every python/py fenced code block in the reply is actually run
+            # server-side (short timeout, isolated subprocess — the same
+            # mechanism as /execute-python) and its real stdout/stderr is
+            # streamed back, tied to that block's position in the reply so
+            # the frontend can attach it to the matching file card.
+            try:
+                block_ordinal = 0
+                for block_match in re.finditer(r"```(\w+)?\n([\s\S]*?)```", assistant_response):
+                    block_ordinal += 1
+                    block_lang = (block_match.group(1) or "text").lower()
+                    if block_lang not in ("python", "py"):
+                        continue
+                    block_code = block_match.group(2)
+                    try:
+                        exec_result = subprocess.run(
+                            [sys.executable, "-c", block_code],
+                            capture_output=True, text=True, timeout=8
+                        )
+                        yield _sse({
+                            "type": "terminal_output",
+                            "ordinal": block_ordinal,
+                            "stdout": exec_result.stdout[-4000:],
+                            "stderr": exec_result.stderr[-4000:],
+                            "returncode": exec_result.returncode
+                        })
+                    except subprocess.TimeoutExpired:
+                        yield _sse({
+                            "type": "terminal_output", "ordinal": block_ordinal,
+                            "stdout": "", "stderr": "Execution timed out after 8 seconds.", "returncode": -1
+                        })
+                    except Exception as exec_exc:
+                        yield _sse({
+                            "type": "terminal_output", "ordinal": block_ordinal,
+                            "stdout": "", "stderr": f"Execution failed: {exec_exc}", "returncode": -1
+                        })
+            except Exception as exc:
+                print(f"[TERMINAL][FAULT] {exc}")
 
             # Background "Python terminal" file generation: if the request
             # was asking for a zip or a PDF of the reply, actually build it
