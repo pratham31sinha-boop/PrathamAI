@@ -423,6 +423,57 @@
         </div>
     </div>
 
+    <!-- VIP registration modal: replaces native prompt() dialogs, which are
+         unreliable/blocked on many mobile browsers. -->
+    <div id="vip-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">🔒 Secure Lock — VIP Access</h4>
+                <button onclick="closeVipModal()" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div id="vip-step-code" class="p-5 flex flex-col gap-3">
+                <p class="text-xs text-[var(--text-dim)]">Enter the security token to continue.</p>
+                <input type="password" id="vip-code-input" placeholder="Security token" class="w-full text-sm px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--panel-2)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
+                <button onclick="submitVipCode()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Continue</button>
+            </div>
+            <div id="vip-step-details" class="p-5 flex-col gap-3 hidden">
+                <p class="text-xs text-[var(--text-dim)]">Token accepted. Tell us who you are.</p>
+                <input type="text" id="vip-name-input" placeholder="Your name" class="w-full text-sm px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--panel-2)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
+                <input type="text" id="vip-relationship-input" placeholder="Relationship with Pratham" class="w-full text-sm px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--panel-2)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
+                <button onclick="submitVipDetails()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Save &amp; Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full-screen artifact/file preview modal, mirrors the Claude-style
+         "opens as its own page" experience: header with filename + kebab
+         menu (Preview / Code toggle, Publish, Copy, Download), full body. -->
+    <div id="artifact-modal" class="fixed inset-0 bg-[var(--bg)] z-50 hidden flex-col">
+        <div class="h-14 border-b border-[var(--border)] flex items-center justify-between px-4 safe-top shrink-0">
+            <button onclick="closeArtifactModal()" class="text-[var(--text)] text-lg cursor-pointer">✕</button>
+            <h4 id="artifact-modal-title" class="text-sm font-bold text-[var(--text)] truncate max-w-[55%]">file.txt</h4>
+            <div class="relative">
+                <button onclick="toggleArtifactMenu()" class="text-[var(--text)] text-lg cursor-pointer px-1">⋮</button>
+                <div id="artifact-menu" class="hidden absolute right-0 top-8 w-44 bg-[var(--panel)] border border-[var(--border)] rounded-xl shadow-lg z-10 py-1 text-sm">
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('preview')">
+                        <span id="artifact-menu-preview-check">Preview</span><span>👁</span>
+                    </div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('code')">
+                        <span id="artifact-menu-code-check">Code</span><span>&lt;/&gt;</span>
+                    </div>
+                    <div class="h-px bg-[var(--border)] my-1"></div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="copyArtifactCode()">
+                        <span>Copy</span><span>⧉</span>
+                    </div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="downloadArtifactCode()">
+                        <span>Download</span><span>⭳</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="artifact-modal-body" class="flex-1 overflow-auto bg-[var(--panel)]"></div>
+    </div>
+
     <script>
         const bootSplash = document.getElementById('boot-splash');
         const loginOverlay = document.getElementById('login-overlay');
@@ -522,6 +573,7 @@
             loginOverlay.style.display = 'none';
             appShell.style.display = 'flex';
             synchronizeConversationsHistoryIndex();
+            refreshVipBadgeFromBackend();
         }
 
         function persistSessionLocally(credential, claims) {
@@ -616,23 +668,65 @@
         }
 
         function triggerHiddenVipFormPrompt() {
-            const entryCode = prompt("Enter Security Token Matrix Key:");
-            if (entryCode === "31082011") {
-                const companionName = prompt("Enter your Name:");
-                const affiliation = prompt("Specify relationship details context with Pratham:");
-                if (companionName && affiliation) {
-                    smartFetchRequest('/auth/vip-register', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                        body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
-                    }).then(res => res.json()).then(data => {
-                        if (data.ok) {
-                            roleBadgeDisplay.innerText = "VIP Tier";
-                            alert("Identity context recorded successfully.");
-                        } else alert("Storage operation tracking fault.");
-                    });
-                }
-            } else alert("Signature reject. Authentication cycle drop.");
+            document.getElementById('vip-code-input').value = '';
+            document.getElementById('vip-name-input').value = '';
+            document.getElementById('vip-relationship-input').value = '';
+            document.getElementById('vip-step-code').classList.remove('hidden');
+            document.getElementById('vip-step-code').classList.add('flex');
+            document.getElementById('vip-step-details').classList.add('hidden');
+            document.getElementById('vip-step-details').classList.remove('flex');
+            const modal = document.getElementById('vip-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => document.getElementById('vip-code-input').focus(), 50);
+        }
+        function closeVipModal() {
+            const modal = document.getElementById('vip-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        function submitVipCode() {
+            const entryCode = document.getElementById('vip-code-input').value.trim();
+            if (entryCode !== "31082011") {
+                alert("Signature reject. Authentication cycle drop.");
+                return;
+            }
+            document.getElementById('vip-step-code').classList.add('hidden');
+            document.getElementById('vip-step-code').classList.remove('flex');
+            document.getElementById('vip-step-details').classList.remove('hidden');
+            document.getElementById('vip-step-details').classList.add('flex');
+            setTimeout(() => document.getElementById('vip-name-input').focus(), 50);
+        }
+        function submitVipDetails() {
+            const companionName = document.getElementById('vip-name-input').value.trim();
+            const affiliation = document.getElementById('vip-relationship-input').value.trim();
+            if (!companionName || !affiliation) {
+                alert("Please fill in both your name and your relationship with Pratham.");
+                return;
+            }
+            smartFetchRequest('/auth/vip-register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
+                body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
+            }).then(res => res.json()).then(data => {
+                if (data.ok) {
+                    roleBadgeDisplay.innerText = "VIP Tier";
+                    closeVipModal();
+                    alert("Identity context recorded successfully.");
+                } else alert("Storage operation tracking fault.");
+            }).catch(() => alert("Storage operation tracking fault."));
+        }
+
+        // Checks whether the currently signed-in email is already registered
+        // as a VIP contact (survives refresh/reload, unlike the old approach
+        // which only set the badge in-memory right after registering).
+        async function refreshVipBadgeFromBackend() {
+            try {
+                const response = await smartFetchRequest('/auth/vip-status', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.is_vip) roleBadgeDisplay.innerText = "VIP Tier";
+            } catch (e) {}
         }
 
         function triggerIdentitySignout() {
@@ -676,6 +770,49 @@
             return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
         }
 
+        // ── Conversation history persistence mirror ──────────────────────
+        // The backend keeps conversations in Supabase when configured, but
+        // falls back to an in-memory dict otherwise, which is wiped on every
+        // backend redeploy/restart. To make "history saved for full time
+        // until the person deletes it" actually true from the user's point
+        // of view, we mirror the conversation list + messages into
+        // localStorage (keyed per signed-in email) and merge it back in
+        // whenever the backend's own copy is missing or incomplete.
+        function convCacheKey() {
+            return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`;
+        }
+        function loadConvCache() {
+            try {
+                const raw = localStorage.getItem(convCacheKey());
+                return raw ? JSON.parse(raw) : { list: [], messages: {} };
+            } catch (e) { return { list: [], messages: {} }; }
+        }
+        function saveConvCache(cache) {
+            try { localStorage.setItem(convCacheKey(), JSON.stringify(cache)); } catch (e) {}
+        }
+        function cacheConversationMeta(id, title) {
+            const cache = loadConvCache();
+            const nowIso = new Date().toISOString();
+            const existingIdx = cache.list.findIndex(c => c.id === id);
+            if (existingIdx >= 0) {
+                cache.list[existingIdx].title = title;
+                cache.list[existingIdx].updated_at = nowIso;
+            } else {
+                cache.list.unshift({ id, title, pinned: false, created_at: nowIso, updated_at: nowIso });
+            }
+            saveConvCache(cache);
+        }
+        function cacheConversationMessages(id, messages) {
+            const cache = loadConvCache();
+            cache.messages[id] = messages;
+            saveConvCache(cache);
+        }
+        function removeCachedConversation(id) {
+            const cache = loadConvCache();
+            cache.list = cache.list.filter(c => c.id !== id);
+            delete cache.messages[id];
+            saveConvCache(cache);
+        }
         function toggleModal(modalTargetId) {
             const target = document.getElementById(modalTargetId);
             target.classList.toggle('hidden');
@@ -811,19 +948,80 @@
             }
         }
 
+        let artifactModalState = { code: '', lang: 'text', filename: 'file.txt', view: 'preview' };
+
         function openFilePreviewFromCard(card) {
             if (!card._code) return;
-            currentExtractedPreviewArtifactPayload = card._code;
-            workbenchSplitPanel.classList.remove('hidden');
-            document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
-            agentBackgroundTerminalLogger.textContent += `[${new Date().toLocaleTimeString([], { hour12: false })}] Preview opened: ${card.dataset.filename}\n`;
-            agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
-            if (card._lang === 'html' || card._lang === 'htm') {
-                interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;" srcdoc="${sanitizeOutputText(card._code)}"></iframe>`;
-            } else {
-                interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs whitespace-pre-wrap p-2">${sanitizeOutputText(card._code)}</pre>`;
+            artifactModalState = { code: card._code, lang: card._lang, filename: card.dataset.filename, view: 'preview' };
+            document.getElementById('artifact-modal-title').innerText = card.dataset.filename;
+            renderArtifactModalBody();
+            pushTerminalLog(`Preview opened: ${card.dataset.filename}`);
+            const modal = document.getElementById('artifact-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeArtifactModal() {
+            const modal = document.getElementById('artifact-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('artifact-menu').classList.add('hidden');
+        }
+
+        function toggleArtifactMenu() {
+            document.getElementById('artifact-menu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('artifact-menu');
+            if (menu && !menu.classList.contains('hidden') && !e.target.closest('#artifact-menu') && !e.target.closest('[onclick="toggleArtifactMenu()"]')) {
+                menu.classList.add('hidden');
             }
-            if (window.innerWidth <= 820) workbenchSplitPanel.classList.add('workbench-open');
+        });
+
+        function setArtifactView(view) {
+            artifactModalState.view = view;
+            document.getElementById('artifact-menu').classList.add('hidden');
+            renderArtifactModalBody();
+        }
+
+        function renderArtifactModalBody() {
+            const body = document.getElementById('artifact-modal-body');
+            const previewCheck = document.getElementById('artifact-menu-preview-check');
+            const codeCheck = document.getElementById('artifact-menu-code-check');
+            previewCheck.innerText = artifactModalState.view === 'preview' ? '✓ Preview' : 'Preview';
+            codeCheck.innerText = artifactModalState.view === 'code' ? '✓ Code' : 'Code';
+
+            const isRenderable = artifactModalState.lang === 'html' || artifactModalState.lang === 'htm';
+            if (artifactModalState.view === 'preview' && isRenderable) {
+                body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
+            } else if (artifactModalState.view === 'preview' && !isRenderable) {
+                // Non-HTML files don't have a live preview; fall back to a
+                // clean read-only code view instead of a blank screen.
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
+            } else {
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
+            }
+        }
+
+        function copyArtifactCode() {
+            document.getElementById('artifact-menu').classList.add('hidden');
+            navigator.clipboard?.writeText(artifactModalState.code).then(() => {
+                pushTerminalLog(`Copied ${artifactModalState.filename} to clipboard.`);
+            }).catch(() => {});
+        }
+
+        function downloadArtifactCode() {
+            document.getElementById('artifact-menu').classList.add('hidden');
+            const blob = new Blob([artifactModalState.code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = artifactModalState.filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            pushTerminalLog(`Downloaded ${artifactModalState.filename}.`);
         }
 
         // Renders/updates an assistant message's segments (text bubbles +
@@ -987,6 +1185,14 @@
                 activeChatTitleHeader.innerText = message.slice(0, 60);
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
+                if (currentConversationId) {
+                    cacheConversationMeta(currentConversationId, message.slice(0, 60));
+                    const cache = loadConvCache();
+                    const existingMsgs = cache.messages[currentConversationId] || [];
+                    existingMsgs.push({ role: 'user', content: message });
+                    if (fullText) existingMsgs.push({ role: 'assistant', content: fullText });
+                    cacheConversationMessages(currentConversationId, existingMsgs);
+                }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
                 removeTypingIndicator();
@@ -1026,12 +1232,28 @@
         }
 
         async function synchronizeConversationsHistoryIndex() {
+            const cache = loadConvCache();
+            let items = cache.list || [];
+            // Paint the cached list immediately so history appears instantly
+            // (fixes any perceived lag while the network call is in flight),
+            // then reconcile with the backend's copy once it responds.
+            if (items.length) { allHistoryItemsCache = items; renderHistoryRows(items); }
             try {
                 const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) return;
-                const items = await response.json();
-                allHistoryItemsCache = items;
-                renderHistoryRows(items);
+                const backendItems = await response.json();
+                // Merge: anything the backend knows about wins for that id;
+                // anything only present locally (backend memory was reset)
+                // stays visible too.
+                const mergedById = {};
+                (backendItems || []).forEach(it => { mergedById[it.id] = it; });
+                items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
+                const merged = Object.values(mergedById).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+                allHistoryItemsCache = merged;
+                renderHistoryRows(merged);
+                const nextCache = loadConvCache();
+                nextCache.list = merged;
+                saveConvCache(nextCache);
             } catch (err) {}
         }
 
@@ -1039,7 +1261,15 @@
             try {
                 const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) throw new Error("Load structural exception context.");
-                const logs = await response.json();
+                let logs = await response.json();
+                if ((!logs || logs.length === 0)) {
+                    // Backend has nothing for this id (likely an in-memory
+                    // reset) — fall back to what we mirrored locally.
+                    const cache = loadConvCache();
+                    logs = cache.messages[conversationId] || [];
+                } else {
+                    cacheConversationMessages(conversationId, logs);
+                }
                 currentConversationId = conversationId;
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
@@ -1062,6 +1292,7 @@
             if (!currentConversationId) return;
             try {
                 await smartFetchRequest(`/conversations/${currentConversationId}`, { method: 'DELETE', headers: { 'Authorization': globalAuthorizationToken } });
+                removeCachedConversation(currentConversationId);
                 createNewConversation();
             } catch (err) {}
         }
