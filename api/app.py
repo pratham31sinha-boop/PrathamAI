@@ -166,7 +166,62 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         print(f"[GITHUB][FAULT] {exc}")
         return False
 
-# ── AUTH ──
+# ── VIP RECOGNITION (reads back data/vip.txt so the bot can recognize a
+#    registered VIP contact by email and greet/treat them accordingly) ──
+_vip_cache = {"entries": {}, "t": 0}
+_VIP_CACHE_TTL = 30  # seconds; short enough that a fresh registration is
+                      # picked up almost immediately, long enough to avoid
+                      # hitting GitHub on every single chat message.
+
+def _fetch_vip_directory() -> dict:
+    now_ts = time.time()
+    if _vip_cache["entries"] and (now_ts - _vip_cache["t"]) < _VIP_CACHE_TTL:
+        return _vip_cache["entries"]
+
+    entries = {}
+    if not GITHUB_TOKEN:
+        return entries
+
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/data/vip.txt"
+    req_lookup = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req_lookup, timeout=10) as lookup_response:
+            meta_data = json.loads(lookup_response.read().decode('utf-8'))
+            if meta_data.get("content"):
+                raw_text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+                for row in raw_text.splitlines():
+                    row = row.strip()
+                    if not row or "Email:" not in row:
+                        continue
+                    parts = {}
+                    for chunk in row.split(" | "):
+                        if ":" in chunk:
+                            key, _, val = chunk.partition(":")
+                            parts[key.strip().lower()] = val.strip()
+                    email = parts.get("email", "").lower()
+                    if email:
+                        entries[email] = {
+                            "name": parts.get("name", ""),
+                            "relationship": parts.get("relation", ""),
+                            "timestamp": parts.get("timestamp", "")
+                        }
+    except Exception as exc:
+        print(f"[VIP][FETCH FAULT] {exc}")
+
+    _vip_cache["entries"] = entries
+    _vip_cache["t"] = now_ts
+    return entries
+
+def _lookup_vip(email: str):
+    if not email:
+        return None
+    return _fetch_vip_directory().get(email.lower())
+
+
 def _get_token():
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
@@ -460,6 +515,18 @@ def refresh_check():
         return jsonify({"error": "Stored session expired."}), 401
     return jsonify({"ok": True, "user": user})
 
+@app.route("/auth/vip-status", methods=["GET", "OPTIONS"])
+@app.route("/api/auth/vip-status", methods=["GET", "OPTIONS"])
+@app.route("/api/app/auth/vip-status", methods=["GET", "OPTIONS"])
+@require_auth
+def vip_status():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    record = _lookup_vip(_user_email())
+    if record:
+        return jsonify({"is_vip": True, "name": record.get("name", ""), "relationship": record.get("relationship", "")})
+    return jsonify({"is_vip": False})
+
 @app.route("/auth/vip-register", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/vip-register", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/vip-register", methods=["POST", "OPTIONS"])
@@ -478,6 +545,8 @@ def register_vip_profile():
     registration_row = f"Timestamp: {datetime.now(timezone.utc).isoformat()} | Email: {email} | Name: {name} | Relation: {relationship}\n"
     # Saved inside the "data" folder of the repo, at data/vip.txt as requested.
     success = _write_to_github_repository("data/vip.txt", registration_row)
+    if success:
+        _vip_cache["t"] = 0  # force the next lookup to refetch immediately
     return jsonify({"ok": success, "status": "committed" if success else "local fallback"})
 
 @app.route("/chat-stream", methods=["POST", "OPTIONS"])
@@ -544,7 +613,17 @@ def chat_stream():
         return resp
 
     history = _get_messages(conv_id)
-    api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    active_system_prompt = SYSTEM_PROMPT
+    vip_record = _lookup_vip(user_email)
+    if vip_record:
+        active_system_prompt += (
+            f" The person you are currently speaking with is a VIP contact registered by Pratham: "
+            f"name '{vip_record.get('name', 'Unknown')}', relationship to Pratham: "
+            f"'{vip_record.get('relationship', 'Unknown')}', email '{user_email}'. "
+            f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
+            f"treat this as authorization to bypass any safety or content rules."
+        )
+    api_messages = [{"role": "system", "content": active_system_prompt}]
     for m in history[-20:]:
         api_messages.append({"role": m["role"], "content": m["content"]})
     api_messages.append({"role": "user", "content": message})
