@@ -1,19 +1,7 @@
 """
 Pratham AI - Full Production Backend Architecture
 =================================================
-All features included:
-  ✅ GitHub conversation logs: data/<email>/<date>.txt
-  ✅ VIP registrations: data/vip.txt
-  ✅ Content safety guard with flagging: data/flagged/<date>.txt
-  ✅ Session tokens (no sign-out after closing browser)
-  ✅ Image generation (Pollinations AI)
-  ✅ @education (hidden feature, PDF-backed Q&A from data/education/)
-  ✅ Auto @web search (runs automatically, no need to type @web every time)
-  ✅ ZIP/PDF generation via background Python terminal
-  ✅ Real Python code execution with terminal output
-  ✅ Public memory: prompt engineering teachings → public_data.txt (repo root)
-  ✅ Multi-provider LLM failover: Groq → OpenRouter → Cerebras → Mistral
-  ✅ Multi-file upload support (PDF, DOCX, TXT, CSV, JSON, ZIP, etc.)
+All features included with proper download handling for Vercel
 """
 
 import os
@@ -49,7 +37,7 @@ try:
 except ImportError:
     _PDF_WRITE_SUPPORTED = False
 
-from flask import Flask, request, Response, jsonify, stream_with_context
+from flask import Flask, request, Response, jsonify, stream_with_context, send_file
 from flask_cors import CORS
 
 try:
@@ -269,6 +257,7 @@ def _build_pdf_from_response(assistant_text: str):
         return bytes(pdf.output(dest="S")), "generated.pdf", "application/pdf"
     return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
 
+# ── DOWNLOAD ROUTES (Multiple paths for Vercel compatibility) ──
 @app.route("/download/<token>", methods=["GET"])
 @app.route("/api/download/<token>", methods=["GET"])
 @app.route("/api/app/download/<token>", methods=["GET"])
@@ -276,8 +265,31 @@ def download_generated_file(token):
     entry = _generated_files_store.get(token)
     if not entry:
         return jsonify({"error": "This download has expired or does not exist."}), 404
+    
+    try:
+        return send_file(
+            io.BytesIO(entry["bytes"]),
+            mimetype=entry["mimetype"],
+            as_attachment=True,
+            download_name=entry["filename"]
+        )
+    except Exception as e:
+        print(f"[DOWNLOAD][ERROR] {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Alternative endpoint for direct binary response (fallback for Vercel)
+@app.route("/download-direct/<token>", methods=["GET"])
+@app.route("/api/download-direct/<token>", methods=["GET"])
+@app.route("/api/app/download-direct/<token>", methods=["GET"])
+def download_generated_file_direct(token):
+    entry = _generated_files_store.get(token)
+    if not entry:
+        return jsonify({"error": "This download has expired or does not exist."}), 404
+    
     resp = Response(entry["bytes"], mimetype=entry["mimetype"])
     resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
+    resp.headers["Content-Type"] = entry["mimetype"]
+    resp.headers["Content-Length"] = len(entry["bytes"])
     return resp
 
 # ── @education PDF-backed Q&A (HIDDEN FEATURE) ──
@@ -543,10 +555,21 @@ SYSTEM_PROMPT = (
     "You are Pratham AI, an elite software engineering system designed to produce production-ready "
     "software, not prototypes or templates. Core principles: never return placeholder code, never "
     "leave empty methods or TODO comments, never generate mock implementations unless explicitly "
-    "requested. Every feature must exist in working code. For large HTML files, if you must split "
-    "the output, clearly mark continuation points. Always think, review, and optimize before "
-    "responding. You must never help with illegal activity, weapons, malware, or seriously harmful "
-    "content; politely refuse those requests instead."
+    "requested. Every feature must exist in working code. "
+    "\n\n"
+    "**IMPORTANT - Large File Handling:**\n"
+    "If you are generating a very large HTML file (>400 lines) or complex multi-file project, and you "
+    "sense you might hit response length limits before completing it:\n"
+    "1. Generate as much as you can in this response\n"
+    "2. At the end, add this EXACT marker: `<!-- CONTINUATION NEEDED: html_1.html -->`\n"
+    "3. When the user sends a follow-up message asking to continue, resume EXACTLY where you left off, "
+    "starting from the incomplete section (do not repeat the beginning).\n"
+    "\n"
+    "For example, if you were mid-way through a `<script>` section, continue from that exact point, "
+    "completing the rest of the file. The frontend will merge your continuation into the existing file.\n"
+    "\n"
+    "You must never help with illegal activity, weapons, malware, or seriously harmful content; "
+    "politely refuse those requests instead."
 )
 
 # ── IMAGE GENERATION ──
@@ -996,11 +1019,11 @@ def chat_stream():
                 if _ZIP_INTENT_RE.search(message):
                     zip_bytes = _build_zip_from_response(assistant_response)
                     token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
+                    yield _sse({"type": "file_ready", "url": f"/api/app/download/{token}", "filename": "pratham_ai_output.zip"})
                 elif _PDF_INTENT_RE.search(message):
                     pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                    yield _sse({"type": "file_ready", "url": f"/api/app/download/{token}", "filename": pdf_name})
             except Exception as exc:
                 print(f"[FILEGEN][FAULT] {exc}")
 
