@@ -187,6 +187,22 @@
         #sidebar-panel { transition: transform .28s ease, width .28s ease; }
         .mobile-hamburger { display: none; }
 
+        .continuation-btn {
+            margin-top: 12px;
+            padding: 10px 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: opacity 0.2s ease;
+            max-width: 200px;
+            text-align: center;
+        }
+        .continuation-btn:hover { opacity: 0.9; }
+
         @media (max-width: 820px) {
             #sidebar-panel {
                 position: fixed; inset: 0 auto 0 0; z-index: 40;
@@ -213,23 +229,6 @@
             .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
             .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
         }
-
-        /* Continuation button styling */
-        .continuation-btn {
-            margin-top: 12px;
-            padding: 10px 16px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            transition: opacity 0.2s ease;
-            max-width: 200px;
-            text-align: center;
-        }
-        .continuation-btn:hover { opacity: 0.9; }
     </style>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
@@ -770,6 +769,10 @@
             agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
         }
 
+        function showActivityFeed(text) {
+            pushTerminalLog(text);
+        }
+
         function setAgentActivity(text) {
             agentActivityStripText.innerText = text;
             agentActivityStrip.classList.add('active');
@@ -1106,6 +1109,8 @@
                         try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
                         if (payload.type === 'metadata') {
                             currentConversationId = payload.conversation_id;
+                        } else if (payload.type === 'activity') {
+                            showActivityFeed(payload.text);
                         } else if (payload.type === 'token') {
                             if (!modelWrapper) {
                                 removeTypingIndicator();
@@ -1138,7 +1143,6 @@
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
                             
-                            // Check for continuation marker
                             if (fullText.includes('<!-- CONTINUATION NEEDED:')) {
                                 const continueBtn = document.createElement('button');
                                 continueBtn.className = 'continuation-btn';
