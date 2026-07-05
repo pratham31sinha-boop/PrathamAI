@@ -1,825 +1,1302 @@
-# app.py — Pratham AI Backend (Complete & Corrected)
+"""
+Pratham AI - Full Production Backend Architecture
+=================================================
+Complete implementation with activity feed, proper file generation
+"""
 
-import os, json, uuid, time, re, subprocess, tempfile, mimetypes, zipfile, io, base64
+import os
+import re
+import io
+import json
+import time
+import uuid
+import base64
+import hmac
+import hashlib
+import zipfile
+import urllib.request
+import urllib.parse
+import sys
+import subprocess
 from datetime import datetime, timezone
-from pathlib import Path
 from functools import wraps
-from typing import Generator
-
-from flask import (
-    Flask, request, jsonify, Response, stream_with_context,
-    send_from_directory, send_file, abort
-)
-from flask_cors import CORS
-import requests as http_requests
-
-# ── Optional imports (graceful fallback) ───────────────────────────────────────
-try:
-    from google.oauth2 import id_token as google_id_token
-    from google.auth.transport import requests as google_auth_requests
-    GOOGLE_VERIFY_AVAILABLE = True
-except ImportError:
-    GOOGLE_VERIFY_AVAILABLE = False
 
 try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
+    from pypdf import PdfReader as _PdfReader
+    _PDF_READ_SUPPORTED = True
 except ImportError:
-    ANTHROPIC_AVAILABLE = False
-
-try:
-    from reportlab.pdfgen import canvas as rl_canvas
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.units import inch
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
-
-try:
-    from PIL import Image as PILImage
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
-
-# ── Flask app setup ────────────────────────────────────────────────────────────
-app = Flask(__name__, static_folder="static")
-CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"])
-
-# ── Config ─────────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
-GOOGLE_CLIENT_ID    = "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com"
-OPENAI_API_KEY      = os.environ.get("OPENAI_API_KEY", "")       # for DALL-E image gen
-STABILITY_API_KEY   = os.environ.get("STABILITY_API_KEY", "")    # fallback image gen
-
-UPLOAD_DIR  = Path("uploads");  UPLOAD_DIR.mkdir(exist_ok=True)
-STATIC_DIR  = Path("static");   STATIC_DIR.mkdir(exist_ok=True)
-GENERATED_DIR = STATIC_DIR / "generated"; GENERATED_DIR.mkdir(exist_ok=True)
-
-MAX_CONTEXT_MESSAGES = 20
-MAX_TOKENS_PER_FILE  = 8000        # trigger continuation if code block approaches this
-ALLOWED_ORIGINS = ["*"]
-
-# ── In-memory stores ───────────────────────────────────────────────────────────
-conversations: dict  = {}   # { conv_id: { "user_email": ..., "messages": [...], "title": ..., "updated_at": ... } }
-session_tokens: dict = {}   # { token: email }
-public_memory: list  = []   # global learned facts
-uploaded_file_context: dict = {}  # { email: [{ filename, content }] }
-
-# ── Authorised users ───────────────────────────────────────────────────────────
-CREATOR_EMAILS    = {"pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"}
-SUPERVISOR_EMAILS = {"aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"}
-
-def get_role(email: str) -> str:
-    e = email.lower()
-    if e in CREATOR_EMAILS:    return "creator"
-    if e in SUPERVISOR_EMAILS: return "supervisor"
-    return "user"
-
-# ── Auth helpers ───────────────────────────────────────────────────────────────
-def extract_bearer(req) -> str:
-    hdr = req.headers.get("Authorization", "")
-    if hdr.startswith("Bearer "): return hdr[7:]
-    return req.args.get("token", "").replace("Bearer ", "")
-
-def resolve_email_from_token(token: str) -> str | None:
-    """Return email from session token or raw Google JWT."""
-    if not token: return None
-    # 1. Check our own session store
-    if token in session_tokens: return session_tokens[token]
-    # 2. Try to decode as Google JWT (no verification — we trust our own exchange)
     try:
-        parts = token.split(".")
-        if len(parts) == 3:
-            padded = parts[1] + "=="
-            claims = json.loads(base64.urlsafe_b64decode(padded))
-            email = claims.get("email", "").lower()
-            if email: return email
-    except Exception: pass
+        from PyPDF2 import PdfReader as _PdfReader
+        _PDF_READ_SUPPORTED = True
+    except ImportError:
+        _PDF_READ_SUPPORTED = False
+
+try:
+    from fpdf import FPDF as _FPDF
+    _PDF_WRITE_SUPPORTED = True
+except ImportError:
+    _PDF_WRITE_SUPPORTED = False
+
+from flask import Flask, request, Response, jsonify, stream_with_context, send_file
+from flask_cors import CORS
+
+try:
+    from supabase import create_client as _supabase_create
+    _supabase_sdk = True
+except ImportError:
+    _supabase_sdk = False
+
+app = Flask(__name__)
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "https://prathamai.vercel.app",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5000",
+            "http://127.0.0.1:5000",
+            "*"
+        ]
+    }
+}, supports_credentials=True)
+
+# ── ENVIRONMENT ──
+GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
+OPENROUTER_API_KEY   = os.environ.get("OPENROUTER_API_KEY", "").strip()
+CEREBRAS_API_KEY     = os.environ.get("CEREBRAS_API_KEY", "").strip()
+MISTRAL_API_KEY      = os.environ.get("MISTRAL_API_KEY", "").strip()
+SUPABASE_URL         = os.environ.get("SUPABASE_URL", "https://ksroorygbrhwpnqtjbxo.supabase.co").strip()
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+GITHUB_TOKEN         = os.environ.get("GITHUB_TOKEN", "").strip()
+GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/data").strip()
+VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
+SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
+SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
+
+SUPABASE_CONFIGURED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
+
+_supabase = None
+if SUPABASE_CONFIGURED:
+    try:
+        _supabase = _supabase_create(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        print(f"[INIT] Persistent layer connected: {SUPABASE_URL}")
+    except Exception:
+        SUPABASE_CONFIGURED = False
+
+_mem_convos: dict = {}
+
+# ── GITHUB LOG PERSISTENCE ──
+_gh_sha_cache: dict = {}
+_GH_CACHE_TTL = 8
+
+def _github_repo_slug() -> str:
+    return GITHUB_REPO.replace("https://github.com/", "").strip("/")
+
+def _write_to_github_repository(target_file_path: str, contents_payload: str) -> bool:
+    if not GITHUB_TOKEN:
+        return False
+
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{target_file_path}"
+
+    sha_reference_token = None
+    existing_content = ""
+
+    cache_hit = _gh_sha_cache.get(target_file_path)
+    now_ts = time.time()
+    if cache_hit and (now_ts - cache_hit["t"]) < _GH_CACHE_TTL:
+        sha_reference_token = cache_hit["sha"]
+        existing_content = cache_hit["content"]
+    else:
+        req_lookup = urllib.request.Request(
+            endpoint_target_url,
+            headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        )
+        try:
+            with urllib.request.urlopen(req_lookup, timeout=10) as lookup_response:
+                meta_data = json.loads(lookup_response.read().decode('utf-8'))
+                sha_reference_token = meta_data.get("sha")
+                if meta_data.get("content"):
+                    existing_content = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+        except Exception:
+            pass
+
+    compiled_body_string = existing_content + contents_payload
+    encoded_binary_bytes = base64.b64encode(compiled_body_string.encode('utf-8')).decode('utf-8')
+
+    mutation_packet = {
+        "message": f"Pratham AI sync: {target_file_path}",
+        "content": encoded_binary_bytes
+    }
+    if sha_reference_token:
+        mutation_packet["sha"] = sha_reference_token
+
+    request_dispatcher = urllib.request.Request(
+        endpoint_target_url,
+        data=json.dumps(mutation_packet).encode('utf-8'),
+        headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github.v3+json"
+        },
+        method="PUT"
+    )
+    try:
+        with urllib.request.urlopen(request_dispatcher, timeout=15) as operation_result:
+            ok = operation_result.status in [200, 201]
+            if ok:
+                try:
+                    result_body = json.loads(operation_result.read().decode('utf-8'))
+                    new_sha = result_body.get("content", {}).get("sha")
+                    _gh_sha_cache[target_file_path] = {
+                        "sha": new_sha, "content": compiled_body_string, "t": time.time()
+                    }
+                except Exception:
+                    _gh_sha_cache.pop(target_file_path, None)
+            return ok
+    except Exception as exc:
+        print(f"[GITHUB][FAULT] {exc}")
+        return False
+
+# ── VIP RECOGNITION ──
+_vip_cache = {"entries": {}, "t": 0}
+_VIP_CACHE_TTL = 30
+
+def _fetch_vip_directory() -> dict:
+    now_ts = time.time()
+    if _vip_cache["entries"] and (now_ts - _vip_cache["t"]) < _VIP_CACHE_TTL:
+        return _vip_cache["entries"]
+
+    entries = {}
+    if not GITHUB_TOKEN:
+        return entries
+
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/data/vip.txt"
+    req_lookup = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req_lookup, timeout=10) as lookup_response:
+            meta_data = json.loads(lookup_response.read().decode('utf-8'))
+            if meta_data.get("content"):
+                raw_text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+                for row in raw_text.splitlines():
+                    row = row.strip()
+                    if not row or "Email:" not in row:
+                        continue
+                    parts = {}
+                    for chunk in row.split(" | "):
+                        if ":" in chunk:
+                            key, _, val = chunk.partition(":")
+                            parts[key.strip().lower()] = val.strip()
+                    email = parts.get("email", "").lower()
+                    if email:
+                        entries[email] = {
+                            "name": parts.get("name", ""),
+                            "relationship": parts.get("relation", ""),
+                            "timestamp": parts.get("timestamp", "")
+                        }
+    except Exception as exc:
+        print(f"[VIP][FETCH FAULT] {exc}")
+
+    _vip_cache["entries"] = entries
+    _vip_cache["t"] = now_ts
+    return entries
+
+def _lookup_vip(email: str):
+    if not email:
+        return None
+    return _fetch_vip_directory().get(email.lower())
+
+# ── BACKGROUND FILE GENERATION ──
+_generated_files_store: dict = {}
+_GENERATED_FILE_TTL = 3600
+
+_ZIP_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export|zip|bundle)\b.{0,20}\b(zip|bundle)\b", re.IGNORECASE)
+_PDF_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export)\b.{0,20}\bpdf\b", re.IGNORECASE)
+_FILE_BUNDLE_RE = re.compile(r"(index\.html|app\.py|app\.tsx|main\.js|style\.css|config\.json)", re.IGNORECASE)
+
+def _prune_generated_files():
+    cutoff = time.time() - _GENERATED_FILE_TTL
+    stale = [tok for tok, entry in _generated_files_store.items() if entry["t"] < cutoff]
+    for tok in stale:
+        _generated_files_store.pop(tok, None)
+
+def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
+    _prune_generated_files()
+    token = uuid.uuid4().hex
+    _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
+    return token
+
+def _parse_code_bundle(text: str) -> dict:
+    files = {}
+    current_filename = None
+    current_content = []
+
+    for line in text.split('\n'):
+        if line.strip().startswith('###') or line.strip().startswith('=='):
+            if current_filename:
+                files[current_filename] = '\n'.join(current_content).strip()
+            current_filename = line.strip().replace('###', '').replace('==', '').strip()
+            current_content = []
+        elif current_filename:
+            current_content.append(line)
+
+    if current_filename:
+        files[current_filename] = '\n'.join(current_content).strip()
+
+    return files
+
+def _build_zip_from_files(files_dict: dict) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, content in files_dict.items():
+            zf.writestr(filename, content)
+    buf.seek(0)
+    return buf.read()
+
+def _build_zip_from_response(assistant_text: str) -> bytes:
+    buf = io.BytesIO()
+    blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        if blocks:
+            for i, (lang, content) in enumerate(blocks, start=1):
+                ext = {
+                    "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
+                    "css": "css", "json": "json", "bash": "sh", "text": "txt", "tsx": "tsx", "ts": "ts"
+                }.get((lang or "text").lower(), "txt")
+                filename = f"file_{i}.{ext}"
+                zf.writestr(filename, content)
+        else:
+            zf.writestr("response.txt", assistant_text)
+    buf.seek(0)
+    return buf.read()
+
+def _build_pdf_from_response(assistant_text: str):
+    if _PDF_WRITE_SUPPORTED:
+        try:
+            pdf = _FPDF()
+            pdf.add_page()
+            pdf.set_font("Helvetica", size=11)
+
+            pdf.set_font("Helvetica", 'B', size=14)
+            pdf.cell(0, 10, "Generated Content", ln=True)
+            pdf.set_font("Helvetica", size=11)
+            pdf.ln(5)
+
+            for line in assistant_text.split("\n"):
+                safe_line = line.encode("latin-1", "replace").decode("latin-1")
+                if safe_line.strip():
+                    pdf.multi_cell(0, 6, safe_line)
+                else:
+                    pdf.ln(3)
+
+            raw_output = pdf.output(dest="S")
+            if isinstance(raw_output, str):
+                pdf_bytes = raw_output.encode("latin-1")
+            else:
+                pdf_bytes = bytes(raw_output)
+            return pdf_bytes, "generated.pdf", "application/pdf"
+        except Exception as e:
+            print(f"[PDF][ERROR] {e}")
+            return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+
+    return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+
+# ── DOWNLOAD ROUTES ──
+@app.route("/download/<token>", methods=["GET"])
+@app.route("/api/download/<token>", methods=["GET"])
+@app.route("/api/app/download/<token>", methods=["GET"])
+def download_generated_file(token):
+    entry = _generated_files_store.get(token)
+    if not entry:
+        return jsonify({"error": "This download has expired or does not exist."}), 404
+
+    try:
+        return send_file(
+            io.BytesIO(entry["bytes"]),
+            mimetype=entry["mimetype"],
+            as_attachment=True,
+            download_name=entry["filename"]
+        )
+    except Exception as e:
+        print(f"[DOWNLOAD][ERROR] {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/download-direct/<token>", methods=["GET"])
+@app.route("/api/download-direct/<token>", methods=["GET"])
+@app.route("/api/app/download-direct/<token>", methods=["GET"])
+def download_generated_file_direct(token):
+    entry = _generated_files_store.get(token)
+    if not entry:
+        return jsonify({"error": "This download has expired or does not exist."}), 404
+
+    resp = Response(entry["bytes"], mimetype=entry["mimetype"])
+    resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
+    resp.headers["Content-Type"] = entry["mimetype"]
+    resp.headers["Content-Length"] = len(entry["bytes"])
+    return resp
+
+# ── @education PDF-backed Q&A (HIDDEN FEATURE) ──
+_education_cache = {"files": {}, "listing_t": 0}
+_EDUCATION_LISTING_TTL = 120
+
+def _github_list_dir(path: str):
+    if not GITHUB_TOKEN:
+        return []
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{path}"
+    req_lookup = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req_lookup, timeout=12) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data if isinstance(data, list) else []
+    except Exception as exc:
+        print(f"[EDU][LIST FAULT] {exc}")
+        return []
+
+def _github_fetch_file_bytes(download_url: str):
+    try:
+        req = urllib.request.Request(download_url, headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read()
+    except Exception as exc:
+        print(f"[EDU][FETCH FAULT] {exc}")
+        return None
+
+def _extract_pdf_text(pdf_bytes: bytes) -> str:
+    if not _PDF_READ_SUPPORTED:
+        return ""
+    try:
+        reader = _PdfReader(io.BytesIO(pdf_bytes))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception as exc:
+        print(f"[EDU][EXTRACT FAULT] {exc}")
+        return ""
+
+def _refresh_education_library():
+    now_ts = time.time()
+    if _education_cache["files"] and (now_ts - _education_cache["listing_t"]) < _EDUCATION_LISTING_TTL:
+        return
+    entries = _github_list_dir("data/education")
+    for entry in entries:
+        if not entry.get("name", "").lower().endswith(".pdf"):
+            continue
+        sha = entry.get("sha")
+        name = entry.get("name")
+        cached = _education_cache["files"].get(name)
+        if cached and cached.get("sha") == sha:
+            continue
+        raw = _github_fetch_file_bytes(entry.get("download_url"))
+        if raw is None:
+            continue
+        text = _extract_pdf_text(raw)
+        _education_cache["files"][name] = {"sha": sha, "text": text}
+    _education_cache["listing_t"] = now_ts
+
+def _find_best_education_excerpt(question: str):
+    _refresh_education_library()
+    if not _education_cache["files"]:
+        return None
+
+    question_words = set(re.findall(r"[a-zA-Z]{3,}", question.lower()))
+    if not question_words:
+        return None
+
+    best = {"score": 0, "filename": None, "excerpt": ""}
+    for filename, data in _education_cache["files"].items():
+        text = data.get("text", "")
+        if not text:
+            continue
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        for para in paragraphs:
+            para_words = set(re.findall(r"[a-zA-Z]{3,}", para.lower()))
+            score = len(question_words & para_words)
+            if score > best["score"]:
+                best = {"score": score, "filename": filename, "excerpt": para[:1800]}
+    return best if best["filename"] else None
+
+# ── AUTO @web SEARCH ──
+def _web_search_snippets(query: str, max_results: int = 4):
+    try:
+        encoded = urllib.parse.quote(query)
+        req = urllib.request.Request(
+            f"https://html.duckduckgo.com/html/?q={encoded}",
+            headers={"User-Agent": "Mozilla/5.0 (PrathamAI Search Agent)"}
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            html_body = resp.read().decode('utf-8', errors='ignore')
+        titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html_body, re.DOTALL)
+        snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html_body, re.DOTALL)
+        clean = lambda s: re.sub('<[^<]+?>', '', s).strip()
+        results = []
+        for i in range(min(max_results, len(titles))):
+            title = clean(titles[i])
+            snippet = clean(snippets[i]) if i < len(snippets) else ""
+            if title:
+                results.append(f"- {title}: {snippet}")
+        return results
+    except Exception as exc:
+        print(f"[WEB][SEARCH FAULT] {exc}")
+        return []
+
+def _get_token():
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:].strip()
+    return None
+
+def _decode_google_claims(token: str):
+    try:
+        payload_chunk = token.split('.')[1]
+        padded_chunk = payload_chunk + '=' * (-len(payload_chunk) % 4)
+        return json.loads(base64.b64decode(padded_chunk).decode('utf-8'))
+    except Exception:
+        return None
+
+# ── SESSION TOKENS ──
+_SESSION_TOKEN_PREFIX = "PAI1"
+
+def _issue_session_token(user: dict) -> str:
+    payload = {
+        "sub": user.get("sub"),
+        "email": user.get("email"),
+        "role": user.get("role", "standard"),
+        "full_name": (user.get("user_metadata") or {}).get("full_name"),
+        "picture": (user.get("user_metadata") or {}).get("picture"),
+        "exp": int(time.time()) + (SESSION_TOKEN_TTL_DAYS * 86400)
+    }
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode('utf-8')).decode('utf-8').rstrip('=')
+    signature = hmac.new(SESSION_SECRET.encode('utf-8'), payload_b64.encode('utf-8'), hashlib.sha256).hexdigest()
+    return f"{_SESSION_TOKEN_PREFIX}.{payload_b64}.{signature}"
+
+def _verify_session_token(token: str):
+    try:
+        prefix, payload_b64, signature = token.split('.')
+        if prefix != _SESSION_TOKEN_PREFIX:
+            return None
+        expected_sig = hmac.new(SESSION_SECRET.encode('utf-8'), payload_b64.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_sig, signature):
+            return None
+        padded = payload_b64 + '=' * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode('utf-8'))
+        if payload.get("exp", 0) < time.time():
+            return None
+        return {
+            "sub": payload.get("sub"),
+            "email": payload.get("email"),
+            "role": payload.get("role", "standard"),
+            "user_metadata": {"full_name": payload.get("full_name"), "picture": payload.get("picture")}
+        }
+    except Exception:
+        return None
+
+def _verify_token(token: str):
+    if not token or token == "dev-session-active-token":
+        return {
+            "sub": "dev-user",
+            "email": "pratham31sinha@gmail.com",
+            "role": "creator",
+            "user_metadata": {"full_name": "Dev Master Creator"}
+        }
+
+    if token.startswith(f"{_SESSION_TOKEN_PREFIX}."):
+        session_user = _verify_session_token(token)
+        if session_user:
+            return session_user
+        return None
+
+    if len(token.split('.')) == 3:
+        claims = _decode_google_claims(token)
+        if claims and ("accounts.google.com" in claims.get("iss", "") or "google.com" in claims.get("iss", "")):
+            exp = claims.get("exp", 0)
+            if exp and time.time() > exp:
+                return None
+            user_email = claims.get("email", "").lower()
+            return {
+                "sub": claims.get("sub"),
+                "email": user_email,
+                "role": "standard",
+                "user_metadata": {"full_name": claims.get("name"), "picture": claims.get("picture")}
+            }
+
+    if not SUPABASE_CONFIGURED or _supabase is None:
+        return {
+            "sub": "dev-user",
+            "email": "dev@local",
+            "role": "standard",
+            "user_metadata": {"full_name": "Fallback Dev Node Profile"}
+        }
+    try:
+        resp = _supabase.auth.get_user(token)
+        if resp and resp.user:
+            return {
+                "sub": resp.user.id,
+                "email": resp.user.email.lower(),
+                "role": "standard",
+                "user_metadata": resp.user.user_metadata or {}
+            }
+    except Exception:
+        pass
     return None
 
 def require_auth(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        token = extract_bearer(request)
-        email = resolve_email_from_token(token)
-        if not email:
-            return jsonify({"error": "Unauthorized"}), 401
-        request.user_email = email
+        if request.method == "OPTIONS":
+            return _cors_preflight()
+        token = _get_token()
+        user = _verify_token(token)
+        if not user:
+            return jsonify({"error": "Session expired or invalid. Please sign in again."}), 401
+        request.current_user = user
         return f(*args, **kwargs)
     return wrapper
 
-# ── SSE helpers ───────────────────────────────────────────────────────────────
-def sse(payload: dict) -> str:
+# ── CONTENT SAFETY GUARD ──
+_BLOCKED_PATTERNS = [
+    r"\bmake\s+a\s+bomb\b", r"\bbuild\s+a\s+bomb\b", r"\bhow\s+to\s+hack\b",
+    r"\bchild\s+(sexual|porn|abuse)\b", r"\bkill\s+(myself|someone|him|her|them)\b",
+    r"\bsynthesi[sz]e\s+(meth|drug|explosive)\b", r"\bmake\s+a\s+weapon\b",
+    r"\bcredit\s+card\s+(number|dump|generator)\b", r"\bddos\b", r"\bransomware\b",
+]
+_BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
+
+def _is_flagged_message(message: str) -> bool:
+    return bool(_BLOCKED_REGEX.search(message or ""))
+
+# ── PUBLIC MEMORY ──
+_TEACHING_INTENT_RE = re.compile(
+    r"\b(remember that|remember this|note this|note that|save this|learn this|keep in mind|"
+    r"for future reference|always do|from now on|don't forget|never forget)\b",
+    re.IGNORECASE
+)
+
+def _maybe_capture_public_teaching(user_email: str, message: str):
+    if not _TEACHING_INTENT_RE.search(message):
+        return
+    entry = (
+        f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
+        f"Taught by: {user_email}\n"
+        f"Content: {message}\n"
+        f"{'=' * 80}\n"
+    )
+    _write_to_github_repository("public_data.txt", entry)
+
+def _extract_public_memories() -> str:
+    if not GITHUB_TOKEN:
+        return "No memories stored yet."
+
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/public_data.txt"
+    req_lookup = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req_lookup, timeout=10) as lookup_response:
+            meta_data = json.loads(lookup_response.read().decode('utf-8'))
+            if meta_data.get("content"):
+                return base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+    except Exception as e:
+        print(f"[MEMORY][FETCH] {e}")
+    return "No memories stored yet."
+
+# ── LLM MULTI-PROVIDER FAILOVER ──
+_provider_cooldowns: dict = {}
+COOLDOWN_SECONDS = 60
+
+def _is_cooling(name: str) -> bool:
+    return time.time() < _provider_cooldowns.get(name, 0)
+
+def _cool(name: str):
+    _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
+
+SYSTEM_PROMPT = (
+    "You are Pratham AI, an elite software engineering system designed to produce production-ready "
+    "software, not prototypes or templates. Core principles: never return placeholder code, never "
+    "leave empty methods or TODO comments, never generate mock implementations unless explicitly "
+    "requested. Every feature must exist in working code. "
+    "\n\n"
+    "**IMAGE GENERATION:**\n"
+    "When user asks to 'make img', 'generate image', 'draw', 'create picture', etc.:\n"
+    "- The system will automatically generate the image using Pollinations AI\n"
+    "- Just acknowledge the request briefly\n"
+    "\n"
+    "**FILE GENERATION WITH ZIP/PDF:**\n"
+    "When user asks to 'make zip', 'create pdf', 'generate bundle', etc.:\n"
+    "- The system will execute Python code to generate the file\n"
+    "- Just acknowledge the request briefly\n"
+    "\n"
+    "**FOR ALL OTHER REQUESTS:**\n"
+    "Respond normally with full explanations, code examples, and detailed answers.\n"
+    "Never help with illegal activity, weapons, malware, or seriously harmful content.\n"
+)
+
+# ── IMAGE GENERATION ──
+_IMAGE_INTENT_RE = re.compile(
+    r"^/image\s+(.+)$|mak(e|ing)?\s+(an?\s+)?(img|image|picture|photo|art|drawing|illustration|man|woman|person|character).{0,50}(?:of|showing|depicting|with)?\s*(.*)$|\b(generate|create|draw|make|paint|design)\b.{0,20}\b(image|picture|photo|art|illustration|img|drawing|portrait)\b",
+    re.IGNORECASE
+)
+
+def _detect_image_prompt(message: str):
+    match = re.search(r"^/image\s+(.+)$", message.strip(), re.IGNORECASE)
+    if match:
+        return match.group(1).strip(" .!")
+
+    if re.search(r"\b(mak|generat|creat|draw|paint|design|illustrat)\w+.{0,30}\b(img|image|picture|photo|art|drawing|portrait|man|woman|person)\b", message, re.IGNORECASE):
+        prompt_match = re.search(
+            r"(?:of|showing|depicting|for|with|:)\s*(.+?)(?:\.|$|\?|!)",
+            message,
+            re.IGNORECASE
+        )
+        if prompt_match:
+            return prompt_match.group(1).strip(" .!?")
+
+        descriptive_match = re.search(
+            r"\b(?:img|image|picture|photo|art|drawing|portrait|man|woman|person)\b\s+(.+?)(?:\.|$|\?|!)",
+            message,
+            re.IGNORECASE
+        )
+        if descriptive_match:
+            return descriptive_match.group(1).strip(" .!?")
+
+        words = re.findall(r"\b[a-z]+\b", message.lower())
+        if words:
+            filtered = [w for w in words if w not in ['make', 'img', 'image', 'of', 'a', 'an', 'the', 'in', 'with', 'picture', 'photo', 'art', 'drawing']]
+            if filtered:
+                return " ".join(filtered[:5])
+
+    return None
+
+def _pollinations_image_url(prompt_text: str) -> str:
+    if not prompt_text:
+        prompt_text = "random beautiful scene"
+    encoded = urllib.parse.quote(prompt_text)
+    return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
+
+def _detect_file_bundle_intent(message: str) -> bool:
+    return bool(re.search(r"###\s+\w+\.|==\s+\w+\.", message))
+
+def _detect_create_files_intent(message: str) -> bool:
+    return bool(re.search(r"\b(make|create|generate|turn|convert|zip|bundle|create files|make files)\b.{0,30}\b(files|zip|bundle|archive)\b", message, re.IGNORECASE))
+
+def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
-def sse_activity(text: str) -> str:
-    return sse({"type": "activity", "text": text})
+def _stream_openai_compatible(url, api_key, model, messages):
+    body = json.dumps({
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "max_tokens": 8192,
+        "temperature": 0.5,
+    }).encode()
 
-def sse_token(text: str) -> str:
-    return sse({"type": "token", "text": text})
-
-def sse_image_start(prompt: str) -> str:
-    return sse({"type": "image_start", "prompt": prompt})
-
-def sse_image(url: str, prompt: str) -> str:
-    return sse({"type": "image", "url": url, "prompt": prompt})
-
-def sse_file_ready(url: str, filename: str) -> str:
-    return sse({"type": "file_ready", "url": url, "filename": filename})
-
-def sse_terminal(ordinal: int, returncode: int, stdout: str, stderr: str) -> str:
-    return sse({"type": "terminal_output", "ordinal": ordinal, "returncode": returncode, "stdout": stdout, "stderr": stderr})
-
-def sse_complete(needs_continuation: bool = False) -> str:
-    return sse({"type": "complete", "needs_continuation": needs_continuation})
-
-def sse_metadata(conv_id: str) -> str:
-    return sse({"type": "metadata", "conversation_id": conv_id})
-
-# ── File generation helpers ───────────────────────────────────────────────────
-def make_pdf(text_content: str, filename: str) -> Path:
-    """Generate a real PDF file using ReportLab."""
-    out_path = GENERATED_DIR / filename
-    if REPORTLAB_AVAILABLE:
-        c = rl_canvas.Canvas(str(out_path), pagesize=letter)
-        w, h = letter
-        margin = inch
-        y = h - margin
-        c.setFont("Helvetica", 11)
-        for line in text_content.split('\n'):
-            if y < margin:
-                c.showPage()
-                c.setFont("Helvetica", 11)
-                y = h - margin
-            # Word-wrap long lines
-            while len(line) > 90:
-                c.drawString(margin, y, line[:90])
-                line = line[90:]
-                y -= 16
-                if y < margin:
-                    c.showPage()
-                    c.setFont("Helvetica", 11)
-                    y = h - margin
-            c.drawString(margin, y, line)
-            y -= 16
-        c.save()
-    else:
-        # Fallback: write as plain text with .pdf extension
-        out_path.write_text(text_content, encoding='utf-8')
-    return out_path
-
-def make_zip(files: dict) -> Path:
-    """
-    Create a ZIP file.
-    files = { "filename.ext": "content string", ... }
-    """
-    ts = int(time.time())
-    zip_path = GENERATED_DIR / f"bundle_{ts}.zip"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name, content in files.items():
-            zf.writestr(name, content)
-    buf.seek(0)
-    zip_path.write_bytes(buf.read())
-    return zip_path
-
-def make_image_placeholder(prompt: str) -> Path:
-    """Generate a placeholder image when no API key is available."""
-    ts = int(time.time())
-    img_path = GENERATED_DIR / f"image_{ts}.png"
-    if PIL_AVAILABLE:
-        from PIL import ImageDraw, ImageFont
-        img = PILImage.new('RGB', (512, 512), color=(194, 97, 63))
-        draw = ImageDraw.Draw(img)
-        draw.text((20, 240), f"🎨 {prompt[:40]}", fill=(255, 255, 255))
-        img.save(str(img_path))
-    else:
-        # Minimal 1x1 PNG bytes
-        png_bytes = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg=="
-        )
-        img_path.write_bytes(png_bytes)
-    return img_path
-
-async def generate_image_dalle(prompt: str) -> str | None:
-    """Call OpenAI DALL-E 3 and return public URL."""
-    if not OPENAI_API_KEY: return None
-    try:
-        resp = http_requests.post(
-            "https://api.openai.com/v1/images/generations",
-            headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
-            json={"model": "dall-e-3", "prompt": prompt, "n": 1, "size": "1024x1024"},
-            timeout=60
-        )
-        data = resp.json()
-        return data["data"][0]["url"]
-    except Exception:
-        return None
-
-def generate_image_stability(prompt: str) -> str | None:
-    """Call Stability AI and return a local URL."""
-    if not STABILITY_API_KEY: return None
-    try:
-        resp = http_requests.post(
-            "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
-            headers={"Authorization": f"Bearer {STABILITY_API_KEY}", "Content-Type": "application/json", "Accept": "application/json"},
-            json={"text_prompts": [{"text": prompt}], "cfg_scale": 7, "height": 1024, "width": 1024, "steps": 30, "samples": 1},
-            timeout=90
-        )
-        data = resp.json()
-        if "artifacts" in data and data["artifacts"]:
-            img_b64 = data["artifacts"][0]["base64"]
-            ts = int(time.time())
-            img_path = GENERATED_DIR / f"image_{ts}.png"
-            img_path.write_bytes(base64.b64decode(img_b64))
-            return f"/static/generated/{img_path.name}"
-    except Exception: pass
-    return None
-
-# ── Intent / tool detection ───────────────────────────────────────────────────
-IMG_PATTERNS = [
-    r'\b(generate|create|make|draw|render|paint|show|produce)\s+(a\s+|an\s+|the\s+)?(image|photo|picture|illustration|artwork|painting|drawing|portrait|scene|wallpaper|thumbnail)\b',
-    r'\b(image|picture|photo)\s+of\b',
-    r'\bvisualize\b',
-    r'\btext.?to.?image\b',
-]
-IMG_RE = re.compile('|'.join(IMG_PATTERNS), re.IGNORECASE)
-
-PDF_PATTERNS = [
-    r'\b(generate|create|make|write|produce|export|save)\s+(a\s+|an\s+|the\s+)?(pdf|PDF)\b',
-    r'\bpdf\s+(document|report|file|version)\b',
-    r'\bexport\s+to\s+pdf\b',
-    r'\bsave\s+as\s+pdf\b',
-]
-PDF_RE = re.compile('|'.join(PDF_PATTERNS), re.IGNORECASE)
-
-ZIP_PATTERNS = [
-    r'\b(generate|create|make|build|package|bundle|zip|compress)\s+(a\s+|an\s+|the\s+)?(zip|ZIP|archive|bundle|package)\b',
-    r'\bzip\s+(file|archive|folder)\b',
-    r'\bpackage\s+(all|the|it|them|files|code)\b',
-    r'\bbundle\s+(all|the|it|them|files|code)\b',
-]
-ZIP_RE = re.compile('|'.join(ZIP_PATTERNS), re.IGNORECASE)
-
-CODE_EXEC_PATTERNS = [
-    r'\b(run|execute|eval|compute|calculate|test)\s+(this|the|my)?\s*(code|script|snippet|python|program)\b',
-    r'\brun\s+it\b',
-]
-CODE_EXEC_RE = re.compile('|'.join(CODE_EXEC_PATTERNS), re.IGNORECASE)
-
-WEB_PATTERNS = [
-    r'\b(search|lookup|find|google|check|look up)\b',
-    r'\bwhat.s\s+happening\b',
-    r'\blatest\b',
-    r'\bcurrent(ly)?\b',
-    r'\btoday\b',
-    r'\brecent\b',
-    r'\bnews\b',
-    r'\b20(24|25)\b',
-]
-WEB_RE = re.compile('|'.join(WEB_PATTERNS), re.IGNORECASE)
-
-LEARN_PATTERNS = [
-    r'\b(remember|learn|save|note|memorize)\s+(that|this|it)?\b',
-    r'\btake note\b',
-    r'\bkeep in mind\b',
-]
-LEARN_RE = re.compile('|'.join(LEARN_PATTERNS), re.IGNORECASE)
-
-def detect_image_prompt(message: str) -> str | None:
-    """Extract image generation prompt from message if detected."""
-    if IMG_RE.search(message):
-        # Try to extract the subject
-        clean = re.sub(r'\b(generate|create|make|draw|render|paint|show|produce|please|can you|could you)\b', '', message, flags=re.IGNORECASE)
-        clean = re.sub(r'\b(a |an |the |image of |picture of |photo of |illustration of )\b', '', clean, flags=re.IGNORECASE)
-        return clean.strip() or message
-    return None
-
-def detect_pdf_request(message: str) -> bool:
-    return bool(PDF_RE.search(message))
-
-def detect_zip_request(message: str) -> bool:
-    return bool(ZIP_RE.search(message))
-
-def detect_code_exec_request(message: str) -> bool:
-    return bool(CODE_EXEC_RE.search(message))
-
-def detect_web_search(message: str) -> bool:
-    return bool(WEB_RE.search(message))
-
-def detect_learn_request(message: str) -> bool:
-    return bool(LEARN_RE.search(message))
-
-# ── Web search (DuckDuckGo scrape) ────────────────────────────────────────────
-def web_search(query: str, max_results: int = 4) -> str:
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        url = f"https://api.duckduckgo.com/?q={http_requests.utils.quote(query)}&format=json&no_redirect=1&no_html=1"
-        r = http_requests.get(url, headers=headers, timeout=8)
-        data = r.json()
-        results = []
-        if data.get("AbstractText"):
-            results.append(f"Summary: {data['AbstractText']}")
-        for topic in data.get("RelatedTopics", [])[:max_results]:
-            if isinstance(topic, dict) and topic.get("Text"):
-                results.append(f"• {topic['Text']}")
-        return "\n".join(results) if results else "No results found."
-    except Exception as e:
-        return f"Web search unavailable: {e}"
-
-# ── Code execution ─────────────────────────────────────────────────────────────
-def execute_python_code(code: str, timeout: int = 15) -> tuple[int, str, str]:
-    """Execute Python code in a temp file. Returns (returncode, stdout, stderr)."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(code)
-        tmp_path = f.name
-    try:
-        result = subprocess.run(
-            ["python3", tmp_path],
-            capture_output=True, text=True, timeout=timeout,
-            cwd=str(GENERATED_DIR)
-        )
-        return result.returncode, result.stdout[:2000], result.stderr[:2000]
-    except subprocess.TimeoutExpired:
-        return 1, "", "Execution timed out (15s limit)."
-    except Exception as e:
-        return 1, "", str(e)
-    finally:
-        try: os.unlink(tmp_path)
-        except: pass
-
-def execute_bash_code(code: str, timeout: int = 15) -> tuple[int, str, str]:
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
-        f.write(code)
-        tmp_path = f.name
-    try:
-        result = subprocess.run(
-            ["bash", tmp_path],
-            capture_output=True, text=True, timeout=timeout,
-            cwd=str(GENERATED_DIR)
-        )
-        return result.returncode, result.stdout[:2000], result.stderr[:2000]
-    except subprocess.TimeoutExpired:
-        return 1, "", "Execution timed out."
-    except Exception as e:
-        return 1, "", str(e)
-    finally:
-        try: os.unlink(tmp_path)
-        except: pass
-
-# ── Extract code blocks from AI response ─────────────────────────────────────
-def extract_code_blocks(text: str) -> list[dict]:
-    """Return list of {lang, code} from fenced code blocks."""
-    blocks = []
-    pattern = re.compile(r'```(\w+)?\n(.*?)```', re.DOTALL)
-    for m in pattern.finditer(text):
-        lang = (m.group(1) or 'text').lower()
-        code = m.group(2)
-        blocks.append({'lang': lang, 'code': code})
-    return blocks
-
-# ── System prompt builder ─────────────────────────────────────────────────────
-def build_system_prompt(user_email: str, web_context: str = "", file_context: str = "") -> str:
-    role = get_role(user_email)
-    memory_str = ""
-    if public_memory:
-        memory_str = "\n\nPublic Memory (things you've been taught):\n" + "\n".join(f"- {m}" for m in public_memory[-20:])
-
-    return f"""You are Pratham AI, an advanced AI assistant that can:
-1. Answer questions with deep knowledge and reasoning
-2. Generate complete, production-ready code files (HTML, Python, JS, CSS, etc.)
-3. Create essays, reports, documents
-4. Analyze uploaded files and images
-5. Perform multi-step reasoning
-
-USER ROLE: {role}
-USER EMAIL: {user_email}
-
-IMPORTANT RULES:
-- When asked to create/generate a file (HTML, Python, JS, PDF content, etc.), ALWAYS provide the COMPLETE file content in a properly fenced code block
-- Use ```html for HTML, ```python for Python, ```javascript for JS, etc.
-- NEVER truncate or abbreviate code — write the entire file
-- If a file is very large (>300 lines), still write it completely. Do not say "continue" or abbreviate
-- For PDF requests: write the full text content in a ```text code block and the backend will convert it to a real PDF
-- For ZIP requests: write each file in separate labeled code blocks and the backend will bundle them
-- For image requests: describe what you want clearly (the backend handles actual generation)
-- Be creative, thorough, and produce genuinely useful output
-- You have access to web search results and file context when provided
-
-CAPABILITIES YOU SHOULD KNOW ABOUT:
-- The backend can execute Python code blocks automatically
-- The backend converts ```text or ```markdown blocks into real PDFs when PDF is requested
-- The backend bundles multiple code blocks into ZIP files when requested
-- Image generation is handled separately by the backend image API
-{memory_str}{web_context}{file_context}"""
-
-# ── Main streaming chat endpoint ───────────────────────────────────────────────
-@app.route("/api/app/chat-stream", methods=["POST"])
-@app.route("/api/chat-stream", methods=["POST"])
-@app.route("/chat-stream", methods=["POST"])
-@require_auth
-def chat_stream():
-    data = request.get_json(silent=True) or {}
-    user_message: str = data.get("message", "").strip()
-    conv_id: str = data.get("conversation_id") or str(uuid.uuid4())
-
-    if not user_message:
-        return jsonify({"error": "Empty message"}), 400
-
-    user_email = request.user_email
-
-    # Get or create conversation
-    if conv_id not in conversations:
-        conversations[conv_id] = {
-            "user_email": user_email,
-            "messages": [],
-            "title": user_message[:60],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-    conv = conversations[conv_id]
-    conv["updated_at"] = datetime.now(timezone.utc).isoformat()
-
-    def generate() -> Generator[str, None, None]:
-        # 1. Send metadata first
-        yield sse_metadata(conv_id)
-
-        # 2. Detect intents
-        wants_image  = detect_image_prompt(user_message)
-        wants_pdf    = detect_pdf_request(user_message)
-        wants_zip    = detect_zip_request(user_message)
-        wants_exec   = detect_code_exec_request(user_message)
-        wants_web    = detect_web_search(user_message)
-        wants_learn  = detect_learn_request(user_message)
-
-        # 3. Handle learning
-        if wants_learn:
-            fact = re.sub(r'\b(remember|learn|save|note|memorize|that|this|please)\b', '', user_message, flags=re.IGNORECASE).strip()
-            if fact:
-                public_memory.append(f"[{user_email}]: {fact}")
-                yield sse_activity("💾 Saved to memory")
-
-        # 4. Web search
-        web_context = ""
-        if wants_web:
-            yield sse_activity("🌐 Searching the web...")
-            results = web_search(user_message)
-            web_context = f"\n\nWeb Search Results for '{user_message}':\n{results}"
-            yield sse_activity("✓ Web search complete")
-
-        # 5. Handle image generation (before AI response)
-        if wants_image:
-            prompt = wants_image
-            yield sse_image_start(prompt)
-            yield sse_activity(f"🎨 Generating image: {prompt[:40]}...")
-
-            image_url = None
-            # Try DALL-E first
-            if OPENAI_API_KEY:
-                import asyncio
-                try:
-                    loop = asyncio.new_event_loop()
-                    image_url = loop.run_until_complete(generate_image_dalle(prompt))
-                    loop.close()
-                except Exception: pass
-
-            # Try Stability AI
-            if not image_url and STABILITY_API_KEY:
-                image_url = generate_image_stability(prompt)
-
-            # Fallback: placeholder
-            if not image_url:
-                placeholder_path = make_image_placeholder(prompt)
-                image_url = f"/static/generated/{placeholder_path.name}"
-
-            yield sse_image(image_url, prompt)
-            yield sse_activity("✓ Image ready")
-
-        # 6. Build file context
-        file_context = ""
-        if user_email in uploaded_file_context and uploaded_file_context[user_email]:
-            parts = []
-            for fc in uploaded_file_context[user_email][-3:]:
-                parts.append(f"\n--- File: {fc['filename']} ---\n{fc['content'][:3000]}")
-            file_context = "\n\nAttached file context:" + "".join(parts)
-
-        # 7. Build messages for Claude
-        system = build_system_prompt(user_email, web_context, file_context)
-        history = conv["messages"][-MAX_CONTEXT_MESSAGES:]
-
-        # Add intent hints to message
-        enhanced_message = user_message
-        if wants_pdf:
-            enhanced_message += "\n\n[SYSTEM HINT: User wants a PDF. Generate the full content in a ```text code block. The backend will convert it to a real PDF file automatically.]"
-        if wants_zip:
-            enhanced_message += "\n\n[SYSTEM HINT: User wants a ZIP bundle. Write each file as a separate named code block. The backend will zip them all.]"
-        if wants_exec:
-            enhanced_message += "\n\n[SYSTEM HINT: User wants code executed. Write executable Python in a ```python code block. The backend will run it and show output.]"
-
-        messages = history + [{"role": "user", "content": enhanced_message}]
-
-        # 8. Stream from Claude
-        full_response = ""
-        if not ANTHROPIC_AVAILABLE or not ANTHROPIC_API_KEY:
-            # Fallback mock response
-            yield sse_activity("⚠ No AI API configured — using mock")
-            mock = f"I received your message: '{user_message}'\n\nThis is a placeholder response. Please configure ANTHROPIC_API_KEY to enable real AI responses."
-            for word in mock.split(" "):
-                yield sse_token(word + " ")
-                full_response += word + " "
-                time.sleep(0.02)
-        else:
-            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-            yield sse_activity("🤔 Thinking...")
-            try:
-                with client.messages.stream(
-                    model="claude-opus-4-5",
-                    max_tokens=8192,
-                    system=system,
-                    messages=messages
-                ) as stream:
-                    for text_chunk in stream.text_stream:
-                        yield sse_token(text_chunk)
-                        full_response += text_chunk
-            except anthropic.APIError as e:
-                error_msg = f"\n\n[API Error: {str(e)}]"
-                yield sse_token(error_msg)
-                full_response += error_msg
-
-        # 9. Post-processing: extract and handle code blocks
-        code_blocks = extract_code_blocks(full_response)
-        needs_continuation = False
-
-        if code_blocks:
-            yield sse_activity("⚙ Processing generated files...")
-
-            # Handle PDF
-            if wants_pdf:
-                for i, block in enumerate(code_blocks):
-                    if block['lang'] in ('text', 'markdown', 'md', 'txt'):
-                        yield sse_activity(f"📄 Creating PDF {i+1}...")
-                        ts = int(time.time())
-                        pdf_filename = f"document_{ts}.pdf"
-                        try:
-                            pdf_path = make_pdf(block['code'], pdf_filename)
-                            yield sse_file_ready(f"/static/generated/{pdf_filename}", pdf_filename)
-                            yield sse_activity(f"✓ PDF ready: {pdf_filename}")
-                        except Exception as ex:
-                            yield sse_activity(f"⚠ PDF error: {ex}")
-
-            # Handle ZIP
-            if wants_zip:
-                yield sse_activity("📦 Bundling files into ZIP...")
-                zip_files = {}
-                for i, block in enumerate(code_blocks):
-                    ext_map = {'html':'index.html','python':'script.py','py':'script.py','javascript':'script.js',
-                               'js':'script.js','css':'style.css','json':'data.json','bash':'run.sh','sh':'run.sh',
-                               'text':'content.txt','txt':'content.txt','markdown':'README.md','md':'README.md'}
-                    base_name = ext_map.get(block['lang'], f"file_{i+1}.txt")
-                    if base_name in zip_files:
-                        name_parts = base_name.rsplit('.', 1)
-                        base_name = f"{name_parts[0]}_{i+1}.{name_parts[1]}"
-                    zip_files[base_name] = block['code']
-                if zip_files:
-                    try:
-                        zip_path = make_zip(zip_files)
-                        yield sse_file_ready(f"/static/generated/{zip_path.name}", zip_path.name)
-                        yield sse_activity(f"✓ ZIP ready: {zip_path.name} ({len(zip_files)} files)")
-                    except Exception as ex:
-                        yield sse_activity(f"⚠ ZIP error: {ex}")
-
-            # Handle code execution
-            if wants_exec or detect_code_exec_request(full_response):
-                for i, block in enumerate(code_blocks):
-                    if block['lang'] in ('python', 'py'):
-                        yield sse_activity(f"🔧 Executing Python block {i+1}...")
-                        rc, stdout, stderr = execute_python_code(block['code'])
-                        yield sse_terminal(i+1, rc, stdout, stderr)
-                        yield sse_activity(f"{'✓' if rc==0 else '⚠'} Execution complete (exit {rc})")
-                    elif block['lang'] in ('bash', 'sh', 'shell'):
-                        yield sse_activity(f"🔧 Executing shell block {i+1}...")
-                        rc, stdout, stderr = execute_bash_code(block['code'])
-                        yield sse_terminal(i+1, rc, stdout, stderr)
-
-        # Check if response was cut short (crude heuristic)
-        if len(full_response) > 7000 and not full_response.rstrip().endswith('```'):
-            needs_continuation = True
-
-        # 10. Save conversation
-        conv["messages"].append({"role": "user", "content": user_message})
-        conv["messages"].append({"role": "assistant", "content": full_response})
-        if len(conv["messages"]) > MAX_CONTEXT_MESSAGES * 2:
-            conv["messages"] = conv["messages"][-(MAX_CONTEXT_MESSAGES * 2):]
-
-        yield sse_complete(needs_continuation)
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
+    req = urllib.request.Request(
+        url,
+        data=body,
         headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        }
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=25) as resp:
+        for raw_line in resp:
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if not line.startswith("data: "):
+                continue
+            payload_str = line[6:]
+            if payload_str == "[DONE]":
+                break
+            try:
+                payload = json.loads(payload_str)
+                token = payload["choices"][0].get("delta", {}).get("content", "")
+                if token:
+                    yield _sse({"type": "token", "text": token})
+            except Exception:
+                continue
+
+def _stream_groq(messages):
+    if not GROQ_API_KEY or _is_cooling("groq"):
+        raise RuntimeError("Groq unavailable or cooling.")
+    yield from _stream_openai_compatible(
+        "https://api.groq.com/openai/v1/chat/completions",
+        GROQ_API_KEY, "llama-3.3-70b-versatile", messages
     )
 
-# ── Auth endpoints ─────────────────────────────────────────────────────────────
-@app.route("/api/app/auth/exchange", methods=["POST"])
-@app.route("/api/auth/exchange", methods=["POST"])
-@app.route("/auth/exchange", methods=["POST"])
+def _stream_openrouter(messages):
+    if not OPENROUTER_API_KEY or _is_cooling("openrouter"):
+        raise RuntimeError("OpenRouter unavailable or cooling.")
+    yield from _stream_openai_compatible(
+        "https://openrouter.ai/api/v1/chat/completions",
+        OPENROUTER_API_KEY, "meta-llama/llama-3.3-70b-instruct", messages
+    )
+
+def _stream_cerebras(messages):
+    if not CEREBRAS_API_KEY or _is_cooling("cerebras"):
+        raise RuntimeError("Cerebras unavailable or cooling.")
+    yield from _stream_openai_compatible(
+        "https://api.cerebras.ai/v1/chat/completions",
+        CEREBRAS_API_KEY, "llama3.3-70b", messages
+    )
+
+def _stream_mistral(messages):
+    if not MISTRAL_API_KEY or _is_cooling("mistral"):
+        raise RuntimeError("Mistral unavailable or cooling.")
+    yield from _stream_openai_compatible(
+        "https://api.mistral.ai/v1/chat/completions",
+        MISTRAL_API_KEY, "mistral-large-latest", messages
+    )
+
+_PROVIDER_CHAIN = [
+    ("groq", _stream_groq),
+    ("openrouter", _stream_openrouter),
+    ("cerebras", _stream_cerebras),
+    ("mistral", _stream_mistral),
+]
+
+def _do_stream(messages):
+    any_token_yielded = False
+    for name, fn in _PROVIDER_CHAIN:
+        try:
+            for chunk in fn(messages):
+                any_token_yielded = True
+                yield chunk
+            if any_token_yielded:
+                yield _sse({"type": "complete"})
+                return
+        except Exception as exc:
+            print(f"[FAILOVER] {name} dropped: {exc}")
+            _cool(name)
+            continue
+
+    yield _sse({
+        "type": "token",
+        "text": "All model providers are temporarily unavailable. Please check your API keys or try again shortly."
+    })
+    yield _sse({"type": "complete"})
+
+# ── DATA ──
+def _user_id():
+    return getattr(request, "current_user", {}).get("sub", "anonymous")
+
+def _user_email():
+    return getattr(request, "current_user", {}).get("email", "anonymous_user@local.domain")
+
+def _get_convo(conv_id):
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            r = _supabase.table("conversations").select("*").eq("id", conv_id).single().execute()
+            return r.data
+        except Exception:
+            pass
+    return _mem_convos.get(conv_id)
+
+def _save_convo(conv):
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            _supabase.table("conversations").upsert(conv).execute()
+            return
+        except Exception:
+            pass
+    _mem_convos[conv["id"]] = conv
+
+def _list_convos(user_id):
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            r = _supabase.table("conversations").select("id,title,pinned,created_at,updated_at").eq("user_id", user_id).order("updated_at", desc=True).execute()
+            return r.data or []
+        except Exception:
+            pass
+    return [
+        {"id": v["id"], "title": v.get("title", "Untitled"), "pinned": v.get("pinned", False),
+         "created_at": v.get("created_at"), "updated_at": v.get("updated_at")}
+        for v in _mem_convos.values() if v.get("user_id") == user_id
+    ]
+
+def _get_messages(conv_id):
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            r = _supabase.table("messages").select("role,content,created_at").eq("conversation_id", conv_id).order("created_at").execute()
+            return r.data or []
+        except Exception:
+            pass
+    return _mem_convos.get(conv_id, {}).get("messages", [])
+
+def _append_message(conv_id, role, content):
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            _supabase.table("messages").insert({
+                "id": str(uuid.uuid4()), "conversation_id": conv_id, "role": role,
+                "content": content, "created_at": datetime.now(timezone.utc).isoformat()
+            }).execute()
+        except Exception:
+            pass
+
+    conv = _mem_convos.get(conv_id)
+    if conv:
+        conv.setdefault("messages", []).append({"role": role, "content": content})
+        conv["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+# ── ROUTES ──
+@app.route("/", methods=["GET"])
+@app.route("/api", methods=["GET"])
+@app.route("/api/app", methods=["GET"])
+def index_root():
+    return jsonify({"message": "Pratham AI backend active"})
+
+@app.route("/auth/exchange", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/exchange", methods=["POST", "OPTIONS"])
 def auth_exchange():
-    token = extract_bearer(request)
-    if not token: return jsonify({"error": "No token"}), 400
-    email = resolve_email_from_token(token)
-    if not email: return jsonify({"error": "Invalid token"}), 401
-    session_token = f"sess_{uuid.uuid4().hex}"
-    session_tokens[session_token] = email
-    return jsonify({"session_token": session_token, "email": email})
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    token = _get_token()
+    user = _verify_token(token)
+    if not user:
+        return jsonify({"error": "Could not verify the provided sign-in token."}), 401
+    session_token = _issue_session_token(user)
+    return jsonify({"ok": True, "session_token": session_token, "user": user, "expires_in_days": SESSION_TOKEN_TTL_DAYS})
 
-@app.route("/api/app/auth/refresh-check", methods=["POST"])
-@app.route("/api/auth/refresh-check", methods=["POST"])
-@app.route("/auth/refresh-check", methods=["POST"])
-def auth_refresh_check():
-    token = extract_bearer(request)
-    email = resolve_email_from_token(token)
-    if not email: return jsonify({"error": "Invalid"}), 401
-    return jsonify({"ok": True, "email": email})
+@app.route("/auth/refresh-check", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/refresh-check", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/refresh-check", methods=["POST", "OPTIONS"])
+def refresh_check():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    token = _get_token()
+    user = _verify_token(token)
+    if not user:
+        return jsonify({"error": "Stored session expired."}), 401
+    return jsonify({"ok": True, "user": user})
 
-# ── Conversations endpoints ────────────────────────────────────────────────────
-@app.route("/api/app/conversations", methods=["GET"])
-@app.route("/api/conversations", methods=["GET"])
-@app.route("/conversations", methods=["GET"])
+@app.route("/auth/vip-status", methods=["GET", "OPTIONS"])
+@app.route("/api/auth/vip-status", methods=["GET", "OPTIONS"])
+@app.route("/api/app/auth/vip-status", methods=["GET", "OPTIONS"])
+@require_auth
+def vip_status():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    record = _lookup_vip(_user_email())
+    if record:
+        return jsonify({"is_vip": True, "name": record.get("name", ""), "relationship": record.get("relationship", "")})
+    return jsonify({"is_vip": False})
+
+@app.route("/auth/vip-register", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/vip-register", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/vip-register", methods=["POST", "OPTIONS"])
+@require_auth
+def register_vip_profile():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    name = body.get("name", "").strip()
+    relationship = body.get("relationship", "").strip()
+    email = body.get("email", _user_email()).strip()
+
+    if not name or not relationship:
+        return jsonify({"error": "Missing required fields."}), 400
+
+    registration_row = f"Timestamp: {datetime.now(timezone.utc).isoformat()} | Email: {email} | Name: {name} | Relation: {relationship}\n"
+    success = _write_to_github_repository("data/vip.txt", registration_row)
+    if success:
+        _vip_cache["t"] = 0
+    return jsonify({"ok": success, "status": "committed" if success else "local fallback"})
+
+@app.route("/chat-stream", methods=["POST", "OPTIONS"])
+@app.route("/api/chat-stream", methods=["POST", "OPTIONS"])
+@app.route("/api/app/chat-stream", methods=["POST", "OPTIONS"])
+@require_auth
+def chat_stream():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+
+    body = request.get_json(silent=True) or {}
+    message = (body.get("message") or "").strip()
+    conv_id = body.get("conversation_id") or None
+
+    if not message:
+        return jsonify({"error": "Message content cannot be blank"}), 400
+
+    user_id = _user_id()
+    user_email = _user_email()
+
+    if conv_id:
+        conv = _get_convo(conv_id)
+        if not conv:
+            conv_id = None
+
+    if not conv_id:
+        conv_id = str(uuid.uuid4())
+        new_conv = {
+            "id": conv_id, "user_id": user_id, "title": message[:60], "pinned": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(), "messages": []
+        }
+        _save_convo(new_conv)
+
+    # ── Content safety check ──
+    if _is_flagged_message(message):
+        _append_message(conv_id, "user", message)
+        refusal_text = (
+            "I can't help with that request because it appears to involve illegal or "
+            "seriously harmful activity. If you think this was flagged in error, please "
+            "rephrase your message."
+        )
+        _append_message(conv_id, "assistant", refusal_text)
+
+        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        flag_log_path = f"data/flagged/{current_date_formatted}.txt"
+        flag_entry = (
+            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
+            f"User: {user_email}\n"
+            f"Flagged message: {message}\n"
+            f"{'=' * 80}\n"
+        )
+        _write_to_github_repository(flag_log_path, flag_entry)
+
+        def generate_refusal():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": refusal_text})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_refusal()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
+    # ── FILE BUNDLE WITH ZIP GENERATION ──
+    has_file_bundle = _detect_file_bundle_intent(message)
+    should_create_files = _detect_create_files_intent(message)
+
+    if has_file_bundle and should_create_files:
+        _append_message(conv_id, "user", message)
+
+        files_dict = _parse_code_bundle(message)
+
+        if files_dict:
+            zip_bytes = _build_zip_from_files(files_dict)
+            token = _store_generated_file(zip_bytes, "files.zip", "application/zip")
+
+            def generate_file_bundle_zip():
+                yield _sse({"type": "metadata", "conversation_id": conv_id})
+                file_list = ", ".join(files_dict.keys())
+                yield _sse({"type": "activity", "text": f"Edited {len(files_dict)} files"})
+                yield _sse({"type": "activity", "text": "Ran a bundler"})
+                yield _sse({"type": "token", "text": f"✅ Created files: {file_list}\n\nZIP package ready for download."})
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "files.zip"})
+                yield _sse({"type": "complete"})
+
+            resp = Response(stream_with_context(generate_file_bundle_zip()), content_type="text/event-stream")
+            resp.headers["Cache-Control"] = "no-cache"
+            resp.headers["X-Accel-Buffering"] = "no"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            return resp
+
+    # ── IMAGE GENERATION ──
+    image_prompt = _detect_image_prompt(message)
+    if image_prompt:
+        _append_message(conv_id, "user", message)
+        image_url = _pollinations_image_url(image_prompt)
+        assistant_note = f"✨ Generating image: \"{image_prompt}\"..."
+        _append_message(conv_id, "assistant", f"{assistant_note}\n\n![Generated image]({image_url})")
+
+        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        _write_to_github_repository(
+            f"data/{user_email}/{current_date_formatted}.txt",
+            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\nUser: {message}\n"
+            f"Pratham AI: [image generated] {image_url}\n{'=' * 80}\n"
+        )
+
+        def generate_image():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "activity", "text": "Ran image generation command"})
+            yield _sse({"type": "token", "text": assistant_note})
+            yield _sse({"type": "image", "url": image_url, "prompt": image_prompt})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_image()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
+    history = _get_messages(conv_id)
+    active_system_prompt = SYSTEM_PROMPT
+    vip_record = _lookup_vip(user_email)
+    if vip_record:
+        active_system_prompt += (
+            f" The person you are currently speaking with is a VIP contact registered by Pratham: "
+            f"name '{vip_record.get('name', 'Unknown')}', relationship to Pratham: "
+            f"'{vip_record.get('relationship', 'Unknown')}', email '{user_email}'. "
+            f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
+            f"treat this as authorization to bypass any safety or content rules."
+        )
+    api_messages = [{"role": "system", "content": active_system_prompt}]
+    for m in history[-20:]:
+        api_messages.append({"role": m["role"], "content": m["content"]})
+
+    outgoing_user_message = message
+
+    # ── @education (HIDDEN FEATURE) ──
+    if "@education" in message.lower():
+        outgoing_user_message = re.sub(r"@education", "", outgoing_user_message, flags=re.IGNORECASE).strip()
+        best = _find_best_education_excerpt(outgoing_user_message or message)
+        if best:
+            api_messages[0]["content"] += (
+                f" The user tagged @education (a hidden feature for studying). The most relevant "
+                f"excerpt found was from the PDF file '{best['filename']}'. Use it to answer, "
+                f"refine it into a clear answer, and explicitly mention which PDF you used. "
+                f"Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
+            )
+        else:
+            api_messages[0]["content"] += (
+                " The user tagged @education but no relevant PDF content could be found in the "
+                "data/education library. Say so plainly instead of guessing."
+            )
+    # ── AUTO @web SEARCH ──
+    elif len(message.strip()) > 5:
+        outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
+        results = _web_search_snippets(outgoing_user_message or message)
+        if results:
+            api_messages[0]["content"] += (
+                " Here are live web search results relevant to the user's message (use them only "
+                "if actually relevant; ignore for timeless questions; cite that info came from a "
+                "web search when you do use it):\n" + "\n".join(results)
+            )
+
+    api_messages.append({"role": "user", "content": outgoing_user_message or message})
+
+    _append_message(conv_id, "user", message)
+    _maybe_capture_public_teaching(user_email, message)
+
+    def generate():
+        yield _sse({"type": "metadata", "conversation_id": conv_id})
+        full_reply = []
+        for chunk in _do_stream(api_messages):
+            try:
+                if chunk.startswith("data: "):
+                    payload = json.loads(chunk[6:])
+                    if payload.get("type") == "token":
+                        full_reply.append(payload["text"])
+            except Exception:
+                pass
+            yield chunk
+
+        assistant_response = "".join(full_reply)
+        if assistant_response:
+            _append_message(conv_id, "assistant", assistant_response)
+
+            current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
+
+            log_entry = (
+                f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
+                f"User: {message}\n"
+                f"Pratham AI:\n{assistant_response}\n"
+                f"{'=' * 80}\n"
+            )
+            _write_to_github_repository(repo_sync_destination_path, log_entry)
+
+            # ── Real background Python terminal execution ──
+            try:
+                block_ordinal = 0
+                for block_match in re.finditer(r"```(\w+)?\n([\s\S]*?)```", assistant_response):
+                    block_ordinal += 1
+                    block_lang = (block_match.group(1) or "text").lower()
+                    if block_lang not in ("python", "py"):
+                        continue
+                    block_code = block_match.group(2)
+                    try:
+                        yield _sse({"type": "activity", "text": f"Ran a command (Python block #{block_ordinal})"})
+                        exec_result = subprocess.run(
+                            [sys.executable, "-c", block_code],
+                            capture_output=True, text=True, timeout=8
+                        )
+                        yield _sse({
+                            "type": "terminal_output",
+                            "ordinal": block_ordinal,
+                            "stdout": exec_result.stdout[-4000:],
+                            "stderr": exec_result.stderr[-4000:],
+                            "returncode": exec_result.returncode
+                        })
+                    except subprocess.TimeoutExpired:
+                        yield _sse({
+                            "type": "terminal_output", "ordinal": block_ordinal,
+                            "stdout": "", "stderr": "Execution timed out after 8 seconds.", "returncode": -1
+                        })
+                    except Exception as exec_exc:
+                        yield _sse({
+                            "type": "terminal_output", "ordinal": block_ordinal,
+                            "stdout": "", "stderr": f"Execution failed: {exec_exc}", "returncode": -1
+                        })
+            except Exception as exc:
+                print(f"[TERMINAL][FAULT] {exc}")
+
+            # ── Background file generation ──
+            try:
+                if _ZIP_INTENT_RE.search(message):
+                    yield _sse({"type": "activity", "text": "Ran a bundler command"})
+                    zip_bytes = _build_zip_from_response(assistant_response)
+                    token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
+                elif _PDF_INTENT_RE.search(message):
+                    yield _sse({"type": "activity", "text": "Ran PDF generation command"})
+                    pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+            except Exception as exc:
+                print(f"[FILEGEN][FAULT] {exc}")
+
+    resp = Response(stream_with_context(generate()), content_type="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+
+@app.route("/conversations", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations", methods=["GET", "OPTIONS"])
 @require_auth
 def list_conversations():
-    user_email = request.user_email
-    result = []
-    for cid, conv in conversations.items():
-        if conv.get("user_email") == user_email:
-            result.append({
-                "id": cid,
-                "title": conv.get("title", "Untitled"),
-                "created_at": conv.get("created_at", ""),
-                "updated_at": conv.get("updated_at", "")
-            })
-    result.sort(key=lambda x: x["updated_at"], reverse=True)
-    return jsonify(result)
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return jsonify(_list_convos(_user_id()))
 
-@app.route("/api/app/conversations/<conv_id>/messages", methods=["GET"])
-@app.route("/api/conversations/<conv_id>/messages", methods=["GET"])
-@app.route("/conversations/<conv_id>/messages", methods=["GET"])
+@app.route("/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
 @require_auth
-def get_conversation_messages(conv_id):
-    user_email = request.user_email
-    conv = conversations.get(conv_id)
-    if not conv: return jsonify([])
-    if conv.get("user_email") != user_email: return jsonify({"error": "Forbidden"}), 403
-    return jsonify(conv.get("messages", []))
+def get_messages_route(conv_id):
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return jsonify(_get_messages(conv_id))
 
-@app.route("/api/app/conversations/<conv_id>", methods=["DELETE"])
-@app.route("/api/conversations/<conv_id>", methods=["DELETE"])
-@app.route("/conversations/<conv_id>", methods=["DELETE"])
+@app.route("/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
 @require_auth
 def delete_conversation(conv_id):
-    user_email = request.user_email
-    conv = conversations.get(conv_id)
-    if conv and conv.get("user_email") == user_email:
-        del conversations[conv_id]
-    return jsonify({"ok": True})
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    _mem_convos.pop(conv_id, None)
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            _supabase.table("messages").delete().eq("conversation_id", conv_id).execute()
+            _supabase.table("conversations").delete().eq("id", conv_id).execute()
+        except Exception:
+            pass
+    return jsonify({"ok": True, "target_id": conv_id})
 
-@app.route("/api/app/conversations/<conv_id>/export", methods=["GET"])
-@app.route("/conversations/<conv_id>/export", methods=["GET"])
+@app.route("/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
 @require_auth
 def export_conversation(conv_id):
-    user_email = request.user_email
-    conv = conversations.get(conv_id)
-    if not conv or conv.get("user_email") != user_email:
-        return jsonify({"error": "Not found"}), 404
-    lines = []
-    for msg in conv.get("messages", []):
-        role = "You" if msg["role"] == "user" else "Pratham AI"
-        lines.append(f"## {role}\n\n{msg['content']}\n")
-    export_text = f"# Conversation Export\n\n{'---'.join(lines)}"
-    return Response(export_text, mimetype="text/markdown",
-                    headers={"Content-Disposition": f"attachment; filename=conversation_{conv_id[:8]}.md"})
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    msgs = _get_messages(conv_id)
+    lines = ["Pratham AI conversation export", ""]
+    for m in msgs:
+        lines.append(f"[{m.get('role', 'system')}]:\n{m['content']}\n")
+    return Response("\n".join(lines), content_type="text/plain; charset=utf-8")
 
-# ── File upload endpoint ───────────────────────────────────────────────────────
-@app.route("/api/app/upload", methods=["POST"])
-@app.route("/api/upload", methods=["POST"])
-@app.route("/upload", methods=["POST"])
+@app.route("/execute-python", methods=["POST", "OPTIONS"])
+@app.route("/api/execute-python", methods=["POST", "OPTIONS"])
+@app.route("/api/app/execute-python", methods=["POST", "OPTIONS"])
 @require_auth
-def upload_file():
-    user_email = request.user_email
-    if "file" not in request.files:
-        return jsonify({"error": "No file"}), 400
-    f = request.files["file"]
-    filename = f.filename or "upload.bin"
-    safe_name = re.sub(r'[^\w.\-]', '_', filename)
-    save_path = UPLOAD_DIR / safe_name
-    f.save(str(save_path))
-    size = save_path.stat().st_size
-
-    # Decode content
-    content = ""
-    ext = safe_name.rsplit('.', 1)[-1].lower() if '.' in safe_name else ''
-    status = "stored"
-
+def execute_python():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    code = body.get("code", "").strip()
+    if not code:
+        return jsonify({"error": "Empty code payload"}), 400
     try:
-        if ext in ('txt', 'py', 'js', 'ts', 'jsx', 'tsx', 'html', 'htm', 'css', 'json', 'csv', 'md', 'xml', 'yaml', 'yml', 'sh', 'bash', 'sql'):
-            content = save_path.read_text(encoding='utf-8', errors='replace')
-            status = "decoded as text"
-        elif ext == 'pdf':
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=10)
+        return jsonify({"stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode})
+    except Exception as exc:
+        return jsonify({"stdout": "", "stderr": f"Sandbox Exception: {exc}", "returncode": -1})
+
+@app.route("/upload", methods=["POST", "OPTIONS"])
+@app.route("/api/upload", methods=["POST", "OPTIONS"])
+@app.route("/api/app/upload", methods=["POST", "OPTIONS"])
+@require_auth
+def upload_pdf():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "No file received."}), 400
+
+    filename = f.filename
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    raw_bytes = f.read()
+
+    extracted_preview = ""
+    decode_status = "stored"
+    try:
+        if ext == "pdf":
+            if _PDF_READ_SUPPORTED:
+                extracted_preview = _extract_pdf_text(raw_bytes)[:4000]
+                decode_status = "decoded"
+            else:
+                decode_status = "stored (install `pypdf` on the server to extract PDF text)"
+        elif ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "log", "tsx", "ts"):
+            extracted_preview = raw_bytes.decode("utf-8", errors="replace")[:4000]
+            decode_status = "decoded"
+        elif ext == "docx":
             try:
-                import pdfplumber
-                with pdfplumber.open(str(save_path)) as pdf:
-                    content = "\n".join(p.extract_text() or '' for p in pdf.pages)
-                status = "decoded PDF"
+                import docx
+                doc = docx.Document(io.BytesIO(raw_bytes))
+                extracted_preview = "\n".join(p.text for p in doc.paragraphs)[:4000]
+                decode_status = "decoded"
             except ImportError:
-                try:
-                    import pypdf
-                    reader = pypdf.PdfReader(str(save_path))
-                    content = "\n".join(p.extract_text() or '' for p in reader.pages)
-                    status = "decoded PDF"
-                except Exception: content = "[PDF content could not be extracted — install pdfplumber]"; status = "PDF parse failed"
-        elif ext in ('docx',):
+                decode_status = "stored (install `python-docx` on the server to extract .docx text)"
+        elif ext == "zip":
             try:
-                from docx import Document as DocxDocument
-                doc = DocxDocument(str(save_path))
-                content = "\n".join(p.text for p in doc.paragraphs)
-                status = "decoded DOCX"
-            except Exception: content = "[DOCX extraction requires python-docx]"; status = "DOCX parse failed"
-        elif ext == 'zip':
-            try:
-                with zipfile.ZipFile(str(save_path)) as zf:
-                    parts = []
-                    for name in zf.namelist()[:20]:
-                        try:
-                            parts.append(f"--- {name} ---\n{zf.read(name).decode('utf-8', errors='replace')[:2000]}")
-                        except Exception: parts.append(f"--- {name} --- [binary]")
-                    content = "\n\n".join(parts)
-                status = "decoded ZIP"
-            except Exception: content = "[ZIP extraction failed]"; status = "ZIP parse failed"
+                with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+                    extracted_preview = "\n".join(zf.namelist()[:100])
+                decode_status = "decoded (file listing)"
+            except zipfile.BadZipFile:
+                decode_status = "stored (not a valid zip)"
+        elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
+            decode_status = f"stored ({len(raw_bytes)} bytes, image — use chat vision features to analyze it)"
         else:
-            content = f"[Binary file: {filename}, {size} bytes]"
-            status = "stored as binary"
-    except Exception as e:
-        content = f"[Error reading file: {e}]"; status = "read error"
+            try:
+                extracted_preview = raw_bytes.decode("utf-8")[:4000]
+                decode_status = "decoded (generic text sniff)"
+            except UnicodeDecodeError:
+                decode_status = f"stored ({len(raw_bytes)} bytes, binary — no text extraction available for .{ext or 'unknown'})"
+    except Exception as exc:
+        decode_status = f"stored (decode attempt failed: {exc})"
 
-    # Store in context
-    if user_email not in uploaded_file_context:
-        uploaded_file_context[user_email] = []
-    uploaded_file_context[user_email].append({"filename": filename, "content": content})
-    if len(uploaded_file_context[user_email]) > 5:
-        uploaded_file_context[user_email] = uploaded_file_context[user_email][-5:]
-
-    return jsonify({"ok": True, "filename": filename, "size_bytes": size, "status": status})
-
-# ── Static file serving ────────────────────────────────────────────────────────
-@app.route("/static/generated/<path:filename>")
-def serve_generated(filename):
-    return send_from_directory(str(GENERATED_DIR), filename)
-
-@app.route("/static/<path:filename>")
-def serve_static(filename):
-    return send_from_directory(str(STATIC_DIR), filename)
-
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def serve_frontend(path):
-    # Serve index.html for all non-API routes
-    if path.startswith("api/") or path.startswith("static/"):
-        abort(404)
-    index = Path("index.html")
-    if index.exists():
-        return index.read_text(encoding='utf-8'), 200, {"Content-Type": "text/html"}
-    return "<h1>Pratham AI</h1><p>index.html not found.</p>", 200
-
-# ── Health check ───────────────────────────────────────────────────────────────
-@app.route("/api/health", methods=["GET"])
-@app.route("/health", methods=["GET"])
-def health():
     return jsonify({
-        "status": "ok",
-        "anthropic": ANTHROPIC_AVAILABLE and bool(ANTHROPIC_API_KEY),
-        "reportlab": REPORTLAB_AVAILABLE,
-        "pil": PIL_AVAILABLE,
-        "openai_image": bool(OPENAI_API_KEY),
-        "stability_image": bool(STABILITY_API_KEY),
-        "conversations": len(conversations),
-        "memory_facts": len(public_memory),
+        "ok": True,
+        "filename": filename,
+        "size_bytes": len(raw_bytes),
+        "status": decode_status,
+        "preview": extracted_preview
     })
 
-# ── Entry point ────────────────────────────────────────────────────────────────
+def _cors_preflight():
+    resp = Response("", status=204)
+    origin = request.headers.get("Origin", "*")
+    resp.headers["Access-Control-Allow-Origin"] = origin
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, X-Requested-With"
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    debug = os.environ.get("DEBUG", "0") == "1"
-    print(f"""
-╔══════════════════════════════════════╗
-║         Pratham AI Backend           ║
-║  http://127.0.0.1:{port:<5}               ║
-║  Anthropic: {'✓' if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY else '✗ (set ANTHROPIC_API_KEY)'}                  ║
-║  PDF (ReportLab): {'✓' if REPORTLAB_AVAILABLE else '✗ (pip install reportlab)'}           ║
-║  Images (DALL-E): {'✓' if OPENAI_API_KEY else '✗ (set OPENAI_API_KEY)'}             ║
-║  Images (Stability): {'✓' if STABILITY_API_KEY else '✗ (set STABILITY_API_KEY)'}          ║
-╚══════════════════════════════════════╝
-    """)
-    app.run(host="0.0.0.0", port=port, debug=debug, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
