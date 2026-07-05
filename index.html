@@ -9,337 +9,156 @@
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-
     <style>
         :root {
-            --bg: #faf9f5;
-            --sidebar: #f4f3ee;
-            --panel: #ffffff;
-            --panel-2: #f4f3ee;
-            --border: #e5e2d9;
-            --text: #30302e;
-            --text-dim: #83827d;
-            --accent: #c2613f;
-            --accent-soft: #eaddd0;
-            --bubble-user: #eeece4;
-            --bubble-model: #ffffff;
-            --terminal-bg: #1e1c19;
-            --terminal-text: #f4f0e6;
+            --bg: #faf9f5; --sidebar: #f4f3ee; --panel: #ffffff; --panel-2: #f4f3ee;
+            --border: #e5e2d9; --text: #30302e; --text-dim: #83827d; --accent: #c2613f;
+            --accent-soft: #eaddd0; --bubble-user: #eeece4; --bubble-model: #ffffff;
+            --terminal-bg: #1e1c19; --terminal-text: #f4f0e6;
             --shadow-premium: 0 1px 3px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.04);
             --hover: #ececE4;
         }
-
         .dark-mode {
-            --bg: #262624;
-            --sidebar: #1f1e1c;
-            --panel: #30302e;
-            --panel-2: #2b2a28;
-            --border: #3d3c39;
-            --text: #f5f4ef;
-            --text-dim: #a6a49c;
-            --accent: #d97757;
-            --accent-soft: #4a3a30;
-            --bubble-user: #35342f;
-            --bubble-model: #30302e;
-            --terminal-bg: #131211;
-            --terminal-text: #4ade80;
+            --bg: #262624; --sidebar: #1f1e1c; --panel: #30302e; --panel-2: #2b2a28;
+            --border: #3d3c39; --text: #f5f4ef; --text-dim: #a6a49c; --accent: #d97757;
+            --accent-soft: #4a3a30; --bubble-user: #35342f; --bubble-model: #30302e;
+            --terminal-bg: #131211; --terminal-text: #4ade80;
             --shadow-premium: 0 1px 3px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25);
             --hover: #3a3936;
         }
-
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            transition: background 0.2s ease, color 0.2s ease;
-        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); transition: background 0.2s ease, color 0.2s ease; }
         .brand-serif { font-family: 'Source Serif 4', serif; }
         .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
         .workspace-scrollpane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9px; }
         .premium-card { box-shadow: var(--shadow-premium); }
         .accent-gradient { background: linear-gradient(135deg, var(--accent), #d98a5f); }
-
         .glow-pulse { animation: glowPulse 2.2s ease-in-out infinite; }
         @keyframes glowPulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.5;transform:scale(.85);} }
-
         .typing-dot { animation: typingBounce 1.1s infinite ease-in-out; }
-        .typing-dot:nth-child(2){animation-delay:.15s;}
-        .typing-dot:nth-child(3){animation-delay:.3s;}
+        .typing-dot:nth-child(2){animation-delay:.15s;} .typing-dot:nth-child(3){animation-delay:.3s;}
         @keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-4px);opacity:1;} }
-
-        .nav-row {
-            display: flex; align-items: center; gap: 10px;
-            padding: 7px 10px; border-radius: 8px;
-            font-size: 13.5px; font-weight: 500; color: var(--text);
-            cursor: pointer; transition: background .12s ease;
-        }
+        .nav-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; font-size:13.5px; font-weight:500; color:var(--text); cursor:pointer; transition:background .12s ease; }
         .nav-row:hover { background: var(--hover); }
-        .nav-row .nav-icon { width: 18px; text-align: center; opacity: .85; font-size: 14px; }
-
-        .chat-row {
-            padding: 7px 10px; border-radius: 8px; font-size: 13px;
-            color: var(--text); cursor: pointer; transition: background .12s ease;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
+        .nav-row .nav-icon { width:18px; text-align:center; opacity:.85; font-size:14px; }
+        .chat-row { padding:7px 10px; border-radius:8px; font-size:13px; color:var(--text); cursor:pointer; transition:background .12s ease; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .chat-row:hover { background: var(--hover); }
-        .chat-row.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-
-        .search-pill {
-            display: flex; align-items: center; gap: 8px;
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--text-dim);
-        }
-
-        #profile-dropdown-menu {
-            position: absolute; bottom: 56px; left: 8px; width: 240px;
-            background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-            box-shadow: var(--shadow-premium); padding: 6px; z-index: 60;
-            font-size: 13px;
-        }
-        #profile-dropdown-menu .menu-item {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--text);
-        }
+        .chat-row.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+        .search-pill { display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:13px; color:var(--text-dim); }
+        #profile-dropdown-menu { position:absolute; bottom:56px; left:8px; width:240px; background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-premium); padding:6px; z-index:60; font-size:13px; }
+        #profile-dropdown-menu .menu-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--text); }
         #profile-dropdown-menu .menu-item:hover { background: var(--hover); }
-        #profile-dropdown-menu .menu-divider { height: 1px; background: var(--border); margin: 5px 2px; }
-        #profile-dropdown-menu .menu-email {
-            padding: 6px 10px 2px; font-size: 11px; color: var(--text-dim); word-break: break-all;
-        }
+        #profile-dropdown-menu .menu-divider { height:1px; background:var(--border); margin:5px 2px; }
+        #profile-dropdown-menu .menu-email { padding:6px 10px 2px; font-size:11px; color:var(--text-dim); word-break:break-all; }
+        #settings-modal .settings-tab { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; font-size:13px; font-weight:500; color:var(--text-dim); cursor:pointer; }
+        #settings-modal .settings-tab.active { background:var(--hover); color:var(--text); }
+        #settings-modal .settings-tab:hover { background:var(--hover); }
+        #settings-modal .settings-row { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--border); }
+        #settings-modal .settings-row:last-child { border-bottom:none; }
+        .theme-choice-btn { width:34px; height:30px; border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; }
+        .theme-choice-btn.selected { border-color:var(--accent); background:var(--accent-soft); }
+        
+        .file-creation-card { display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px 12px; max-width:320px; cursor:pointer; transition:border-color .15s ease,background .15s ease; position:relative; overflow:hidden; }
+        .file-creation-card:hover { border-color:var(--accent); background:var(--hover); }
+        .fcc-icon { width:34px; height:34px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent); font-size:15px; font-weight:700; }
+        .fcc-meta { min-width:0; flex:1; }
+        .fcc-name { font-size:12.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .fcc-sub { font-size:10.5px; color:var(--text-dim); margin-top:1px; display:flex; align-items:center; gap:5px; }
+        .fcc-status-dot { width:6px; height:6px; border-radius:999px; background:var(--accent); }
+        .file-creation-card.in-progress .fcc-status-dot { animation:glowPulse 1s ease-in-out infinite; }
+        .file-creation-card.done .fcc-status-dot { background:#4ade80; animation:none; }
+        .fcc-progress-track { position:absolute; left:0; bottom:0; height:2px; width:100%; background:var(--border); overflow:hidden; }
+        .fcc-progress-fill { position:absolute; left:-40%; top:0; bottom:0; width:40%; background:var(--accent); border-radius:2px; }
+        .file-creation-card.in-progress .fcc-progress-fill { animation:fccShimmer 1.1s ease-in-out infinite; }
+        .file-creation-card.done .fcc-progress-track { display:none; }
+        @keyframes fccShimmer { 0%{left:-40%;} 100%{left:100%;} }
+        .fcc-openhint { font-size:10px; color:var(--accent); font-weight:600; white-space:nowrap; }
 
-        #settings-modal .settings-tab {
-            display: flex; align-items: center; gap: 10px;
-            padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
-            color: var(--text-dim); cursor: pointer;
-        }
-        #settings-modal .settings-tab.active { background: var(--hover); color: var(--text); }
-        #settings-modal .settings-tab:hover { background: var(--hover); }
-        #settings-modal .settings-row {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 14px 0; border-bottom: 1px solid var(--border);
-        }
-        #settings-modal .settings-row:last-child { border-bottom: none; }
-        .theme-choice-btn {
-            width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--border);
-            display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px;
-        }
-        .theme-choice-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
+        #agent-activity-strip { display:none; align-items:center; gap:7px; font-size:11px; color:var(--text-dim); padding:0 4px 6px; }
+        #agent-activity-strip.active { display:flex; }
+        #agent-activity-strip .aas-spinner { width:11px; height:11px; border-radius:999px; border:2px solid var(--accent-soft); border-top-color:var(--accent); animation:bootSpin .7s linear infinite; flex-shrink:0; }
+        #paste-attachment-chip.active { display:flex; }
 
-        .file-creation-card {
-            display: flex; align-items: center; gap: 10px;
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 12px; padding: 10px 12px; max-width: 320px;
-            cursor: pointer; transition: border-color .15s ease, background .15s ease;
-            position: relative; overflow: hidden;
-        }
-        .file-creation-card:hover { border-color: var(--accent); background: var(--hover); }
-        .file-creation-card .fcc-icon {
-            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
-            display: flex; align-items: center; justify-content: center;
-            background: var(--accent-soft); color: var(--accent); font-size: 15px; font-weight: 700;
-        }
-        .file-creation-card .fcc-meta { min-width: 0; flex: 1; }
-        .file-creation-card .fcc-name { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .file-creation-card .fcc-sub { font-size: 10.5px; color: var(--text-dim); margin-top: 1px; display: flex; align-items: center; gap: 5px; }
-        .file-creation-card .fcc-status-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
-        .file-creation-card.in-progress .fcc-status-dot { animation: glowPulse 1s ease-in-out infinite; }
-        .file-creation-card.done .fcc-status-dot { background: #4ade80; animation: none; }
-        .file-creation-card .fcc-progress-track {
-            position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
-            background: var(--border); overflow: hidden;
-        }
-        .file-creation-card .fcc-progress-fill {
-            position: absolute; left: -40%; top: 0; bottom: 0; width: 40%;
-            background: var(--accent); border-radius: 2px;
-        }
-        .file-creation-card.in-progress .fcc-progress-fill { animation: fccShimmer 1.1s ease-in-out infinite; }
-        .file-creation-card.done .fcc-progress-track { display: none; }
-        @keyframes fccShimmer {
-            0% { left: -40%; }
-            100% { left: 100%; }
-        }
-        .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+        #boot-splash { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; background:var(--bg); }
+        #boot-splash .boot-spinner { width:34px; height:34px; border-radius:999px; border:3px solid var(--accent-soft); border-top-color:var(--accent); animation:bootSpin .8s linear infinite; }
+        @keyframes bootSpin { to { transform:rotate(360deg); } }
 
-        #agent-activity-strip {
-            display: none; align-items: center; gap: 7px;
-            font-size: 11px; color: var(--text-dim); padding: 0 4px 6px;
-        }
-        #agent-activity-strip.active { display: flex; }
-        #agent-activity-strip .aas-spinner {
-            width: 11px; height: 11px; border-radius: 999px;
-            border: 2px solid var(--accent-soft); border-top-color: var(--accent);
-            animation: bootSpin .7s linear infinite; flex-shrink: 0;
-        }
-        #paste-attachment-chip.active { display: flex; }
+        #sidebar-panel { transition:transform .28s ease, width .28s ease; }
+        .mobile-hamburger { display:none; }
+        .continuation-btn { margin-top:12px; padding:10px 16px; background:var(--accent); color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; transition:opacity 0.2s ease; max-width:200px; text-align:center; }
+        .continuation-btn:hover { opacity:0.9; }
 
-        #boot-splash {
-            position: fixed; inset: 0; z-index: 70; display: flex; align-items: center;
-            justify-content: center; background: var(--bg);
-        }
-        #boot-splash .boot-spinner {
-            width: 34px; height: 34px; border-radius: 999px;
-            border: 3px solid var(--accent-soft); border-top-color: var(--accent);
-            animation: bootSpin .8s linear infinite;
-        }
-        @keyframes bootSpin { to { transform: rotate(360deg); } }
+        .activity-feed { display:flex; flex-direction:column; gap:4px; max-width:92%; margin-bottom:8px; }
+        .activity-feed-row { display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--text-dim); background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:5px 9px; width:fit-content; }
+        .activity-feed-row .afr-icon { font-size:11px; color:var(--accent); }
 
-        #sidebar-panel { transition: transform .28s ease, width .28s ease; }
-        .mobile-hamburger { display: none; }
-
-        .continuation-btn {
-            margin-top: 12px;
-            padding: 10px 16px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            transition: opacity 0.2s ease;
-            max-width: 200px;
-            text-align: center;
-        }
-        .continuation-btn:hover { opacity: 0.9; }
-
-        /* ── Inline activity feed (Claude-style "Ran a command" rows) ── */
-        .activity-feed {
-            display: flex; flex-direction: column; gap: 4px;
-            max-width: 92%; margin-bottom: 2px;
-        }
-        .activity-feed-row {
-            display: flex; align-items: center; gap: 7px;
-            font-size: 11.5px; color: var(--text-dim);
-            background: var(--panel-2); border: 1px solid var(--border);
-            border-radius: 8px; padding: 5px 9px; width: fit-content;
-        }
-        .activity-feed-row .afr-icon { font-size: 11px; color: var(--accent); }
-
-        /* ── Generated-image loading animation ── */
-        .image-generation-holder {
-            position: relative; border-radius: 16px; overflow: hidden;
-            border: 1px solid var(--border); max-width: 85%;
-            background: linear-gradient(100deg, var(--panel-2) 30%, var(--hover) 50%, var(--panel-2) 70%);
-            background-size: 200% 100%;
-            animation: imgShimmer 1.4s ease-in-out infinite;
-            min-height: 180px; display: flex; align-items: center; justify-content: center;
-        }
-        @keyframes imgShimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        .image-generation-holder .igh-label {
-            font-size: 11px; color: var(--text-dim); font-weight: 600;
-            display: flex; align-items: center; gap: 6px;
-        }
-        .image-generation-holder img {
-            width: 100%; display: block; opacity: 0; transition: opacity .4s ease;
-            position: relative; z-index: 1;
-        }
-        .image-generation-holder img.loaded { opacity: 1; }
-        .image-generation-holder .igh-placeholder {
-            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-        }
-        .image-generation-holder.loaded .igh-placeholder { display: none; }
+        .image-generation-holder { position:relative; border-radius:16px; overflow:hidden; border:1px solid var(--border); max-width:85%; background:linear-gradient(100deg, var(--panel-2) 30%, var(--hover) 50%, var(--panel-2) 70%); background-size:200% 100%; animation:imgShimmer 1.4s ease-in-out infinite; min-height:180px; display:flex; align-items:center; justify-content:center; }
+        @keyframes imgShimmer { 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
+        .image-generation-holder .igh-label { font-size:11px; color:var(--text-dim); font-weight:600; display:flex; align-items:center; gap:6px; }
+        .image-generation-holder img { width:100%; display:block; opacity:0; transition:opacity .4s ease; position:relative; z-index:1; }
+        .image-generation-holder img.loaded { opacity:1; }
+        .image-generation-holder .igh-placeholder { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+        .image-generation-holder.loaded .igh-placeholder { display:none; }
 
         @media (max-width: 820px) {
-            #sidebar-panel {
-                position: fixed; inset: 0 auto 0 0; z-index: 40;
-                width: 84vw; max-width: 300px; transform: translateX(-100%);
-                box-shadow: 0 0 40px rgba(0,0,0,.25);
-            }
-            #sidebar-panel.sidebar-open { transform: translateX(0); }
-            #sidebar-scrim {
-                display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
-            }
-            #sidebar-scrim.scrim-visible { display: block; }
-            .mobile-hamburger { display: flex; }
-            #workbench-split-panel {
-                position: fixed; inset: 0; width: 100%; z-index: 45;
-                transform: translateX(100%); transition: transform .28s ease;
-            }
-            #workbench-split-panel.workbench-open { transform: translateX(0); }
-            #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
-            #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
-            #settings-modal .settings-sidebar { display: none; }
+            #sidebar-panel { position:fixed; inset:0 auto 0 0; z-index:40; width:84vw; max-width:300px; transform:translateX(-100%); box-shadow:0 0 40px rgba(0,0,0,.25); }
+            #sidebar-panel.sidebar-open { transform:translateX(0); }
+            #sidebar-scrim { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:35; }
+            #sidebar-scrim.scrim-visible { display:block; }
+            .mobile-hamburger { display:flex; }
+            #workbench-split-panel { position:fixed; inset:0; width:100%; z-index:45; transform:translateX(100%); transition:transform .28s ease; }
+            #workbench-split-panel.workbench-open { transform:translateX(0); }
+            #conversation-viewport-panel { padding-left:14px; padding-right:14px; }
+            #profile-dropdown-menu { left:8px; right:8px; width:auto; }
+            #settings-modal .settings-sidebar { display:none; }
         }
-
         @supports (padding: max(0px)) {
-            .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
-            .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+            .safe-bottom { padding-bottom:max(1rem, env(safe-area-inset-bottom)); }
+            .safe-top { padding-top:max(0.5rem, env(safe-area-inset-top)); }
         }
     </style>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
-
     <div id="boot-splash"><div class="boot-spinner"></div></div>
-
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
-            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
-            <div>
-                <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
-                <p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p>
-            </div>
+            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="P"><span data-brand-logo-fallback>P</span></div>
+            <div><h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1><p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p></div>
             <hr class="border-[var(--border)]">
-            <div class="flex justify-center w-full py-2 min-h-[44px]">
-                <div id="googleSignInGate" class="w-full flex justify-center items-center">
-                    <div id="gsiButtonContainer"></div>
-                </div>
-            </div>
+            <div class="flex justify-center w-full py-2 min-h-[44px]"><div id="googleSignInGate" class="w-full flex justify-center items-center"><div id="gsiButtonContainer"></div></div></div>
             <p class="text-[10px] text-[var(--text-dim)] font-mono opacity-60">Secure workspace session</p>
         </div>
     </div>
-
     <div id="sidebar-scrim" onclick="closeMobileSidebar()"></div>
-
     <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden">
-
         <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between safe-top relative">
             <div class="p-3 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between px-1">
                     <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
                     <button onclick="closeMobileSidebar()" class="mobile-hamburger p-1.5 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md cursor-pointer">✕</button>
                 </div>
-
-                <button onclick="createNewConversation()" class="nav-row justify-start w-full" style="background:var(--panel); border:1px solid var(--border);">
-                    <span class="nav-icon">＋</span> New chat
-                </button>
-
-                <div class="search-pill cursor-pointer" onclick="focusHistorySearch()">
-                    <span class="nav-icon">🔍</span>
-                    <input id="history-search-input" type="text" placeholder="Search chats..." class="bg-transparent border-none focus:outline-none w-full text-[var(--text)] placeholder-[var(--text-dim)]" oninput="filterHistoryList()">
-                </div>
-
+                <button onclick="createNewConversation()" class="nav-row justify-start w-full" style="background:var(--panel);border:1px solid var(--border);"><span class="nav-icon">＋</span> New chat</button>
+                <div class="search-pill cursor-pointer" onclick="focusHistorySearch()"><span class="nav-icon">🔍</span><input id="history-search-input" type="text" placeholder="Search chats..." class="bg-transparent border-none focus:outline-none w-full text-[var(--text)] placeholder-[var(--text-dim)]" oninput="filterHistoryList()"></div>
                 <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-2">Chats</div>
                 <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-0.5 px-0.5"></div>
             </div>
-
             <div class="border-t border-[var(--border)] p-2 safe-bottom">
                 <div class="nav-row" onclick="toggleProfileDropdown()">
                     <div id="user-avatar-frame" class="w-8 h-8 rounded-full bg-[var(--accent-soft)] flex items-center justify-center font-bold text-[11px] overflow-hidden text-[var(--accent)] shrink-0">U</div>
-                    <div class="flex-1 min-w-0">
-                        <p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Resolving Identity...</p>
-                        <p id="role-badge-display" class="text-[10px] text-[var(--text-dim)] truncate">Evaluating...</p>
-                    </div>
+                    <div class="flex-1 min-w-0"><p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Loading...</p><p id="role-badge-display" class="text-[10px] text-[var(--text-dim)] truncate">—</p></div>
                     <span class="text-[var(--text-dim)] text-xs">⋮</span>
                 </div>
             </div>
-
             <div id="profile-dropdown-menu" class="hidden">
-                <div class="menu-email" id="profile-dropdown-email">user@example.com</div>
-                <div class="menu-divider"></div>
+                <div class="menu-email" id="profile-dropdown-email">user@example.com</div><div class="menu-divider"></div>
                 <div class="menu-item" onclick="openSettingsFromMenu()"><span>⚙️ Settings</span></div>
                 <div class="menu-item" onclick="toggleColorTheme()"><span>🌗 Appearance</span></div>
-                <div class="menu-item"><span>❓ Get help</span></div>
-                <div class="menu-divider"></div>
+                <div class="menu-item"><span>❓ Get help</span></div><div class="menu-divider"></div>
                 <div class="menu-item" onclick="triggerIdentitySignout()"><span>↩ Log out</span></div>
             </div>
         </aside>
-
         <main class="flex-1 h-full flex flex-row min-w-0 bg-[var(--bg)]">
-
             <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
                 <header class="h-14 border-b border-[var(--border)] px-3 sm:px-4 flex items-center justify-between bg-[var(--bg)] z-20 safe-top">
                     <div class="flex items-center gap-2 min-w-0">
@@ -352,23 +171,17 @@
                         <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Delete</button>
                     </div>
                 </header>
-
                 <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
                     <div class="m-auto text-center py-12 space-y-2">
-                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="P"><span data-brand-logo-fallback>P</span></div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
-                        <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
+                        <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Ask anything, generate images, create files, or run code</p>
                     </div>
                 </div>
-
                 <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
                         <div id="agent-activity-strip"><span class="aas-spinner"></span><span id="agent-activity-strip-text">Thinking...</span></div>
-                        <div id="paste-attachment-chip" class="hidden items-center gap-2 bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text)] w-fit">
-                            <span>📄</span>
-                            <span id="paste-attachment-chip-label">paste.txt</span>
-                            <span onclick="clearPasteAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
-                        </div>
+                        <div id="paste-attachment-chip" class="hidden items-center gap-2 bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text)] w-fit"><span>📄</span><span id="paste-attachment-chip-label">paste.txt</span><span onclick="clearPasteAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span></div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
                             <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
@@ -377,1051 +190,157 @@
                     </div>
                 </div>
             </div>
-
             <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
-                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 mobile-hamburger">
-                    <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)]">Workbench</span>
-                    <button onclick="toggleWorkbenchMobile()" class="text-sm cursor-pointer">✕</button>
-                </div>
+                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 mobile-hamburger"><span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)]">Workbench</span><button onclick="toggleWorkbenchMobile()" class="text-sm cursor-pointer">✕</button></div>
                 <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
-                    <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
-                        <span>&gt;_ Live Agent Terminal Output Logs</span>
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
-                    </div>
-                    <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
+                    <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider"><span>&gt;_ Agent Terminal</span><span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span></div>
+                    <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left">System ready...</pre>
                 </div>
                 <div class="flex-1 flex flex-col overflow-hidden">
-                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
-                        <span>⚡ Sandbox Preview</span>
-                        <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout</button>
-                    </div>
-                    <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
-                        <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
-                    </div>
+                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]"><span>⚡ Sandbox Preview</span><button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout</button></div>
+                    <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center"><div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No preview mounted</div></div>
                 </div>
             </div>
         </main>
     </div>
-
-    <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+    <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
-            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                <h4 class="text-sm font-bold text-[var(--text)]">Attach File</h4>
-                <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
-            </div>
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between"><h4 class="text-sm font-bold text-[var(--text)]">Attach File</h4><button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button></div>
             <div class="p-5 flex flex-col gap-4">
-                <p class="text-[10.5px] text-[var(--text-dim)] -mt-2">Any file type is accepted. Text, PDF, DOCX, JSON, CSV, and ZIP get their content decoded automatically on the server; other types are stored as-is.</p>
-                <input type="file" id="pdf-payload-file-element" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
-                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Upload &amp; Decode</button>
+                <p class="text-[10.5px] text-[var(--text-dim)]">Accepts text, PDF, DOCX, JSON, CSV, ZIP</p>
+                <input type="file" id="pdf-payload-file-element" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] cursor-pointer"/>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 cursor-pointer shadow-sm">Upload &amp; Decode</button>
             </div>
         </div>
     </div>
-
-    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-2xl h-[75vh] max-h-[560px] overflow-hidden premium-card flex">
             <div class="settings-sidebar w-44 border-r border-[var(--border)] p-3 flex flex-col gap-1 bg-[var(--panel-2)]">
                 <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pb-1">Settings</div>
-                <div class="settings-tab active">⚙️ General</div>
-                <div class="settings-tab">👤 Account</div>
-                <div class="settings-tab">🛡️ Privacy</div>
+                <div class="settings-tab active">⚙️ General</div><div class="settings-tab">👤 Account</div><div class="settings-tab">🛡️ Privacy</div>
                 <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-3 pb-1">Customize</div>
                 <div class="settings-tab">🎨 Appearance</div>
-                <div class="settings-tab">🔌 Connectors</div>
             </div>
             <div class="flex-1 flex flex-col min-w-0">
-                <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                    <h4 class="text-sm font-bold text-[var(--text)]">Profile</h4>
-                    <button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
-                </div>
+                <div class="p-4 border-b border-[var(--border)] flex items-center justify-between"><h4 class="text-sm font-bold text-[var(--text)]">Profile</h4><button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button></div>
                 <div class="flex-1 overflow-y-auto workspace-scrollpane p-5">
-                    <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Avatar</span>
-                        <div id="settings-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
-                    </div>
-                    <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Full name</span>
-                        <span id="settings-name-display" class="text-sm text-[var(--text-dim)]">—</span>
-                    </div>
-                    <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Email</span>
-                        <span id="settings-email-display" class="text-sm text-[var(--text-dim)]">—</span>
-                    </div>
-                    <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Appearance</span>
-                        <div class="flex gap-1.5">
-                            <div class="theme-choice-btn" id="theme-btn-light" onclick="setTheme('light')">☀️</div>
-                            <div class="theme-choice-btn" id="theme-btn-dark" onclick="setTheme('dark')">🌙</div>
-                        </div>
-                    </div>
-                    <div class="pt-6">
-                        <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out</button>
-                    </div>
+                    <div class="settings-row"><span class="text-sm text-[var(--text)]">Avatar</span><div id="settings-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div></div>
+                    <div class="settings-row"><span class="text-sm text-[var(--text)]">Full name</span><span id="settings-name-display" class="text-sm text-[var(--text-dim)]">—</span></div>
+                    <div class="settings-row"><span class="text-sm text-[var(--text)]">Email</span><span id="settings-email-display" class="text-sm text-[var(--text-dim)]">—</span></div>
+                    <div class="settings-row"><span class="text-sm text-[var(--text)]">Appearance</span><div class="flex gap-1.5"><div class="theme-choice-btn" id="theme-btn-light" onclick="setTheme('light')">☀️</div><div class="theme-choice-btn" id="theme-btn-dark" onclick="setTheme('dark')">🌙</div></div></div>
+                    <div class="pt-6"><button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 cursor-pointer">Log out</button></div>
                 </div>
             </div>
         </div>
     </div>
-
     <div id="artifact-modal" class="fixed inset-0 bg-[var(--bg)] z-50 hidden flex-col">
         <div class="h-14 border-b border-[var(--border)] flex items-center justify-between px-4 safe-top shrink-0">
             <button onclick="closeArtifactModal()" class="text-[var(--text)] text-lg cursor-pointer">✕</button>
             <h4 id="artifact-modal-title" class="text-sm font-bold text-[var(--text)] truncate max-w-[55%]">file.txt</h4>
-            <div class="relative">
-                <button onclick="toggleArtifactMenu()" class="text-[var(--text)] text-lg cursor-pointer px-1">⋮</button>
+            <div class="relative"><button onclick="toggleArtifactMenu()" class="text-[var(--text)] text-lg cursor-pointer px-1">⋮</button>
                 <div id="artifact-menu" class="hidden absolute right-0 top-8 w-44 bg-[var(--panel)] border border-[var(--border)] rounded-xl shadow-lg z-10 py-1 text-sm">
-                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('preview')">
-                        <span id="artifact-menu-preview-check">Preview</span><span>👁</span>
-                    </div>
-                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('code')">
-                        <span id="artifact-menu-code-check">Code</span><span>&lt;/&gt;</span>
-                    </div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('preview')"><span id="artifact-menu-preview-check">Preview</span><span>👁</span></div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('code')"><span id="artifact-menu-code-check">Code</span><span>&lt;/&gt;</span></div>
                     <div class="h-px bg-[var(--border)] my-1"></div>
-                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="copyArtifactCode()">
-                        <span>Copy</span><span>⧉</span>
-                    </div>
-                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="downloadArtifactCode()">
-                        <span>Download</span><span>⭳</span>
-                    </div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="copyArtifactCode()"><span>Copy</span><span>⧉</span></div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="downloadArtifactCode()"><span>Download</span><span>⭳</span></div>
                 </div>
             </div>
         </div>
         <div id="artifact-modal-body" class="flex-1 overflow-auto bg-[var(--panel)]"></div>
     </div>
-
-    <script>
-        const bootSplash = document.getElementById('boot-splash');
-        const loginOverlay = document.getElementById('login-overlay');
-        const appShell = document.getElementById('app-shell');
-        const sidebarPanel = document.getElementById('sidebar-panel');
-        const sidebarScrim = document.getElementById('sidebar-scrim');
-        const historyItemsBox = document.getElementById('history-items-box');
-        const activeChatTitleHeader = document.getElementById('active-chat-title-header');
-        const conversationViewportPanel = document.getElementById('conversation-viewport-panel');
-        const interactionSubmissionForm = document.getElementById('interaction-submission-form');
-        const userPromptInputField = document.getElementById('user-prompt-input-field');
-        const roleBadgeDisplay = document.getElementById('role-badge-display');
-        const profileNameDisplay = document.getElementById('profile-name-display');
-        const userAvatarFrame = document.getElementById('user-avatar-frame');
-        const inputActionSubmitBtn = document.getElementById('input-action-submit-btn');
-        const exportActionTrigger = document.getElementById('export-action-trigger');
-        const deleteActionTrigger = document.getElementById('delete-action-trigger');
-        const workbenchSplitPanel = document.getElementById('workbench-split-panel');
-        const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
-        const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
-        const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
-        const agentActivityStrip = document.getElementById('agent-activity-strip');
-        const agentActivityStripText = document.getElementById('agent-activity-strip-text');
-
-        const LOGO_URL = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/logo.png";
-
-        let currentConversationId = null;
-        let globalAuthorizationToken = "";
-        let SERVER_CONTEXT_HOST = "";
-        let activeUserIdentityEmail = "";
-        let currentExtractedPreviewArtifactPayload = "";
-        let isGenerating = false;
-        let allHistoryItemsCache = [];
-        let pendingPasteAttachment = null;
-
-        function setPasteAttachment(content, lineCount) {
-            pendingPasteAttachment = { content, lines: lineCount };
-            document.getElementById('paste-attachment-chip-label').innerText = `paste.txt (${lineCount} lines)`;
-            document.getElementById('paste-attachment-chip').classList.add('active');
-        }
-        function clearPasteAttachment() {
-            pendingPasteAttachment = null;
-            document.getElementById('paste-attachment-chip').classList.remove('active');
-        }
-
-        const SESSION_STORAGE_KEY = "prathamai_session_v1";
-
-        function openMobileSidebar() { sidebarPanel.classList.add('sidebar-open'); sidebarScrim.classList.add('scrim-visible'); }
-        function closeMobileSidebar() { sidebarPanel.classList.remove('sidebar-open'); sidebarScrim.classList.remove('scrim-visible'); }
-        function toggleWorkbenchMobile() { workbenchSplitPanel.classList.toggle('workbench-open'); }
-        function focusHistorySearch() { document.getElementById('history-search-input').focus(); }
-
-        function toggleProfileDropdown() {
-            profileDropdownMenu.classList.toggle('hidden');
-        }
-        document.addEventListener('click', (e) => {
-            if (!profileDropdownMenu.contains(e.target) && !e.target.closest('.nav-row')) {
-                profileDropdownMenu.classList.add('hidden');
-            }
-        });
-        function openSettingsFromMenu() {
-            profileDropdownMenu.classList.add('hidden');
-            toggleModal('settings-modal');
-        }
-
-        function setTheme(mode) {
-            if (mode === 'dark') document.documentElement.classList.add('dark-mode');
-            else document.documentElement.classList.remove('dark-mode');
-            document.getElementById('theme-btn-light').classList.toggle('selected', mode === 'light');
-            document.getElementById('theme-btn-dark').classList.toggle('selected', mode === 'dark');
-        }
-        function toggleColorTheme() {
-            const isDark = document.documentElement.classList.toggle('dark-mode');
-            document.getElementById('theme-btn-light')?.classList.toggle('selected', !isDark);
-            document.getElementById('theme-btn-dark')?.classList.toggle('selected', isDark);
-        }
-
-        function paintIdentityIntoShell(claims) {
-            profileNameDisplay.innerText = claims.name || claims.email;
-            document.getElementById('profile-dropdown-email').innerText = activeUserIdentityEmail;
-            document.getElementById('settings-name-display').innerText = claims.name || "—";
-            document.getElementById('settings-email-display').innerText = activeUserIdentityEmail;
-
-            if (claims.picture) {
-                userAvatarFrame.innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;
-                document.getElementById('settings-avatar-frame').innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;
-            } else {
-                const initials = (claims.name || claims.email || "U").slice(0,2).toUpperCase();
-                userAvatarFrame.innerText = initials;
-                document.getElementById('settings-avatar-frame').innerText = initials;
-            }
-
-            const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
-            const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
-
-            if (creators.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "App Creator";
-            else if (supervisors.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "Supervisor";
-            else roleBadgeDisplay.innerText = "Free plan";
-        }
-
-        function enterAppShell() {
-            loginOverlay.style.display = 'none';
-            appShell.style.display = 'flex';
-            synchronizeConversationsHistoryIndex();
-        }
-
-        function persistSessionLocally(credential, claims) {
-            try {
-                localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ credential, claims }));
-            } catch (e) {}
-        }
-
-        function clearPersistedSession() {
-            try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
-        }
-
-        async function handleGoogleIdentityCallback(response) {
-            if (!response || !response.credential) return;
-            globalAuthorizationToken = `Bearer ${response.credential}`;
-            try {
-                const base64Url = response.credential.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const claims = JSON.parse(window.atob(base64));
-
-                activeUserIdentityEmail = claims.email.toLowerCase();
-                paintIdentityIntoShell(claims);
-
-                let tokenToPersist = response.credential;
-                try {
-                    const exchangeRes = await smartFetchRequest('/auth/exchange', {
-                        method: 'POST', headers: { 'Authorization': globalAuthorizationToken }
-                    });
-                    if (exchangeRes.ok) {
-                        const exchangeData = await exchangeRes.json();
-                        if (exchangeData.session_token) {
-                            tokenToPersist = exchangeData.session_token;
-                            globalAuthorizationToken = `Bearer ${exchangeData.session_token}`;
-                        }
-                    }
-                } catch (e) {}
-
-                persistSessionLocally(tokenToPersist, claims);
-                enterAppShell();
-            } catch (e) {
-                console.error("[AUTH][FAILURE]", e);
-            }
-        }
-        window.handleGoogleIdentityCallback = handleGoogleIdentityCallback;
-
-        function initializeGoogleOauthGate() {
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.initialize({
-                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-                    callback: window.handleGoogleIdentityCallback,
-                    auto_select: false
-                });
-                google.accounts.id.renderButton(document.getElementById("gsiButtonContainer"), {
-                    type: "standard", shape: "rectangular", theme: "outline",
-                    text: "signin_with", size: "large", logo_alignment: "left", width: 240
-                });
-            } else {
-                setTimeout(initializeGoogleOauthGate, 100);
-            }
-        }
-
-        async function attemptSilentSessionRestore() {
-            let stored = null;
-            try {
-                const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-                if (raw) stored = JSON.parse(raw);
-            } catch (e) { stored = null; }
-
-            if (!stored || !stored.credential || !stored.claims) return false;
-
-            globalAuthorizationToken = `Bearer ${stored.credential}`;
-            activeUserIdentityEmail = (stored.claims.email || "").toLowerCase();
-
-            try {
-                const response = await smartFetchRequest('/auth/refresh-check', {
-                    method: 'POST',
-                    headers: { 'Authorization': globalAuthorizationToken }
-                });
-                if (!response.ok) {
-                    clearPersistedSession();
-                    globalAuthorizationToken = "";
-                    activeUserIdentityEmail = "";
-                    return false;
-                }
-            } catch (e) {}
-
-            paintIdentityIntoShell(stored.claims);
-            enterAppShell();
-            return true;
-        }
-
-        function triggerIdentitySignout() {
-            globalAuthorizationToken = "";
-            activeUserIdentityEmail = "";
-            currentConversationId = null;
-            clearPersistedSession();
-            appShell.style.display = 'none';
-            loginOverlay.style.display = 'flex';
-            document.getElementById('settings-modal').classList.add('hidden');
-            document.getElementById('settings-modal').classList.remove('flex');
-            profileDropdownMenu.classList.add('hidden');
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.disableAutoSelect();
-            }
-            initializeGoogleOauthGate();
-        }
-
-        async function smartFetchRequest(endpointPath, options = {}) {
-            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            const pathPermutations = [
-                `${hostBase}/api/app${endpointPath}`, `${hostBase}/api/app${endpointPath}/`,
-                `${hostBase}/api${endpointPath}`, `${hostBase}${endpointPath}`,
-                `/api/app${endpointPath}`, `/api${endpointPath}`, `${endpointPath}`
-            ];
-            let lastResponse = null;
-            for (const targetUrl of pathPermutations) {
-                try {
-                    const response = await fetch(targetUrl, options);
-                    if (response.status !== 404) return response;
-                    lastResponse = response;
-                } catch (err) {}
-            }
-            return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
-        }
-
-        function convCacheKey() {
-            return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`;
-        }
-        function loadConvCache() {
-            try {
-                const raw = localStorage.getItem(convCacheKey());
-                return raw ? JSON.parse(raw) : { list: [], messages: {} };
-            } catch (e) { return { list: [], messages: {} }; }
-        }
-        function saveConvCache(cache) {
-            try { localStorage.setItem(convCacheKey(), JSON.stringify(cache)); } catch (e) {}
-        }
-        function cacheConversationMeta(id, title) {
-            const cache = loadConvCache();
-            const nowIso = new Date().toISOString();
-            const existingIdx = cache.list.findIndex(c => c.id === id);
-            if (existingIdx >= 0) {
-                cache.list[existingIdx].title = title;
-                cache.list[existingIdx].updated_at = nowIso;
-            } else {
-                cache.list.unshift({ id, title, pinned: false, created_at: nowIso, updated_at: nowIso });
-            }
-            saveConvCache(cache);
-        }
-        function cacheConversationMessages(id, messages) {
-            const cache = loadConvCache();
-            cache.messages[id] = messages;
-            saveConvCache(cache);
-        }
-        function removeCachedConversation(id) {
-            const cache = loadConvCache();
-            cache.list = cache.list.filter(c => c.id !== id);
-            delete cache.messages[id];
-            saveConvCache(cache);
-        }
-        function toggleModal(modalTargetId) {
-            const target = document.getElementById(modalTargetId);
-            target.classList.toggle('hidden');
-            target.classList.toggle('flex');
-        }
-
-        function createNewConversation() {
-            currentConversationId = null;
-            activeChatTitleHeader.innerText = "New conversation";
-            exportActionTrigger.classList.add('hidden');
-            deleteActionTrigger.classList.add('hidden');
-            workbenchSplitPanel.classList.add('hidden');
-            workbenchSplitPanel.classList.remove('workbench-open');
-            document.getElementById('workbench-toggle-mobile').classList.add('hidden');
-            clearAgentActivity();
-            conversationViewportPanel.innerHTML = `
-                <div class="m-auto text-center py-12 space-y-2">
-                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
-                    <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
-                    <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
-                </div>
-            `;
-            synchronizeConversationsHistoryIndex();
-            closeMobileSidebar();
-        }
-
-        function renderUserPromptBubble(promptText) {
-            const row = document.createElement('div');
-            row.className = 'w-full flex justify-end';
-            row.innerHTML = `<div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>`;
-            conversationViewportPanel.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-        }
-
-        const LANG_EXT_MAP = {
-            html: 'html', htm: 'html', javascript: 'js', js: 'js', jsx: 'jsx',
-            typescript: 'ts', ts: 'ts', python: 'py', py: 'py', css: 'css',
-            json: 'json', bash: 'sh', sh: 'sh', shell: 'sh', text: 'txt',
-            xml: 'xml', markdown: 'md', md: 'md', sql: 'sql', yaml: 'yml',
-            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs',
-            tsx: 'tsx', lua: 'lua', swift: 'swift', kotlin: 'kt'
-        };
-
-        function guessFileName(lang, ordinal) {
-            const ext = LANG_EXT_MAP[(lang || '').toLowerCase()] || 'txt';
-            return ordinal === 1 ? `generated.${ext}` : `generated_${ordinal}.${ext}`;
-        }
-
-        function pushTerminalLog(message) {
-            const stamp = new Date().toLocaleTimeString([], { hour12: false });
-            const line = `[${stamp}] ${message}\n`;
-            if (agentBackgroundTerminalLogger.textContent === 'System waiting for generation directives...') {
-                agentBackgroundTerminalLogger.textContent = '';
-            }
-            agentBackgroundTerminalLogger.textContent += line;
-            agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
-        }
-
-        // ── Inline activity feed rows (visible in the chat itself, not just
-        // the background terminal panel) — mirrors Claude's "Ran a command",
-        // "Edited a file" style indicators so activity is visible at a glance.
-        function ensureActivityFeed(wrapper) {
-            let feed = wrapper.querySelector('.activity-feed');
-            if (!feed) {
-                feed = document.createElement('div');
-                feed.className = 'activity-feed';
-                wrapper.insertBefore(feed, wrapper.firstChild.nextSibling || null);
-            }
-            return feed;
-        }
-
-        function appendActivityRow(wrapper, text) {
-            const feed = ensureActivityFeed(wrapper);
-            const row = document.createElement('div');
-            row.className = 'activity-feed-row';
-            row.innerHTML = `<span class="afr-icon">✓</span><span>${sanitizeOutputText(text)}</span>`;
-            feed.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-        }
-
-        function showActivityFeed(text) {
-            pushTerminalLog(text);
-        }
-
-        function setAgentActivity(text) {
-            agentActivityStripText.innerText = text;
-            agentActivityStrip.classList.add('active');
-        }
-        function clearAgentActivity() {
-            agentActivityStrip.classList.remove('active');
-        }
-
-        function parseAssistantSegments(text) {
-            const segments = [];
-            const fenceOpenRe = /```(\w+)?\n/g;
-            let idx = 0;
-            while (idx < text.length) {
-                fenceOpenRe.lastIndex = idx;
-                const m = fenceOpenRe.exec(text);
-                if (!m) { segments.push({ type: 'text', content: text.slice(idx) }); break; }
-                if (m.index > idx) segments.push({ type: 'text', content: text.slice(idx, m.index) });
-                const lang = (m[1] || 'text').toLowerCase();
-                const codeStart = m.index + m[0].length;
-                const closeIdx = text.indexOf('```', codeStart);
-                if (closeIdx === -1) {
-                    segments.push({ type: 'code', lang, content: text.slice(codeStart), closed: false });
-                    idx = text.length;
-                } else {
-                    segments.push({ type: 'code', lang, content: text.slice(codeStart, closeIdx), closed: true });
-                    idx = closeIdx + 3;
-                }
-            }
-            return segments;
-        }
-
-        function buildFileCreationCard(lang, content, closed, ordinal) {
-            const card = document.createElement('div');
-            card.className = `file-creation-card ${closed ? 'done' : 'in-progress'}`;
-            const filename = guessFileName(lang, ordinal);
-            card.dataset.filename = filename;
-            card.dataset.lang = lang;
-            card.dataset.ordinal = ordinal;
-            card._code = content;
-            card._lang = lang;
-            const ext = (LANG_EXT_MAP[lang] || 'txt').toUpperCase();
-            const lineCount = content.split('\n').length;
-            card.innerHTML = `
-                <div class="fcc-icon">${ext.slice(0, 2)}</div>
-                <div class="fcc-meta">
-                    <div class="fcc-name">${filename} (${lineCount} lines)</div>
-                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : 'Writing file...'}</span></div>
-                </div>
-                <span class="fcc-openhint">${closed ? 'Open' : ''}</span>
-                <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
-            `;
-            card.onclick = () => openFilePreviewFromCard(card);
-            return card;
-        }
-
-        function updateFileCreationCard(card, content, closed) {
-            card._code = content;
-            const lineCount = content.split('\n').length;
-            const nameEl = card.querySelector('.fcc-name');
-            if (nameEl) nameEl.innerText = `${card.dataset.filename} (${lineCount} lines)`;
-            const statusText = card.querySelector('.fcc-status-text');
-            const openHint = card.querySelector('.fcc-openhint');
-            if (closed && card.classList.contains('in-progress')) {
-                card.classList.remove('in-progress');
-                card.classList.add('done');
-                statusText.innerText = 'Ready to preview';
-                openHint.innerText = 'Open';
-                pushTerminalLog(`File created: ${card.dataset.filename} (${lineCount} lines)`);
-            } else if (!closed) {
-                statusText.innerText = `Writing file... (${lineCount} lines)`;
-            }
-        }
-
-        let artifactModalState = { code: '', lang: 'text', filename: 'file.txt', view: 'preview' };
-
-        function openFilePreviewFromCard(card) {
-            if (!card._code) return;
-            artifactModalState = { code: card._code, lang: card._lang, filename: card.dataset.filename, view: 'preview' };
-            document.getElementById('artifact-modal-title').innerText = card.dataset.filename;
-            renderArtifactModalBody();
-            pushTerminalLog(`Preview opened: ${card.dataset.filename}`);
-            const modal = document.getElementById('artifact-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function closeArtifactModal() {
-            const modal = document.getElementById('artifact-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-            document.getElementById('artifact-menu').classList.add('hidden');
-        }
-
-        function toggleArtifactMenu() {
-            document.getElementById('artifact-menu').classList.toggle('hidden');
-        }
-        document.addEventListener('click', (e) => {
-            const menu = document.getElementById('artifact-menu');
-            if (menu && !menu.classList.contains('hidden') && !e.target.closest('#artifact-menu') && !e.target.closest('[onclick="toggleArtifactMenu()"]')) {
-                menu.classList.add('hidden');
-            }
-        });
-
-        function setArtifactView(view) {
-            artifactModalState.view = view;
-            document.getElementById('artifact-menu').classList.add('hidden');
-            renderArtifactModalBody();
-        }
-
-        function renderArtifactModalBody() {
-            const body = document.getElementById('artifact-modal-body');
-            const previewCheck = document.getElementById('artifact-menu-preview-check');
-            const codeCheck = document.getElementById('artifact-menu-code-check');
-            previewCheck.innerText = artifactModalState.view === 'preview' ? '✓ Preview' : 'Preview';
-            codeCheck.innerText = artifactModalState.view === 'code' ? '✓ Code' : 'Code';
-
-            const isRenderable = artifactModalState.lang === 'html' || artifactModalState.lang === 'htm';
-            if (artifactModalState.view === 'preview' && isRenderable) {
-                body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
-            } else if (artifactModalState.view === 'preview' && !isRenderable) {
-                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
-            } else {
-                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
-            }
-        }
-
-        function copyArtifactCode() {
-            document.getElementById('artifact-menu').classList.add('hidden');
-            navigator.clipboard?.writeText(artifactModalState.code).then(() => {
-                pushTerminalLog(`Copied ${artifactModalState.filename} to clipboard.`);
-            }).catch(() => {});
-        }
-
-        function downloadArtifactCode() {
-            document.getElementById('artifact-menu').classList.add('hidden');
-            const blob = new Blob([artifactModalState.code], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = artifactModalState.filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            pushTerminalLog(`Downloaded ${artifactModalState.filename}.`);
-        }
-
-        function updateAssistantMessageDOM(wrapper, fullText) {
-            const segments = parseAssistantSegments(fullText);
-            if (!wrapper._segNodes) wrapper._segNodes = [];
-            if (!wrapper._fileOrdinal) wrapper._fileOrdinal = 0;
-
-            segments.forEach((seg, i) => {
-                let node = wrapper._segNodes[i];
-                if (seg.type === 'text') {
-                    if (!node || node.dataset.segType !== 'text') {
-                        node = document.createElement('div');
-                        node.dataset.segType = 'text';
-                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
-                        wrapper.appendChild(node);
-                        wrapper._segNodes[i] = node;
-                    }
-                    if (seg.content.trim().length > 0) {
-                        node.style.display = '';
-                        node.innerHTML = sanitizeOutputText(seg.content).replace(/\n/g, '<br>');
-                    } else {
-                        node.style.display = 'none';
-                    }
-                } else {
-                    if (!node || node.dataset.segType !== 'code') {
-                        wrapper._fileOrdinal += 1;
-                        node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
-                        node.dataset.segType = 'code';
-                        wrapper.appendChild(node);
-                        wrapper._segNodes[i] = node;
-                        setAgentActivity(`Writing ${node.dataset.filename}...`);
-                        pushTerminalLog(`Creating ${node.dataset.filename}...`);
-                    } else {
-                        updateFileCreationCard(node, seg.content, seg.closed);
-                        if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
-                    }
-                }
-            });
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-        }
-
-        // ── Generated image with a real loading animation: a shimmering
-        // skeleton is shown until the image has actually finished loading,
-        // then it fades in smoothly instead of popping in abruptly.
-        function appendGeneratedImage(wrapper, url, promptText) {
-            const holder = document.createElement('div');
-            holder.className = 'image-generation-holder';
-            holder.innerHTML = `
-                <div class="igh-placeholder">
-                    <span class="igh-label"><span class="aas-spinner" style="display:inline-block;"></span> Rendering image…</span>
-                </div>
-                <img alt="${sanitizeOutputText(promptText || 'Generated image')}">
-            `;
-            wrapper.appendChild(holder);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-
-            const imgEl = holder.querySelector('img');
-            imgEl.onload = () => {
-                imgEl.classList.add('loaded');
-                holder.classList.add('loaded');
-                conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-            };
-            imgEl.onerror = () => {
-                holder.querySelector('.igh-label').innerText = '⚠ Image failed to load';
-            };
-            imgEl.src = url;
-        }
-
-        function appendDownloadCard(wrapper, relativeUrl, filename) {
-            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            const fullUrl = `${hostBase}${relativeUrl}`;
-            const card = document.createElement('a');
-            card.href = fullUrl;
-            card.target = '_blank';
-            card.rel = 'noopener';
-            card.className = 'file-creation-card done';
-            card.innerHTML = `
-                <div class="fcc-icon">⭳</div>
-                <div class="fcc-meta">
-                    <div class="fcc-name">${sanitizeOutputText(filename)}</div>
-                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Built in background terminal — ready</span></div>
-                </div>
-                <span class="fcc-openhint">Download</span>
-            `;
-            wrapper.appendChild(card);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-        }
-
-        function mountModelOutputTargetShell() {
-            const containerNode = document.createElement('div');
-            containerNode.className = 'w-full flex flex-col items-start gap-1.5';
-            containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
-            conversationViewportPanel.appendChild(containerNode);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-            return containerNode;
-        }
-
-        function mountTypingIndicator() {
-            const row = document.createElement('div');
-            row.className = 'w-full flex flex-col items-start gap-1';
-            row.id = 'typing-indicator-row';
-            row.innerHTML = `
-                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
-                <div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs">
-                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
-                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
-                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
-                </div>
-            `;
-            conversationViewportPanel.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-        }
-        function removeTypingIndicator() {
-            const row = document.getElementById('typing-indicator-row');
-            if (row) row.remove();
-        }
-
-        function sanitizeOutputText(rawText) {
-            return rawText.replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char] || char));
-        }
-
-        async function dispatchChatMessage() {
-            const typedMessage = userPromptInputField.value.trim();
-            if ((!typedMessage && !pendingPasteAttachment) || isGenerating) return;
-
-            if (typedMessage === "31082011") {
-                userPromptInputField.value = '';
-                userPromptInputField.style.height = 'auto';
-                openVipDetailsStepDirectly();
-                return;
-            }
-
-            let message = typedMessage;
-            let displayMessage = typedMessage;
-            if (pendingPasteAttachment) {
-                message = (typedMessage ? typedMessage + "\n\n" : "") + "```text\n" + pendingPasteAttachment.content + "\n```";
-                displayMessage = (typedMessage ? typedMessage + "\n\n" : "") + `📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;
-            }
-            clearPasteAttachment();
-
-            isGenerating = true;
-            inputActionSubmitBtn.disabled = true;
-            inputActionSubmitBtn.classList.add('opacity-60');
-
-            if (conversationViewportPanel.children.length === 1 && conversationViewportPanel.querySelector('.m-auto')) {
-                conversationViewportPanel.innerHTML = '';
-            }
-
-            renderUserPromptBubble(displayMessage);
-            userPromptInputField.value = '';
-            userPromptInputField.style.height = 'auto';
-            mountTypingIndicator();
-            setAgentActivity('Thinking...');
-            pushTerminalLog(`Received request: "${message.slice(0, 60)}"`);
-
-            try {
-                const response = await smartFetchRequest('/chat-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                    body: JSON.stringify({ message: message, conversation_id: currentConversationId })
-                });
-
-                if (!response.ok) {
-                    removeTypingIndicator();
-                    clearAgentActivity();
-                    if (response.status === 401) {
-                        alert("Session expired. Please sign in again.");
-                        triggerIdentitySignout();
-                    } else {
-                        const wrapper = mountModelOutputTargetShell();
-                        const cell = document.createElement('div');
-                        cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
-                        cell.innerText = "Something went wrong reaching the server. Please try again.";
-                        wrapper.appendChild(cell);
-                    }
-                    return;
-                }
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '', modelWrapper = null, fullText = '';
-                let renderQueued = false;
-
-                const flushRender = () => {
-                    renderQueued = false;
-                    if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
-                };
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n');
-                    buffer = events.pop();
-                    for (const evt of events) {
-                        const line = evt.trim();
-                        if (!line.startsWith('data: ')) continue;
-                        let payload;
-                        try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
-                        if (payload.type === 'metadata') {
-                            currentConversationId = payload.conversation_id;
-                        } else if (payload.type === 'activity') {
-                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            appendActivityRow(modelWrapper, payload.text);
-                            setAgentActivity(payload.text);
-                            showActivityFeed(payload.text);
-                        } else if (payload.type === 'token') {
-                            if (!modelWrapper) {
-                                removeTypingIndicator();
-                                modelWrapper = mountModelOutputTargetShell();
-                                setAgentActivity('Writing response...');
-                            }
-                            fullText += payload.text;
-                            if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
-                        } else if (payload.type === 'image') {
-                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            setAgentActivity('Rendering image...');
-                            pushTerminalLog(`Image generated: "${payload.prompt}"`);
-                            appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
-                        } else if (payload.type === 'file_ready') {
-                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
-                            appendDownloadCard(modelWrapper, payload.url, payload.filename);
-                        } else if (payload.type === 'terminal_output') {
-                            const ok = payload.returncode === 0;
-                            pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
-                            if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
-                            if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
-                            if (modelWrapper) {
-                                const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-ordinal="${payload.ordinal}"]`);
-                                if (matchingCard) {
-                                    const statusText = matchingCard.querySelector('.fcc-status-text');
-                                    if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
-                                }
-                            }
-                        } else if (payload.type === 'complete') {
-                            if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
-
-                            if (fullText.includes('<!-- CONTINUATION NEEDED:')) {
-                                const continueBtn = document.createElement('button');
-                                continueBtn.className = 'continuation-btn';
-                                continueBtn.innerText = '⚠️ Continue generation...';
-                                continueBtn.onclick = () => {
-                                    userPromptInputField.value = 'Continue completing the previous file from where you stopped.';
-                                    interactionSubmissionForm.requestSubmit();
-                                };
-                                modelWrapper.appendChild(continueBtn);
-                                pushTerminalLog('Large file detected - continuation available.');
-                            } else {
-                                pushTerminalLog('Response complete.');
-                            }
-                            clearAgentActivity();
-                        }
-                    }
-                }
-
-                removeTypingIndicator();
-                clearAgentActivity();
-                activeChatTitleHeader.innerText = displayMessage.slice(0, 60);
-                exportActionTrigger.classList.remove('hidden');
-                deleteActionTrigger.classList.remove('hidden');
-                if (currentConversationId) {
-                    cacheConversationMeta(currentConversationId, displayMessage.slice(0, 60));
-                    const cache = loadConvCache();
-                    const existingMsgs = cache.messages[currentConversationId] || [];
-                    existingMsgs.push({ role: 'user', content: message });
-                    if (fullText) existingMsgs.push({ role: 'assistant', content: fullText });
-                    cacheConversationMessages(currentConversationId, existingMsgs);
-                }
-                synchronizeConversationsHistoryIndex();
-            } catch (err) {
-                removeTypingIndicator();
-                clearAgentActivity();
-                const wrapper = mountModelOutputTargetShell();
-                const cell = document.createElement('div');
-                cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
-                cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
-                wrapper.appendChild(cell);
-                console.error("[CHAT][STREAM ERROR]", err);
-            } finally {
-                isGenerating = false;
-                inputActionSubmitBtn.disabled = false;
-                inputActionSubmitBtn.classList.remove('opacity-60');
-                userPromptInputField.focus();
-            }
-        }
-
-        function filterHistoryList() {
-            const q = document.getElementById('history-search-input').value.toLowerCase();
-            renderHistoryRows(allHistoryItemsCache.filter(i => i.title.toLowerCase().includes(q)));
-        }
-
-        function renderHistoryRows(items) {
-            if (items.length === 0) {
-                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`;
-                return;
-            }
-            historyItemsBox.innerHTML = '';
-            items.forEach(item => {
-                const row = document.createElement('div');
-                row.className = `chat-row ${item.id === currentConversationId ? 'active' : ''}`;
-                row.innerText = item.title;
-                row.onclick = () => loadConversationSession(item.id);
-                historyItemsBox.appendChild(row);
-            });
-        }
-
-        async function synchronizeConversationsHistoryIndex() {
-            const cache = loadConvCache();
-            let items = cache.list || [];
-            if (items.length) { allHistoryItemsCache = items; renderHistoryRows(items); }
-            try {
-                const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (!response.ok) return;
-                const backendItems = await response.json();
-                const mergedById = {};
-                (backendItems || []).forEach(it => { mergedById[it.id] = it; });
-                items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
-                const merged = Object.values(mergedById).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-                allHistoryItemsCache = merged;
-                renderHistoryRows(merged);
-                const nextCache = loadConvCache();
-                nextCache.list = merged;
-                saveConvCache(nextCache);
-            } catch (err) {}
-        }
-
-        async function loadConversationSession(conversationId) {
-            try {
-                const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (!response.ok) throw new Error("Load structural exception context.");
-                let logs = await response.json();
-                if ((!logs || logs.length === 0)) {
-                    const cache = loadConvCache();
-                    logs = cache.messages[conversationId] || [];
-                } else {
-                    cacheConversationMessages(conversationId, logs);
-                }
-                currentConversationId = conversationId;
-                exportActionTrigger.classList.remove('hidden');
-                deleteActionTrigger.classList.remove('hidden');
-                conversationViewportPanel.innerHTML = '';
-                workbenchSplitPanel.classList.add('hidden');
-                document.getElementById('workbench-toggle-mobile').classList.add('hidden');
-                logs.forEach(log => {
-                    if (log.role === 'user') renderUserPromptBubble(log.content);
-                    else if (log.role === 'assistant') {
-                        const wrapper = mountModelOutputTargetShell();
-                        updateAssistantMessageDOM(wrapper, log.content);
-                    }
-                });
-                synchronizeConversationsHistoryIndex();
-                closeMobileSidebar();
-            } catch (err) {}
-        }
-
-        async function triggerSessionDelete() {
-            if (!currentConversationId) return;
-            try {
-                await smartFetchRequest(`/conversations/${currentConversationId}`, { method: 'DELETE', headers: { 'Authorization': globalAuthorizationToken } });
-                removeCachedConversation(currentConversationId);
-                createNewConversation();
-            } catch (err) {}
-        }
-
-        function triggerSessionExport() {
-            if (!currentConversationId) return;
-            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
-        }
-
-        async function dispatchPdfUpload() {
-            const selector = document.getElementById('pdf-payload-file-element');
-            if (selector.files.length === 0) return;
-            const packet = new FormData();
-            packet.append("file", selector.files[0]);
-            try {
-                const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
-                const res = await response.json();
-                if (res.ok) {
-                    alert(`${res.filename} — ${res.status}`);
-                    pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
-                } else {
-                    alert(res.error || "Upload failed.");
-                }
-                toggleModal('pdf-modal');
-            } catch (err) { alert("Upload failed. Check your connection and try again."); }
-        }
-
-        function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
-
-        function openVipDetailsStepDirectly() {
-            alert("Enter 31082011 via the account menu's Secure Lock option to register VIP details.");
-        }
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            const currentOrigin = window.location.origin;
-            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
-            setTheme('light');
-
-            document.querySelectorAll('[data-brand-logo]').forEach(img => {
-                img.src = LOGO_URL;
-                img.style.display = '';
-                img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
-                img.onerror = () => { img.style.display = 'none'; };
-            });
-            const faviconLink = document.createElement('link');
-            faviconLink.rel = 'icon';
-            faviconLink.href = LOGO_URL;
-            faviconLink.onerror = () => faviconLink.remove();
-            document.head.appendChild(faviconLink);
-
-            userPromptInputField.addEventListener('input', () => {
-                userPromptInputField.style.height = 'auto';
-                userPromptInputField.style.height = Math.min(userPromptInputField.scrollHeight, 128) + 'px';
-            });
-            userPromptInputField.addEventListener('paste', (e) => {
-                const clipboardText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-                const lineCount = clipboardText.split(/\r\n|\r|\n/).length;
-                if (lineCount > 50) {
-                    e.preventDefault();
-                    setPasteAttachment(clipboardText, lineCount);
-                }
-            });
-            userPromptInputField.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    interactionSubmissionForm.requestSubmit();
-                }
-            });
-            interactionSubmissionForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                dispatchChatMessage();
-            });
-
-            const restored = await attemptSilentSessionRestore();
-            bootSplash.style.display = 'none';
-            if (!restored) {
-                loginOverlay.style.display = 'flex';
-                initializeGoogleOauthGate();
-            }
-        });
-    </script>
+<script>
+const LOGO_URL="https://raw.githubusercontent.com/pratham31sinha-boop/data/main/logo.png";
+const SESSION_STORAGE_KEY="prathamai_session_v1";
+const LANG_EXT_MAP={html:'html',htm:'html',javascript:'js',js:'js',jsx:'jsx',typescript:'ts',ts:'ts',python:'py',py:'py',css:'css',json:'json',bash:'sh',sh:'sh',shell:'sh',text:'txt',xml:'xml',markdown:'md',md:'md',sql:'sql',yaml:'yml',yml:'yml',java:'java',c:'c',cpp:'cpp',go:'go',rust:'rs',tsx:'tsx',lua:'lua'};
+let currentConversationId=null,globalAuthorizationToken="",SERVER_CONTEXT_HOST="",activeUserIdentityEmail="",isGenerating=false,allHistoryItemsCache=[],pendingPasteAttachment=null;
+const bootSplash=document.getElementById('boot-splash'),loginOverlay=document.getElementById('login-overlay'),appShell=document.getElementById('app-shell'),sidebarPanel=document.getElementById('sidebar-panel'),sidebarScrim=document.getElementById('sidebar-scrim'),historyItemsBox=document.getElementById('history-items-box'),activeChatTitleHeader=document.getElementById('active-chat-title-header'),conversationViewportPanel=document.getElementById('conversation-viewport-panel'),interactionSubmissionForm=document.getElementById('interaction-submission-form'),userPromptInputField=document.getElementById('user-prompt-input-field'),roleBadgeDisplay=document.getElementById('role-badge-display'),profileNameDisplay=document.getElementById('profile-name-display'),userAvatarFrame=document.getElementById('user-avatar-frame'),inputActionSubmitBtn=document.getElementById('input-action-submit-btn'),exportActionTrigger=document.getElementById('export-action-trigger'),deleteActionTrigger=document.getElementById('delete-action-trigger'),workbenchSplitPanel=document.getElementById('workbench-split-panel'),agentBackgroundTerminalLogger=document.getElementById('agent-background-terminal-logger'),interactiveRenderCanvasMount=document.getElementById('interactive-render-canvas-mount'),profileDropdownMenu=document.getElementById('profile-dropdown-menu'),agentActivityStrip=document.getElementById('agent-activity-strip'),agentActivityStripText=document.getElementById('agent-activity-strip-text');
+function setPasteAttachment(c,l){pendingPasteAttachment={content:c,lines:l};document.getElementById('paste-attachment-chip-label').innerText=`paste.txt (${l} lines)`;document.getElementById('paste-attachment-chip').classList.add('active');}
+function clearPasteAttachment(){pendingPasteAttachment=null;document.getElementById('paste-attachment-chip').classList.remove('active');}
+function openMobileSidebar(){sidebarPanel.classList.add('sidebar-open');sidebarScrim.classList.add('scrim-visible');}
+function closeMobileSidebar(){sidebarPanel.classList.remove('sidebar-open');sidebarScrim.classList.remove('scrim-visible');}
+function toggleWorkbenchMobile(){workbenchSplitPanel.classList.toggle('workbench-open');}
+function focusHistorySearch(){document.getElementById('history-search-input').focus();}
+function toggleProfileDropdown(){profileDropdownMenu.classList.toggle('hidden');}
+document.addEventListener('click',e=>{if(!profileDropdownMenu.contains(e.target)&&!e.target.closest('.nav-row'))profileDropdownMenu.classList.add('hidden');});
+function openSettingsFromMenu(){profileDropdownMenu.classList.add('hidden');toggleModal('settings-modal');}
+function setTheme(m){if(m==='dark')document.documentElement.classList.add('dark-mode');else document.documentElement.classList.remove('dark-mode');document.getElementById('theme-btn-light').classList.toggle('selected',m==='light');document.getElementById('theme-btn-dark').classList.toggle('selected',m==='dark');}
+function toggleColorTheme(){const d=document.documentElement.classList.toggle('dark-mode');document.getElementById('theme-btn-light')?.classList.toggle('selected',!d);document.getElementById('theme-btn-dark')?.classList.toggle('selected',d);}
+function paintIdentityIntoShell(c){profileNameDisplay.innerText=c.name||c.email;document.getElementById('profile-dropdown-email').innerText=activeUserIdentityEmail;document.getElementById('settings-name-display').innerText=c.name||"—";document.getElementById('settings-email-display').innerText=activeUserIdentityEmail;if(c.picture){userAvatarFrame.innerHTML=`<img src="${c.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;document.getElementById('settings-avatar-frame').innerHTML=`<img src="${c.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;}else{const i=(c.name||c.email||"U").slice(0,2).toUpperCase();userAvatarFrame.innerText=i;document.getElementById('settings-avatar-frame').innerText=i;}
+const cr=["pratham31sinha@gmail.com","pratham08sinha@gmail.com","pratham310811@gmail.com"],sv=["aditiaishwaryam11@gmail.com","akritiaishwaryam17@gmail.com"];if(cr.includes(activeUserIdentityEmail))roleBadgeDisplay.innerText="App Creator";else if(sv.includes(activeUserIdentityEmail))roleBadgeDisplay.innerText="Supervisor";else roleBadgeDisplay.innerText="Free plan";}
+function enterAppShell(){loginOverlay.style.display='none';appShell.style.display='flex';synchronizeConversationsHistoryIndex();}
+function persistSessionLocally(c,cl){try{localStorage.setItem(SESSION_STORAGE_KEY,JSON.stringify({credential:c,claims:cl}));}catch(e){}}
+function clearPersistedSession(){try{localStorage.removeItem(SESSION_STORAGE_KEY);}catch(e){}}
+async function handleGoogleIdentityCallback(r){if(!r||!r.credential)return;globalAuthorizationToken=`Bearer ${r.credential}`;try{const b64u=r.credential.split('.')[1],b64=b64u.replace(/-/g,'+').replace(/_/g,'/'),cl=JSON.parse(window.atob(b64));activeUserIdentityEmail=cl.email.toLowerCase();paintIdentityIntoShell(cl);let tok=r.credential;try{const ex=await smartFetchRequest('/auth/exchange',{method:'POST',headers:{'Authorization':globalAuthorizationToken}});if(ex.ok){const d=await ex.json();if(d.session_token){tok=d.session_token;globalAuthorizationToken=`Bearer ${d.session_token}`;}}}catch(e){}
+persistSessionLocally(tok,cl);enterAppShell();}catch(e){console.error("[AUTH]",e);}}
+window.handleGoogleIdentityCallback=handleGoogleIdentityCallback;
+function initializeGoogleOauthGate(){if(typeof google!=='undefined'&&google.accounts&&google.accounts.id){google.accounts.id.initialize({client_id:"352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",callback:window.handleGoogleIdentityCallback,auto_select:false});google.accounts.id.renderButton(document.getElementById("gsiButtonContainer"),{type:"standard",shape:"rectangular",theme:"outline",text:"signin_with",size:"large",width:240});}else{setTimeout(initializeGoogleOauthGate,100);}}
+async function attemptSilentSessionRestore(){let s=null;try{const r=localStorage.getItem(SESSION_STORAGE_KEY);if(r)s=JSON.parse(r);}catch(e){s=null;}
+if(!s||!s.credential||!s.claims)return false;globalAuthorizationToken=`Bearer ${s.credential}`;activeUserIdentityEmail=(s.claims.email||"").toLowerCase();try{const r=await smartFetchRequest('/auth/refresh-check',{method:'POST',headers:{'Authorization':globalAuthorizationToken}});if(!r.ok){clearPersistedSession();globalAuthorizationToken="";activeUserIdentityEmail="";return false;}}catch(e){}
+paintIdentityIntoShell(s.claims);enterAppShell();return true;}
+function triggerIdentitySignout(){globalAuthorizationToken="";activeUserIdentityEmail="";currentConversationId=null;clearPersistedSession();appShell.style.display='none';loginOverlay.style.display='flex';document.getElementById('settings-modal').classList.add('hidden');document.getElementById('settings-modal').classList.remove('flex');profileDropdownMenu.classList.add('hidden');if(typeof google!=='undefined'&&google.accounts&&google.accounts.id)google.accounts.id.disableAutoSelect();initializeGoogleOauthGate();}
+async function smartFetchRequest(ep,opt={}){const h=SERVER_CONTEXT_HOST.replace(/\/$/,""),paths=[`${h}/api/app${ep}`,`${h}/api${ep}`,`${h}${ep}`,`/api/app${ep}`,`/api${ep}`,ep];let last=null;for(const u of paths){try{const r=await fetch(u,opt);if(r.status!==404)return r;last=r;}catch(e){}}
+return last||new Response(JSON.stringify({error:"Route not found"}),{status:404});}
+function convCacheKey(){return `prathamai_convcache_${activeUserIdentityEmail||'anon'}`;}
+function loadConvCache(){try{const r=localStorage.getItem(convCacheKey());return r?JSON.parse(r):{list:[],messages:{}};}catch(e){return {list:[],messages:{}};}}
+function saveConvCache(c){try{localStorage.setItem(convCacheKey(),JSON.stringify(c));}catch(e){}}
+function cacheConversationMeta(id,t){const c=loadConvCache(),now=new Date().toISOString(),idx=c.list.findIndex(x=>x.id===id);if(idx>=0){c.list[idx].title=t;c.list[idx].updated_at=now;}else c.list.unshift({id,title:t,pinned:false,created_at:now,updated_at:now});saveConvCache(c);}
+function cacheConversationMessages(id,m){const c=loadConvCache();c.messages[id]=m;saveConvCache(c);}
+function removeCachedConversation(id){const c=loadConvCache();c.list=c.list.filter(x=>x.id!==id);delete c.messages[id];saveConvCache(c);}
+function toggleModal(id){const el=document.getElementById(id);el.classList.toggle('hidden');el.classList.toggle('flex');}
+function createNewConversation(){currentConversationId=null;activeChatTitleHeader.innerText="New conversation";exportActionTrigger.classList.add('hidden');deleteActionTrigger.classList.add('hidden');workbenchSplitPanel.classList.add('hidden');workbenchSplitPanel.classList.remove('workbench-open');document.getElementById('workbench-toggle-mobile').classList.add('hidden');clearAgentActivity();conversationViewportPanel.innerHTML=`<div class="m-auto text-center py-12 space-y-2"><div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="P"><span data-brand-logo-fallback>P</span></div><h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3><p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Ask anything, generate images, create files, or run code</p></div>`;synchronizeConversationsHistoryIndex();closeMobileSidebar();}
+function renderUserPromptBubble(t){const r=document.createElement('div');r.className='w-full flex justify-end';r.innerHTML=`<div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(t)}</div>`;conversationViewportPanel.appendChild(r);conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;}
+function guessFileName(l,o){const e=LANG_EXT_MAP[(l||'').toLowerCase()]||'txt';return o===1?`generated.${e}`:`generated_${o}.${e}`;}
+function pushTerminalLog(m){const s=new Date().toLocaleTimeString([],{hour12:false}),l=`[${s}] ${m}\n`;if(agentBackgroundTerminalLogger.textContent==='System ready...')agentBackgroundTerminalLogger.textContent='';agentBackgroundTerminalLogger.textContent+=l;agentBackgroundTerminalLogger.scrollTop=agentBackgroundTerminalLogger.scrollHeight;}
+function ensureActivityFeed(w){let f=w.querySelector('.activity-feed');if(!f){f=document.createElement('div');f.className='activity-feed';w.insertBefore(f,w.firstChild.nextSibling||null);}return f;}
+function appendActivityRow(w,t){const f=ensureActivityFeed(w),r=document.createElement('div');r.className='activity-feed-row';r.innerHTML=`<span class="afr-icon">✓</span><span>${sanitizeOutputText(t)}</span>`;f.appendChild(r);conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;}
+function setAgentActivity(t){agentActivityStripText.innerText=t;agentActivityStrip.classList.add('active');}
+function clearAgentActivity(){agentActivityStrip.classList.remove('active');}
+function parseAssistantSegments(t){const segs=[],re=/```(\w+)?\n/g;let idx=0;while(idx<t.length){re.lastIndex=idx;const m=re.exec(t);if(!m){segs.push({type:'text',content:t.slice(idx)});break;}
+if(m.index>idx)segs.push({type:'text',content:t.slice(idx,m.index)});const lang=(m[1]||'text').toLowerCase(),codeStart=m.index+m[0].length,closeIdx=t.indexOf('```',codeStart);if(closeIdx===-1){segs.push({type:'code',lang,content:t.slice(codeStart),closed:false});idx=t.length;}else{segs.push({type:'code',lang,content:t.slice(codeStart,closeIdx),closed:true});idx=closeIdx+3;}}
+return segs;}
+function buildFileCard(lang,content,closed,ordinal){const card=document.createElement('div');card.className=`file-creation-card ${closed?'done':'in-progress'}`;const fn=guessFileName(lang,ordinal);card.dataset.filename=fn;card.dataset.ordinal=String(ordinal);card._code=content;card._lang=lang;const ext=(LANG_EXT_MAP[lang]||'txt').toUpperCase(),lines=content.split('\n').length;card.innerHTML=`<div class="fcc-icon">${ext.slice(0,2)}</div><div class="fcc-meta"><div class="fcc-name">${sanitizeOutputText(fn)} (${lines} lines)</div><div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed?'Ready':'Writing...'}</span></div></div><span class="fcc-openhint">${closed?'Open':''}</span><div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>`;card.onclick=()=>openArtifact(card);return card;}
+function updateFileCard(card,content,closed){card._code=content;const lines=content.split('\n').length,nameEl=card.querySelector('.fcc-name');if(nameEl)nameEl.innerText=`${card.dataset.filename} (${lines} lines)`;const st=card.querySelector('.fcc-status-text'),hint=card.querySelector('.fcc-openhint');if(closed&&card.classList.contains('in-progress')){card.classList.remove('in-progress');card.classList.add('done');if(st)st.innerText='Ready';if(hint)hint.innerText='Open';pushTerminalLog(`✓ ${card.dataset.filename} complete (${lines} lines)`);}else if(!closed&&st)st.innerText=`Writing... (${lines} lines)`;}
+let artifactState={code:'',lang:'text',filename:'file.txt',view:'preview'};
+function openArtifact(card){if(!card._code)return;artifactState={code:card._code,lang:card._lang,filename:card.dataset.filename,view:'preview'};document.getElementById('artifact-modal-title').innerText=card.dataset.filename;renderArtifactBody();const modal=document.getElementById('artifact-modal');modal.classList.remove('hidden');modal.classList.add('flex');}
+function closeArtifactModal(){const modal=document.getElementById('artifact-modal');modal.classList.add('hidden');modal.classList.remove('flex');document.getElementById('artifact-menu').classList.add('hidden');}
+function toggleArtifactMenu(){document.getElementById('artifact-menu').classList.toggle('hidden');}
+function setArtifactView(v){artifactState.view=v;document.getElementById('artifact-menu').classList.add('hidden');renderArtifactBody();}
+function renderArtifactBody(){const body=document.getElementById('artifact-modal-body');document.getElementById('artifact-menu-preview-check').innerText=artifactState.view==='preview'?'✓ Preview':'Preview';document.getElementById('artifact-menu-code-check').innerText=artifactState.view==='code'?'✓ Code':'Code';const isHtml=['html','htm'].includes(artifactState.lang);if(artifactState.view==='preview'&&isHtml)body.innerHTML=`<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactState.code)}"></iframe>`;else body.innerHTML=`<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactState.code)}</pre>`;}
+function copyArtifactCode(){document.getElementById('artifact-menu').classList.add('hidden');navigator.clipboard?.writeText(artifactState.code).then(()=>pushTerminalLog(`Copied ${artifactState.filename}`));}
+function downloadArtifactCode(){document.getElementById('artifact-menu').classList.add('hidden');const blob=new Blob([artifactState.code],{type:'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=artifactState.filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);pushTerminalLog(`Downloaded ${artifactState.filename}`);}
+function expandActivePreviewContainer(){toggleWorkbenchMobile();}
+document.addEventListener('click',e=>{const menu=document.getElementById('artifact-menu');if(menu&&!menu.classList.contains('hidden')&&!e.target.closest('#artifact-menu')&&!e.target.closest('[onclick="toggleArtifactMenu()"]'))menu.classList.add('hidden');});
+function mountModelOutputTargetShell(){const c=document.createElement('div');c.className='w-full flex flex-col items-start gap-1.5';c.innerHTML=`<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;conversationViewportPanel.appendChild(c);conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;return c;}
+function mountTypingIndicator(){const r=document.createElement('div');r.id='typing-indicator-row';r.className='w-full flex flex-col items-start gap-1';r.innerHTML=`<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span><div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs"><span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span><span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span><span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span></div>`;conversationViewportPanel.appendChild(r);conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;}
+function removeTypingIndicator(){document.getElementById('typing-indicator-row')?.remove();}
+function sanitizeOutputText(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]||c));}
+function updateAssistantDOM(wrapper,fullText){if(!wrapper._segNodes)wrapper._segNodes=[];if(!wrapper._ordinal)wrapper._ordinal=0;const segs=parseAssistantSegments(fullText);segs.forEach((seg,i)=>{let node=wrapper._segNodes[i];if(seg.type==='text'){if(!node||node.dataset.segType!=='text'){node=document.createElement('div');node.dataset.segType='text';node.className='bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';wrapper.appendChild(node);wrapper._segNodes[i]=node;}
+node.style.display=seg.content.trim()?'':'none';node.innerHTML=sanitizeOutputText(seg.content).replace(/\n/g,'<br>');}else{if(!node||node.dataset.segType!=='code'){wrapper._ordinal+=1;node=buildFileCard(seg.lang,seg.content,seg.closed,wrapper._ordinal);node.dataset.segType='code';wrapper.appendChild(node);wrapper._segNodes[i]=node;if(!seg.closed){setAgentActivity(`Writing ${node.dataset.filename}...`);pushTerminalLog(`Creating ${node.dataset.filename}...`);}}else{updateFileCard(node,seg.content,seg.closed);if(!seg.closed)setAgentActivity(`Writing ${node.dataset.filename}...`);}}});conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;}
+async function dispatchChatMessage(){const typed=userPromptInputField.value.trim();if((!typed&&!pendingPasteAttachment)||isGenerating)return;let message=typed,displayMessage=typed;if(pendingPasteAttachment){message=(typed?typed+'\n\n':'')+' ```text\n'+pendingPasteAttachment.content+'\n```';displayMessage=(typed?typed+'\n\n':'')+`📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;clearPasteAttachment();}
+isGenerating=true;inputActionSubmitBtn.disabled=true;inputActionSubmitBtn.classList.add('opacity-60');const welcome=conversationViewportPanel.querySelector('.m-auto');if(welcome)welcome.remove();renderUserPromptBubble(displayMessage);userPromptInputField.value='';userPromptInputField.style.height='auto';mountTypingIndicator();setAgentActivity('Thinking...');pushTerminalLog(`→ Request: "${message.slice(0,80)}"`);workbenchSplitPanel.classList.remove('hidden');document.getElementById('workbench-toggle-mobile').classList.remove('hidden');try{const resp=await smartFetchRequest('/chat-stream',{method:'POST',headers:{'Content-Type':'application/json','Authorization':globalAuthorizationToken},body:JSON.stringify({message,conversation_id:currentConversationId})});if(!resp.ok){removeTypingIndicator();clearAgentActivity();if(resp.status===401){alert('Session expired. Please sign in again.');triggerIdentitySignout();return;}
+const w=mountModelOutputTargetShell(),c=document.createElement('div');c.className='bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] leading-relaxed shadow-xs';c.innerText='Server error. Please try again.';w.appendChild(c);return;}
+const reader=resp.body.getReader(),decoder=new TextDecoder();let buffer='',modelWrapper=null,fullText='',renderQueued=false;const flushRender=()=>{renderQueued=false;if(modelWrapper)updateAssistantDOM(modelWrapper,fullText);};while(true){const {done,value}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const events=buffer.split('\n\n');buffer=events.pop();for(const evt of events){const line=evt.trim();if(!line.startsWith('data: '))continue;let payload;try{payload=JSON.parse(line.slice(6));}catch(e){continue;}
+if(payload.type==='metadata'){currentConversationId=payload.conversation_id;}else if(payload.type==='activity'){if(!modelWrapper){removeTypingIndicator();modelWrapper=mountModelOutputTargetShell();}
+appendActivityRow(modelWrapper,payload.text);pushTerminalLog(`⚡ ${payload.text}`);}else if(payload.type==='token'){if(!modelWrapper){removeTypingIndicator();modelWrapper=mountModelOutputTargetShell();setAgentActivity('Writing...');}
+fullText+=payload.text;if(!renderQueued){renderQueued=true;requestAnimationFrame(flushRender);}}else if(payload.type==='image'){if(!modelWrapper){removeTypingIndicator();modelWrapper=mountModelOutputTargetShell();}
+appendImageCard(modelWrapper,payload.url,payload.prompt);}else if(payload.type==='file_ready'){if(!modelWrapper){removeTypingIndicator();modelWrapper=mountModelOutputTargetShell();}
+appendDownloadCard(modelWrapper,payload.url,payload.filename);}else if(payload.type==='terminal_output'){const ok=payload.returncode===0;pushTerminalLog(`$ exec block #${payload.ordinal} → exit ${payload.returncode}`);if(payload.stdout)pushTerminalLog(`stdout:\n${payload.stdout.slice(0,500)}`);if(payload.stderr)pushTerminalLog(`stderr:\n${payload.stderr.slice(0,500)}`);}else if(payload.type==='complete'){if(modelWrapper)updateAssistantDOM(modelWrapper,fullText);clearAgentActivity();pushTerminalLog('✓ Complete');}}}
+removeTypingIndicator();clearAgentActivity();activeChatTitleHeader.innerText=displayMessage.slice(0,60);exportActionTrigger.classList.remove('hidden');deleteActionTrigger.classList.remove('hidden');if(currentConversationId){cacheConversationMeta(currentConversationId,displayMessage.slice(0,60));const cache=loadConvCache(),msgs=cache.messages[currentConversationId]||[];msgs.push({role:'user',content:message});if(fullText)msgs.push({role:'assistant',content:fullText});cacheConversationMessages(currentConversationId,msgs);}
+synchronizeConversationsHistoryIndex();}catch(err){removeTypingIndicator();clearAgentActivity();const w=mountModelOutputTargetShell(),c=document.createElement('div');c.className='bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] leading-relaxed shadow-xs';c.innerText='Connection error. Please check your network.';w.appendChild(c);console.error('[CHAT]',err);}finally{isGenerating=false;inputActionSubmitBtn.disabled=false;inputActionSubmitBtn.classList.remove('opacity-60');userPromptInputField.focus();}}
+function appendImageCard(wrapper,url,prompt){const holder=document.createElement('div');holder.className='image-generation-holder';holder.innerHTML=`<div class="igh-placeholder"><span class="igh-label"><span class="glow-pulse">●</span>Generating image...</span></div><img src="${url}" alt="${sanitizeOutputText(prompt||'Generated image')}" onload="this.classList.add('loaded');this.parentElement.classList.add('loaded');">`;wrapper.appendChild(holder);conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;pushTerminalLog(`🎨 Image generated: ${url}`);}
+function appendDownloadCard(wrapper,relUrl,filename){const base=SERVER_CONTEXT_HOST.replace(/\/$/,''),fullUrl=relUrl.startsWith('http')?relUrl:`${base}${relUrl}`,a=document.createElement('a');a.href=fullUrl;a.target='_blank';a.rel='noopener noreferrer';a.className='file-creation-card done';a.style.textDecoration='none';const ext=filename.split('.').pop().toUpperCase();a.innerHTML=`<div class="fcc-icon">⭳</div><div class="fcc-meta"><div class="fcc-name">${sanitizeOutputText(filename)}</div><div class="fcc-sub"><span class="fcc-status-dot" style="background:#4ade80;"></span><span>Ready</span></div></div><span class="fcc-openhint">Download</span>`;wrapper.appendChild(a);conversationViewportPanel.scrollTop=conversationViewportPanel.scrollHeight;pushTerminalLog(`📥 ${filename} ready`);}
+function filterHistoryList(){const q=document.getElementById('history-search-input').value.toLowerCase();renderHistoryRows(allHistoryItemsCache.filter(i=>i.title.toLowerCase().includes(q)));}
+function renderHistoryRows(items){if(!items.length){historyItemsBox.innerHTML=`<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`;return;}
+historyItemsBox.innerHTML='';items.forEach(item=>{const row=document.createElement('div');row.className=`chat-row ${item.id===currentConversationId?'active':''}`;row.innerText=item.title;row.onclick=()=>loadConversationSession(item.id);historyItemsBox.appendChild(row);});}
+async function synchronizeConversationsHistoryIndex(){const cache=loadConvCache();let items=cache.list||[];if(items.length){allHistoryItemsCache=items;renderHistoryRows(items);}
+try{const resp=await smartFetchRequest('/conversations',{method:'GET',headers:{'Authorization':globalAuthorizationToken}});if(!resp.ok)return;const backend=await resp.json(),map={};(backend||[]).forEach(it=>map[it.id]=it);items.forEach(it=>{if(!map[it.id])map[it.id]=it;});const merged=Object.values(map).sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));allHistoryItemsCache=merged;renderHistoryRows(merged);const nc=loadConvCache();nc.list=merged;saveConvCache(nc);}catch(e){}}
+async function loadConversationSession(id){try{let logs=[];const r=await smartFetchRequest(`/conversations/${id}/messages`,{method:'GET',headers:{'Authorization':globalAuthorizationToken}});if(r.ok){logs=await r.json();cacheConversationMessages(id,logs);}else{const c=loadConvCache();logs=c.messages[id]||[];}
+currentConversationId=id;exportActionTrigger.classList.remove('hidden');deleteActionTrigger.classList.remove('hidden');conversationViewportPanel.innerHTML='';workbenchSplitPanel.classList.remove('hidden');logs.forEach(log=>{if(log.role==='user')renderUserPromptBubble(log.content);else if(log.role==='assistant'){const w=mountModelOutputTargetShell();updateAssistantDOM(w,log.content);}});synchronizeConversationsHistoryIndex();closeMobileSidebar();}catch(e){}}
+async function triggerSessionDelete(){if(!currentConversationId)return;try{await smartFetchRequest(`/conversations/${currentConversationId}`,{method:'DELETE',headers:{'Authorization':globalAuthorizationToken}});removeCachedConversation(currentConversationId);createNewConversation();}catch(e){}}
+function triggerSessionExport(){if(!currentConversationId)return;const base=SERVER_CONTEXT_HOST.replace(/\/$/,'');window.open(`${base}/api/app/conversations/${currentConversationId}/export?token=${encodeURIComponent(globalAuthorizationToken)}`,'_blank');}
+async function dispatchPdfUpload(){const sel=document.getElementById('pdf-payload-file-element');if(!sel.files.length)return;const fd=new FormData();fd.append('file',sel.files[0]);try{const r=await smartFetchRequest('/upload',{method:'POST',headers:{'Authorization':globalAuthorizationToken},body:fd}),res=await r.json();if(res.ok){alert(`${res.filename} — ${res.status}`);pushTerminalLog(`Uploaded: ${res.filename}`);}else alert(res.error||'Upload failed.');toggleModal('pdf-modal');}catch(e){alert('Upload failed.');}}
+window.addEventListener('DOMContentLoaded',async()=>{const origin=window.location.origin;SERVER_CONTEXT_HOST=(origin.startsWith('file://')||origin.includes('null'))?'http://127.0.0.1:5000':origin;setTheme('light');document.querySelectorAll('[data-brand-logo]').forEach(img=>{img.src=LOGO_URL;img.style.display='';img.onload=()=>{const fb=img.nextElementSibling;if(fb)fb.style.display='none';};img.onerror=()=>img.style.display='none';});const fav=document.createElement('link');fav.rel='icon';fav.href=LOGO_URL;document.head.appendChild(fav);userPromptInputField.addEventListener('input',()=>{userPromptInputField.style.height='auto';userPromptInputField.style.height=Math.min(userPromptInputField.scrollHeight,128)+'px';});userPromptInputField.addEventListener('paste',e=>{const txt=(e.clipboardData||window.clipboardData)?.getData('text')||'',lines=txt.split(/\r\n|\r|\n/).length;if(lines>50){e.preventDefault();setPasteAttachment(txt,lines);}});userPromptInputField.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();interactionSubmissionForm.requestSubmit();}});interactionSubmissionForm.addEventListener('submit',e=>{e.preventDefault();dispatchChatMessage();});const restored=await attemptSilentSessionRestore();bootSplash.style.display='none';if(!restored){loginOverlay.style.display='flex';initializeGoogleOauthGate();}});
+</script>
 </body>
 </html>
