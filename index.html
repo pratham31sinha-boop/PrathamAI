@@ -179,6 +179,7 @@
             border: 2px solid var(--accent-soft); border-top-color: var(--accent);
             animation: bootSpin .7s linear infinite; flex-shrink: 0;
         }
+        #paste-attachment-chip.active { display: flex; }
 
         /* Boot / session-restoring splash (avoids a flash of the login screen
            while we silently check localStorage for a still-valid session) */
@@ -234,7 +235,7 @@
 
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
-            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg">P</div>
+            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
             <div>
                 <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
                 <p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p>
@@ -274,9 +275,8 @@
             </div>
 
             <div class="border-t border-[var(--border)] p-2 safe-bottom">
-                <div class="grid grid-cols-2 gap-1 text-[11px] mb-2 px-1">
-                    <button onclick="triggerHiddenVipFormPrompt()" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center cursor-pointer">🔒 Secure Lock</button>
-                    <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text-dim)] rounded-lg hover:text-[var(--text)] transition-all font-medium text-center cursor-pointer">📎 Ingest</button>
+                <div class="mb-2 px-1">
+                    <button onclick="triggerHiddenVipFormPrompt()" class="w-full py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center text-[11px] cursor-pointer">🔒 Secure Lock</button>
                 </div>
 
                 <div class="nav-row" onclick="toggleProfileDropdown()">
@@ -318,7 +318,7 @@
 
                 <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
                     <div class="m-auto text-center py-12 space-y-2">
-                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
+                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                         <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
@@ -327,9 +327,14 @@
                 <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
                         <div id="agent-activity-strip"><span class="aas-spinner"></span><span id="agent-activity-strip-text">Thinking...</span></div>
+                        <div id="paste-attachment-chip" class="hidden items-center gap-2 bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text)] w-fit">
+                            <span>📄</span>
+                            <span id="paste-attachment-chip-label">paste.txt</span>
+                            <span onclick="clearPasteAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
+                        </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
-                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI... (try @education or @web)" class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
                             <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
                         </form>
                     </div>
@@ -412,10 +417,6 @@
                             <div class="theme-choice-btn" id="theme-btn-dark" onclick="setTheme('dark')">🌙</div>
                         </div>
                     </div>
-                    <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Target host gateway</span>
-                        <input type="text" id="backend-host-url-config" value="" placeholder="Automatic" class="text-xs px-2 py-1.5 border border-[var(--border)] rounded-md bg-[var(--panel-2)] text-[var(--accent)] font-mono focus:outline-none w-40 text-right" onchange="updateBackendHostContext()"/>
-                    </div>
                     <div class="pt-6">
                         <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out</button>
                     </div>
@@ -492,13 +493,19 @@
         const inputActionSubmitBtn = document.getElementById('input-action-submit-btn');
         const exportActionTrigger = document.getElementById('export-action-trigger');
         const deleteActionTrigger = document.getElementById('delete-action-trigger');
-        const backendHostConfig = document.getElementById('backend-host-url-config');
         const workbenchSplitPanel = document.getElementById('workbench-split-panel');
         const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
         const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
         const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
         const agentActivityStrip = document.getElementById('agent-activity-strip');
         const agentActivityStripText = document.getElementById('agent-activity-strip-text');
+
+        // Brand logo: pulled from the root of the GitHub data repo. If your
+        // logo file has a different name/extension than "logo.png", or lives
+        // in a different repo, just change this one line — every "P" badge
+        // in the app (login screen, empty-state, etc.) falls back to the
+        // plain "P" mark automatically if this URL 404s.
+        const LOGO_URL = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/logo.png";
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
@@ -507,6 +514,17 @@
         let currentExtractedPreviewArtifactPayload = "";
         let isGenerating = false;
         let allHistoryItemsCache = [];
+        let pendingPasteAttachment = null; // { content, lines } — see setPasteAttachment()
+
+        function setPasteAttachment(content, lineCount) {
+            pendingPasteAttachment = { content, lines: lineCount };
+            document.getElementById('paste-attachment-chip-label').innerText = `paste.txt (${lineCount} lines)`;
+            document.getElementById('paste-attachment-chip').classList.add('active');
+        }
+        function clearPasteAttachment() {
+            pendingPasteAttachment = null;
+            document.getElementById('paste-attachment-chip').classList.remove('active');
+        }
 
         // Key used to persist the session in localStorage so a page refresh
         // (or fully closing and reopening the browser) does not force the
@@ -587,7 +605,7 @@
             try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
         }
 
-        function handleGoogleIdentityCallback(response) {
+        async function handleGoogleIdentityCallback(response) {
             if (!response || !response.credential) return;
             globalAuthorizationToken = `Bearer ${response.credential}`;
             try {
@@ -597,7 +615,27 @@
 
                 activeUserIdentityEmail = claims.email.toLowerCase();
                 paintIdentityIntoShell(claims);
-                persistSessionLocally(response.credential, claims);
+
+                // Exchange the short-lived (~1hr) Google ID token for a
+                // long-lived backend session token so the person doesn't get
+                // signed out again just from closing the browser for a
+                // while. Falls back to the raw Google token if the exchange
+                // fails for any reason, so sign-in still works either way.
+                let tokenToPersist = response.credential;
+                try {
+                    const exchangeRes = await smartFetchRequest('/auth/exchange', {
+                        method: 'POST', headers: { 'Authorization': globalAuthorizationToken }
+                    });
+                    if (exchangeRes.ok) {
+                        const exchangeData = await exchangeRes.json();
+                        if (exchangeData.session_token) {
+                            tokenToPersist = exchangeData.session_token;
+                            globalAuthorizationToken = `Bearer ${exchangeData.session_token}`;
+                        }
+                    }
+                } catch (e) { /* fall back to raw google credential below */ }
+
+                persistSessionLocally(tokenToPersist, claims);
                 enterAppShell();
             } catch (e) {
                 console.error("[AUTH][FAILURE]", e);
@@ -636,12 +674,12 @@
 
             if (!stored || !stored.credential || !stored.claims) return false;
 
-            const nowSeconds = Math.floor(Date.now() / 1000);
-            if (stored.claims.exp && nowSeconds > stored.claims.exp) {
-                clearPersistedSession();
-                return false;
-            }
-
+            // Note: `stored.claims.exp` reflects the ORIGINAL Google ID
+            // token's ~1-hour expiry, not the actual long-lived session
+            // token we now store as `stored.credential` (see /auth/exchange).
+            // So we deliberately do NOT reject the session here just because
+            // that Google claim looks expired — the backend's
+            // /auth/refresh-check call below is the real source of truth.
             globalAuthorizationToken = `Bearer ${stored.credential}`;
             activeUserIdentityEmail = (stored.claims.email || "").toLowerCase();
 
@@ -760,11 +798,6 @@
             initializeGoogleOauthGate();
         }
 
-        updateBackendHostContext = () => {
-            SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
-            synchronizeConversationsHistoryIndex();
-        }
-
         async function smartFetchRequest(endpointPath, options = {}) {
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
             const pathPermutations = [
@@ -843,7 +876,7 @@
             clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
-                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
+                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                     <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
@@ -930,6 +963,7 @@
             const filename = guessFileName(lang, ordinal);
             card.dataset.filename = filename;
             card.dataset.lang = lang;
+            card.dataset.ordinal = ordinal;
             card._code = content;
             card._lang = lang;
             const ext = (LANG_EXT_MAP[lang] || 'txt').toUpperCase();
@@ -1140,20 +1174,33 @@
         }
 
         async function dispatchChatMessage() {
-            const message = userPromptInputField.value.trim();
-            if (!message || isGenerating) return;
+            const typedMessage = userPromptInputField.value.trim();
+            if ((!typedMessage && !pendingPasteAttachment) || isGenerating) return;
 
             // If the person types the VIP secret code straight into the chat
             // box (instead of using the 🔒 Secure Lock button), intercept it
             // here and open the proper VIP modal instead of sending it to the
             // model — this is what was happening before: "31082011" was being
             // treated as ordinary chat text and answered as if it were a date.
-            if (message === "31082011") {
+            if (typedMessage === "31082011") {
                 userPromptInputField.value = '';
                 userPromptInputField.style.height = 'auto';
                 openVipDetailsStepDirectly();
                 return;
             }
+
+            // Build what's actually sent to the model (typed text + the
+            // pasted content as a fenced block), and what's shown in the
+            // user's own chat bubble (typed text + a small attachment note,
+            // not the raw dump — mirrors how a 50+ line paste becomes a
+            // proper "paste.txt" attachment instead of cluttering the box).
+            let message = typedMessage;
+            let displayMessage = typedMessage;
+            if (pendingPasteAttachment) {
+                message = (typedMessage ? typedMessage + "\n\n" : "") + "```text\n" + pendingPasteAttachment.content + "\n```";
+                displayMessage = (typedMessage ? typedMessage + "\n\n" : "") + `📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;
+            }
+            clearPasteAttachment();
 
             isGenerating = true;
             inputActionSubmitBtn.disabled = true;
@@ -1163,7 +1210,7 @@
                 conversationViewportPanel.innerHTML = '';
             }
 
-            renderUserPromptBubble(message);
+            renderUserPromptBubble(displayMessage);
             userPromptInputField.value = '';
             userPromptInputField.style.height = 'auto';
             mountTypingIndicator();
@@ -1235,6 +1282,21 @@
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
+                        } else if (payload.type === 'terminal_output') {
+                            // Real output from a python code block that was
+                            // actually executed server-side in the background
+                            // terminal — not a simulation.
+                            const ok = payload.returncode === 0;
+                            pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
+                            if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
+                            if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
+                            if (modelWrapper) {
+                                const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-ordinal="${payload.ordinal}"]`);
+                                if (matchingCard) {
+                                    const statusText = matchingCard.querySelector('.fcc-status-text');
+                                    if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
+                                }
+                            }
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
                             pushTerminalLog('Response complete.');
@@ -1244,11 +1306,11 @@
 
                 removeTypingIndicator();
                 clearAgentActivity();
-                activeChatTitleHeader.innerText = message.slice(0, 60);
+                activeChatTitleHeader.innerText = displayMessage.slice(0, 60);
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
                 if (currentConversationId) {
-                    cacheConversationMeta(currentConversationId, message.slice(0, 60));
+                    cacheConversationMeta(currentConversationId, displayMessage.slice(0, 60));
                     const cache = loadConvCache();
                     const existingMsgs = cache.messages[currentConversationId] || [];
                     existingMsgs.push({ role: 'user', content: message });
@@ -1395,12 +1457,31 @@
         window.addEventListener('DOMContentLoaded', async () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
-            backendHostConfig.value = SERVER_CONTEXT_HOST;
             setTheme('light');
+
+            document.querySelectorAll('[data-brand-logo]').forEach(img => {
+                img.src = LOGO_URL;
+                img.style.display = '';
+                img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
+                img.onerror = () => { img.style.display = 'none'; };
+            });
+            const faviconLink = document.createElement('link');
+            faviconLink.rel = 'icon';
+            faviconLink.href = LOGO_URL;
+            faviconLink.onerror = () => faviconLink.remove();
+            document.head.appendChild(faviconLink);
 
             userPromptInputField.addEventListener('input', () => {
                 userPromptInputField.style.height = 'auto';
                 userPromptInputField.style.height = Math.min(userPromptInputField.scrollHeight, 128) + 'px';
+            });
+            userPromptInputField.addEventListener('paste', (e) => {
+                const clipboardText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+                const lineCount = clipboardText.split(/\r\n|\r|\n/).length;
+                if (lineCount > 50) {
+                    e.preventDefault();
+                    setPasteAttachment(clipboardText, lineCount);
+                }
             });
             userPromptInputField.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
