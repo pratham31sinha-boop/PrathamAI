@@ -1,21 +1,7 @@
 """
 Pratham AI - Full Production Backend Architecture
 =================================================
-Complete implementation with:
-  ✅ GitHub conversation logs: data/<email>/<date>.txt
-  ✅ VIP registrations: data/vip.txt
-  ✅ Content safety guard with flagging: data/flagged/<date>.txt
-  ✅ Session tokens (no sign-out after closing browser)
-  ✅ Image generation (Pollinations AI) - FULLY WORKING
-  ✅ @education (hidden feature, PDF-backed Q&A from data/education/)
-  ✅ Auto @web search (runs automatically, no need to type @web every time)
-  ✅ ZIP/PDF generation via background Python terminal
-  ✅ Real Python code execution with terminal output
-  ✅ Public memory: prompt engineering teachings → public_data.txt (repo root)
-  ✅ File bundle parsing: user pastes code bundle → AI creates individual files → ZIPs them
-  ✅ Multi-provider LLM failover: Groq → OpenRouter → Cerebras → Mistral
-  ✅ Multi-file upload support (PDF, DOCX, TXT, CSV, JSON, ZIP, etc.)
-  ✅ Logo integration from GitHub
+Complete implementation with activity feed, proper file generation
 """
 
 import os
@@ -288,6 +274,7 @@ def _build_zip_from_files(files_dict: dict) -> bytes:
     return buf.read()
 
 def _build_zip_from_response(assistant_text: str) -> bytes:
+    """Extracts code blocks from response and creates ZIP"""
     buf = io.BytesIO()
     blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -297,24 +284,44 @@ def _build_zip_from_response(assistant_text: str) -> bytes:
                     "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
                     "css": "css", "json": "json", "bash": "sh", "text": "txt", "tsx": "tsx", "ts": "ts"
                 }.get((lang or "text").lower(), "txt")
-                zf.writestr(f"file_{i}.{ext}", content)
+                filename = f"file_{i}.{ext}"
+                zf.writestr(filename, content)
         else:
             zf.writestr("response.txt", assistant_text)
     buf.seek(0)
     return buf.read()
 
-def _build_pdf_from_response(assistant_text: str):
+def _build_pdf_from_response(assistant_text: str) -> tuple:
+    """Builds ACTUAL PDF from response text"""
     if _PDF_WRITE_SUPPORTED:
-        pdf = _FPDF()
-        pdf.add_page()
-        pdf.set_font("Helvetica", size=11)
-        for line in assistant_text.split("\n"):
-            safe_line = line.encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 6, safe_line)
-        return bytes(pdf.output(dest="S")), "generated.pdf", "application/pdf"
+        try:
+            pdf = _FPDF()
+            pdf.add_page()
+            pdf.set_font("Helvetica", size=11)
+            
+            # Add title
+            pdf.set_font("Helvetica", 'B', size=14)
+            pdf.cell(0, 10, "Generated Content", ln=True)
+            pdf.set_font("Helvetica", size=11)
+            pdf.ln(5)
+            
+            # Add content
+            for line in assistant_text.split("\n"):
+                safe_line = line.encode("latin-1", "replace").decode("latin-1")
+                if safe_line.strip():
+                    pdf.multi_cell(0, 6, safe_line)
+                else:
+                    pdf.ln(3)
+            
+            return bytes(pdf.output(dest="S")), "generated.pdf", "application/pdf"
+        except Exception as e:
+            print(f"[PDF][ERROR] {e}")
+            return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+    
+    # Fallback: return as text file
     return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
 
-# ── DOWNLOAD ROUTES (Multiple paths for Vercel compatibility) ──
+# ── DOWNLOAD ROUTES ──
 @app.route("/download/<token>", methods=["GET"])
 @app.route("/api/download/<token>", methods=["GET"])
 @app.route("/api/app/download/<token>", methods=["GET"])
@@ -334,7 +341,6 @@ def download_generated_file(token):
         print(f"[DOWNLOAD][ERROR] {e}")
         return jsonify({"error": str(e)}), 500
 
-# Alternative endpoint for direct binary response (fallback for Vercel)
 @app.route("/download-direct/<token>", methods=["GET"])
 @app.route("/api/download-direct/<token>", methods=["GET"])
 @app.route("/api/app/download-direct/<token>", methods=["GET"])
@@ -431,7 +437,7 @@ def _find_best_education_excerpt(question: str):
                 best = {"score": score, "filename": filename, "excerpt": para[:1800]}
     return best if best["filename"] else None
 
-# ── AUTO @web SEARCH (runs automatically on every message > 5 chars) ──
+# ── AUTO @web SEARCH ──
 def _web_search_snippets(query: str, max_results: int = 4):
     try:
         encoded = urllib.parse.quote(query)
@@ -469,7 +475,7 @@ def _decode_google_claims(token: str):
     except Exception:
         return None
 
-# ── SESSION TOKENS (fixes sign-out after browser close) ──
+# ── SESSION TOKENS ──
 _SESSION_TOKEN_PREFIX = "PAI1"
 
 def _issue_session_token(user: dict) -> str:
@@ -580,7 +586,7 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
-# ── PUBLIC MEMORY (prompt engineering teachings → public_data.txt at repo root) ──
+# ── PUBLIC MEMORY ──
 _TEACHING_INTENT_RE = re.compile(
     r"\b(remember that|remember this|note this|note that|save this|learn this|keep in mind|"
     r"for future reference|always do|from now on|don't forget|never forget)\b",
@@ -599,7 +605,7 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
     _write_to_github_repository("public_data.txt", entry)
 
 def _extract_public_memories() -> str:
-    """Fetches public_data.txt from GitHub and returns the content"""
+    """Fetches public_data.txt from GitHub"""
     if not GITHUB_TOKEN:
         return "No memories stored yet."
     
@@ -636,35 +642,13 @@ SYSTEM_PROMPT = (
     "\n\n"
     "**IMAGE GENERATION:**\n"
     "When user asks to 'make img', 'generate image', 'draw', 'create picture', etc.:\n"
-    "- Respond with a brief acknowledgment\n"
     "- The system will automatically generate the image using Pollinations AI\n"
-    "- Do NOT try to create images yourself - the system handles it\n"
-    "\n"
-    "**FILE BUNDLE GENERATION:**\n"
-    "When user pastes code like:\n"
-    "### index.html\n"
-    "<!DOCTYPE html>...\n"
-    "### app.py\n"
-    "import os...\n"
-    "\n"
-    "And asks 'make these files into html' or 'make these files' or 'zip these':\n"
-    "1. The system will automatically detect the file bundle\n"
-    "2. Parse each file from the bundle\n"
-    "3. Create individual files\n"
-    "4. ZIP them together\n"
-    "DO NOT explain - just respond briefly that files will be created\n"
+    "- Just acknowledge the request briefly\n"
     "\n"
     "**FILE GENERATION WITH ZIP/PDF:**\n"
     "When user asks to 'make zip', 'create pdf', 'generate bundle', etc.:\n"
-    "- Respond that the file is being created\n"
     "- The system will execute Python code to generate the file\n"
-    "- Do NOT write Python code yourself - the system handles it\n"
-    "\n"
-    "**LARGE FILE HANDLING:**\n"
-    "If generating very large HTML (>400 lines):\n"
-    "1. Generate as much as you can\n"
-    "2. At the end, add: `<!-- CONTINUATION NEEDED: html_1.html -->`\n"
-    "3. User clicks Continue, you resume exactly where you left off\n"
+    "- Just acknowledge the request briefly\n"
     "\n"
     "**FOR ALL OTHER REQUESTS:**\n"
     "Respond normally with full explanations, code examples, and detailed answers.\n"
@@ -678,14 +662,11 @@ _IMAGE_INTENT_RE = re.compile(
 )
 
 def _detect_image_prompt(message: str) -> str:
-    # Check for explicit "/image" command
     match = re.search(r"^/image\s+(.+)$", message.strip(), re.IGNORECASE)
     if match:
         return match.group(1).strip(" .!")
     
-    # Check for natural language image requests
     if re.search(r"\b(mak|generat|creat|draw|paint|design|illustrat)\w+.{0,30}\b(img|image|picture|photo|art|drawing|portrait|man|woman|person)\b", message, re.IGNORECASE):
-        # Extract what they want to make an image of
         prompt_match = re.search(
             r"(?:of|showing|depicting|for|with|:)\s*(.+?)(?:\.|$|\?|!)",
             message,
@@ -694,7 +675,6 @@ def _detect_image_prompt(message: str) -> str:
         if prompt_match:
             return prompt_match.group(1).strip(" .!?")
         
-        # Fallback: extract descriptive part
         descriptive_match = re.search(
             r"\b(?:img|image|picture|photo|art|drawing|portrait|man|woman|person)\b\s+(.+?)(?:\.|$|\?|!)",
             message,
@@ -703,11 +683,9 @@ def _detect_image_prompt(message: str) -> str:
         if descriptive_match:
             return descriptive_match.group(1).strip(" .!?")
         
-        # Last resort: use key terms from message
         words = re.findall(r"\b[a-z]+\b", message.lower())
         if words:
-            # Filter out common words
-            filtered = [w for w in words if w not in ['make', 'make', 'img', 'image', 'of', 'a', 'an', 'the', 'in', 'with', 'picture', 'photo', 'art', 'drawing']]
+            filtered = [w for w in words if w not in ['make', 'img', 'image', 'of', 'a', 'an', 'the', 'in', 'with', 'picture', 'photo', 'art', 'drawing']]
             if filtered:
                 return " ".join(filtered[:5])
     
@@ -720,11 +698,9 @@ def _pollinations_image_url(prompt_text: str) -> str:
     return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
 
 def _detect_file_bundle_intent(message: str) -> bool:
-    """Detects if message contains code bundle (### filename markers)"""
     return bool(re.search(r"###\s+\w+\.|==\s+\w+\.", message))
 
 def _detect_create_files_intent(message: str) -> bool:
-    """Detects if user wants to create/zip files from a bundle"""
     return bool(re.search(r"\b(make|create|generate|turn|convert|zip|bundle|create files|make files)\b.{0,30}\b(files|zip|bundle|archive)\b", message, re.IGNORECASE))
 
 def _sse(payload: dict) -> str:
@@ -1021,17 +997,17 @@ def chat_stream():
     if has_file_bundle and should_create_files:
         _append_message(conv_id, "user", message)
         
-        # Parse the code bundle
         files_dict = _parse_code_bundle(message)
         
         if files_dict:
-            # Generate ZIP from parsed files
             zip_bytes = _build_zip_from_files(files_dict)
             token = _store_generated_file(zip_bytes, "files.zip", "application/zip")
             
             def generate_file_bundle_zip():
                 yield _sse({"type": "metadata", "conversation_id": conv_id})
                 file_list = ", ".join(files_dict.keys())
+                yield _sse({"type": "activity", "text": f"Edited {len(files_dict)} files"})
+                yield _sse({"type": "activity", "text": "Ran a bundler"})
                 yield _sse({"type": "token", "text": f"✅ Created files: {file_list}\n\nZIP package ready for download."})
                 yield _sse({"type": "file_ready", "url": f"/api/app/download/{token}", "filename": "files.zip"})
                 yield _sse({"type": "complete"})
@@ -1042,7 +1018,7 @@ def chat_stream():
             resp.headers["Access-Control-Allow-Credentials"] = "true"
             return resp
 
-    # ── IMAGE GENERATION (FULLY AUTOMATED) ──
+    # ── IMAGE GENERATION ──
     image_prompt = _detect_image_prompt(message)
     if image_prompt:
         _append_message(conv_id, "user", message)
@@ -1059,6 +1035,7 @@ def chat_stream():
 
         def generate_image():
             yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "activity", "text": "Ran image generation command"})
             yield _sse({"type": "token", "text": assistant_note})
             yield _sse({"type": "image", "url": image_url, "prompt": image_prompt})
             yield _sse({"type": "complete"})
@@ -1102,7 +1079,7 @@ def chat_stream():
                 " The user tagged @education but no relevant PDF content could be found in the "
                 "data/education library. Say so plainly instead of guessing."
             )
-    # ── AUTO @web SEARCH (runs automatically on every message > 5 chars) ──
+    # ── AUTO @web SEARCH ──
     elif len(message.strip()) > 5:
         outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         results = _web_search_snippets(outgoing_user_message or message)
@@ -1156,6 +1133,7 @@ def chat_stream():
                         continue
                     block_code = block_match.group(2)
                     try:
+                        yield _sse({"type": "activity", "text": f"Ran a command (Python block #{block_ordinal})"})
                         exec_result = subprocess.run(
                             [sys.executable, "-c", block_code],
                             capture_output=True, text=True, timeout=8
@@ -1183,10 +1161,12 @@ def chat_stream():
             # ── Background file generation ──
             try:
                 if _ZIP_INTENT_RE.search(message):
+                    yield _sse({"type": "activity", "text": "Ran a bundler command"})
                     zip_bytes = _build_zip_from_response(assistant_response)
                     token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
                     yield _sse({"type": "file_ready", "url": f"/api/app/download/{token}", "filename": "pratham_ai_output.zip"})
                 elif _PDF_INTENT_RE.search(message):
+                    yield _sse({"type": "activity", "text": "Ran PDF generation command"})
                     pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
                     yield _sse({"type": "file_ready", "url": f"/api/app/download/{token}", "filename": pdf_name})
