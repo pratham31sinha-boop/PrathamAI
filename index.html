@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#c2613f">
     <title>Pratham AI — Enterprise Suite</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    
+
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    
+
     <style>
         :root {
             --bg: #f6f3ec;
@@ -24,6 +25,7 @@
             --bubble-model: #ffffff;
             --terminal-bg: #1e1c19;
             --terminal-text: #f4f0e6;
+            --shadow-premium: 0 8px 30px rgba(0,0,0,0.06);
         }
 
         .dark-mode {
@@ -39,6 +41,15 @@
             --bubble-model: #23201c;
             --terminal-bg: #090807;
             --terminal-text: #4ade80;
+            --shadow-premium: 0 8px 30px rgba(0,0,0,0.35);
+        }
+
+        * { -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior: none;
         }
 
         body {
@@ -47,107 +58,196 @@
             color: var(--text);
             transition: background 0.2s ease, color 0.2s ease;
         }
-        
-        .brand-serif {
-            font-family: 'Source Serif 4', serif;
-        }
+
+        .brand-serif { font-family: 'Source Serif 4', serif; }
 
         .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
         .workspace-scrollpane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9px; }
+
+        .premium-card {
+            box-shadow: var(--shadow-premium);
+        }
+
+        .accent-gradient {
+            background: linear-gradient(135deg, var(--accent), #d98a5f);
+        }
+
+        .glow-pulse {
+            animation: glowPulse 2.2s ease-in-out infinite;
+        }
+        @keyframes glowPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        .typing-dot {
+            animation: typingBounce 1.1s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-4px); opacity: 1; }
+        }
+
+        /* ===== Mobile responsiveness ===== */
+        #sidebar-panel {
+            transition: transform 0.28s ease, width 0.28s ease;
+        }
+
+        .mobile-hamburger { display: none; }
+
+        @media (max-width: 820px) {
+            #sidebar-panel {
+                position: fixed;
+                inset: 0 auto 0 0;
+                z-index: 40;
+                width: 82vw;
+                max-width: 300px;
+                transform: translateX(-100%);
+                box-shadow: 0 0 40px rgba(0,0,0,0.25);
+            }
+            #sidebar-panel.sidebar-open { transform: translateX(0); }
+
+            #sidebar-scrim {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.35);
+                z-index: 35;
+            }
+            #sidebar-scrim.scrim-visible { display: block; }
+
+            .mobile-hamburger { display: flex; }
+
+            #workbench-split-panel {
+                position: fixed;
+                inset: 0;
+                width: 100%;
+                z-index: 45;
+                transform: translateX(100%);
+                transition: transform 0.28s ease;
+            }
+            #workbench-split-panel.workbench-open { transform: translateX(0); }
+
+            #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
+            #login-overlay .brand-serif { font-size: 1.6rem; }
+        }
+
+        @supports (padding: max(0px)) {
+            .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+            .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
 
-    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50">
-        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl space-y-6">
-            <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
-            <p class="text-sm text-[var(--text-dim)]">Enterprise System Node Validation Portal</p>
+    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
+            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg">P</div>
+            <div>
+                <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
+                <p class="text-sm text-[var(--text-dim)] mt-1">Enterprise System Node Validation Portal</p>
+            </div>
             <hr class="border-[var(--border)]">
-            
+
             <div class="flex justify-center w-full py-2 min-h-[44px]">
                 <div id="googleSignInGate" class="w-full flex justify-center items-center">
                     <div id="gsiButtonContainer"></div>
-                   </div>
                 </div>
             </div>
-            
-            <p class="text-[10px] text-[var(--text-dim)] font-mono">Workspace ID Context Reference: ksroorygbrhwpnqtjbxo</p>
+
+            <p class="text-[10px] text-[var(--text-dim)] font-mono opacity-60">Secure workspace session</p>
         </div>
     </div>
 
+    <div id="sidebar-scrim" onclick="closeMobileSidebar()"></div>
+
     <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden">
-        
-        <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between z-30 transition-all duration-300">
+
+        <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between safe-top">
             <div class="p-4 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between">
                     <span class="brand-serif text-xl font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
-                    <button onclick="toggleColorTheme()" class="p-1 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md hover:border-[var(--accent)] transition-colors cursor-pointer">🌗 Mode</button>
+                    <div class="flex items-center gap-1">
+                        <button onclick="toggleColorTheme()" class="p-1.5 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md hover:border-[var(--accent)] transition-colors cursor-pointer">🌗</button>
+                        <button onclick="closeMobileSidebar()" class="mobile-hamburger p-1.5 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md cursor-pointer">✕</button>
+                    </div>
                 </div>
-                
-                <div class="flex items-center gap-3 p-2 rounded-xl bg-[var(--panel)] border border-[var(--border)] shadow-xs">
-                    <div id="user-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--border)] flex items-center justify-center font-bold text-xs overflow-hidden text-[var(--text)]">U</div>
+
+                <!-- Profile block: Google photo + name, top of sidebar -->
+                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[var(--panel)] border border-[var(--border)] premium-card">
+                    <div id="user-avatar-frame" class="w-10 h-10 rounded-full bg-[var(--border)] flex items-center justify-center font-bold text-xs overflow-hidden text-[var(--text)] ring-2 ring-[var(--accent-soft)]">U</div>
                     <div class="flex-1 min-w-0">
                         <p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Resolving Identity...</p>
                         <p id="role-badge-display" class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-dim)] font-mono">Evaluating...</p>
                     </div>
-                    <button onclick="triggerIdentitySignout()" class="text-xs text-[var(--accent)] font-medium hover:underline">Exit</button>
                 </div>
 
-                <button onclick="createNewConversation()" class="w-full flex items-center justify-center gap-2 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] py-2.5 px-4 rounded-xl text-sm font-medium hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer shadow-xs">
+                <button onclick="createNewConversation()" class="w-full flex items-center justify-center gap-2 accent-gradient text-white py-2.5 px-4 rounded-xl text-sm font-semibold hover:opacity-90 transition-all cursor-pointer shadow-sm">
                     ＋ New Conversation
                 </button>
-                
-                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-1">Active Indexes</div>
+
+                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-1 pt-1">Active Indexes</div>
                 <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5"></div>
             </div>
 
-            <div class="p-3 border-t border-[var(--border)] bg-[var(--sidebar)] flex flex-col gap-2">
-                <div class="p-2 bg-[var(--panel)] rounded-xl border border-[var(--border)]">
-                    <label class="text-[9px] uppercase font-bold text-[var(--text-dim)] tracking-wider block mb-1">Target Host Gateway</label>
-                    <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[var(--bg)] text-xs px-2 py-1 border border-[var(--border)] rounded-md text-[var(--accent)] font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
-                </div>
-                
+            <div class="p-3 border-t border-[var(--border)] bg-[var(--sidebar)] flex flex-col gap-2 safe-bottom">
                 <div class="grid grid-cols-2 gap-1 text-[11px]">
                     <button onclick="triggerHiddenVipFormPrompt()" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center cursor-pointer shadow-xs">🔒 Secure Lock</button>
                     <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text-dim)] rounded-lg hover:text-[var(--text)] transition-all font-medium text-center cursor-pointer shadow-xs">📎 Ingest Vectors</button>
                 </div>
+
+                <!-- Settings, bottom of sidebar -->
+                <button onclick="toggleModal('settings-modal')" class="w-full flex items-center justify-center gap-2 py-2 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] rounded-xl text-xs font-semibold hover:border-[var(--accent)] transition-all cursor-pointer shadow-xs">
+                    ⚙️ Settings
+                </button>
             </div>
         </aside>
 
         <main class="flex-1 h-full flex flex-row min-w-0 bg-[var(--bg)]">
-            
+
             <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
-                <header class="h-14 border-b border-[var(--border)] px-4 flex items-center justify-between bg-[var(--panel)] z-20">
-                    <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">Pipeline Channel Standard Core</h2>
+                <header class="h-14 border-b border-[var(--border)] px-3 sm:px-4 flex items-center justify-between bg-[var(--panel)] z-20 safe-top">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <button onclick="openMobileSidebar()" class="mobile-hamburger p-1.5 border border-[var(--border)] bg-[var(--panel)] rounded-md text-sm cursor-pointer">☰</button>
+                        <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">Pipeline Channel Standard Core</h2>
+                    </div>
                     <div class="flex items-center gap-2">
+                        <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">⚡</button>
                         <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">Export</button>
                         <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">Drop</button>
                     </div>
                 </header>
 
-                <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
+                <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
                     <div class="m-auto text-center py-12 space-y-2">
+                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
-                        <p class="text-xs text-[var(--text-dim)] max-w-xs">Submit queries or request structured file components code execution frames.</p>
+                        <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
                 </div>
 
-                <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-4 z-20">
+                <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
-                        <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all">
+                        <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
-                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI... (Use @education to search vectors)" class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
-                            <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center bg-[var(--accent)] text-white rounded-full hover:opacity-90 transition-opacity shadow-xs cursor-pointer text-sm font-bold">↑</button>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
                         </form>
                     </div>
                 </div>
             </div>
 
             <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 mobile-hamburger">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)]">Workbench</span>
+                    <button onclick="toggleWorkbenchMobile()" class="text-sm cursor-pointer">✕</button>
+                </div>
                 <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
                     <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
                         <span>&gt;_ Live Agent Terminal Output Logs</span>
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
                     </div>
                     <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
                 </div>
@@ -166,14 +266,34 @@
     </div>
 
     <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
             <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
                 <h4 class="text-sm font-bold text-[var(--text)]">Ingest PDF Context Vector</h4>
                 <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-5 flex flex-col gap-4">
                 <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
-                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-[var(--accent)] text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Initialize Document Index</button>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Initialize Document Index</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">Settings</h4>
+                <button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div class="p-5 flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-[var(--text)]">Appearance</span>
+                    <button onclick="toggleColorTheme()" class="text-xs px-3 py-1.5 border border-[var(--border)] rounded-lg bg-[var(--sidebar)] cursor-pointer">🌗 Toggle theme</button>
+                </div>
+                <div class="p-2.5 bg-[var(--sidebar)] rounded-xl border border-[var(--border)]">
+                    <label class="text-[9px] uppercase font-bold text-[var(--text-dim)] tracking-wider block mb-1">Target Host Gateway</label>
+                    <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[var(--bg)] text-xs px-2 py-1.5 border border-[var(--border)] rounded-md text-[var(--accent)] font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
+                </div>
+                <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Sign out</button>
             </div>
         </div>
     </div>
@@ -181,8 +301,9 @@
     <script>
         const loginOverlay = document.getElementById('login-overlay');
         const appShell = document.getElementById('app-shell');
-        
+
         const sidebarPanel = document.getElementById('sidebar-panel');
+        const sidebarScrim = document.getElementById('sidebar-scrim');
         const historyItemsBox = document.getElementById('history-items-box');
         const activeChatTitleHeader = document.getElementById('active-chat-title-header');
         const conversationViewportPanel = document.getElementById('conversation-viewport-panel');
@@ -191,11 +312,12 @@
         const roleBadgeDisplay = document.getElementById('role-badge-display');
         const profileNameDisplay = document.getElementById('profile-name-display');
         const userAvatarFrame = document.getElementById('user-avatar-frame');
-        
+        const inputActionSubmitBtn = document.getElementById('input-action-submit-btn');
+
         const exportActionTrigger = document.getElementById('export-action-trigger');
         const deleteActionTrigger = document.getElementById('delete-action-trigger');
         const backendHostConfig = document.getElementById('backend-host-url-config');
-        
+
         const workbenchSplitPanel = document.getElementById('workbench-split-panel');
         const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
         const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
@@ -205,26 +327,40 @@
         let SERVER_CONTEXT_HOST = "";
         let activeUserIdentityEmail = "";
         let currentExtractedPreviewArtifactPayload = "";
+        let isGenerating = false;
+
+        // ===== Mobile sidebar / workbench controls =====
+        function openMobileSidebar() {
+            sidebarPanel.classList.add('sidebar-open');
+            sidebarScrim.classList.add('scrim-visible');
+        }
+        function closeMobileSidebar() {
+            sidebarPanel.classList.remove('sidebar-open');
+            sidebarScrim.classList.remove('scrim-visible');
+        }
+        function toggleWorkbenchMobile() {
+            workbenchSplitPanel.classList.toggle('workbench-open');
+        }
 
         // Force function binding directly onto global window stack before library initialization loop
         function handleGoogleIdentityCallback(response) {
             if (!response || !response.credential) return;
             globalAuthorizationToken = `Bearer ${response.credential}`;
-            
+
             try {
                 const base64Url = response.credential.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const claims = JSON.parse(window.atob(base64));
-                
+
                 activeUserIdentityEmail = claims.email.toLowerCase();
                 profileNameDisplay.innerText = claims.name || claims.email;
-                if(claims.picture) {
+                if (claims.picture) {
                     userAvatarFrame.innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover" referrerpolicy="no-referrer">`;
                 }
-                
+
                 const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
                 const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
-                
+
                 if (creators.includes(activeUserIdentityEmail)) {
                     roleBadgeDisplay.innerText = "App Creator Profile";
                     roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded";
@@ -235,51 +371,71 @@
                     roleBadgeDisplay.innerText = "Validated System User";
                     roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded";
                 }
-                
-                // Unconditional layout display swaps to drop gate view layer
+
                 loginOverlay.style.display = 'none';
                 appShell.style.display = 'flex';
-                
+
                 synchronizeConversationsHistoryIndex();
-            } catch(e) {
+            } catch (e) {
                 console.error("[AUTH][FAILURE] Token mapping exception context: ", e);
             }
         }
-        
-        // Pinned explicitly to current active window execution scope
+
         window.handleGoogleIdentityCallback = handleGoogleIdentityCallback;
 
-function initializeGoogleOauthGate() {
-    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-        google.accounts.id.initialize({
-            client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-            callback: window.handleGoogleIdentityCallback,
-            auto_select: false
-        });
+        function initializeGoogleOauthGate() {
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.initialize({
+                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
+                    callback: window.handleGoogleIdentityCallback,
+                    auto_select: false
+                });
 
-        google.accounts.id.renderButton(
-            document.getElementById("gsiButtonContainer"),
-            {
-                type: "standard",
-                shape: "rectangular",
-                theme: "outline",
-                text: "signin_with",
-                size: "large",
-                logo_alignment: "left",
-                width: 240
+                google.accounts.id.renderButton(
+                    document.getElementById("gsiButtonContainer"),
+                    {
+                        type: "standard",
+                        shape: "rectangular",
+                        theme: "outline",
+                        text: "signin_with",
+                        size: "large",
+                        logo_alignment: "left",
+                        width: 240
+                    }
+                );
+            } else {
+                setTimeout(initializeGoogleOauthGate, 100);
             }
-        );
-    } else {
-        setTimeout(initializeGoogleOauthGate, 100);
-    }
-}
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
             backendHostConfig.value = SERVER_CONTEXT_HOST;
-            
+
             initializeGoogleOauthGate();
+
+            // Auto-resize textarea
+            userPromptInputField.addEventListener('input', () => {
+                userPromptInputField.style.height = 'auto';
+                userPromptInputField.style.height = Math.min(userPromptInputField.scrollHeight, 128) + 'px';
+            });
+
+            // Enter to send, Shift+Enter for newline
+            userPromptInputField.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    interactionSubmissionForm.requestSubmit();
+                }
+            });
+
+            // THE CRITICAL FIX: form previously had no submit handler, so clicking
+            // send triggered a native HTML form submission -> full page reload ->
+            // in-memory auth token and state wiped -> looked like an auto-logout.
+            interactionSubmissionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                dispatchChatMessage();
+            });
         });
 
         function toggleColorTheme() {
@@ -291,8 +447,8 @@ function initializeGoogleOauthGate() {
             if (entryCode === "31082011") {
                 const companionName = prompt("Enter your Name:");
                 const affiliation = prompt("Specify relationship details context with Pratham:");
-                
-                if(companionName && affiliation) {
+
+                if (companionName && affiliation) {
                     smartFetchRequest('/auth/vip-register', {
                         method: 'POST',
                         headers: {
@@ -301,7 +457,7 @@ function initializeGoogleOauthGate() {
                         },
                         body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
                     }).then(res => res.json()).then(data => {
-                        if(data.ok) {
+                        if (data.ok) {
                             roleBadgeDisplay.innerText = "Internal Core VIP Tier";
                             roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded text-center";
                             alert("Identity context recorded into vault file workspace successfully.");
@@ -318,8 +474,10 @@ function initializeGoogleOauthGate() {
         function triggerIdentitySignout() {
             globalAuthorizationToken = "";
             activeUserIdentityEmail = "";
+            currentConversationId = null;
             appShell.style.display = 'none';
             loginOverlay.style.display = 'flex';
+            toggleModal('settings-modal');
             initializeGoogleOauthGate();
         }
 
@@ -344,7 +502,7 @@ function initializeGoogleOauthGate() {
             for (const targetUrl of pathPermutations) {
                 try {
                     const response = await fetch(targetUrl, options);
-                    if (response.status !== 404) return response; 
+                    if (response.status !== 404) return response;
                     lastResponse = response;
                 } catch (err) {}
             }
@@ -363,20 +521,23 @@ function initializeGoogleOauthGate() {
             exportActionTrigger.classList.add('hidden');
             deleteActionTrigger.classList.add('hidden');
             workbenchSplitPanel.classList.add('hidden');
+            workbenchSplitPanel.classList.remove('workbench-open');
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
+                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
                     <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
-                    <p class="text-xs text-[var(--text-dim)] max-w-xs">Submit queries or request structured file components code execution frames.</p>
+                    <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
             `;
             synchronizeConversationsHistoryIndex();
+            closeMobileSidebar();
         }
 
         function renderUserPromptBubble(promptText) {
             const row = document.createElement('div');
             row.className = 'w-full flex justify-end';
             row.innerHTML = `
-                <div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">
+                <div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">
                     ${sanitizeOutputText(promptText)}
                 </div>
             `;
@@ -389,11 +550,32 @@ function initializeGoogleOauthGate() {
             containerNode.className = 'w-full flex flex-col items-start gap-1';
             containerNode.innerHTML = `
                 <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
-                <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[90%] leading-relaxed break-words shadow-xs"></div>
+                <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs"></div>
             `;
             conversationViewportPanel.appendChild(containerNode);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
             return containerNode.querySelector('.model-stream-target-node');
+        }
+
+        function mountTypingIndicator() {
+            const row = document.createElement('div');
+            row.className = 'w-full flex flex-col items-start gap-1';
+            row.id = 'typing-indicator-row';
+            row.innerHTML = `
+                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
+                <div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs">
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                </div>
+            `;
+            conversationViewportPanel.appendChild(row);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const row = document.getElementById('typing-indicator-row');
+            if (row) row.remove();
         }
 
         function sanitizeOutputText(rawText) {
@@ -402,15 +584,116 @@ function initializeGoogleOauthGate() {
             }[char] || char));
         }
 
+        // ===== THE ACTUAL SEND / STREAM LOGIC (previously missing) =====
+        async function dispatchChatMessage() {
+            const message = userPromptInputField.value.trim();
+            if (!message || isGenerating) return;
+
+            isGenerating = true;
+            inputActionSubmitBtn.disabled = true;
+            inputActionSubmitBtn.classList.add('opacity-60');
+
+            // Clear the empty-state placeholder on first message
+            if (conversationViewportPanel.children.length === 1 && conversationViewportPanel.querySelector('.m-auto')) {
+                conversationViewportPanel.innerHTML = '';
+            }
+
+            renderUserPromptBubble(message);
+            userPromptInputField.value = '';
+            userPromptInputField.style.height = 'auto';
+            mountTypingIndicator();
+
+            try {
+                const response = await smartFetchRequest('/chat-stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': globalAuthorizationToken
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        conversation_id: currentConversationId
+                    })
+                });
+
+                if (!response.ok) {
+                    removeTypingIndicator();
+                    if (response.status === 401) {
+                        // Only ever sign out explicitly on a genuine auth rejection
+                        alert("Session expired. Please sign in again.");
+                        triggerIdentitySignout();
+                    } else {
+                        const cell = mountModelOutputTargetShell();
+                        cell.innerText = "Something went wrong reaching the server. Please try again.";
+                    }
+                    return;
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let modelCell = null;
+                let fullText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop();
+
+                    for (const evt of events) {
+                        const line = evt.trim();
+                        if (!line.startsWith('data: ')) continue;
+                        const jsonStr = line.slice(6);
+                        let payload;
+                        try { payload = JSON.parse(jsonStr); } catch (e) { continue; }
+
+                        if (payload.type === 'metadata') {
+                            currentConversationId = payload.conversation_id;
+                        } else if (payload.type === 'token') {
+                            if (!modelCell) {
+                                removeTypingIndicator();
+                                modelCell = mountModelOutputTargetShell();
+                            }
+                            fullText += payload.text;
+                            modelCell.innerHTML = sanitizeOutputText(fullText).replace(/\n/g, '<br>');
+                            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                        } else if (payload.type === 'complete') {
+                            if (fullText) evaluateAndParsePreviewSandboxPayload(fullText);
+                        }
+                    }
+                }
+
+                removeTypingIndicator();
+                activeChatTitleHeader.innerText = message.slice(0, 60);
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
+                synchronizeConversationsHistoryIndex();
+
+            } catch (err) {
+                removeTypingIndicator();
+                const cell = mountModelOutputTargetShell();
+                cell.innerText = "Connection interrupted. Please check the target host gateway in Settings and try again.";
+                console.error("[CHAT][STREAM ERROR]", err);
+            } finally {
+                isGenerating = false;
+                inputActionSubmitBtn.disabled = false;
+                inputActionSubmitBtn.classList.remove('opacity-60');
+                userPromptInputField.focus();
+            }
+        }
+
         async function synchronizeConversationsHistoryIndex() {
             try {
                 const response = await smartFetchRequest(`/conversations`, {
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
-                if(!response.ok) return;
+                if (!response.ok) return;
                 const items = await response.json();
-                
+
                 if (items.length === 0) {
                     historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No logged history vectors found.</p>`;
                     return;
@@ -437,16 +720,16 @@ function initializeGoogleOauthGate() {
                     method: 'GET',
                     headers: { 'Authorization': globalAuthorizationToken }
                 });
-                if(!response.ok) throw new Error("Load structural exception context.");
+                if (!response.ok) throw new Error("Load structural exception context.");
                 const logs = await response.json();
-                
+
                 currentConversationId = conversationId;
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
-                
+
                 conversationViewportPanel.innerHTML = '';
                 logs.forEach(log => {
-                    if(log.role === 'user') {
+                    if (log.role === 'user') {
                         renderUserPromptBubble(log.content);
                     } else if (log.role === 'assistant') {
                         const cell = mountModelOutputTargetShell();
@@ -455,6 +738,7 @@ function initializeGoogleOauthGate() {
                     }
                 });
                 synchronizeConversationsHistoryIndex();
+                closeMobileSidebar();
             } catch (err) {}
         }
 
@@ -470,14 +754,14 @@ function initializeGoogleOauthGate() {
         }
 
         function triggerSessionExport() {
-            if(!currentConversationId) return;
+            if (!currentConversationId) return;
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
             window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
         }
 
         async function dispatchPdfUpload() {
             const selector = document.getElementById('pdf-payload-file-element');
-            if(selector.files.length === 0) return;
+            if (selector.files.length === 0) return;
             const packet = new FormData();
             packet.append("file", selector.files[0]);
             try {
@@ -489,12 +773,12 @@ function initializeGoogleOauthGate() {
                 const res = await response.json();
                 alert(res.message || res.error);
                 toggleModal('pdf-modal');
-            } catch(err) {
+            } catch (err) {
                 alert("Vector mapping initialization fault standard trace drop.");
             }
         }
 
-function evaluateAndParsePreviewSandboxPayload(textBlock) {
+        function evaluateAndParsePreviewSandboxPayload(textBlock) {
             const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
             let match;
             let lastMatch = null;
@@ -509,6 +793,11 @@ function evaluateAndParsePreviewSandboxPayload(textBlock) {
                 currentExtractedPreviewArtifactPayload = code;
 
                 workbenchSplitPanel.classList.remove('hidden');
+                if (window.innerWidth > 820) {
+                    document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
+                } else {
+                    document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
+                }
                 agentBackgroundTerminalLogger.textContent = `Payload parsed: ${language} block (${code.length} chars)`;
 
                 if (language === 'html') {
@@ -517,6 +806,10 @@ function evaluateAndParsePreviewSandboxPayload(textBlock) {
                     interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs whitespace-pre-wrap p-2">${sanitizeOutputText(code)}</pre>`;
                 }
             }
+        }
+
+        function expandActivePreviewContainer() {
+            toggleWorkbenchMobile();
         }
     </script>
 </body>
