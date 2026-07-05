@@ -1,7 +1,21 @@
 """
 Pratham AI - Full Production Backend Architecture
 =================================================
-All features included with proper download handling for Vercel
+Complete implementation with:
+  ✅ GitHub conversation logs: data/<email>/<date>.txt
+  ✅ VIP registrations: data/vip.txt
+  ✅ Content safety guard with flagging: data/flagged/<date>.txt
+  ✅ Session tokens (no sign-out after closing browser)
+  ✅ Image generation (Pollinations AI) - FULLY WORKING
+  ✅ @education (hidden feature, PDF-backed Q&A from data/education/)
+  ✅ Auto @web search (runs automatically, no need to type @web every time)
+  ✅ ZIP/PDF generation via background Python terminal
+  ✅ Real Python code execution with terminal output
+  ✅ Public memory: prompt engineering teachings → public_data.txt (repo root)
+  ✅ File bundle parsing: user pastes code bundle → AI creates individual files → ZIPs them
+  ✅ Multi-provider LLM failover: Groq → OpenRouter → Cerebras → Mistral
+  ✅ Multi-file upload support (PDF, DOCX, TXT, CSV, JSON, ZIP, etc.)
+  ✅ Logo integration from GitHub
 """
 
 import os
@@ -215,8 +229,9 @@ def _lookup_vip(email: str):
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600
 
-_ZIP_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export|zip)\b.{0,20}\bzip\b", re.IGNORECASE)
+_ZIP_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export|zip|bundle)\b.{0,20}\b(zip|bundle)\b", re.IGNORECASE)
 _PDF_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export)\b.{0,20}\bpdf\b", re.IGNORECASE)
+_FILE_BUNDLE_RE = re.compile(r"(index\.html|app\.py|app\.tsx|main\.js|style\.css|config\.json)", re.IGNORECASE)
 
 def _prune_generated_files():
     cutoff = time.time() - _GENERATED_FILE_TTL
@@ -230,6 +245,48 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
     return token
 
+def _parse_code_bundle(text: str) -> dict:
+    """
+    Parses a text bundle containing multiple files.
+    Expected format:
+    
+    ### index.html
+    <!DOCTYPE html>
+    ...
+    
+    ### app.py
+    import os
+    ...
+    """
+    files = {}
+    current_filename = None
+    current_content = []
+    
+    for line in text.split('\n'):
+        # Check if line starts a new file definition
+        if line.strip().startswith('###') or line.strip().startswith('=='):
+            if current_filename:
+                files[current_filename] = '\n'.join(current_content).strip()
+            current_filename = line.strip().replace('###', '').replace('==', '').strip()
+            current_content = []
+        elif current_filename:
+            current_content.append(line)
+    
+    # Don't forget the last file
+    if current_filename:
+        files[current_filename] = '\n'.join(current_content).strip()
+    
+    return files
+
+def _build_zip_from_files(files_dict: dict) -> bytes:
+    """Creates a ZIP file from a dictionary of {filename: content}"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, content in files_dict.items():
+            zf.writestr(filename, content)
+    buf.seek(0)
+    return buf.read()
+
 def _build_zip_from_response(assistant_text: str) -> bytes:
     buf = io.BytesIO()
     blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
@@ -238,7 +295,7 @@ def _build_zip_from_response(assistant_text: str) -> bytes:
             for i, (lang, content) in enumerate(blocks, start=1):
                 ext = {
                     "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
-                    "css": "css", "json": "json", "bash": "sh", "text": "txt"
+                    "css": "css", "json": "json", "bash": "sh", "text": "txt", "tsx": "tsx", "ts": "ts"
                 }.get((lang or "text").lower(), "txt")
                 zf.writestr(f"file_{i}.{ext}", content)
         else:
@@ -541,6 +598,26 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
     )
     _write_to_github_repository("public_data.txt", entry)
 
+def _extract_public_memories() -> str:
+    """Fetches public_data.txt from GitHub and returns the content"""
+    if not GITHUB_TOKEN:
+        return "No memories stored yet."
+    
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/public_data.txt"
+    req_lookup = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req_lookup, timeout=10) as lookup_response:
+            meta_data = json.loads(lookup_response.read().decode('utf-8'))
+            if meta_data.get("content"):
+                return base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+    except Exception as e:
+        print(f"[MEMORY][FETCH] {e}")
+    return "No memories stored yet."
+
 # ── LLM MULTI-PROVIDER FAILOVER ──
 _provider_cooldowns: dict = {}
 COOLDOWN_SECONDS = 60
@@ -557,37 +634,98 @@ SYSTEM_PROMPT = (
     "leave empty methods or TODO comments, never generate mock implementations unless explicitly "
     "requested. Every feature must exist in working code. "
     "\n\n"
-    "**IMPORTANT - Large File Handling:**\n"
-    "If you are generating a very large HTML file (>400 lines) or complex multi-file project, and you "
-    "sense you might hit response length limits before completing it:\n"
-    "1. Generate as much as you can in this response\n"
-    "2. At the end, add this EXACT marker: `<!-- CONTINUATION NEEDED: html_1.html -->`\n"
-    "3. When the user sends a follow-up message asking to continue, resume EXACTLY where you left off, "
-    "starting from the incomplete section (do not repeat the beginning).\n"
+    "**IMAGE GENERATION:**\n"
+    "When user asks to 'make img', 'generate image', 'draw', 'create picture', etc.:\n"
+    "- Respond with a brief acknowledgment\n"
+    "- The system will automatically generate the image using Pollinations AI\n"
+    "- Do NOT try to create images yourself - the system handles it\n"
     "\n"
-    "For example, if you were mid-way through a `<script>` section, continue from that exact point, "
-    "completing the rest of the file. The frontend will merge your continuation into the existing file.\n"
+    "**FILE BUNDLE GENERATION:**\n"
+    "When user pastes code like:\n"
+    "### index.html\n"
+    "<!DOCTYPE html>...\n"
+    "### app.py\n"
+    "import os...\n"
     "\n"
-    "You must never help with illegal activity, weapons, malware, or seriously harmful content; "
-    "politely refuse those requests instead."
+    "And asks 'make these files into html' or 'make these files' or 'zip these':\n"
+    "1. The system will automatically detect the file bundle\n"
+    "2. Parse each file from the bundle\n"
+    "3. Create individual files\n"
+    "4. ZIP them together\n"
+    "DO NOT explain - just respond briefly that files will be created\n"
+    "\n"
+    "**FILE GENERATION WITH ZIP/PDF:**\n"
+    "When user asks to 'make zip', 'create pdf', 'generate bundle', etc.:\n"
+    "- Respond that the file is being created\n"
+    "- The system will execute Python code to generate the file\n"
+    "- Do NOT write Python code yourself - the system handles it\n"
+    "\n"
+    "**LARGE FILE HANDLING:**\n"
+    "If generating very large HTML (>400 lines):\n"
+    "1. Generate as much as you can\n"
+    "2. At the end, add: `<!-- CONTINUATION NEEDED: html_1.html -->`\n"
+    "3. User clicks Continue, you resume exactly where you left off\n"
+    "\n"
+    "**FOR ALL OTHER REQUESTS:**\n"
+    "Respond normally with full explanations, code examples, and detailed answers.\n"
+    "Never help with illegal activity, weapons, malware, or seriously harmful content.\n"
 )
 
 # ── IMAGE GENERATION ──
 _IMAGE_INTENT_RE = re.compile(
-    r"^/image\s+(.+)$|\b(?:generate|create|draw|make|paint)\b.{0,20}\b(?:image|picture|photo|art|illustration|drawing)\b(?:\s+(?:of|showing|depicting))?\s*(.*)$",
+    r"^/image\s+(.+)$|mak(e|ing)?\s+(an?\s+)?(img|image|picture|photo|art|drawing|illustration|man|woman|person|character).{0,50}(?:of|showing|depicting|with)?\s*(.*)$|\b(generate|create|draw|make|paint|design)\b.{0,20}\b(image|picture|photo|art|illustration|img|drawing|portrait)\b",
     re.IGNORECASE
 )
 
-def _detect_image_prompt(message: str):
-    m = _IMAGE_INTENT_RE.search(message.strip())
-    if not m:
-        return None
-    prompt_text = (m.group(1) or m.group(2) or "").strip(" .!")
-    return prompt_text or None
+def _detect_image_prompt(message: str) -> str:
+    # Check for explicit "/image" command
+    match = re.search(r"^/image\s+(.+)$", message.strip(), re.IGNORECASE)
+    if match:
+        return match.group(1).strip(" .!")
+    
+    # Check for natural language image requests
+    if re.search(r"\b(mak|generat|creat|draw|paint|design|illustrat)\w+.{0,30}\b(img|image|picture|photo|art|drawing|portrait|man|woman|person)\b", message, re.IGNORECASE):
+        # Extract what they want to make an image of
+        prompt_match = re.search(
+            r"(?:of|showing|depicting|for|with|:)\s*(.+?)(?:\.|$|\?|!)",
+            message,
+            re.IGNORECASE
+        )
+        if prompt_match:
+            return prompt_match.group(1).strip(" .!?")
+        
+        # Fallback: extract descriptive part
+        descriptive_match = re.search(
+            r"\b(?:img|image|picture|photo|art|drawing|portrait|man|woman|person)\b\s+(.+?)(?:\.|$|\?|!)",
+            message,
+            re.IGNORECASE
+        )
+        if descriptive_match:
+            return descriptive_match.group(1).strip(" .!?")
+        
+        # Last resort: use key terms from message
+        words = re.findall(r"\b[a-z]+\b", message.lower())
+        if words:
+            # Filter out common words
+            filtered = [w for w in words if w not in ['make', 'make', 'img', 'image', 'of', 'a', 'an', 'the', 'in', 'with', 'picture', 'photo', 'art', 'drawing']]
+            if filtered:
+                return " ".join(filtered[:5])
+    
+    return None
 
 def _pollinations_image_url(prompt_text: str) -> str:
+    if not prompt_text:
+        prompt_text = "random beautiful scene"
     encoded = urllib.parse.quote(prompt_text)
     return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
+
+def _detect_file_bundle_intent(message: str) -> bool:
+    """Detects if message contains code bundle (### filename markers)"""
+    return bool(re.search(r"###\s+\w+\.|==\s+\w+\.", message))
+
+def _detect_create_files_intent(message: str) -> bool:
+    """Detects if user wants to create/zip files from a bundle"""
+    return bool(re.search(r"\b(make|create|generate|turn|convert|zip|bundle|create files|make files)\b.{0,30}\b(files|zip|bundle|archive)\b", message, re.IGNORECASE))
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
@@ -876,13 +1014,41 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # ── Image generation ──
+    # ── FILE BUNDLE WITH ZIP GENERATION ──
+    has_file_bundle = _detect_file_bundle_intent(message)
+    should_create_files = _detect_create_files_intent(message)
+    
+    if has_file_bundle and should_create_files:
+        _append_message(conv_id, "user", message)
+        
+        # Parse the code bundle
+        files_dict = _parse_code_bundle(message)
+        
+        if files_dict:
+            # Generate ZIP from parsed files
+            zip_bytes = _build_zip_from_files(files_dict)
+            token = _store_generated_file(zip_bytes, "files.zip", "application/zip")
+            
+            def generate_file_bundle_zip():
+                yield _sse({"type": "metadata", "conversation_id": conv_id})
+                file_list = ", ".join(files_dict.keys())
+                yield _sse({"type": "token", "text": f"✅ Created files: {file_list}\n\nZIP package ready for download."})
+                yield _sse({"type": "file_ready", "url": f"/api/app/download/{token}", "filename": "files.zip"})
+                yield _sse({"type": "complete"})
+            
+            resp = Response(stream_with_context(generate_file_bundle_zip()), content_type="text/event-stream")
+            resp.headers["Cache-Control"] = "no-cache"
+            resp.headers["X-Accel-Buffering"] = "no"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            return resp
+
+    # ── IMAGE GENERATION (FULLY AUTOMATED) ──
     image_prompt = _detect_image_prompt(message)
     if image_prompt:
         _append_message(conv_id, "user", message)
         image_url = _pollinations_image_url(image_prompt)
-        assistant_note = f"Here's your generated image for: \"{image_prompt}\""
-        _append_message(conv_id, "assistant", f"{assistant_note}\n![generated image]({image_url})")
+        assistant_note = f"✨ Generating image: \"{image_prompt}\"..."
+        _append_message(conv_id, "assistant", f"{assistant_note}\n\n![Generated image]({image_url})")
 
         current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         _write_to_github_repository(
@@ -893,7 +1059,7 @@ def chat_stream():
 
         def generate_image():
             yield _sse({"type": "metadata", "conversation_id": conv_id})
-            yield _sse({"type": "token", "text": assistant_note + "\n\n"})
+            yield _sse({"type": "token", "text": assistant_note})
             yield _sse({"type": "image", "url": image_url, "prompt": image_prompt})
             yield _sse({"type": "complete"})
 
@@ -1121,7 +1287,7 @@ def upload_pdf():
                 decode_status = "decoded"
             else:
                 decode_status = "stored (install `pypdf` on the server to extract PDF text)"
-        elif ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "log"):
+        elif ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "log", "tsx", "ts"):
             extracted_preview = raw_bytes.decode("utf-8", errors="replace")[:4000]
             decode_status = "decoded"
         elif ext == "docx":
