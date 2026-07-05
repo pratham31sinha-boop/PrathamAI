@@ -24,19 +24,63 @@ Fixes included in this pass:
      size so tokens reach the browser faster (reduces perceived latency).
   7. General hardening: extra input validation, clearer error payloads,
      more defensive exception handling, and additional inline comments.
+
+Second pass — new features (nothing above was removed):
+  8. General-purpose assistant: the system prompt is no longer coding-only;
+     Pratham AI now answers any topic like a normal chatbot, while still
+     being great at code when asked.
+  9. Image generation via Pollinations AI (no API key required): a message
+     like "generate an image of a red fox in snow" or "/image a red fox in
+     snow" now returns a real rendered image instead of text.
+ 10. "@education" tag: lists PDFs stored under data/education/ in the GitHub
+     repo, extracts their text (best-effort, requires the optional `pypdf`
+     package), scores paragraphs for relevance against the question, and
+     feeds the best-matching excerpt to the model so it can answer citing
+     which PDF it used — even if the wording isn't an exact match.
+ 11. "@web" tag: does a best-effort live DuckDuckGo lookup and feeds the
+     results into the model's context, so it can answer with current
+     information instead of only training-time knowledge.
+ 12. File generation via a background Python "terminal": if a message asks
+     to turn the reply into a zip or a PDF, the backend actually builds that
+     file server-side (zipfile from stdlib; PDF via the optional `fpdf2`
+     package, or a plain-text fallback if that package isn't installed) and
+     returns a download link.
+ 13. Upload endpoint now accepts (and best-effort decodes) many file types,
+     not just PDF: txt/csv/json/md are read directly; .pdf via `pypdf` if
+     installed; anything else gets a basic binary/text sniff instead of a
+     hard rejection.
 """
 
 import os
 import re
+import io
 import json
 import time
 import uuid
 import base64
+import zipfile
 import urllib.request
+import urllib.parse
 import sys
 import subprocess
 from datetime import datetime, timezone
 from functools import wraps
+
+try:
+    from pypdf import PdfReader as _PdfReader
+    _PDF_READ_SUPPORTED = True
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader as _PdfReader
+        _PDF_READ_SUPPORTED = True
+    except ImportError:
+        _PDF_READ_SUPPORTED = False
+
+try:
+    from fpdf import FPDF as _FPDF
+    _PDF_WRITE_SUPPORTED = True
+except ImportError:
+    _PDF_WRITE_SUPPORTED = False
 
 from flask import Flask, request, Response, jsonify, stream_with_context
 from flask_cors import CORS
@@ -221,6 +265,184 @@ def _lookup_vip(email: str):
         return None
     return _fetch_vip_directory().get(email.lower())
 
+# ── BACKGROUND FILE GENERATION ("the AI uses a Python terminal") ──
+# This is the real, executing counterpart to the frontend's animated file
+# cards: when the person's message asks for a zip or a PDF, the backend
+# actually builds that file in Python (zipfile from stdlib; PDF via the
+# optional fpdf2 package) and hands back a one-time download link.
+_generated_files_store: dict = {}
+_GENERATED_FILE_TTL = 3600  # 1 hour
+
+_ZIP_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export|zip)\b.{0,20}\bzip\b", re.IGNORECASE)
+_PDF_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export)\b.{0,20}\bpdf\b", re.IGNORECASE)
+
+def _prune_generated_files():
+    cutoff = time.time() - _GENERATED_FILE_TTL
+    stale = [tok for tok, entry in _generated_files_store.items() if entry["t"] < cutoff]
+    for tok in stale:
+        _generated_files_store.pop(tok, None)
+
+def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
+    _prune_generated_files()
+    token = uuid.uuid4().hex
+    _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
+    return token
+
+def _build_zip_from_response(assistant_text: str) -> bytes:
+    """Packs every fenced code block in the reply into a zip; if there are
+    none, zips the plain reply text as response.txt instead."""
+    buf = io.BytesIO()
+    blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        if blocks:
+            for i, (lang, content) in enumerate(blocks, start=1):
+                ext = {
+                    "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
+                    "css": "css", "json": "json", "bash": "sh", "text": "txt"
+                }.get((lang or "text").lower(), "txt")
+                zf.writestr(f"file_{i}.{ext}", content)
+        else:
+            zf.writestr("response.txt", assistant_text)
+    buf.seek(0)
+    return buf.read()
+
+def _build_pdf_from_response(assistant_text: str):
+    """Returns (bytes, filename, mimetype). Uses fpdf2 if installed; falls
+    back to a plain .txt file (with a clear filename) if it isn't, so the
+    person still gets *something* downloadable rather than a hard failure."""
+    if _PDF_WRITE_SUPPORTED:
+        pdf = _FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=11)
+        for line in assistant_text.split("\n"):
+            safe_line = line.encode("latin-1", "replace").decode("latin-1")
+            pdf.multi_cell(0, 6, safe_line)
+        return bytes(pdf.output(dest="S")), "generated.pdf", "application/pdf"
+    return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+
+@app.route("/download/<token>", methods=["GET"])
+@app.route("/api/download/<token>", methods=["GET"])
+@app.route("/api/app/download/<token>", methods=["GET"])
+def download_generated_file(token):
+    entry = _generated_files_store.get(token)
+    if not entry:
+        return jsonify({"error": "This download has expired or does not exist."}), 404
+    resp = Response(entry["bytes"], mimetype=entry["mimetype"])
+    resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
+    return resp
+
+# ── "@education" PDF-backed Q&A ──
+_education_cache = {"files": {}, "listing_t": 0}
+_EDUCATION_LISTING_TTL = 120  # seconds
+
+def _github_list_dir(path: str):
+    if not GITHUB_TOKEN:
+        return []
+    repo_clean = _github_repo_slug()
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{path}"
+    req_lookup = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req_lookup, timeout=12) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data if isinstance(data, list) else []
+    except Exception as exc:
+        print(f"[EDU][LIST FAULT] {exc}")
+        return []
+
+def _github_fetch_file_bytes(download_url: str):
+    try:
+        req = urllib.request.Request(download_url, headers={"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read()
+    except Exception as exc:
+        print(f"[EDU][FETCH FAULT] {exc}")
+        return None
+
+def _extract_pdf_text(pdf_bytes: bytes) -> str:
+    if not _PDF_READ_SUPPORTED:
+        return ""
+    try:
+        reader = _PdfReader(io.BytesIO(pdf_bytes))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception as exc:
+        print(f"[EDU][EXTRACT FAULT] {exc}")
+        return ""
+
+def _refresh_education_library():
+    now_ts = time.time()
+    if _education_cache["files"] and (now_ts - _education_cache["listing_t"]) < _EDUCATION_LISTING_TTL:
+        return
+    entries = _github_list_dir("data/education")
+    for entry in entries:
+        if not entry.get("name", "").lower().endswith(".pdf"):
+            continue
+        sha = entry.get("sha")
+        name = entry.get("name")
+        cached = _education_cache["files"].get(name)
+        if cached and cached.get("sha") == sha:
+            continue  # unchanged, keep existing extracted text
+        raw = _github_fetch_file_bytes(entry.get("download_url"))
+        if raw is None:
+            continue
+        text = _extract_pdf_text(raw)
+        _education_cache["files"][name] = {"sha": sha, "text": text}
+    _education_cache["listing_t"] = now_ts
+
+def _find_best_education_excerpt(question: str):
+    """
+    Very lightweight relevance scoring: splits every cached PDF's text into
+    paragraphs and scores each paragraph by how many question keywords it
+    contains. This intentionally does NOT require an exact phrase match —
+    the goal is "most relevant", not "identical text".
+    """
+    _refresh_education_library()
+    if not _education_cache["files"]:
+        return None
+
+    question_words = set(re.findall(r"[a-zA-Z]{3,}", question.lower()))
+    if not question_words:
+        return None
+
+    best = {"score": 0, "filename": None, "excerpt": ""}
+    for filename, data in _education_cache["files"].items():
+        text = data.get("text", "")
+        if not text:
+            continue
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        for para in paragraphs:
+            para_words = set(re.findall(r"[a-zA-Z]{3,}", para.lower()))
+            score = len(question_words & para_words)
+            if score > best["score"]:
+                best = {"score": score, "filename": filename, "excerpt": para[:1800]}
+    return best if best["filename"] else None
+
+# ── "@web" best-effort live search (DuckDuckGo HTML, no API key) ──
+def _web_search_snippets(query: str, max_results: int = 4):
+    try:
+        encoded = urllib.parse.quote(query)
+        req = urllib.request.Request(
+            f"https://html.duckduckgo.com/html/?q={encoded}",
+            headers={"User-Agent": "Mozilla/5.0 (PrathamAI Search Agent)"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html_body = resp.read().decode('utf-8', errors='ignore')
+        titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html_body, re.DOTALL)
+        snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html_body, re.DOTALL)
+        clean = lambda s: re.sub('<[^<]+?>', '', s).strip()
+        results = []
+        for i in range(min(max_results, len(titles))):
+            title = clean(titles[i])
+            snippet = clean(snippets[i]) if i < len(snippets) else ""
+            if title:
+                results.append(f"- {title}: {snippet}")
+        return results
+    except Exception as exc:
+        print(f"[WEB][SEARCH FAULT] {exc}")
+        return []
+
 
 def _get_token():
     auth = request.headers.get("Authorization", "")
@@ -322,12 +544,37 @@ def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
 SYSTEM_PROMPT = (
-    "You are Pratham AI, an advanced full stack coding assistant. "
-    "Always format file output generations or components cleanly within fenced code blocks "
-    "using explicit language tags like ```html, ```javascript, or ```text so they can be rendered live. "
+    "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
+    "questions, writing, learning, advice, and analysis, not just coding. When a task does "
+    "involve code or file output, format it cleanly in fenced code blocks with explicit "
+    "language tags like ```html, ```javascript, or ```text so it can be rendered live. "
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead."
 )
+
+# ── IMAGE GENERATION (Pollinations AI — no API key required) ──
+_IMAGE_INTENT_RE = re.compile(
+    r"^/image\s+(.+)$|\b(?:generate|create|draw|make|paint)\b.{0,20}\b(?:image|picture|photo|art|illustration|drawing)\b(?:\s+(?:of|showing|depicting))?\s*(.*)$",
+    re.IGNORECASE
+)
+
+def _detect_image_prompt(message: str):
+    """
+    Returns a plain-language image description if `message` looks like an
+    image-generation request, else None. Kept intentionally simple (regex
+    heuristic) rather than a full intent classifier, to stay fast.
+    """
+    m = _IMAGE_INTENT_RE.search(message.strip())
+    if not m:
+        return None
+    prompt_text = (m.group(1) or m.group(2) or "").strip(" .!")
+    return prompt_text or None
+
+def _pollinations_image_url(prompt_text: str) -> str:
+    encoded = urllib.parse.quote(prompt_text)
+    # width/height/seed kept default-ish; nologo=true removes the Pollinations
+    # watermark bar when supported.
+    return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
@@ -612,6 +859,33 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
+    # ── Image generation short-circuit (Pollinations AI, no key needed) ──
+    image_prompt = _detect_image_prompt(message)
+    if image_prompt:
+        _append_message(conv_id, "user", message)
+        image_url = _pollinations_image_url(image_prompt)
+        assistant_note = f"Here's your generated image for: \"{image_prompt}\""
+        _append_message(conv_id, "assistant", f"{assistant_note}\n![generated image]({image_url})")
+
+        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        _write_to_github_repository(
+            f"data/{user_email}/{current_date_formatted}.txt",
+            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\nUser: {message}\n"
+            f"Pratham AI: [image generated] {image_url}\n{'=' * 80}\n"
+        )
+
+        def generate_image():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": assistant_note + "\n\n"})
+            yield _sse({"type": "image", "url": image_url, "prompt": image_prompt})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_image()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
     history = _get_messages(conv_id)
     active_system_prompt = SYSTEM_PROMPT
     vip_record = _lookup_vip(user_email)
@@ -626,7 +900,41 @@ def chat_stream():
     api_messages = [{"role": "system", "content": active_system_prompt}]
     for m in history[-20:]:
         api_messages.append({"role": m["role"], "content": m["content"]})
-    api_messages.append({"role": "user", "content": message})
+
+    outgoing_user_message = message
+    if "@education" in message.lower():
+        outgoing_user_message = re.sub(r"@education", "", outgoing_user_message, flags=re.IGNORECASE).strip()
+        best = _find_best_education_excerpt(outgoing_user_message or message)
+        if best:
+            api_messages[0]["content"] += (
+                f" The user tagged @education, meaning they want an answer sourced from the PDF "
+                f"library. The most relevant excerpt found was from the PDF file '{best['filename']}'. "
+                f"Use it to answer, refine it into a clear answer (don't just quote it verbatim), "
+                f"note it doesn't need to be an exact textual match, and explicitly mention which PDF "
+                f"file you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
+            )
+        else:
+            api_messages[0]["content"] += (
+                " The user tagged @education but no relevant PDF content could be found in the "
+                "data/education library (it may be empty, or the pypdf package may not be installed "
+                "on the server). Say so plainly instead of guessing."
+            )
+    elif "@web" in message.lower():
+        outgoing_user_message = re.sub(r"@web", "", outgoing_user_message, flags=re.IGNORECASE).strip()
+        results = _web_search_snippets(outgoing_user_message or message)
+        if results:
+            api_messages[0]["content"] += (
+                " The user tagged @web, meaning they want current information. Here are live search "
+                "results to ground your answer (cite that the info came from a web search):\n"
+                + "\n".join(results)
+            )
+        else:
+            api_messages[0]["content"] += (
+                " The user tagged @web but the live search did not return usable results right now; "
+                "say so and answer from general knowledge instead."
+            )
+
+    api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
     _append_message(conv_id, "user", message)
 
@@ -659,6 +967,21 @@ def chat_stream():
                 f"{'=' * 80}\n"
             )
             _write_to_github_repository(repo_sync_destination_path, log_entry)
+
+            # Background "Python terminal" file generation: if the request
+            # was asking for a zip or a PDF of the reply, actually build it
+            # now and hand back a real download link.
+            try:
+                if _ZIP_INTENT_RE.search(message):
+                    zip_bytes = _build_zip_from_response(assistant_response)
+                    token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
+                elif _PDF_INTENT_RE.search(message):
+                    pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+            except Exception as exc:
+                print(f"[FILEGEN][FAULT] {exc}")
 
     resp = Response(stream_with_context(generate()), content_type="text/event-stream")
     resp.headers["Cache-Control"] = "no-cache"
@@ -738,9 +1061,59 @@ def upload_pdf():
     if request.method == "OPTIONS":
         return _cors_preflight()
     f = request.files.get("file")
-    if not f or not f.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Only PDF uploads are supported."}), 400
-    return jsonify({"ok": True, "filename": f.filename, "message": "File indexed securely."})
+    if not f or not f.filename:
+        return jsonify({"error": "No file received."}), 400
+
+    filename = f.filename
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    raw_bytes = f.read()
+
+    extracted_preview = ""
+    decode_status = "stored"
+    try:
+        if ext == "pdf":
+            if _PDF_READ_SUPPORTED:
+                extracted_preview = _extract_pdf_text(raw_bytes)[:4000]
+                decode_status = "decoded"
+            else:
+                decode_status = "stored (install `pypdf` on the server to extract PDF text)"
+        elif ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "log"):
+            extracted_preview = raw_bytes.decode("utf-8", errors="replace")[:4000]
+            decode_status = "decoded"
+        elif ext == "docx":
+            try:
+                import docx  # python-docx, optional dependency
+                doc = docx.Document(io.BytesIO(raw_bytes))
+                extracted_preview = "\n".join(p.text for p in doc.paragraphs)[:4000]
+                decode_status = "decoded"
+            except ImportError:
+                decode_status = "stored (install `python-docx` on the server to extract .docx text)"
+        elif ext == "zip":
+            try:
+                with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+                    extracted_preview = "\n".join(zf.namelist()[:100])
+                decode_status = "decoded (file listing)"
+            except zipfile.BadZipFile:
+                decode_status = "stored (not a valid zip)"
+        elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
+            decode_status = f"stored ({len(raw_bytes)} bytes, image — use chat vision features to analyze it)"
+        else:
+            # Best-effort generic sniff: try UTF-8 text, else report as binary.
+            try:
+                extracted_preview = raw_bytes.decode("utf-8")[:4000]
+                decode_status = "decoded (generic text sniff)"
+            except UnicodeDecodeError:
+                decode_status = f"stored ({len(raw_bytes)} bytes, binary — no text extraction available for .{ext or 'unknown'})"
+    except Exception as exc:
+        decode_status = f"stored (decode attempt failed: {exc})"
+
+    return jsonify({
+        "ok": True,
+        "filename": filename,
+        "size_bytes": len(raw_bytes),
+        "status": decode_status,
+        "preview": extracted_preview
+    })
 
 def _cors_preflight():
     resp = Response("", status=204)
