@@ -132,7 +132,6 @@
             border-radius: 12px; padding: 10px 12px; max-width: 320px;
             cursor: pointer; transition: border-color .15s ease, background .15s ease;
             position: relative; overflow: hidden;
-            margin-bottom: 8px;
         }
         .file-creation-card:hover { border-color: var(--accent); background: var(--hover); }
         .file-creation-card .fcc-icon {
@@ -204,9 +203,10 @@
         }
         .continuation-btn:hover { opacity: 0.9; }
 
+        /* ── Inline activity feed (Claude-style "Ran a command" rows) ── */
         .activity-feed {
             display: flex; flex-direction: column; gap: 4px;
-            max-width: 92%; margin-bottom: 6px; margin-top: 4px;
+            max-width: 92%; margin-bottom: 2px;
         }
         .activity-feed-row {
             display: flex; align-items: center; gap: 7px;
@@ -216,6 +216,7 @@
         }
         .activity-feed-row .afr-icon { font-size: 11px; color: var(--accent); }
 
+        /* ── Generated-image loading animation ── */
         .image-generation-holder {
             position: relative; border-radius: 16px; overflow: hidden;
             border: 1px solid var(--border); max-width: 85%;
@@ -223,7 +224,6 @@
             background-size: 200% 100%;
             animation: imgShimmer 1.4s ease-in-out infinite;
             min-height: 180px; display: flex; align-items: center; justify-content: center;
-            margin-bottom: 8px;
         }
         @keyframes imgShimmer {
             0% { background-position: 200% 0; }
@@ -270,16 +270,6 @@
             .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
         }
     </style>
-    <script>
-        (function() {
-            try {
-                var stored = localStorage.getItem("prathamai_theme_config");
-                if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                    document.documentElement.classList.add('dark-mode');
-                }
-            } catch(e){}
-        })();
-    </script>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
 
@@ -420,7 +410,7 @@
                 <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-5 flex flex-col gap-4">
-                <p class="text-[10.5px] text-[var(--text-dim)] -mt-2">Any file type is accepted. Text, PDF, DOCX, JSON, CSV, and ZIP get decoded automatically on the server.</p>
+                <p class="text-[10.5px] text-[var(--text-dim)] -mt-2">Any file type is accepted. Text, PDF, DOCX, JSON, CSV, and ZIP get their content decoded automatically on the server; other types are stored as-is.</p>
                 <input type="file" id="pdf-payload-file-element" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
                 <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Upload &amp; Decode</button>
             </div>
@@ -522,12 +512,12 @@
         const agentActivityStripText = document.getElementById('agent-activity-strip-text');
 
         const LOGO_URL = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/logo.png";
-        const SESSION_STORAGE_KEY = "prathamai_session_v1";
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
         let SERVER_CONTEXT_HOST = "";
         let activeUserIdentityEmail = "";
+        let currentExtractedPreviewArtifactPayload = "";
         let isGenerating = false;
         let allHistoryItemsCache = [];
         let pendingPasteAttachment = null;
@@ -542,12 +532,16 @@
             document.getElementById('paste-attachment-chip').classList.remove('active');
         }
 
+        const SESSION_STORAGE_KEY = "prathamai_session_v1";
+
         function openMobileSidebar() { sidebarPanel.classList.add('sidebar-open'); sidebarScrim.classList.add('scrim-visible'); }
         function closeMobileSidebar() { sidebarPanel.classList.remove('sidebar-open'); sidebarScrim.classList.remove('scrim-visible'); }
         function toggleWorkbenchMobile() { workbenchSplitPanel.classList.toggle('workbench-open'); }
         function focusHistorySearch() { document.getElementById('history-search-input').focus(); }
 
-        function toggleProfileDropdown() { profileDropdownMenu.classList.toggle('hidden'); }
+        function toggleProfileDropdown() {
+            profileDropdownMenu.classList.toggle('hidden');
+        }
         document.addEventListener('click', (e) => {
             if (!profileDropdownMenu.contains(e.target) && !e.target.closest('.nav-row')) {
                 profileDropdownMenu.classList.add('hidden');
@@ -561,14 +555,11 @@
         function setTheme(mode) {
             if (mode === 'dark') document.documentElement.classList.add('dark-mode');
             else document.documentElement.classList.remove('dark-mode');
-            localStorage.setItem("prathamai_theme_config", mode);
             document.getElementById('theme-btn-light').classList.toggle('selected', mode === 'light');
             document.getElementById('theme-btn-dark').classList.toggle('selected', mode === 'dark');
         }
         function toggleColorTheme() {
             const isDark = document.documentElement.classList.toggle('dark-mode');
-            const choice = isDark ? 'dark' : 'light';
-            localStorage.setItem("prathamai_theme_config", choice);
             document.getElementById('theme-btn-light')?.classList.toggle('selected', !isDark);
             document.getElementById('theme-btn-dark')?.classList.toggle('selected', isDark);
         }
@@ -603,8 +594,11 @@
         }
 
         function persistSessionLocally(credential, claims) {
-            try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ credential, claims })); } catch (e) {}
+            try {
+                localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ credential, claims }));
+            } catch (e) {}
         }
+
         function clearPersistedSession() {
             try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
         }
@@ -636,7 +630,9 @@
 
                 persistSessionLocally(tokenToPersist, claims);
                 enterAppShell();
-            } catch (e) { console.error("[AUTH][FAILURE]", e); }
+            } catch (e) {
+                console.error("[AUTH][FAILURE]", e);
+            }
         }
         window.handleGoogleIdentityCallback = handleGoogleIdentityCallback;
 
@@ -651,7 +647,9 @@
                     type: "standard", shape: "rectangular", theme: "outline",
                     text: "signin_with", size: "large", logo_alignment: "left", width: 240
                 });
-            } else { setTimeout(initializeGoogleOauthGate, 100); }
+            } else {
+                setTimeout(initializeGoogleOauthGate, 100);
+            }
         }
 
         async function attemptSilentSessionRestore() {
@@ -662,19 +660,22 @@
             } catch (e) { stored = null; }
 
             if (!stored || !stored.credential || !stored.claims) return false;
+
             globalAuthorizationToken = `Bearer ${stored.credential}`;
             activeUserIdentityEmail = (stored.claims.email || "").toLowerCase();
 
             try {
                 const response = await smartFetchRequest('/auth/refresh-check', {
-                    method: 'POST', headers: { 'Authorization': globalAuthorizationToken }
+                    method: 'POST',
+                    headers: { 'Authorization': globalAuthorizationToken }
                 });
                 if (!response.ok) {
                     clearPersistedSession();
-                    globalAuthorizationToken = ""; activeUserIdentityEmail = "";
+                    globalAuthorizationToken = "";
+                    activeUserIdentityEmail = "";
                     return false;
                 }
-            } catch (e) { return false; }
+            } catch (e) {}
 
             paintIdentityIntoShell(stored.claims);
             enterAppShell();
@@ -682,9 +683,12 @@
         }
 
         function triggerIdentitySignout() {
-            globalAuthorizationToken = ""; activeUserIdentityEmail = ""; currentConversationId = null;
+            globalAuthorizationToken = "";
+            activeUserIdentityEmail = "";
+            currentConversationId = null;
             clearPersistedSession();
-            appShell.style.display = 'none'; loginOverlay.style.display = 'flex';
+            appShell.style.display = 'none';
+            loginOverlay.style.display = 'flex';
             document.getElementById('settings-modal').classList.add('hidden');
             document.getElementById('settings-modal').classList.remove('flex');
             profileDropdownMenu.classList.add('hidden');
@@ -698,7 +702,7 @@
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
             const pathPermutations = [
                 `${hostBase}/api/app${endpointPath}`, `${hostBase}/api/app${endpointPath}/`,
-                `${hostBase}/api${endpointPath}`, `${hostBase${endpointPath}}`,
+                `${hostBase}/api${endpointPath}`, `${hostBase}${endpointPath}`,
                 `/api/app${endpointPath}`, `/api${endpointPath}`, `${endpointPath}`
             ];
             let lastResponse = null;
@@ -709,10 +713,12 @@
                     lastResponse = response;
                 } catch (err) {}
             }
-            return lastResponse || new Response(JSON.stringify({ error: "Route execution mismatch (404)." }), { status: 404 });
+            return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
         }
 
-        function convCacheKey() { return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`; }
+        function convCacheKey() {
+            return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`;
+        }
         function loadConvCache() {
             try {
                 const raw = localStorage.getItem(convCacheKey());
@@ -735,16 +741,20 @@
             saveConvCache(cache);
         }
         function cacheConversationMessages(id, messages) {
-            const cache = loadConvCache(); cache.messages[id] = messages; saveConvCache(cache);
+            const cache = loadConvCache();
+            cache.messages[id] = messages;
+            saveConvCache(cache);
         }
         function removeCachedConversation(id) {
             const cache = loadConvCache();
             cache.list = cache.list.filter(c => c.id !== id);
-            delete cache.messages[id]; saveConvCache(cache);
+            delete cache.messages[id];
+            saveConvCache(cache);
         }
         function toggleModal(modalTargetId) {
             const target = document.getElementById(modalTargetId);
-            target.classList.toggle('hidden'); target.classList.toggle('flex');
+            target.classList.toggle('hidden');
+            target.classList.toggle('flex');
         }
 
         function createNewConversation() {
@@ -763,12 +773,13 @@
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
             `;
-            synchronizeConversationsHistoryIndex(); closeMobileSidebar();
+            synchronizeConversationsHistoryIndex();
+            closeMobileSidebar();
         }
 
         function renderUserPromptBubble(promptText) {
             const row = document.createElement('div');
-            row.className = 'w-full flex justify-end mb-2';
+            row.className = 'w-full flex justify-end';
             row.innerHTML = `<div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>`;
             conversationViewportPanel.appendChild(row);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
@@ -779,7 +790,8 @@
             typescript: 'ts', ts: 'ts', python: 'py', py: 'py', css: 'css',
             json: 'json', bash: 'sh', sh: 'sh', shell: 'sh', text: 'txt',
             xml: 'xml', markdown: 'md', md: 'md', sql: 'sql', yaml: 'yml',
-            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs', tsx: 'tsx'
+            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs',
+            tsx: 'tsx', lua: 'lua', swift: 'swift', kotlin: 'kt'
         };
 
         function guessFileName(lang, ordinal) {
@@ -789,17 +801,22 @@
 
         function pushTerminalLog(message) {
             const stamp = new Date().toLocaleTimeString([], { hour12: false });
+            const line = `[${stamp}] ${message}\n`;
             if (agentBackgroundTerminalLogger.textContent === 'System waiting for generation directives...') {
                 agentBackgroundTerminalLogger.textContent = '';
             }
-            agentBackgroundTerminalLogger.textContent += `[${stamp}] ${message}\n`;
+            agentBackgroundTerminalLogger.textContent += line;
             agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
         }
 
+        // ── Inline activity feed rows (visible in the chat itself, not just
+        // the background terminal panel) — mirrors Claude's "Ran a command",
+        // "Edited a file" style indicators so activity is visible at a glance.
         function ensureActivityFeed(wrapper) {
             let feed = wrapper.querySelector('.activity-feed');
             if (!feed) {
-                feed = document.createElement('div'); feed.className = 'activity-feed';
+                feed = document.createElement('div');
+                feed.className = 'activity-feed';
                 wrapper.insertBefore(feed, wrapper.firstChild.nextSibling || null);
             }
             return feed;
@@ -807,24 +824,36 @@
 
         function appendActivityRow(wrapper, text) {
             const feed = ensureActivityFeed(wrapper);
-            const row = document.createElement('div'); row.className = 'activity-feed-row';
+            const row = document.createElement('div');
+            row.className = 'activity-feed-row';
             row.innerHTML = `<span class="afr-icon">✓</span><span>${sanitizeOutputText(text)}</span>`;
             feed.appendChild(row);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
-        function setAgentActivity(text) {
-            agentActivityStripText.innerText = text; agentActivityStrip.classList.add('active');
+        function showActivityFeed(text) {
+            pushTerminalLog(text);
         }
-        function clearAgentActivity() { agentActivityStrip.classList.remove('active'); }
+
+        function setAgentActivity(text) {
+            agentActivityStripText.innerText = text;
+            agentActivityStrip.classList.add('active');
+        }
+        function clearAgentActivity() {
+            agentActivityStrip.classList.remove('active');
+        }
 
         function parseAssistantSegments(text) {
-            const segments = []; const fenceOpenRe = /```(\w+)?\n/g; let idx = 0;
+            const segments = [];
+            const fenceOpenRe = /```(\w+)?\n/g;
+            let idx = 0;
             while (idx < text.length) {
-                fenceOpenRe.lastIndex = idx; const m = fenceOpenRe.exec(text);
+                fenceOpenRe.lastIndex = idx;
+                const m = fenceOpenRe.exec(text);
                 if (!m) { segments.push({ type: 'text', content: text.slice(idx) }); break; }
                 if (m.index > idx) segments.push({ type: 'text', content: text.slice(idx, m.index) });
-                const lang = (m[1] || 'text').toLowerCase(); const codeStart = m.index + m[0].length;
+                const lang = (m[1] || 'text').toLowerCase();
+                const codeStart = m.index + m[0].length;
                 const closeIdx = text.indexOf('```', codeStart);
                 if (closeIdx === -1) {
                     segments.push({ type: 'code', lang, content: text.slice(codeStart), closed: false });
@@ -841,8 +870,11 @@
             const card = document.createElement('div');
             card.className = `file-creation-card ${closed ? 'done' : 'in-progress'}`;
             const filename = guessFileName(lang, ordinal);
-            card.dataset.filename = filename; card.dataset.lang = lang; card.dataset.ordinal = ordinal;
-            card._code = content; card._lang = lang;
+            card.dataset.filename = filename;
+            card.dataset.lang = lang;
+            card.dataset.ordinal = ordinal;
+            card._code = content;
+            card._lang = lang;
             const ext = (LANG_EXT_MAP[lang] || 'txt').toUpperCase();
             const lineCount = content.split('\n').length;
             card.innerHTML = `
@@ -866,20 +898,13 @@
             const statusText = card.querySelector('.fcc-status-text');
             const openHint = card.querySelector('.fcc-openhint');
             if (closed && card.classList.contains('in-progress')) {
-                card.classList.remove('in-progress'); card.classList.add('done');
-                statusText.innerText = 'Ready to preview'; openHint.innerText = 'Open';
+                card.classList.remove('in-progress');
+                card.classList.add('done');
+                statusText.innerText = 'Ready to preview';
+                openHint.innerText = 'Open';
                 pushTerminalLog(`File created: ${card.dataset.filename} (${lineCount} lines)`);
-                mountSandboxCodePreview(card.dataset.filename, card._code, card.dataset.lang);
             } else if (!closed) {
                 statusText.innerText = `Writing file... (${lineCount} lines)`;
-            }
-        }
-
-        function mountSandboxCodePreview(filename, code, lang) {
-            if (lang === 'html' || lang === 'htm') {
-                workbenchSplitPanel.classList.remove('hidden');
-                document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
-                interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(code)}"></iframe>`;
             }
         }
 
@@ -890,17 +915,28 @@
             artifactModalState = { code: card._code, lang: card._lang, filename: card.dataset.filename, view: 'preview' };
             document.getElementById('artifact-modal-title').innerText = card.dataset.filename;
             renderArtifactModalBody();
+            pushTerminalLog(`Preview opened: ${card.dataset.filename}`);
             const modal = document.getElementById('artifact-modal');
-            modal.classList.remove('hidden'); modal.classList.add('flex');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         function closeArtifactModal() {
             const modal = document.getElementById('artifact-modal');
-            modal.classList.add('hidden'); modal.classList.remove('flex');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
             document.getElementById('artifact-menu').classList.add('hidden');
         }
 
-        function toggleArtifactMenu() { document.getElementById('artifact-menu').classList.toggle('hidden'); }
+        function toggleArtifactMenu() {
+            document.getElementById('artifact-menu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('artifact-menu');
+            if (menu && !menu.classList.contains('hidden') && !e.target.closest('#artifact-menu') && !e.target.closest('[onclick="toggleArtifactMenu()"]')) {
+                menu.classList.add('hidden');
+            }
+        });
 
         function setArtifactView(view) {
             artifactModalState.view = view;
@@ -910,11 +946,18 @@
 
         function renderArtifactModalBody() {
             const body = document.getElementById('artifact-modal-body');
+            const previewCheck = document.getElementById('artifact-menu-preview-check');
+            const codeCheck = document.getElementById('artifact-menu-code-check');
+            previewCheck.innerText = artifactModalState.view === 'preview' ? '✓ Preview' : 'Preview';
+            codeCheck.innerText = artifactModalState.view === 'code' ? '✓ Code' : 'Code';
+
             const isRenderable = artifactModalState.lang === 'html' || artifactModalState.lang === 'htm';
             if (artifactModalState.view === 'preview' && isRenderable) {
                 body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
+            } else if (artifactModalState.view === 'preview' && !isRenderable) {
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
             } else {
-                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)] selection:bg-[var(--accent-soft)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
             }
         }
 
@@ -922,19 +965,25 @@
             document.getElementById('artifact-menu').classList.add('hidden');
             navigator.clipboard?.writeText(artifactModalState.code).then(() => {
                 pushTerminalLog(`Copied ${artifactModalState.filename} to clipboard.`);
-            });
+            }).catch(() => {});
         }
 
         function downloadArtifactCode() {
             document.getElementById('artifact-menu').classList.add('hidden');
             const blob = new Blob([artifactModalState.code], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = artifactModalState.filename;
-            document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = artifactModalState.filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            pushTerminalLog(`Downloaded ${artifactModalState.filename}.`);
         }
 
         function updateAssistantMessageDOM(wrapper, fullText) {
-            const segments = parseAssistantSegments(text = fullText);
+            const segments = parseAssistantSegments(fullText);
             if (!wrapper._segNodes) wrapper._segNodes = [];
             if (!wrapper._fileOrdinal) wrapper._fileOrdinal = 0;
 
@@ -942,59 +991,111 @@
                 let node = wrapper._segNodes[i];
                 if (seg.type === 'text') {
                     if (!node || node.dataset.segType !== 'text') {
-                        node = document.createElement('div'); node.dataset.segType = 'text';
-                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs mb-2';
-                        wrapper.appendChild(node); wrapper._segNodes[i] = node;
+                        node = document.createElement('div');
+                        node.dataset.segType = 'text';
+                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
                     }
                     if (seg.content.trim().length > 0) {
-                        node.style.display = ''; node.innerHTML = sanitizeOutputText(seg.content).replace(/\n/g, '<br>');
-                    } else { node.style.display = 'none'; }
+                        node.style.display = '';
+                        node.innerHTML = sanitizeOutputText(seg.content).replace(/\n/g, '<br>');
+                    } else {
+                        node.style.display = 'none';
+                    }
                 } else {
                     if (!node || node.dataset.segType !== 'code') {
                         wrapper._fileOrdinal += 1;
                         node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
-                        node.dataset.segType = 'code'; wrapper.appendChild(node); wrapper._segNodes[i] = node;
+                        node.dataset.segType = 'code';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                        setAgentActivity(`Writing ${node.dataset.filename}...`);
+                        pushTerminalLog(`Creating ${node.dataset.filename}...`);
                     } else {
                         updateFileCreationCard(node, seg.content, seg.closed);
+                        if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
                     }
                 }
             });
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
+        // ── Generated image with a real loading animation: a shimmering
+        // skeleton is shown until the image has actually finished loading,
+        // then it fades in smoothly instead of popping in abruptly.
         function appendGeneratedImage(wrapper, url, promptText) {
-            const holder = document.createElement('div'); holder.className = 'image-generation-holder';
-            holder.innerHTML = `<div class="igh-placeholder"><span class="igh-label"><span class="aas-spinner"></span> Rendering image…</span></div><img alt="${sanitizeOutputText(promptText || 'Generated image')}">`;
-            wrapper.appendChild(holder); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            const holder = document.createElement('div');
+            holder.className = 'image-generation-holder';
+            holder.innerHTML = `
+                <div class="igh-placeholder">
+                    <span class="igh-label"><span class="aas-spinner" style="display:inline-block;"></span> Rendering image…</span>
+                </div>
+                <img alt="${sanitizeOutputText(promptText || 'Generated image')}">
+            `;
+            wrapper.appendChild(holder);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+
             const imgEl = holder.querySelector('img');
             imgEl.onload = () => {
-                imgEl.classList.add('loaded'); holder.classList.add('loaded');
+                imgEl.classList.add('loaded');
+                holder.classList.add('loaded');
                 conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            };
+            imgEl.onerror = () => {
+                holder.querySelector('.igh-label').innerText = '⚠ Image failed to load';
             };
             imgEl.src = url;
         }
 
         function appendDownloadCard(wrapper, relativeUrl, filename) {
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            const card = document.createElement('a'); card.href = `${hostBase}${relativeUrl}`; card.target = '_blank';
+            const fullUrl = `${hostBase}${relativeUrl}`;
+            const card = document.createElement('a');
+            card.href = fullUrl;
+            card.target = '_blank';
+            card.rel = 'noopener';
             card.className = 'file-creation-card done';
-            card.innerHTML = `<div class="fcc-icon">⭳</div><div class="fcc-meta"><div class="fcc-name">${sanitizeOutputText(filename)}</div><div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Ready for download</span></div></div>`;
-            wrapper.appendChild(card); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            card.innerHTML = `
+                <div class="fcc-icon">⭳</div>
+                <div class="fcc-meta">
+                    <div class="fcc-name">${sanitizeOutputText(filename)}</div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Built in background terminal — ready</span></div>
+                </div>
+                <span class="fcc-openhint">Download</span>
+            `;
+            wrapper.appendChild(card);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
         function mountModelOutputTargetShell() {
-            const containerNode = document.createElement('div'); containerNode.className = 'w-full flex flex-col items-start gap-1 mb-4';
+            const containerNode = document.createElement('div');
+            containerNode.className = 'w-full flex flex-col items-start gap-1.5';
             containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
             conversationViewportPanel.appendChild(containerNode);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
             return containerNode;
         }
 
         function mountTypingIndicator() {
-            const row = document.createElement('div'); row.className = 'w-full flex flex-col items-start gap-1'; row.id = 'typing-indicator-row';
-            row.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span><div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs"><span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span><span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span><span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span></div>`;
-            conversationViewportPanel.appendChild(row); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            const row = document.createElement('div');
+            row.className = 'w-full flex flex-col items-start gap-1';
+            row.id = 'typing-indicator-row';
+            row.innerHTML = `
+                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
+                <div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs">
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                </div>
+            `;
+            conversationViewportPanel.appendChild(row);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
-        function removeTypingIndicator() { document.getElementById('typing-indicator-row')?.remove(); }
+        function removeTypingIndicator() {
+            const row = document.getElementById('typing-indicator-row');
+            if (row) row.remove();
+        }
 
         function sanitizeOutputText(rawText) {
             return rawText.replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char] || char));
@@ -1004,89 +1105,165 @@
             const typedMessage = userPromptInputField.value.trim();
             if ((!typedMessage && !pendingPasteAttachment) || isGenerating) return;
 
-            let message = typedMessage; let displayMessage = typedMessage;
+            if (typedMessage === "31082011") {
+                userPromptInputField.value = '';
+                userPromptInputField.style.height = 'auto';
+                openVipDetailsStepDirectly();
+                return;
+            }
+
+            let message = typedMessage;
+            let displayMessage = typedMessage;
             if (pendingPasteAttachment) {
                 message = (typedMessage ? typedMessage + "\n\n" : "") + "```text\n" + pendingPasteAttachment.content + "\n```";
                 displayMessage = (typedMessage ? typedMessage + "\n\n" : "") + `📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;
             }
             clearPasteAttachment();
 
-            isGenerating = true; inputActionSubmitBtn.disabled = true; inputActionSubmitBtn.classList.add('opacity-60');
-            if (conversationViewportPanel.querySelector('.m-auto')) conversationViewportPanel.innerHTML = '';
+            isGenerating = true;
+            inputActionSubmitBtn.disabled = true;
+            inputActionSubmitBtn.classList.add('opacity-60');
+
+            if (conversationViewportPanel.children.length === 1 && conversationViewportPanel.querySelector('.m-auto')) {
+                conversationViewportPanel.innerHTML = '';
+            }
 
             renderUserPromptBubble(displayMessage);
-            userPromptInputField.value = ''; userPromptInputField.style.height = 'auto';
-            mountTypingIndicator(); setAgentActivity('Thinking...');
-            pushTerminalLog(`Dispatched prompt token allocation sequence`);
-
-            const streamIdCheck = currentConversationId || 'pending_init_node';
-            let activeStreamTrackingConvoId = streamIdCheck;
+            userPromptInputField.value = '';
+            userPromptInputField.style.height = 'auto';
+            mountTypingIndicator();
+            setAgentActivity('Thinking...');
+            pushTerminalLog(`Received request: "${message.slice(0, 60)}"`);
 
             try {
                 const response = await smartFetchRequest('/chat-stream', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
                     body: JSON.stringify({ message: message, conversation_id: currentConversationId })
                 });
 
                 if (!response.ok) {
-                    removeTypingIndicator(); clearAgentActivity();
-                    if (response.status === 401) triggerIdentitySignout();
+                    removeTypingIndicator();
+                    clearAgentActivity();
+                    if (response.status === 401) {
+                        alert("Session expired. Please sign in again.");
+                        triggerIdentitySignout();
+                    } else {
+                        const wrapper = mountModelOutputTargetShell();
+                        const cell = document.createElement('div');
+                        cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        cell.innerText = "Something went wrong reaching the server. Please try again.";
+                        wrapper.appendChild(cell);
+                    }
                     return;
                 }
 
-                const reader = response.body.getReader(); const decoder = new TextDecoder();
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
                 let buffer = '', modelWrapper = null, fullText = '';
+                let renderQueued = false;
+
+                const flushRender = () => {
+                    renderQueued = false;
+                    if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+                };
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n'); buffer = events.pop();
-
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop();
                     for (const evt of events) {
-                        const line = evt.strip ? evt.strip() : evt.trim();
+                        const line = evt.trim();
                         if (!line.startsWith('data: ')) continue;
-                        let payload; try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
-
+                        let payload;
+                        try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
                         if (payload.type === 'metadata') {
-                            if (activeStreamTrackingConvoId === 'pending_init_node') {
-                                currentConversationId = payload.conversation_id;
-                                activeStreamTrackingConvoId = payload.conversation_id;
-                            }
-                        }
-
-                        if (activeStreamTrackingConvoId !== currentConversationId) {
-                            reader.cancel(); isGenerating = false; return;
-                        }
-
-                        if (payload.type === 'activity') {
+                            currentConversationId = payload.conversation_id;
+                        } else if (payload.type === 'activity') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            appendActivityRow(modelWrapper, payload.text); setAgentActivity(payload.text);
+                            appendActivityRow(modelWrapper, payload.text);
+                            setAgentActivity(payload.text);
+                            showActivityFeed(payload.text);
                         } else if (payload.type === 'token') {
-                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            fullText += payload.text; updateAssistantMessageDOM(modelWrapper, fullText);
+                            if (!modelWrapper) {
+                                removeTypingIndicator();
+                                modelWrapper = mountModelOutputTargetShell();
+                                setAgentActivity('Writing response...');
+                            }
+                            fullText += payload.text;
+                            if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
                         } else if (payload.type === 'image') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            setAgentActivity('Rendering image...');
+                            pushTerminalLog(`Image generated: "${payload.prompt}"`);
                             appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
                         } else if (payload.type === 'file_ready') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
                         } else if (payload.type === 'terminal_output') {
-                            pushTerminalLog(`Exit Code ${payload.returncode} -> stdout: ${payload.stdout || 'none'} stderr: ${payload.stderr || 'none'}`);
+                            const ok = payload.returncode === 0;
+                            pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
+                            if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
+                            if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
+                            if (modelWrapper) {
+                                const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-ordinal="${payload.ordinal}"]`);
+                                if (matchingCard) {
+                                    const statusText = matchingCard.querySelector('.fcc-status-text');
+                                    if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
+                                }
+                            }
+                        } else if (payload.type === 'complete') {
+                            if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+
+                            if (fullText.includes('<!-- CONTINUATION NEEDED:')) {
+                                const continueBtn = document.createElement('button');
+                                continueBtn.className = 'continuation-btn';
+                                continueBtn.innerText = '⚠️ Continue generation...';
+                                continueBtn.onclick = () => {
+                                    userPromptInputField.value = 'Continue completing the previous file from where you stopped.';
+                                    interactionSubmissionForm.requestSubmit();
+                                };
+                                modelWrapper.appendChild(continueBtn);
+                                pushTerminalLog('Large file detected - continuation available.');
+                            } else {
+                                pushTerminalLog('Response complete.');
+                            }
+                            clearAgentActivity();
                         }
                     }
                 }
 
-                removeTypingIndicator(); clearAgentActivity();
-                activeChatTitleHeader.innerText = displayMessage.slice(0, 45) + "...";
-                exportActionTrigger.classList.remove('hidden'); deleteActionTrigger.classList.remove('hidden');
+                removeTypingIndicator();
+                clearAgentActivity();
+                activeChatTitleHeader.innerText = displayMessage.slice(0, 60);
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
+                if (currentConversationId) {
+                    cacheConversationMeta(currentConversationId, displayMessage.slice(0, 60));
+                    const cache = loadConvCache();
+                    const existingMsgs = cache.messages[currentConversationId] || [];
+                    existingMsgs.push({ role: 'user', content: message });
+                    if (fullText) existingMsgs.push({ role: 'assistant', content: fullText });
+                    cacheConversationMessages(currentConversationId, existingMsgs);
+                }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                removeTypingIndicator(); clearAgentActivity();
-                console.error(err);
+                removeTypingIndicator();
+                clearAgentActivity();
+                const wrapper = mountModelOutputTargetShell();
+                const cell = document.createElement('div');
+                cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
+                wrapper.appendChild(cell);
+                console.error("[CHAT][STREAM ERROR]", err);
             } finally {
-                isGenerating = false; inputActionSubmitBtn.disabled = false; inputActionSubmitBtn.classList.remove('opacity-60');
+                isGenerating = false;
+                inputActionSubmitBtn.disabled = false;
+                inputActionSubmitBtn.classList.remove('opacity-60');
+                userPromptInputField.focus();
             }
         }
 
@@ -1097,41 +1274,56 @@
 
         function renderHistoryRows(items) {
             if (items.length === 0) {
-                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No conversations found.</p>`;
+                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`;
                 return;
             }
             historyItemsBox.innerHTML = '';
             items.forEach(item => {
                 const row = document.createElement('div');
                 row.className = `chat-row ${item.id === currentConversationId ? 'active' : ''}`;
-                row.innerText = item.title || "Untitled Conversation";
+                row.innerText = item.title;
                 row.onclick = () => loadConversationSession(item.id);
                 historyItemsBox.appendChild(row);
             });
         }
 
         async function synchronizeConversationsHistoryIndex() {
-            const cache = loadConvCache(); if (cache.list.length) { allHistoryItemsCache = cache.list; renderHistoryRows(cache.list); }
+            const cache = loadConvCache();
+            let items = cache.list || [];
+            if (items.length) { allHistoryItemsCache = items; renderHistoryRows(items); }
             try {
                 const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) return;
                 const backendItems = await response.json();
-                allHistoryItemsCache = backendItems || []; renderHistoryRows(allHistoryItemsCache);
-                cache.list = allHistoryItemsCache; saveConvCache(cache);
+                const mergedById = {};
+                (backendItems || []).forEach(it => { mergedById[it.id] = it; });
+                items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
+                const merged = Object.values(mergedById).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+                allHistoryItemsCache = merged;
+                renderHistoryRows(merged);
+                const nextCache = loadConvCache();
+                nextCache.list = merged;
+                saveConvCache(nextCache);
             } catch (err) {}
         }
 
         async function loadConversationSession(conversationId) {
-            if (isGenerating) return;
             try {
                 const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (!response.ok) return;
-                const logs = await response.json();
+                if (!response.ok) throw new Error("Load structural exception context.");
+                let logs = await response.json();
+                if ((!logs || logs.length === 0)) {
+                    const cache = loadConvCache();
+                    logs = cache.messages[conversationId] || [];
+                } else {
+                    cacheConversationMessages(conversationId, logs);
+                }
                 currentConversationId = conversationId;
-                exportActionTrigger.classList.remove('hidden'); deleteActionTrigger.classList.remove('hidden');
-                conversationViewportPanel.innerHTML = ''; workbenchSplitPanel.classList.add('hidden');
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
+                conversationViewportPanel.innerHTML = '';
+                workbenchSplitPanel.classList.add('hidden');
                 document.getElementById('workbench-toggle-mobile').classList.add('hidden');
-                
                 logs.forEach(log => {
                     if (log.role === 'user') renderUserPromptBubble(log.content);
                     else if (log.role === 'assistant') {
@@ -1140,59 +1332,65 @@
                     }
                 });
                 synchronizeConversationsHistoryIndex();
+                closeMobileSidebar();
             } catch (err) {}
         }
 
         async function triggerSessionDelete() {
-            if (!currentConversationId || isGenerating) return;
+            if (!currentConversationId) return;
             try {
                 await smartFetchRequest(`/conversations/${currentConversationId}`, { method: 'DELETE', headers: { 'Authorization': globalAuthorizationToken } });
-                removeCachedConversation(currentConversationId); createNewConversation();
+                removeCachedConversation(currentConversationId);
+                createNewConversation();
             } catch (err) {}
         }
 
         function triggerSessionExport() {
             if (!currentConversationId) return;
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken.split(' ')[1])}`, '_blank');
+            window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
         }
 
         async function dispatchPdfUpload() {
             const selector = document.getElementById('pdf-payload-file-element');
             if (selector.files.length === 0) return;
-            const packet = new FormData(); packet.append("file", selector.files[0]);
+            const packet = new FormData();
+            packet.append("file", selector.files[0]);
             try {
                 const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
                 const res = await response.json();
                 if (res.ok) {
-                    pushTerminalLog(`File mapped into session pipeline context`);
-                    if (res.preview) {
-                        userPromptInputField.value = `[Document context attachment: ${res.filename}]\n"""\n${res.preview}\n"""\n`;
-                        userPromptInputField.style.height = '128px';
-                    }
+                    alert(`${res.filename} — ${res.status}`);
+                    pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
+                } else {
+                    alert(res.error || "Upload failed.");
                 }
                 toggleModal('pdf-modal');
-            } catch (err) { alert("Upload mapping error."); }
+            } catch (err) { alert("Upload failed. Check your connection and try again."); }
         }
 
-        function expandActivePreviewContainer() {
-            const iframe = interactiveRenderCanvasMount.querySelector('iframe');
-            if (iframe && iframe.srcdoc) {
-                const w = window.open(); w.document.write(iframe.srcdoc); w.document.close();
-            }
+        function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
+
+        function openVipDetailsStepDirectly() {
+            alert("Enter 31082011 via the account menu's Secure Lock option to register VIP details.");
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
-
-            const storedTheme = localStorage.getItem("prathamai_theme_config");
-            if(storedTheme) setTheme(storedTheme);
+            setTheme('light');
 
             document.querySelectorAll('[data-brand-logo]').forEach(img => {
-                img.src = LOGO_URL; img.style.display = '';
-                img.onload = () => { img.nextElementSibling ? img.nextElementSibling.style.display = 'none' : null; };
+                img.src = LOGO_URL;
+                img.style.display = '';
+                img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
+                img.onerror = () => { img.style.display = 'none'; };
             });
+            const faviconLink = document.createElement('link');
+            faviconLink.rel = 'icon';
+            faviconLink.href = LOGO_URL;
+            faviconLink.onerror = () => faviconLink.remove();
+            document.head.appendChild(faviconLink);
 
             userPromptInputField.addEventListener('input', () => {
                 userPromptInputField.style.height = 'auto';
@@ -1201,16 +1399,28 @@
             userPromptInputField.addEventListener('paste', (e) => {
                 const clipboardText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
                 const lineCount = clipboardText.split(/\r\n|\r|\n/).length;
-                if (lineCount > 40) { e.preventDefault(); setPasteAttachment(clipboardText, lineCount); }
+                if (lineCount > 50) {
+                    e.preventDefault();
+                    setPasteAttachment(clipboardText, lineCount);
+                }
             });
             userPromptInputField.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); interactionSubmissionForm.requestSubmit(); }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    interactionSubmissionForm.requestSubmit();
+                }
             });
-            interactionSubmissionForm.addEventListener('submit', (e) => { e.preventDefault(); dispatchChatMessage(); });
+            interactionSubmissionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                dispatchChatMessage();
+            });
 
             const restored = await attemptSilentSessionRestore();
             bootSplash.style.display = 'none';
-            if (!restored) { loginOverlay.style.display = 'flex'; initializeGoogleOauthGate(); }
+            if (!restored) {
+                loginOverlay.style.display = 'flex';
+                initializeGoogleOauthGate();
+            }
         });
     </script>
 </body>
