@@ -608,7 +608,7 @@
             if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                google.accounts.id.initialize({
                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-                   callback: handleCredentialResponse,
+                   callback: handleGoogleIdentityCallback,
                    ux_mode: "redirect",                           // Add this line
                    login_uri: "https://prathamai.vercel.app"      // Add this line
                });
@@ -748,10 +748,10 @@
             initializeGoogleOauthGate();
         }
 
-        updateBackendHostContext = () => {
+        const updateBackendHostContext = () => {
             SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
             synchronizeConversationsHistoryIndex();
-        }
+        };
 
         async function smartFetchRequest(endpointPath, options = {}) {
             const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
