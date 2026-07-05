@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#c2613f">
-    <title>Pratham AI</title>
+    <title>Pratham AI — Workspace Suite</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
-        /* ===== Claude-style palette ===== */
         :root {
             --bg: #faf9f5;
             --sidebar: #f4f3ee;
@@ -31,21 +30,21 @@
         }
 
         .dark-mode {
-            --bg: #262624;
-            --sidebar: #1f1e1c;
-            --panel: #30302e;
-            --panel-2: #2b2a28;
-            --border: #3d3c39;
-            --text: #f5f4ef;
-            --text-dim: #a6a49c;
-            --accent: #d97757;
-            --accent-soft: #4a3a30;
-            --bubble-user: #35342f;
-            --bubble-model: #30302e;
-            --terminal-bg: #131211;
+            --bg: #161514;
+            --sidebar: #1f1d1b;
+            --panel: #292724;
+            --panel-2: #242220;
+            --border: #383531;
+            --text: #f4f0e6;
+            --text-dim: #9e978e;
+            --accent: #e2754c;
+            --accent-soft: #4a342b;
+            --bubble-user: #33302c;
+            --bubble-model: #292724;
+            --terminal-bg: #0d0c0b;
             --terminal-text: #4ade80;
             --shadow-premium: 0 1px 3px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25);
-            --hover: #3a3936;
+            --hover: #3d3a35;
         }
 
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -70,7 +69,6 @@
         .typing-dot:nth-child(3){animation-delay:.3s;}
         @keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-4px);opacity:1;} }
 
-        /* Claude-style sidebar nav rows */
         .nav-row {
             display: flex; align-items: center; gap: 10px;
             padding: 7px 10px; border-radius: 8px;
@@ -94,7 +92,6 @@
             border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--text-dim);
         }
 
-        /* Profile dropdown, mimics Claude's account menu */
         #profile-dropdown-menu {
             position: absolute; bottom: 56px; left: 8px; width: 240px;
             background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
@@ -111,7 +108,6 @@
             padding: 6px 10px 2px; font-size: 11px; color: var(--text-dim); word-break: break-all;
         }
 
-        /* Settings modal, mimics Claude's settings layout */
         #settings-modal .settings-tab {
             display: flex; align-items: center; gap: 10px;
             padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
@@ -130,7 +126,6 @@
         }
         .theme-choice-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
 
-        /* ===== Mobile ===== */
         #sidebar-panel { transition: transform .28s ease, width .28s ease; }
         .mobile-hamburger { display: none; }
 
@@ -141,15 +136,10 @@
                 box-shadow: 0 0 40px rgba(0,0,0,.25);
             }
             #sidebar-panel.sidebar-open { transform: translateX(0); }
-            #sidebar-scrim {
-                display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
-            }
+            #sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35; }
             #sidebar-scrim.scrim-visible { display: block; }
             .mobile-hamburger { display: flex; }
-            #workbench-split-panel {
-                position: fixed; inset: 0; width: 100%; z-index: 45;
-                transform: translateX(100%); transition: transform .28s ease;
-            }
+            #workbench-split-panel { position: fixed; inset: 0; width: 100%; z-index: 45; transform: translateX(100%); transition: transform .28s ease; }
             #workbench-split-panel.workbench-open { transform: translateX(0); }
             #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
             #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
@@ -201,7 +191,7 @@
                     <input id="history-search-input" type="text" placeholder="Search chats..." class="bg-transparent border-none focus:outline-none w-full text-[var(--text)] placeholder-[var(--text-dim)]" oninput="filterHistoryList()">
                 </div>
 
-                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-2">Chats</div>
+                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-2">Chats History</div>
                 <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-0.5 px-0.5"></div>
             </div>
 
@@ -221,15 +211,14 @@
                 </div>
             </div>
 
-            <!-- Profile dropdown, mimics Claude account menu -->
             <div id="profile-dropdown-menu" class="hidden">
                 <div class="menu-email" id="profile-dropdown-email">user@example.com</div>
                 <div class="menu-divider"></div>
-                <div class="menu-item" onclick="openSettingsFromMenu()"><span>⚙️ Settings</span></div>
-                <div class="menu-item" onclick="toggleColorTheme()"><span>🌗 Appearance</span></div>
-                <div class="menu-item"><span>❓ Get help</span></div>
+                <div class="menu-item" onclick="openSettingsFromMenu()"><span>⚙️ Settings Dashboard</span></div>
+                <div class="menu-item" onclick="toggleColorTheme()"><span>🌗 Appearance Mode</span></div>
+                <div class="menu-item" onclick="dispatchGitHubTreeSync()"><span>📦 Refresh GitHub Repository</span></div>
                 <div class="menu-divider"></div>
-                <div class="menu-item" onclick="triggerIdentitySignout()"><span>↩ Log out</span></div>
+                <div class="menu-item" onclick="triggerIdentitySignout()"><span>% Log out</span></div>
             </div>
         </aside>
 
@@ -242,7 +231,7 @@
                         <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">New conversation</h2>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">⚡</button>
+                        <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md">⚡ View Split</button>
                         <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Export</button>
                         <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Delete</button>
                     </div>
@@ -267,28 +256,40 @@
                 </div>
             </div>
 
-            <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
-                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 mobile-hamburger">
-                    <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)]">Workbench</span>
-                    <button onclick="toggleWorkbenchMobile()" class="text-sm cursor-pointer">✕</button>
+            <aside id="workbench-split-panel" class="w-100 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3">
+                    <div class="flex gap-2 text-xs font-semibold uppercase tracking-wider">
+                        <button onclick="switchWorkbenchTab('terminal')" id="tab-btn-terminal" class="border-b-2 border-[var(--accent)] px-1 py-2 text-[var(--text)]">Terminal</button>
+                        <button onclick="switchWorkbenchTab('github')" id="tab-btn-github" class="border-b-2 border-transparent px-1 py-2 text-[var(--text-dim)]">Repository Monitor</button>
+                    </div>
+                    <button onclick="toggleWorkbenchMobile()" class="mobile-hamburger text-sm cursor-pointer">✕</button>
                 </div>
-                <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
+
+                <div id="workbench-tab-terminal" class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
                     <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
-                        <span>&gt;_ Live Agent Terminal Output Logs</span>
+                        <span>&gt;_ Live Agent Terminal Logs</span>
                         <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
                     </div>
                     <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
                 </div>
-                <div class="flex-1 flex flex-col overflow-hidden">
-                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
-                        <span>⚡ Sandbox Preview</span>
-                        <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout</button>
+
+                <div id="workbench-tab-github" class="hidden flex-1 overflow-y-auto workspace-scrollpane p-3 bg-[var(--bg)] flex flex-col gap-2">
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-1">Private Repository Structure Tree</div>
+                    <div id="github-repo-tree-view-canvas" class="text-xs font-mono bg-[var(--panel)] border border-[var(--border)] p-3 rounded-xl space-y-1 overflow-x-auto">
+                        <span class="italic text-[var(--text-dim)]">No files loaded. Run code block extraction routines or call explicit repository refreshes.</span>
+                    </div>
+                </div>
+
+                <div id="workbench-preview-container-shell" class="flex-1 flex flex-col overflow-hidden">
+                    <div class="h-9 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-[10px] font-semibold tracking-wide uppercase text-[var(--text-dim)]">
+                        <span>⚡ Sandbox Preview Canvas</span>
+                        <button onclick="expandActivePreviewContainer()" class="text-[9px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout View</button>
                     </div>
                     <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
                         <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
                     </div>
                 </div>
-            </div>
+            </aside>
         </main>
     </div>
 
@@ -305,7 +306,6 @@
         </div>
     </div>
 
-    <!-- Settings modal, mimics Claude's settings page layout -->
     <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-2xl h-[75vh] max-h-[560px] overflow-hidden premium-card flex">
             <div class="settings-sidebar w-44 border-r border-[var(--border)] p-3 flex flex-col gap-1 bg-[var(--panel-2)]">
@@ -319,35 +319,35 @@
             </div>
             <div class="flex-1 flex flex-col min-w-0">
                 <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                    <h4 class="text-sm font-bold text-[var(--text)]">Profile</h4>
+                    <h4 class="text-sm font-bold text-[var(--text)]">Profile Configuration Core</h4>
                     <button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
                 </div>
                 <div class="flex-1 overflow-y-auto workspace-scrollpane p-5">
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Avatar</span>
+                        <span class="text-sm text-[var(--text)]">Avatar Matrix</span>
                         <div id="settings-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Full name</span>
+                        <span class="text-sm text-[var(--text)]">Full name identifier</span>
                         <span id="settings-name-display" class="text-sm text-[var(--text-dim)]">—</span>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Email</span>
+                        <span class="text-sm text-[var(--text)]">Authenticated Email</span>
                         <span id="settings-email-display" class="text-sm text-[var(--text-dim)]">—</span>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Appearance</span>
+                        <span class="text-sm text-[var(--text)]">Appearance Skin Spec</span>
                         <div class="flex gap-1.5">
                             <div class="theme-choice-btn" id="theme-btn-light" onclick="setTheme('light')">☀️</div>
                             <div class="theme-choice-btn" id="theme-btn-dark" onclick="setTheme('dark')">🌙</div>
                         </div>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Target host gateway</span>
+                        <span class="text-sm text-[var(--text)]">Target host gateway link node</span>
                         <input type="text" id="backend-host-url-config" value="" placeholder="Automatic" class="text-xs px-2 py-1.5 border border-[var(--border)] rounded-md bg-[var(--panel-2)] text-[var(--accent)] font-mono focus:outline-none w-40 text-right" onchange="updateBackendHostContext()"/>
                     </div>
                     <div class="pt-6">
-                        <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out</button>
+                        <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out profile context stream</button>
                     </div>
                 </div>
             </div>
@@ -375,6 +375,7 @@
         const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
         const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
         const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
+        const githubRepoTreeViewCanvas = document.getElementById('github-repo-tree-view-canvas');
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
@@ -389,17 +390,31 @@
         function toggleWorkbenchMobile() { workbenchSplitPanel.classList.toggle('workbench-open'); }
         function focusHistorySearch() { document.getElementById('history-search-input').focus(); }
 
-        function toggleProfileDropdown() {
-            profileDropdownMenu.classList.toggle('hidden');
-        }
+        function toggleProfileDropdown() { profileDropdownMenu.classList.toggle('hidden'); }
         document.addEventListener('click', (e) => {
             if (!profileDropdownMenu.contains(e.target) && !e.target.closest('.nav-row')) {
                 profileDropdownMenu.classList.add('hidden');
             }
         });
-        function openSettingsFromMenu() {
-            profileDropdownMenu.classList.add('hidden');
-            toggleModal('settings-modal');
+        function openSettingsFromMenu() { profileDropdownMenu.classList.add('hidden'); toggleModal('settings-modal'); }
+
+        function switchWorkbenchTab(tabId) {
+            const tBtn = document.getElementById('tab-btn-terminal');
+            const gBtn = document.getElementById('tab-btn-github');
+            const tBox = document.getElementById('workbench-tab-terminal');
+            const gBox = document.getElementById('workbench-tab-github');
+            if(tabId === 'github') {
+                gBtn.className = "border-b-2 border-[var(--accent)] px-1 py-2 text-[var(--text)] font-semibold cursor-pointer";
+                tBtn.className = "border-b-2 border-transparent px-1 py-2 text-[var(--text-dim)] cursor-pointer";
+                gBox.classList.remove('hidden');
+                tBox.classList.add('hidden');
+                dispatchGitHubTreeSync();
+            } else {
+                tBtn.className = "border-b-2 border-[var(--accent)] px-1 py-2 text-[var(--text)] font-semibold cursor-pointer";
+                gBtn.className = "border-b-2 border-transparent px-1 py-2 text-[var(--text-dim)] cursor-pointer";
+                tBox.classList.remove('hidden');
+                gBox.classList.add('hidden');
+            }
         }
 
         function setTheme(mode) {
@@ -440,9 +455,9 @@
                 const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
                 const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
 
-                if (creators.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "App Creator";
-                else if (supervisors.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "Supervisor";
-                else roleBadgeDisplay.innerText = "Free plan";
+                if (creators.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "App Creator Profile Context";
+                else if (supervisors.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "Supervisor Overseer Panel";
+                else roleBadgeDisplay.innerText = "Standard System Account Node";
 
                 loginOverlay.style.display = 'none';
                 appShell.style.display = 'flex';
@@ -486,10 +501,6 @@
                     interactionSubmissionForm.requestSubmit();
                 }
             });
-            interactionSubmissionForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                dispatchChatMessage();
-            });
         });
 
         function triggerHiddenVipFormPrompt() {
@@ -504,8 +515,8 @@
                         body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
                     }).then(res => res.json()).then(data => {
                         if (data.ok) {
-                            roleBadgeDisplay.innerText = "VIP Tier";
-                            alert("Identity context recorded successfully.");
+                            roleBadgeDisplay.innerText = "Internal Core VIP Account";
+                            alert("Identity context recorded successfully into private storage parameters mapping repository.");
                         } else alert("Storage operation tracking fault.");
                     });
                 }
@@ -513,13 +524,9 @@
         }
 
         function triggerIdentitySignout() {
-            globalAuthorizationToken = "";
-            activeUserIdentityEmail = "";
-            currentConversationId = null;
-            appShell.style.display = 'none';
-            loginOverlay.style.display = 'flex';
+            globalAuthorizationToken = ""; activeUserIdentityEmail = ""; currentConversationId = null;
+            appShell.style.display = 'none'; loginOverlay.style.display = 'flex';
             document.getElementById('settings-modal').classList.add('hidden');
-            document.getElementById('settings-modal').classList.remove('flex');
             profileDropdownMenu.classList.add('hidden');
             initializeGoogleOauthGate();
         }
@@ -554,12 +561,9 @@
         }
 
         function createNewConversation() {
-            currentConversationId = null;
-            activeChatTitleHeader.innerText = "New conversation";
-            exportActionTrigger.classList.add('hidden');
-            deleteActionTrigger.classList.add('hidden');
-            workbenchSplitPanel.classList.add('hidden');
-            workbenchSplitPanel.classList.remove('workbench-open');
+            currentConversationId = null; activeChatTitleHeader.innerText = "New conversation";
+            exportActionTrigger.classList.add('hidden'); deleteActionTrigger.classList.add('hidden');
+            workbenchSplitPanel.classList.add('hidden'); workbenchSplitPanel.classList.remove('workbench-open');
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
                     <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
@@ -567,34 +571,27 @@
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
             `;
-            synchronizeConversationsHistoryIndex();
-            closeMobileSidebar();
+            synchronizeConversationsHistoryIndex(); closeMobileSidebar();
         }
 
         function renderUserPromptBubble(promptText) {
-            const row = document.createElement('div');
-            row.className = 'w-full flex justify-end';
+            const row = document.createElement('div'); row.className = 'w-full flex justify-end';
             row.innerHTML = `<div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>`;
-            conversationViewportPanel.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            conversationViewportPanel.appendChild(row); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
         function mountModelOutputTargetShell() {
-            const containerNode = document.createElement('div');
-            containerNode.className = 'w-full flex flex-col items-start gap-1';
+            const containerNode = document.createElement('div'); containerNode.className = 'w-full flex flex-col items-start gap-1';
             containerNode.innerHTML = `
                 <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
                 <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs"></div>
             `;
-            conversationViewportPanel.appendChild(containerNode);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            conversationViewportPanel.appendChild(containerNode); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
             return containerNode.querySelector('.model-stream-target-node');
         }
 
         function mountTypingIndicator() {
-            const row = document.createElement('div');
-            row.className = 'w-full flex flex-col items-start gap-1';
-            row.id = 'typing-indicator-row';
+            const row = document.createElement('div'); row.className = 'w-full flex flex-col items-start gap-1'; row.id = 'typing-indicator-row';
             row.innerHTML = `
                 <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
                 <div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs">
@@ -603,71 +600,70 @@
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                 </div>
             `;
-            conversationViewportPanel.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            conversationViewportPanel.appendChild(row); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
-        function removeTypingIndicator() {
-            const row = document.getElementById('typing-indicator-row');
-            if (row) row.remove();
-        }
+        function removeTypingIndicator() { const row = document.getElementById('typing-indicator-row'); if (row) row.remove(); }
 
-        function sanitizeOutputText(rawText) {
-            return rawText.replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char] || char));
+        async function dispatchGitHubTreeSync() {
+            githubRepoTreeViewCanvas.innerHTML = `<span class="italic text-[var(--text-dim)] animate-pulse">Querying live repository tree map vectors...</span>`;
+            try {
+                const res = await smartFetchRequest('/github/repo-tree', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                if(!res.ok) throw new Error();
+                const data = await res.json();
+                if(data.error) { githubRepoTreeViewCanvas.innerHTML = `<span class="text-red-500 font-medium">${data.error}</span>`; return; }
+                githubRepoTreeViewCanvas.innerHTML = data.files.map(f => `
+                    <div class="flex items-center justify-between py-1 border-b border-[var(--border)]/60 last:border-none">
+                        <span class="truncate pr-2 text-[var(--text)] font-medium">📄 ${f.path}</span>
+                        <span class="text-[10px] text-[var(--text-dim)] shrink-0 font-sans px-1.5 py-0.5 bg-[var(--sidebar)] rounded">${(f.size/1024).toFixed(1)} KB</span>
+                    </div>
+                `).join('');
+            } catch(e) {
+                githubRepoTreeViewCanvas.innerHTML = `<span class="text-red-500 italic">Failed to securely query GitHub directory tree structures logs.</span>`;
+            }
         }
 
         async function dispatchChatMessage() {
             const message = userPromptInputField.value.trim();
             if (!message || isGenerating) return;
-            isGenerating = true;
-            inputActionSubmitBtn.disabled = true;
-            inputActionSubmitBtn.classList.add('opacity-60');
+            isGenerating = true; inputActionSubmitBtn.disabled = true; inputActionSubmitBtn.classList.add('opacity-60');
 
             if (conversationViewportPanel.children.length === 1 && conversationViewportPanel.querySelector('.m-auto')) {
                 conversationViewportPanel.innerHTML = '';
             }
 
-            renderUserPromptBubble(message);
-            userPromptInputField.value = '';
-            userPromptInputField.style.height = 'auto';
-            mountTypingIndicator();
+            renderUserPromptBubble(message); userPromptInputField.value = ''; userPromptInputField.style.height = 'auto'; mountTypingIndicator();
+
+            if (message.toLowerCase().includes("html") || message.toLowerCase().includes("code") || message.toLowerCase().includes("preview") || message.toLowerCase().includes("build")) {
+                workbenchSplitPanel.classList.remove('hidden');
+                agentBackgroundTerminalLogger.innerText = `[LOG] Intercepting evaluation coding layout guidelines...\n[ACTION] Invoking rapid token parsing streams frames...`;
+            }
 
             try {
                 const response = await smartFetchRequest('/chat-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
                     body: JSON.stringify({ message: message, conversation_id: currentConversationId })
                 });
 
                 if (!response.ok) {
                     removeTypingIndicator();
-                    if (response.status === 401) {
-                        alert("Session expired. Please sign in again.");
-                        triggerIdentitySignout();
-                    } else {
-                        const cell = mountModelOutputTargetShell();
-                        cell.innerText = "Something went wrong reaching the server. Please try again.";
-                    }
+                    if (response.status === 401) { alert("Session expired. Please sign in again."); triggerIdentitySignout(); } 
+                    else { const cell = mountModelOutputTargetShell(); cell.innerText = "Something went wrong reaching the server. Please try again."; }
                     return;
                 }
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
+                const reader = response.body.getReader(); const decoder = new TextDecoder();
                 let buffer = '', modelCell = null, fullText = '';
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n');
-                    buffer = events.pop();
+                    const events = buffer.split('\n\n'); buffer = events.pop();
                     for (const evt of events) {
-                        const line = evt.trim();
-                        if (!line.startsWith('data: ')) continue;
-                        let payload;
-                        try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
-                        if (payload.type === 'metadata') {
-                            currentConversationId = payload.conversation_id;
-                        } else if (payload.type === 'token') {
+                        const line = evt.trim(); if (!line.startsWith('data: ')) continue;
+                        let payload; try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
+                        if (payload.type === 'metadata') { currentConversationId = payload.conversation_id; } 
+                        else if (payload.type === 'token') {
                             if (!modelCell) { removeTypingIndicator(); modelCell = mountModelOutputTargetShell(); }
                             fullText += payload.text;
                             modelCell.innerHTML = sanitizeOutputText(fullText).replace(/\n/g, '<br>');
@@ -677,21 +673,14 @@
                         }
                     }
                 }
-
-                removeTypingIndicator();
-                activeChatTitleHeader.innerText = message.slice(0, 60);
-                exportActionTrigger.classList.remove('hidden');
-                deleteActionTrigger.classList.remove('hidden');
+                removeTypingIndicator(); activeChatTitleHeader.innerText = message.slice(0, 60);
+                exportActionTrigger.classList.remove('hidden'); deleteActionTrigger.classList.remove('hidden');
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                removeTypingIndicator();
-                const cell = mountModelOutputTargetShell();
-                cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
-                console.error("[CHAT][STREAM ERROR]", err);
+                removeTypingIndicator(); const cell = mountModelOutputTargetShell();
+                cell.innerText = "Connection interrupted. Check your backend status gateway link.";
             } finally {
-                isGenerating = false;
-                inputActionSubmitBtn.disabled = false;
-                inputActionSubmitBtn.classList.remove('opacity-60');
+                isGenerating = false; inputActionSubmitBtn.disabled = false; inputActionSubmitBtn.classList.remove('opacity-60');
                 userPromptInputField.focus();
             }
         }
@@ -703,15 +692,13 @@
 
         function renderHistoryRows(items) {
             if (items.length === 0) {
-                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`;
-                return;
+                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`; return;
             }
             historyItemsBox.innerHTML = '';
             items.forEach(item => {
                 const row = document.createElement('div');
                 row.className = `chat-row ${item.id === currentConversationId ? 'active' : ''}`;
-                row.innerText = item.title;
-                row.onclick = () => loadConversationSession(item.id);
+                row.innerText = item.title; row.onclick = () => loadConversationSession(item.id);
                 historyItemsBox.appendChild(row);
             });
         }
@@ -720,9 +707,7 @@
             try {
                 const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) return;
-                const items = await response.json();
-                allHistoryItemsCache = items;
-                renderHistoryRows(items);
+                const items = await response.json(); allHistoryItemsCache = items; renderHistoryRows(items);
             } catch (err) {}
         }
 
@@ -731,9 +716,7 @@
                 const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) throw new Error("Load structural exception context.");
                 const logs = await response.json();
-                currentConversationId = conversationId;
-                exportActionTrigger.classList.remove('hidden');
-                deleteActionTrigger.classList.remove('hidden');
+                currentConversationId = conversationId; exportActionTrigger.classList.remove('hidden'); deleteActionTrigger.classList.remove('hidden');
                 conversationViewportPanel.innerHTML = '';
                 logs.forEach(log => {
                     if (log.role === 'user') renderUserPromptBubble(log.content);
@@ -743,8 +726,7 @@
                         evaluateAndParsePreviewSandboxPayload(log.content);
                     }
                 });
-                synchronizeConversationsHistoryIndex();
-                closeMobileSidebar();
+                synchronizeConversationsHistoryIndex(); closeMobileSidebar();
             } catch (err) {}
         }
 
@@ -763,15 +745,11 @@
         }
 
         async function dispatchPdfUpload() {
-            const selector = document.getElementById('pdf-payload-file-element');
-            if (selector.files.length === 0) return;
-            const packet = new FormData();
-            packet.append("file", selector.files[0]);
+            const selector = document.getElementById('pdf-payload-file-element'); if (selector.files.length === 0) return;
+            const packet = new FormData(); packet.append("file", selector.files[0]);
             try {
                 const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
-                const res = await response.json();
-                alert(res.message || res.error);
-                toggleModal('pdf-modal');
+                const res = await response.json(); alert(res.message || res.error); toggleModal('pdf-modal');
             } catch (err) { alert("Vector mapping initialization fault standard trace drop."); }
         }
 
@@ -780,21 +758,22 @@
             let match, lastMatch = null;
             while ((match = codeBlockRegex.exec(textBlock)) !== null) lastMatch = match;
             if (lastMatch) {
-                const language = lastMatch[1] || 'text';
-                const code = lastMatch[2];
-                currentExtractedPreviewArtifactPayload = code;
-                workbenchSplitPanel.classList.remove('hidden');
-                document.getElementById('workbench-toggle-mobile').classList.remove('hidden');
-                agentBackgroundTerminalLogger.textContent = `Payload parsed: ${language} block (${code.length} chars)`;
+                const language = lastMatch[1] || 'text'; const code = lastMatch[2];
+                currentExtractedPreviewArtifactPayload = code; workbenchSplitPanel.classList.remove('hidden');
+                agentBackgroundTerminalLogger.textContent = `[SUCCESS] Output detected: ${language} parsing frame context loaded cleanly.`;
                 if (language === 'html') {
-                    interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;" srcdoc="${sanitizeOutputText(code)}"></iframe>`;
+                    interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#ffffff;border-radius:8px;" srcdoc="${sanitizeOutputText(code)}"></iframe>`;
                 } else {
-                    interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs whitespace-pre-wrap p-2">${sanitizeOutputText(code)}</pre>`;
+                    interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs font-mono whitespace-pre-wrap p-2 text-left w-full select-text selection:bg-[var(--accent-soft)]">${sanitizeOutputText(code)}</pre>`;
                 }
             }
         }
 
-        function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
+        function expandActivePreviewContainer() {
+            if(!currentExtractedPreviewArtifactPayload) return;
+            const openWindow = window.open("", "_blank");
+            openWindow.document.open(); openWindow.document.write(currentExtractedPreviewArtifactPayload); openWindow.document.close();
+        }
     </script>
 </body>
 </html>
