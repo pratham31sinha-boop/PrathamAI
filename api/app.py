@@ -626,9 +626,21 @@ SYSTEM_PROMPT = (
     "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
     "questions, writing, learning, advice, and analysis, not just coding. When a task does "
     "involve code or file output, format it cleanly in fenced code blocks with explicit "
-    "language tags like ```html, ```javascript, or ```text so it can be rendered live. "
+    "language tags like ```html, ```javascript, or ```text so it can be rendered live.\n\n"
+    "You also have a REAL background terminal, not a simulated one. Any ```python, ```py, "
+    "```bash, ```sh, or ```shell fenced block you write is actually executed on the server "
+    "right after you finish your reply, and you will be shown the real stdout/stderr/return "
+    "code and get another turn to react to it. Use this to actually DO tasks instead of just "
+    "describing them: run calculations, process or transform data, generate/inspect files in "
+    "the working directory, test that your own code really works, or chain several steps "
+    "together (write code -> see real output -> fix or continue) until the task is finished. "
+    "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
+    "conversation turn allows a limited number of execute-and-continue cycles, so work "
+    "efficiently and give a clear final plain-language answer once the task is actually done. "
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
-    "someone; politely refuse those requests instead."
+    "someone; politely refuse those requests instead — this includes never using the terminal "
+    "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
+    "sandbox."
 )
 
 # ── IMAGE GENERATION (Pollinations AI — no API key required) ──
@@ -753,6 +765,84 @@ def _do_stream(messages):
         "text": "All model providers are temporarily unavailable. Please check your API keys or try again shortly."
     })
     yield _sse({"type": "complete"})
+
+# ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
+# This is what actually lets Pratham AI "do tasks" with a python terminal
+# instead of just talking about code. Any ```python / ```py / ```bash /
+# ```sh / ```shell block in a reply gets really executed server-side, and
+# the real stdout/stderr is fed back to the model so it can react to what
+# happened (fix a bug, use a computed result, continue a multi-step task)
+# instead of just guessing at what the code would print.
+#
+# SECURITY NOTE (read this before deploying): this executes arbitrary code
+# with no sandboxing beyond a subprocess + timeout — no container, no
+# network/filesystem restriction, no user isolation. That is fine for a
+# single-owner hobby/dev deployment, but if this app is ever opened up to
+# other people, this endpoint (and the /execute-python route below) is a
+# full remote-code-execution surface on your server. If you plan to let
+# other people use this, put the execution in an isolated sandbox (e.g. a
+# throwaway Docker container / firecracker VM / a service like e2b) rather
+# than running it directly in the main process.
+
+_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell"}
+_CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
+_TERMINAL_MAX_ITERATIONS = 4          # hard cap on agent "run code, see result, continue" cycles
+_TERMINAL_BLOCK_TIMEOUT = 15          # seconds per executed block
+_TERMINAL_OUTPUT_CHAR_LIMIT = 4000    # per-stream truncation so huge output can't blow up context/UI
+
+def _extract_executable_blocks(text: str):
+    """Returns a list of (lang, code) for every fenced block whose language
+    tag is one we know how to actually execute."""
+    out = []
+    for m in _CODE_BLOCK_RE.finditer(text):
+        lang = (m.group(1) or "").lower()
+        if lang in _EXECUTABLE_LANGS:
+            out.append((lang, m.group(2)))
+    return out
+
+def _run_code_block(lang: str, code: str):
+    """Actually executes one code block in the background terminal and
+    returns (stdout, stderr, returncode). This is real execution, not a
+    simulation — whatever the code does (compute, read/write files in the
+    working dir, hit the network, etc.) really happens on the server."""
+    try:
+        if lang in ("python", "py"):
+            cmd = [sys.executable, "-u", "-c", code]
+        else:  # bash / sh / shell
+            cmd = ["bash", "-c", code]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT
+        )
+        return (
+            result.stdout[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
+            result.stderr[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
+            result.returncode,
+        )
+    except subprocess.TimeoutExpired:
+        return "", f"Execution timed out after {_TERMINAL_BLOCK_TIMEOUT} seconds.", -1
+    except Exception as exc:
+        return "", f"Execution failed: {exc}", -1
+
+def _format_terminal_results_for_model(results):
+    """Turns a list of {lang, code, stdout, stderr, returncode} dicts into a
+    plain-text block the model can read, so it can decide whether the task
+    is done or another step is needed."""
+    lines = ["[BACKGROUND TERMINAL RESULTS]"]
+    for i, r in enumerate(results, start=1):
+        status = "ok" if r["returncode"] == 0 else f"exit code {r['returncode']}"
+        lines.append(f"--- Block {i} ({r['lang']}, {status}) ---")
+        if r["stdout"]:
+            lines.append(f"stdout:\n{r['stdout']}")
+        if r["stderr"]:
+            lines.append(f"stderr:\n{r['stderr']}")
+        if not r["stdout"] and not r["stderr"]:
+            lines.append("(no output)")
+    lines.append(
+        "[/BACKGROUND TERMINAL RESULTS]\n"
+        "Continue the task using these real results. If everything needed is done, "
+        "give the final answer in plain language instead of running more code."
+    )
+    return "\n".join(lines)
 
 # ── DATA ──
 def _user_id():
@@ -1043,18 +1133,59 @@ def chat_stream():
 
     def generate():
         yield _sse({"type": "metadata", "conversation_id": conv_id})
-        full_reply = []
-        for chunk in _do_stream(api_messages):
-            try:
-                if chunk.startswith("data: "):
-                    payload = json.loads(chunk[6:])
-                    if payload.get("type") == "token":
-                        full_reply.append(payload["text"])
-            except Exception:
-                pass
-            yield chunk
 
-        assistant_response = "".join(full_reply)
+        full_reply_parts = []   # everything shown to the user across all iterations, in order
+        working_messages = list(api_messages)
+        block_ordinal = 0
+
+        for iteration in range(_TERMINAL_MAX_ITERATIONS):
+            iteration_text_parts = []
+            for chunk in _do_stream(working_messages):
+                try:
+                    if chunk.startswith("data: "):
+                        payload = json.loads(chunk[6:])
+                        if payload.get("type") == "token":
+                            iteration_text_parts.append(payload["text"])
+                            full_reply_parts.append(payload["text"])
+                        elif payload.get("type") == "complete":
+                            continue  # only forward the final "complete" once, after the loop ends
+                except Exception:
+                    pass
+                if not chunk.startswith("data: ") or json.loads(chunk[6:]).get("type") != "complete":
+                    yield chunk
+
+            iteration_reply = "".join(iteration_text_parts)
+
+            # ── Run every executable block in this iteration's reply ──
+            blocks = _extract_executable_blocks(iteration_reply)
+            if not blocks:
+                break  # nothing to execute -> the model's answer is final
+
+            results = []
+            for lang, code in blocks:
+                block_ordinal += 1
+                stdout, stderr, rc = _run_code_block(lang, code)
+                results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
+                yield _sse({
+                    "type": "terminal_output",
+                    "ordinal": block_ordinal,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "returncode": rc
+                })
+
+            is_last_allowed_iteration = (iteration == _TERMINAL_MAX_ITERATIONS - 1)
+            if is_last_allowed_iteration:
+                break  # out of cycles; stop here rather than asking for yet another turn
+
+            # Feed the real execution results back to the model as a new turn
+            # so it can react to what actually happened.
+            working_messages.append({"role": "assistant", "content": iteration_reply})
+            working_messages.append({"role": "user", "content": _format_terminal_results_for_model(results)})
+
+        yield _sse({"type": "complete"})
+
+        assistant_response = "".join(full_reply_parts)
         if assistant_response:
             _append_message(conv_id, "assistant", assistant_response)
 
@@ -1070,45 +1201,6 @@ def chat_stream():
                 f"{'=' * 80}\n"
             )
             _write_to_github_repository(repo_sync_destination_path, log_entry)
-
-            # ── Real background Python terminal execution ──
-            # Every python/py fenced code block in the reply is actually run
-            # server-side (short timeout, isolated subprocess — the same
-            # mechanism as /execute-python) and its real stdout/stderr is
-            # streamed back, tied to that block's position in the reply so
-            # the frontend can attach it to the matching file card.
-            try:
-                block_ordinal = 0
-                for block_match in re.finditer(r"```(\w+)?\n([\s\S]*?)```", assistant_response):
-                    block_ordinal += 1
-                    block_lang = (block_match.group(1) or "text").lower()
-                    if block_lang not in ("python", "py"):
-                        continue
-                    block_code = block_match.group(2)
-                    try:
-                        exec_result = subprocess.run(
-                            [sys.executable, "-c", block_code],
-                            capture_output=True, text=True, timeout=8
-                        )
-                        yield _sse({
-                            "type": "terminal_output",
-                            "ordinal": block_ordinal,
-                            "stdout": exec_result.stdout[-4000:],
-                            "stderr": exec_result.stderr[-4000:],
-                            "returncode": exec_result.returncode
-                        })
-                    except subprocess.TimeoutExpired:
-                        yield _sse({
-                            "type": "terminal_output", "ordinal": block_ordinal,
-                            "stdout": "", "stderr": "Execution timed out after 8 seconds.", "returncode": -1
-                        })
-                    except Exception as exec_exc:
-                        yield _sse({
-                            "type": "terminal_output", "ordinal": block_ordinal,
-                            "stdout": "", "stderr": f"Execution failed: {exec_exc}", "returncode": -1
-                        })
-            except Exception as exc:
-                print(f"[TERMINAL][FAULT] {exc}")
 
             # Background "Python terminal" file generation: if the request
             # was asking for a zip or a PDF of the reply, actually build it
