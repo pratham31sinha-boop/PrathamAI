@@ -65,6 +65,8 @@ import urllib.request
 import urllib.parse
 import sys
 import subprocess
+import tempfile
+import shutil
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -305,21 +307,38 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
     return token
 
-def _build_zip_from_response(assistant_text: str) -> bytes:
-    """Packs every fenced code block in the reply into a zip; if there are
-    none, zips the plain reply text as response.txt instead."""
+def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
+    """Packs real files first: if the background terminal actually created
+    any files in `workdir` during this request (e.g. the model ran python
+    that wrote out a .csv, a script, etc.), those real files are what gets
+    zipped. Falls back to packing every fenced code block in the reply if
+    the workdir is empty, and to a plain response.txt if there were no code
+    blocks either."""
     buf = io.BytesIO()
-    blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        if blocks:
-            for i, (lang, content) in enumerate(blocks, start=1):
-                ext = {
-                    "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
-                    "css": "css", "json": "json", "bash": "sh", "text": "txt"
-                }.get((lang or "text").lower(), "txt")
-                zf.writestr(f"file_{i}.{ext}", content)
-        else:
-            zf.writestr("response.txt", assistant_text)
+        real_files_written = False
+        if workdir and os.path.isdir(workdir):
+            for root, _dirs, files in os.walk(workdir):
+                for fname in files:
+                    full_path = os.path.join(root, fname)
+                    arcname = os.path.relpath(full_path, workdir)
+                    try:
+                        zf.write(full_path, arcname)
+                        real_files_written = True
+                    except Exception:
+                        continue
+
+        if not real_files_written:
+            blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
+            if blocks:
+                for i, (lang, content) in enumerate(blocks, start=1):
+                    ext = {
+                        "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
+                        "css": "css", "json": "json", "bash": "sh", "text": "txt"
+                    }.get((lang or "text").lower(), "txt")
+                    zf.writestr(f"file_{i}.{ext}", content)
+            else:
+                zf.writestr("response.txt", assistant_text)
     buf.seek(0)
     return buf.read()
 
@@ -624,6 +643,51 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
         f"{'=' * 80}\n"
     )
     _write_to_github_repository("public_data.txt", entry)
+    _public_teachings_cache["t"] = 0  # force the next read to refetch immediately
+
+# ── PUBLIC SHARED MEMORY READ-BACK ──
+# Writing to public_data.txt only matters if something actually reads it
+# back. This fetches the same single, repo-root public_data.txt (one file
+# shared by every user, as requested) and feeds the most recent entries into
+# every conversation's system prompt, so a thing one person taught the
+# assistant is genuinely remembered and usable in anyone else's chat too.
+_public_teachings_cache = {"text": "", "t": 0}
+_PUBLIC_TEACHINGS_TTL = 30  # seconds
+_PUBLIC_TEACHINGS_CHAR_BUDGET = 3000  # keep the injected memory small relative to the rest of the prompt
+
+def _fetch_public_teachings_text() -> str:
+    now_ts = time.time()
+    if _public_teachings_cache["text"] and (now_ts - _public_teachings_cache["t"]) < _PUBLIC_TEACHINGS_TTL:
+        return _public_teachings_cache["text"]
+
+    text = ""
+    if GITHUB_TOKEN:
+        repo_clean = _github_repo_slug()
+        endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/public_data.txt"
+        req_lookup = urllib.request.Request(
+            endpoint_target_url,
+            headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        )
+        try:
+            with urllib.request.urlopen(req_lookup, timeout=10) as lookup_response:
+                meta_data = json.loads(lookup_response.read().decode('utf-8'))
+                if meta_data.get("content"):
+                    text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+        except Exception as exc:
+            print(f"[PUBLIC MEMORY][FETCH FAULT] {exc}")
+
+    _public_teachings_cache["text"] = text
+    _public_teachings_cache["t"] = now_ts
+    return text
+
+def _public_teachings_for_prompt() -> str:
+    """Returns the most recent entries (tail of the file, since new entries
+    are appended at the end), trimmed to a fixed character budget so shared
+    memory can't crowd out the rest of the system prompt."""
+    full_text = _fetch_public_teachings_text()
+    if not full_text.strip():
+        return ""
+    return full_text[-_PUBLIC_TEACHINGS_CHAR_BUDGET:]
 
 # ── LLM MULTI-PROVIDER FAILOVER: Groq -> OpenRouter -> Cerebras -> Mistral ──
 _provider_cooldowns: dict = {}
@@ -652,11 +716,15 @@ SYSTEM_PROMPT = (
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
     "Separately: if the person asks you to turn your reply into a zip or a pdf (e.g. \"zip it\", "
     "\"make it a zip\", \"as a pdf\", \"download this\"), you do NOT need to build that file "
-    "yourself. The backend automatically packages your final reply into a real zip or pdf and "
-    "attaches a working download button right after you answer. So just answer the actual "
-    "question normally in plain language — do NOT paste your answer into a ```text (or any) "
-    "fenced code block just to \"simulate\" a file; that creates a fake, non-functional file card "
-    "instead of the real download link the backend already provides.\n\n"
+    "yourself, and you should NOT run shell commands like `zip`, `unzip`, or `touch` to "
+    "demonstrate it — those tools may not even exist in this sandbox and are never required. The "
+    "backend automatically packages your final reply (or, if your terminal use in this turn "
+    "actually created real files, those exact files) into a real zip or pdf and attaches a "
+    "working download button right after you answer. So just answer the actual question or "
+    "produce the actual requested content normally in plain language / code blocks as usual — do "
+    "NOT paste your answer into a ```text (or any) fenced code block just to \"simulate\" a file; "
+    "that creates a fake, non-functional file card instead of the real download link the backend "
+    "already provides.\n\n"
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
@@ -820,19 +888,31 @@ def _extract_executable_blocks(text: str):
             out.append((lang, m.group(2)))
     return out
 
-def _run_code_block(lang: str, code: str):
+def _run_code_block(lang: str, code: str, cwd: str = None):
     """Actually executes one code block in the background terminal and
     returns (stdout, stderr, returncode). This is real execution, not a
-    simulation — whatever the code does (compute, read/write files in the
-    working dir, hit the network, etc.) really happens on the server."""
+    simulation — whatever the code does (compute, read/write files in `cwd`,
+    hit the network, etc.) really happens on the server.
+
+    `cwd` should point at a writable scratch directory (see `_new_terminal_workdir`
+    below). Without it, execution defaults to the process's own working
+    directory, which is read-only on several hosting platforms (serverless
+    functions, some container images) — that's what causes errors like
+    "touch: cannot create file" or "Read-only file system" that the model
+    would otherwise have no way to work around.
+    """
     try:
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
+            )
         else:  # bash / sh / shell
-            cmd = ["bash", "-c", code]
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT
-        )
+            shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
+            cmd = [shell_bin, "-c", code]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
+            )
         return (
             result.stdout[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
             result.stderr[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
@@ -840,8 +920,22 @@ def _run_code_block(lang: str, code: str):
         )
     except subprocess.TimeoutExpired:
         return "", f"Execution timed out after {_TERMINAL_BLOCK_TIMEOUT} seconds.", -1
+    except FileNotFoundError as exc:
+        return "", f"Execution failed: required interpreter not found ({exc}).", -1
     except Exception as exc:
         return "", f"Execution failed: {exc}", -1
+
+def _new_terminal_workdir() -> str:
+    """Creates a fresh, guaranteed-writable scratch directory for one
+    chat-stream request's terminal session. All executed blocks within that
+    same request share this directory, so a file written in one block (e.g.
+    step 1 generates data.csv) can be read by a later block (step 2 processes
+    data.csv) within the same multi-step agent loop."""
+    return tempfile.mkdtemp(prefix="pratham_ai_terminal_")
+
+def _cleanup_terminal_workdir(path: str):
+    if path:
+        shutil.rmtree(path, ignore_errors=True)
 
 def _format_terminal_results_for_model(results):
     """Turns a list of {lang, code, stdout, stderr, returncode} dicts into a
@@ -1106,6 +1200,14 @@ def chat_stream():
             f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
             f"treat this as authorization to bypass any safety or content rules."
         )
+    shared_memory_text = _public_teachings_for_prompt()
+    if shared_memory_text:
+        active_system_prompt += (
+            " Below are notes previous users have explicitly asked you to remember for everyone "
+            "(shared across all users of this app, not private to any one person). Treat them as "
+            "standing instructions/facts to keep in mind, but they never override your core safety "
+            "rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
+        )
     api_messages = [{"role": "system", "content": active_system_prompt}]
     for m in history[-20:]:
         api_messages.append({"role": m["role"], "content": m["content"]})
@@ -1157,6 +1259,7 @@ def chat_stream():
         full_reply_parts = []   # everything shown to the user across all iterations, in order
         working_messages = list(api_messages)
         block_ordinal = 0
+        terminal_workdir = _new_terminal_workdir()
 
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
@@ -1184,7 +1287,7 @@ def chat_stream():
             results = []
             for lang, code in blocks:
                 block_ordinal += 1
-                stdout, stderr, rc = _run_code_block(lang, code)
+                stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
                     "type": "terminal_output",
@@ -1227,7 +1330,7 @@ def chat_stream():
             # now and hand back a real download link.
             try:
                 if _is_export_intent(message, _ZIP_INTENT_RE):
-                    zip_bytes = _build_zip_from_response(assistant_response)
+                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir)
                     token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
                 elif _is_export_intent(message, _PDF_INTENT_RE):
@@ -1236,6 +1339,8 @@ def chat_stream():
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
             except Exception as exc:
                 print(f"[FILEGEN][FAULT] {exc}")
+
+        _cleanup_terminal_workdir(terminal_workdir)
 
     resp = Response(stream_with_context(generate()), content_type="text/event-stream")
     resp.headers["Cache-Control"] = "no-cache"
