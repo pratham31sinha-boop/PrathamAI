@@ -1121,13 +1121,15 @@
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
+        // Appends a real downloadable file card. Instead of guessing an
+        // absolute URL from the CURRENT PAGE's origin (which breaks when the
+        // frontend is on Vercel and the backend lives elsewhere — Vercel only
+        // forwards /api/* by default, so a bare /download/<token> 404s on
+        // Vercel's own edge), this routes the fetch through the same
+        // multi-path smartFetchRequest helper every other call already uses,
+        // then triggers a real file download from the resulting blob.
         function appendDownloadCard(wrapper, relativeUrl, filename) {
-            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
-            const fullUrl = `${hostBase}${relativeUrl}`;
-            const card = document.createElement('a');
-            card.href = fullUrl;
-            card.target = '_blank';
-            card.rel = 'noopener';
+            const card = document.createElement('div');
             card.className = 'file-creation-card done';
             card.innerHTML = `
                 <div class="fcc-icon">⭳</div>
@@ -1137,6 +1139,33 @@
                 </div>
                 <span class="fcc-openhint">Download</span>
             `;
+            card.onclick = async () => {
+                const statusText = card.querySelector('.fcc-status-text');
+                try {
+                    statusText.innerText = 'Fetching file...';
+                    // relativeUrl looks like "/download/<token>" — strip any
+                    // "/api/" or "/api/app/" prefix if present so
+                    // smartFetchRequest can try its own full set of
+                    // permutations against whichever host actually serves it.
+                    const cleanPath = relativeUrl.replace(/^\/(api\/app\/|api\/)?/, '/');
+                    const response = await smartFetchRequest(cleanPath, { method: 'GET' });
+                    if (!response.ok) throw new Error(`Download fetch failed (${response.status})`);
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(blobUrl);
+                    statusText.innerText = 'Built in background terminal — ready';
+                    pushTerminalLog(`Downloaded ${filename}.`);
+                } catch (err) {
+                    statusText.innerText = 'Download failed — tap to retry';
+                    console.error('[DOWNLOAD][FAULT]', err);
+                }
+            };
             wrapper.appendChild(card);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
