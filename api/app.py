@@ -277,8 +277,21 @@ def _lookup_vip(email: str):
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600  # 1 hour
 
-_ZIP_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export|zip)\b.{0,20}\bzip\b", re.IGNORECASE)
-_PDF_INTENT_RE = re.compile(r"\b(make|create|generate|give me|download|export)\b.{0,20}\bpdf\b", re.IGNORECASE)
+_ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
+_PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
+
+def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
+    """
+    Loose but practical intent check: true if the keyword ('zip'/'pdf')
+    appears anywhere in the message, UNLESS the message is clearly a
+    question about the format itself (contains '?') rather than a request
+    to package the reply as a file. This intentionally matches phrasings
+    like "zip it", "make it a zip", "as a pdf", "download this as zip",
+    etc. — the earlier stricter pattern missed most of these.
+    """
+    if "?" in message:
+        return False
+    return bool(regex.search(message))
 
 def _prune_generated_files():
     cutoff = time.time() - _GENERATED_FILE_TTL
@@ -636,7 +649,14 @@ SYSTEM_PROMPT = (
     "together (write code -> see real output -> fix or continue) until the task is finished. "
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
-    "efficiently and give a clear final plain-language answer once the task is actually done. "
+    "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "Separately: if the person asks you to turn your reply into a zip or a pdf (e.g. \"zip it\", "
+    "\"make it a zip\", \"as a pdf\", \"download this\"), you do NOT need to build that file "
+    "yourself. The backend automatically packages your final reply into a real zip or pdf and "
+    "attaches a working download button right after you answer. So just answer the actual "
+    "question normally in plain language — do NOT paste your answer into a ```text (or any) "
+    "fenced code block just to \"simulate\" a file; that creates a fake, non-functional file card "
+    "instead of the real download link the backend already provides.\n\n"
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
@@ -1206,11 +1226,11 @@ def chat_stream():
             # was asking for a zip or a PDF of the reply, actually build it
             # now and hand back a real download link.
             try:
-                if _ZIP_INTENT_RE.search(message):
+                if _is_export_intent(message, _ZIP_INTENT_RE):
                     zip_bytes = _build_zip_from_response(assistant_response)
                     token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
-                elif _PDF_INTENT_RE.search(message):
+                elif _is_export_intent(message, _PDF_INTENT_RE):
                     pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
