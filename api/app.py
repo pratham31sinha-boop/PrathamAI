@@ -67,6 +67,7 @@ import sys
 import subprocess
 import tempfile
 import shutil
+import textwrap
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -122,6 +123,12 @@ GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/data")
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
+
+# Mirrors the creator list already hardcoded in the frontend's
+# paintIdentityIntoShell(), so the backend can also recognize these accounts
+# for creator-only features (like the live system-diagnostics short-circuit
+# below) without needing a separate database/table.
+CREATOR_EMAILS = {"pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"}
 
 SUPABASE_CONFIGURED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
 
@@ -342,19 +349,116 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
     buf.seek(0)
     return buf.read()
 
+def _escape_pdf_literal_text(s: str) -> str:
+    return s.replace('\\', r'\\').replace('(', r'\(').replace(')', r'\)')
+
+def _write_minimal_pdf(text: str) -> bytes:
+    """
+    Builds a real, valid multi-page PDF directly from scratch using nothing
+    but the standard library — no fpdf2, no reportlab, no external `pandoc`/
+    `wkhtmltopdf` binary. This exists because relying on an optional package
+    being installed on the server was silently falling back to a .txt file
+    whenever that package was missing (which is exactly what was happening
+    here). Handles line-wrapping and pagination manually and writes the
+    PDF's object table + xref + trailer by hand per the PDF 1.4 spec. This
+    intentionally only needs to render plain text (no images/rich
+    formatting) — that's all the use case (turning a chat reply into a
+    downloadable PDF) requires.
+    """
+    font_size = 11
+    leading = 14
+    margin_left = 50
+    margin_top = 792 - 50   # US Letter page height in points, minus a top margin
+    max_width_chars = 95
+    lines_per_page = 60
+
+    raw_lines = []
+    for para in text.split("\n"):
+        wrapped = textwrap.wrap(para, width=max_width_chars) or ['']
+        raw_lines.extend(wrapped)
+    if not raw_lines:
+        raw_lines = ['']
+
+    pages = [raw_lines[i:i + lines_per_page] for i in range(0, len(raw_lines), lines_per_page)] or [['']]
+
+    objects = {}
+    next_obj_num = [1]
+
+    def alloc():
+        n = next_obj_num[0]
+        next_obj_num[0] += 1
+        return n
+
+    catalog_num = alloc()
+    pages_num = alloc()
+    font_num = alloc()
+
+    page_nums, content_nums = [], []
+    for _ in pages:
+        page_nums.append(alloc())
+        content_nums.append(alloc())
+
+    content_bodies = []
+    for page_lines in pages:
+        stream_parts = ["BT", f"/F1 {font_size} Tf", f"{leading} TL", f"{margin_left} {margin_top} Td"]
+        first = True
+        for line in page_lines:
+            escaped = _escape_pdf_literal_text(line)
+            if first:
+                stream_parts.append(f"({escaped}) Tj")
+                first = False
+            else:
+                stream_parts.append("T*")
+                stream_parts.append(f"({escaped}) Tj")
+        stream_parts.append("ET")
+        content_bodies.append("\n".join(stream_parts))
+
+    objects[catalog_num] = f"<< /Type /Catalog /Pages {pages_num} 0 R >>"
+    kids_refs = " ".join(f"{n} 0 R" for n in page_nums)
+    objects[pages_num] = f"<< /Type /Pages /Kids [{kids_refs}] /Count {len(page_nums)} >>"
+    objects[font_num] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+
+    for i, page_num in enumerate(page_nums):
+        content_num = content_nums[i]
+        objects[page_num] = (
+            f"<< /Type /Page /Parent {pages_num} 0 R /Resources << /Font << /F1 {font_num} 0 R >> >> "
+            f"/MediaBox [0 0 612 792] /Contents {content_num} 0 R >>"
+        )
+        body = content_bodies[i]
+        objects[content_num] = f"<< /Length {len(body.encode('latin-1', 'replace'))} >>\nstream\n{body}\nendstream"
+
+    buf = io.BytesIO()
+    buf.write(b"%PDF-1.4\n")
+    offsets = {}
+    for num in sorted(objects.keys()):
+        offsets[num] = buf.tell()
+        buf.write(f"{num} 0 obj\n".encode('latin-1'))
+        buf.write(objects[num].encode('latin-1', 'replace'))
+        buf.write(b"\nendobj\n")
+
+    xref_offset = buf.tell()
+    total_objs = next_obj_num[0]
+    buf.write(f"xref\n0 {total_objs}\n".encode('latin-1'))
+    buf.write(b"0000000000 65535 f \n")
+    for num in range(1, total_objs):
+        buf.write(f"{offsets.get(num, 0):010d} 00000 n \n".encode('latin-1'))
+
+    buf.write(b"trailer\n")
+    buf.write(f"<< /Size {total_objs} /Root {catalog_num} 0 R >>\n".encode('latin-1'))
+    buf.write(b"startxref\n")
+    buf.write(f"{xref_offset}\n".encode('latin-1'))
+    buf.write(b"%%EOF")
+    return buf.getvalue()
+
 def _build_pdf_from_response(assistant_text: str):
-    """Returns (bytes, filename, mimetype). Uses fpdf2 if installed; falls
-    back to a plain .txt file (with a clear filename) if it isn't, so the
-    person still gets *something* downloadable rather than a hard failure."""
-    if _PDF_WRITE_SUPPORTED:
-        pdf = _FPDF()
-        pdf.add_page()
-        pdf.set_font("Helvetica", size=11)
-        for line in assistant_text.split("\n"):
-            safe_line = line.encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 6, safe_line)
-        return bytes(pdf.output(dest="S")), "generated.pdf", "application/pdf"
-    return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+    """Returns (bytes, filename, mimetype). Always produces a real .pdf via
+    the dependency-free writer above — no more silent fallback to .txt."""
+    try:
+        pdf_bytes = _write_minimal_pdf(assistant_text)
+        return pdf_bytes, "generated.pdf", "application/pdf"
+    except Exception as exc:
+        print(f"[PDF][BUILD FAULT] {exc}")
+        return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
 
 @app.route("/download/<token>", methods=["GET"])
 @app.route("/api/download/<token>", methods=["GET"])
@@ -621,8 +725,9 @@ def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
 _TEACHING_INTENT_RE = re.compile(
-    r"\b(remember that|remember this|note this|note that|save this|learn this|keep in mind|"
-    r"for future reference|always do|from now on|don't forget|never forget)\b",
+    r"\b(remember (that|this|to)|note (this|that)|save this|learn this|keep in mind|"
+    r"for future reference|always do|always use|from now on|don't forget|never forget|"
+    r"for (every|all) user|public memory|shared memory|for everyone|store this)\b",
     re.IGNORECASE
 )
 
@@ -716,7 +821,8 @@ SYSTEM_PROMPT = (
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
     "Separately: if the person asks you to turn your reply into a zip or a pdf (e.g. \"zip it\", "
     "\"make it a zip\", \"as a pdf\", \"download this\"), you do NOT need to build that file "
-    "yourself, and you should NOT run shell commands like `zip`, `unzip`, or `touch` to "
+    "yourself, and you should NOT run shell commands like `zip`, `unzip`, `touch`, `pandoc`, or "
+    "`wkhtmltopdf` to "
     "demonstrate it — those tools may not even exist in this sandbox and are never required. The "
     "backend automatically packages your final reply (or, if your terminal use in this turn "
     "actually created real files, those exact files) into a real zip or pdf and attaches a "
@@ -936,6 +1042,68 @@ def _new_terminal_workdir() -> str:
 def _cleanup_terminal_workdir(path: str):
     if path:
         shutil.rmtree(path, ignore_errors=True)
+
+# ── CREATOR-ONLY LIVE DIAGNOSTICS ──
+# Answers "is the terminal working?" / "system status" etc. with facts this
+# process actually just measured, rather than the model guessing. Only
+# reachable by CREATOR_EMAILS, and it bypasses the LLM entirely so it can
+# never be wrong about its own environment the way a model reply could be.
+_DIAGNOSTIC_INTENT_RE = re.compile(
+    r"\b(system status|diagnostic|terminal (status|working)|is (the )?terminal working|"
+    r"memory status|is memory working|check status|health check|status check)\b",
+    re.IGNORECASE
+)
+
+def _run_system_diagnostics() -> str:
+    lines = ["**Pratham AI — live system diagnostics** (creator-only, just measured)\n"]
+
+    # 1. Python terminal execution
+    workdir = _new_terminal_workdir()
+    try:
+        out, err, rc = _run_code_block("python", "print(2 + 2)", cwd=workdir)
+        python_ok = (rc == 0 and out.strip() == "4")
+    except Exception as exc:
+        python_ok, out, err = False, "", str(exc)
+    lines.append(f"- Python terminal: {'✅ working' if python_ok else '❌ NOT working'} (exit handling verified: `print(2+2)` -> `{out.strip()}`{f', stderr: {err.strip()[:150]}' if err.strip() else ''})")
+
+    # 2. Shell terminal + writable filesystem check (this is the exact thing
+    #    that failed before with "Read-only file system")
+    try:
+        probe_path = os.path.join(workdir, "probe.txt")
+        out, err, rc = _run_code_block("bash", f"echo hello > {probe_path} && cat {probe_path}", cwd=workdir)
+        shell_ok = (rc == 0 and "hello" in out)
+    except Exception as exc:
+        shell_ok, err = False, str(exc)
+    lines.append(f"- Shell terminal + writable scratch dir: {'✅ working' if shell_ok else '❌ NOT working'}{f' ({err.strip()[:150]})' if not shell_ok and err else ''}")
+    _cleanup_terminal_workdir(workdir)
+
+    # 3. GitHub token / write path
+    lines.append(f"- GITHUB_TOKEN configured: {'✅ yes' if bool(GITHUB_TOKEN) else '❌ no (memory + logs cannot persist without this)'}")
+
+    # 4. Shared public memory read-back
+    shared_text = _fetch_public_teachings_text()
+    lines.append(f"- Shared memory (public_data.txt) readable: {'✅ yes' if shared_text else '⚠️ empty or unreachable'} ({len(shared_text)} chars cached)")
+
+    # 5. PDF generation (pure-python writer, no external deps needed anymore)
+    try:
+        test_pdf = _write_minimal_pdf("diagnostic test")
+        pdf_ok = test_pdf[:4] == b"%PDF"
+    except Exception:
+        pdf_ok = False
+    lines.append(f"- PDF generation (built-in, no fpdf2/pandoc needed): {'✅ working' if pdf_ok else '❌ NOT working'}")
+
+    # 6. LLM providers configured
+    provider_flags = {
+        "Groq": bool(GROQ_API_KEY), "OpenRouter": bool(OPENROUTER_API_KEY),
+        "Cerebras": bool(CEREBRAS_API_KEY), "Mistral": bool(MISTRAL_API_KEY)
+    }
+    configured = [name for name, ok in provider_flags.items() if ok]
+    lines.append(f"- LLM providers configured: {', '.join(configured) if configured else '❌ none — chat will not work'}")
+
+    # 7. Persistent conversation storage
+    lines.append(f"- Supabase persistent storage: {'✅ connected' if SUPABASE_CONFIGURED else '⚠️ not configured (falling back to in-memory, wiped on restart)'}")
+
+    return "\n".join(lines)
 
 def _format_terminal_results_for_model(results):
     """Turns a list of {lang, code, stdout, stderr, returncode} dicts into a
@@ -1162,6 +1330,25 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
+    # ── Creator-only live diagnostics short-circuit ──
+    # Bypasses the LLM entirely so "is the terminal working" gets an answer
+    # this process actually just measured, not a guess from the model.
+    if user_email.lower() in CREATOR_EMAILS and _DIAGNOSTIC_INTENT_RE.search(message):
+        _append_message(conv_id, "user", message)
+        diagnostics_text = _run_system_diagnostics()
+        _append_message(conv_id, "assistant", diagnostics_text)
+
+        def generate_diagnostics():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": diagnostics_text})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_diagnostics()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
     # ── Image generation short-circuit (Pollinations AI, no key needed) ──
     image_prompt = _detect_image_prompt(message)
     if image_prompt:
@@ -1258,7 +1445,12 @@ def chat_stream():
 
         full_reply_parts = []   # everything shown to the user across all iterations, in order
         working_messages = list(api_messages)
-        block_ordinal = 0
+        total_blocks_seen = 0   # counts EVERY fenced code block (any language), matching the
+                                 # frontend's own per-block counter exactly, so terminal_output
+                                 # events land on the right card. Counting only executable blocks
+                                 # here (as before) drifted out of sync as soon as a reply also
+                                 # contained a non-executable block (e.g. ```json, ```html), which
+                                 # is what caused status updates to attach to the wrong card.
         terminal_workdir = _new_terminal_workdir()
 
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
@@ -1279,19 +1471,27 @@ def chat_stream():
 
             iteration_reply = "".join(iteration_text_parts)
 
-            # ── Run every executable block in this iteration's reply ──
-            blocks = _extract_executable_blocks(iteration_reply)
-            if not blocks:
+            # ── Walk every fenced block in this iteration's reply, in order ──
+            all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
+            executable_present = any(
+                (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
+            )
+            if not executable_present:
                 break  # nothing to execute -> the model's answer is final
 
             results = []
-            for lang, code in blocks:
-                block_ordinal += 1
+            for m in all_blocks_this_iteration:
+                total_blocks_seen += 1
+                lang = (m.group(1) or "").lower()
+                if lang not in _EXECUTABLE_LANGS:
+                    continue  # not runnable (e.g. ```json, ```html) — leave its ordinal "spent"
+                              # but don't execute or emit a terminal_output for it
+                code = m.group(2)
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
                     "type": "terminal_output",
-                    "ordinal": block_ordinal,
+                    "ordinal": total_blocks_seen,
                     "stdout": stdout,
                     "stderr": stderr,
                     "returncode": rc
