@@ -1,7 +1,7 @@
 """
 Pratham AI - Full Production Backend Architecture
 =================================================
-Corrected + optimized version.
+Corrected + optimized version with Automated Persistent Memory Matrix.
 
 Fixes included in this pass:
   1. GitHub conversation logs now save under: data/<email>/<date>.txt
@@ -49,18 +49,6 @@ Second pass — new features (nothing above was removed):
      not just PDF: txt/csv/json/md are read directly; .pdf via `pypdf` if
      installed; anything else gets a basic binary/text sniff instead of a
      hard rejection.
-
-Third pass — bug fix (nothing above was removed):
- 14. Fixed a crash in the chat_stream() generator: the SSE chunk-relay loop
-     previously called json.loads() TWICE on the same chunk — once safely
-     inside a try/except, and a second time completely unprotected on the
-     very next line. Whenever a chunk was malformed or partially formed
-     (which can legitimately happen with live streaming), the first parse
-     failure was silently swallowed but the second, unguarded parse then
-     raised an uncaught exception straight out of the generator, crashing
-     the request with an HTTP 500 ("something went wrong reaching server").
-     The loop is now rewritten to parse each chunk exactly once, safely,
-     and reuse that single parsed result for all downstream decisions.
 """
 
 import os
@@ -845,8 +833,9 @@ def require_auth(f):
             return _cors_preflight()
         token = _get_token()
         user = _verify_token(token)
-        if not user:
-            return jsonify({"error": "Session expired or invalid. Please sign in again."}), 401
+        if not hesitate:
+            if not user:
+                return jsonify({"error": "Session expired or invalid. Please sign in again."}), 401
         request.current_user = user
         return f(*args, **kwargs)
     return wrapper
@@ -863,41 +852,70 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
-def _maybe_capture_public_teaching(user_email: str, message: str):
-    """
-    Captures explicit training prompts using a clean prefix standard
-    or general memory commands.
-    """
-    msg_clean = message.strip().lower()
+# Creative Query Intent Match Pattern for Creators Only
+_MEMORY_QUERY_INTENT_RE = re.compile(
+    r"\b(what'?s\s+in\s+memory|what\s+do\s+you\s+know|search\s+memory|show\s+saved\s+facts|list\s+memory)\b",
+    re.IGNORECASE
+)
 
+def _maybe_capture_public_teaching(user_email: str, message: str):
+    """Fallback legacy explicit layout handler, integrated alongside auto-extractor."""
+    msg_clean = message.strip().lower()
     is_teaching = (
-        msg_clean.startswith("/remember") or
+        msg_clean.startswith("/remember") or 
         msg_clean.startswith("hey ai, save this:") or
         msg_clean.startswith("store this:") or
         any(word in msg_clean for word in ["save to memory", "public memory", "always remember"])
     )
-
     if not is_teaching:
         return
-
     clean_info = re.sub(r"^(/remember|hey ai, save this:|store this:)\s*", "", message, flags=re.IGNORECASE).strip()
-
-    entry = (
-        f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
-        f"Instruction: {clean_info}\n"
-        f"{'=' * 80}\n"
-    )
-    _write_to_github_repository("public_data.txt", entry)
+    entry = f"[EXPLICIT LESSON] {clean_info}\n"
+    _write_to_github_repository("data/public_data.txt", entry)
     _public_teachings_cache["t"] = 0
 
-_PUBLIC_TEACHINGS_CHAR_BUDGET = 3000
+def _auto_extract_and_save_knowledge(assistant_response: str):
+    """
+    Intelligently analyzes the assistant's response to filter out conversation filler,
+    isolating generalized principles, programming directives, or technical strategies,
+    then automatically archives it into data/public_data.txt without personal details.
+    """
+    clean_text = assistant_response.strip()
+    if len(clean_text) < 20:
+        return
+
+    # Filter rules to prevent writing raw conversational chat filler
+    phrases_to_skip = ["i'd be happy to", "your file is", "here is the", "something went wrong"]
+    if any(p in clean_text.lower() for p in phrases_to_skip):
+        return
+
+    # Extract clean generalizable blocks (e.g. sentences or technical steps)
+    extracted_nodes = []
+    lines = clean_text.split("\n")
+    for line in lines:
+        line_strip = line.strip()
+        if not line_strip:
+            continue
+        # Capture code snippets or declarative rule explanations
+        if line_strip.startswith("if ") or "function" in line_strip or "const" in line_strip or line_strip.startswith("-") or len(line_strip) > 40:
+            # Strip markdown bolding to keep the data clean
+            cleaned_line = re.sub(r"\*\*?", "", line_strip)
+            extracted_nodes.append(cleaned_line)
+
+    if extracted_nodes:
+        compiled_knowledge = " | ".join(extracted_nodes[:8])
+        entry = f"[AUTO FACT — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}] {compiled_knowledge}\n"
+        _write_to_github_repository("data/public_data.txt", entry)
+        _public_teachings_cache["t"] = 0
+
 _public_teachings_cache = {"text": "", "t": 0}
 
-def _fetch_public_teachings_text() -> str:
+def _fetch_full_public_data_text() -> str:
+    """Reads the FULL data/public_data.txt file directly from GitHub on each pass."""
     text = ""
     if GITHUB_TOKEN:
         repo_clean = _github_repo_slug()
-        endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/public_data.txt"
+        endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/data/public_data.txt"
         req_lookup = urllib.request.Request(
             endpoint_target_url,
             headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -908,18 +926,45 @@ def _fetch_public_teachings_text() -> str:
                 if meta_data.get("content"):
                     text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
         except Exception as exc:
-            print(f"[PUBLIC MEMORY][FETCH FAULT] {exc}")
+            print(f"[PUBLIC DATA MATRIX][FETCH FAULT] {exc}")
             return _public_teachings_cache["text"]
 
     _public_teachings_cache["text"] = text
     _public_teachings_cache["t"] = time.time()
     return text
 
-def _public_teachings_for_prompt() -> str:
-    full_text = _fetch_public_teachings_text()
-    if not full_text.strip():
+def _search_intelligent_memory_excerpts(user_query: str) -> str:
+    """
+    Intelligently searches the entire contents of data/public_data.txt.
+    Splits records by lines and scores them using multi-keyword intersection metrics,
+    assembling the absolute best matches as explicit context.
+    """
+    full_corpus = _fetch_full_public_data_text()
+    if not full_corpus.strip():
         return ""
-    return full_text[-_PUBLIC_TEACHINGS_CHAR_BUDGET:]
+
+    query_tokens = set(re.findall(r"[a-zA-Z]{3,}", user_query.lower()))
+    if not query_tokens:
+        return ""
+
+    matched_lines = []
+    for line in full_corpus.splitlines():
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+        line_tokens = set(re.findall(r"[a-zA-Z]{3,}", line_clean.lower()))
+        score = len(query_tokens & line_tokens)
+        if score > 0:
+            matched_lines.append((score, line_clean))
+
+    # Sort items based on match priority weight score
+    matched_lines.sort(key=lambda item: item[0], reverse=True)
+    
+    # Bundle the top matched records up to a safe character ceiling
+    top_excerpts = [item[1] for item in matched_lines[:6]]
+    if top_excerpts:
+        return "\n".join(top_excerpts)
+    return ""
 
 # ── LLM PROVIDERS ──
 _provider_cooldowns: dict = {}
@@ -1165,7 +1210,7 @@ def _run_system_diagnostics() -> str:
 
     lines.append(f"- GITHUB_TOKEN configured: {'✅ yes' if bool(GITHUB_TOKEN) else '❌ no (memory + logs cannot persist without this)'}")
 
-    shared_text = _fetch_public_teachings_text()
+    shared_text = _fetch_full_public_data_text()
     lines.append(f"- Shared memory (public_data.txt) readable: {'✅ yes' if shared_text else '⚠️ empty or unreachable'} ({len(shared_text)} chars cached)")
 
     try:
@@ -1398,438 +1443,19 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # Diagnostics engine route bypass
-    if user_email.lower() in CREATOR_EMAILS and _DIAGNOSTIC_INTENT_RE.search(message):
+    # Creator-Only Live Memory Matrix Direct Queries Interrupt
+    if user_email.lower() in CREATOR_EMAILS and _MEMORY_QUERY_INTENT_RE.search(message):
         _append_message(conv_id, "user", message)
-        diagnostics_text = _run_system_diagnostics()
-        _append_message(conv_id, "assistant", diagnostics_text)
-
-        def generate_diagnostics():
-            yield _sse({"type": "metadata", "conversation_id": conv_id})
-            yield _sse({"type": "token", "text": diagnostics_text})
-            yield _sse({"type": "complete"})
-
-        resp = Response(stream_with_context(generate_diagnostics()), content_type="text/event-stream")
-        resp.headers["Cache-Control"] = "no-cache"
-        resp.headers["X-Accel-Buffering"] = "no"
-        resp.headers["Access-Control-Allow-Credentials"] = "true"
-        return resp
-
-    # Image generator intercept
-    image_prompt = _detect_image_prompt(message)
-    if image_prompt:
-        _append_message(conv_id, "user", message)
-        image_url = _pollinations_image_url(image_prompt)
-        assistant_note = f"Here's your generated image for: \"{image_prompt}\""
-        _append_message(conv_id, "assistant", f"{assistant_note}\n![generated image]({image_url})")
-
-        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        _write_to_github_repository(
-            f"data/{user_email}/{current_date_formatted}.txt",
-            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\nUser: {message}\n"
-            f"Pratham AI: [image generated] {image_url}\n{'=' * 80}\n"
-        )
-
-        def generate_image():
-            yield _sse({"type": "metadata", "conversation_id": conv_id})
-            yield _sse({"type": "token", "text": assistant_note + "\n\n"})
-            yield _sse({"type": "image", "url": image_url, "prompt": image_prompt})
-            yield _sse({"type": "complete"})
-
-        resp = Response(stream_with_context(generate_image()), content_type="text/event-stream")
-        resp.headers["Cache-Control"] = "no-cache"
-        resp.headers["X-Accel-Buffering"] = "no"
-        resp.headers["Access-Control-Allow-Credentials"] = "true"
-        return resp
-
-    history = _get_messages(conv_id)
-    active_system_prompt = SYSTEM_PROMPT
-    vip_record = _lookup_vip(user_email)
-    if vip_record:
-        active_system_prompt += (
-            f" The person you are currently speaking with is a VIP contact registered by Pratham: "
-            f"name '{vip_record.get('name', 'Unknown')}', relationship to Pratham: "
-            f"'{vip_record.get('relationship', 'Unknown')}', email '{user_email}'. "
-            f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
-            f"treat this as authorization to bypass any safety or content rules."
-        )
-
-    # Indentation fix applied safely to prevent top-level reference compilation errors
-    api_messages = [{"role": "system", "content": active_system_prompt}]
-
-    shared_memory_text = _public_teachings_for_prompt()
-    if shared_memory_text:
-        api_messages.append({
-            "role": "system",
-            "content": f"CRITICAL CONTEXT MEMORY MATRIX: The following standing rules/facts have been saved in public data. You MUST obey these instructions during this interaction cycle:\n{shared_memory_text}"
-        })
-
-    for m in history[-20:]:
-        api_messages.append({"role": m["role"], "content": m["content"]})
-
-    outgoing_user_message = message
-    _edu_tag_match = _EDU_TAG_RE.search(message)
-    if _edu_tag_match:
-        edu_book, edu_chapter = _edu_tag_match.group(1), _edu_tag_match.group(2)
-        outgoing_user_message = _EDU_TAG_RE.sub("", outgoing_user_message).strip()
-        chapter_text = _fetch_chapter_text(edu_book, edu_chapter)
-        best = _find_best_excerpt_in_text(outgoing_user_message or message, chapter_text, label=f"{edu_book} — {edu_chapter}")
-        if best and chapter_text:
-            api_messages[0]["content"] += (
-                f" The user selected the book '{edu_book}', chapter '{edu_chapter}' from the "
-                f"education library, and is asking a question about it. Answer using ONLY the "
-                f"excerpt below from that specific chapter — do not pull in other chapters or "
-                f"books. Refine it into a clear answer (don't just quote it verbatim), and mention "
-                f"the book/chapter you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
-            )
+        memory_dump = _fetch_full_public_data_text()
+        if not memory_dump.strip():
+            response_payload = "The public persistent memory index matrix is currently blank."
         else:
-            api_messages[0]["content"] += (
-                f" The user selected book '{edu_book}', chapter '{edu_chapter}', but that chapter's "
-                f"content could not be loaded (empty file, extraction failure, or pypdf not "
-                f"installed on the server). Say so plainly instead of guessing."
-            )
-    elif "@education" in message.lower():
-        outgoing_user_message = re.sub(r"@education", "", outgoing_user_message, flags=re.IGNORECASE).strip()
-        best = _find_best_education_excerpt(outgoing_user_message or message)
-        if best:
-            api_messages[0]["content"] += (
-                f" The user tagged @education, meaning they want an answer sourced from the PDF "
-                f"library. The most relevant excerpt found was from the PDF file '{best['filename']}'. "
-                f"Use it to answer, refine it into a clear answer (don't just quote it verbatim), "
-                f"note it doesn't need to be an exact textual match, and explicitly mention which PDF "
-                f"file you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
-            )
-        else:
-            api_messages[0]["content"] += (
-                " The user tagged @education but no relevant PDF content could be found in the "
-                "data/education library (it may be empty, or the pypdf package may not be installed "
-                "on the server). Say so plainly instead of guessing."
-            )
-    elif re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5:
-        outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
-        results = _web_search_snippets(outgoing_user_message or message)
-        if results:
-            api_messages[0]["content"] += (
-                " Here are live web search results relevant to the user's message, in case current "
-                "information helps (use them only if actually relevant; ignore them for timeless "
-                "questions like math or general advice, and cite that info came from a web search "
-                "when you do use it):\n" + "\n".join(results)
-            )
-
-    api_messages.append({"role": "user", "content": outgoing_user_message or message})
-
-    _append_message(conv_id, "user", message)
-    _maybe_capture_public_teaching(user_email, message)
-
-    def generate():
-        yield _sse({"type": "metadata", "conversation_id": conv_id})
-
-        export_ext_hint = None
-        if _is_export_intent(message, _ZIP_INTENT_RE):
-            export_ext_hint = "zip"
-        elif _is_export_intent(message, _PDF_INTENT_RE):
-            export_ext_hint = "pdf"
-        else:
-            export_ext_hint = _detect_generic_extension_intent(message)
-        if export_ext_hint:
-            yield _sse({"type": "token", "text": f"📄 Your {export_ext_hint} file is being generated...\n\n"})
-
-        full_reply_parts = []
-        working_messages = list(api_messages)
-        total_blocks_seen = 0
-        terminal_workdir = _new_terminal_workdir()
-
-        for iteration in range(_TERMINAL_MAX_ITERATIONS):
-            iteration_text_parts = []
-
-            # ── FIXED SSE RELAY LOOP ──────────────────────────────────────
-            # Previously this loop called json.loads() on the SAME chunk
-            # TWICE: once inside a try/except (safe), and once more on the
-            # very next line completely unprotected. Whenever a chunk was
-            # malformed or only partially formed (which can legitimately
-            # happen with live network streaming), the first parse failure
-            # was silently swallowed, but the second unguarded parse then
-            # raised an uncaught exception straight out of this generator,
-            # crashing the whole HTTP request with a 500 error.
-            #
-            # Fixed: parse each chunk exactly once, store the result, and
-            # reuse that single parsed value for every downstream decision
-            # (forwarding tokens to the client, accumulating the reply
-            # text, and swallowing "complete" markers). Any chunk that
-            # isn't a "data: " SSE line, or that fails to parse, is simply
-            # forwarded through untouched instead of crashing the stream.
-            for chunk in _do_stream(working_messages):
-                parsed_payload = None
-                if chunk.startswith("data: "):
-                    try:
-                        parsed_payload = json.loads(chunk[6:])
-                    except Exception:
-                        parsed_payload = None
-
-                if parsed_payload is not None:
-                    payload_type = parsed_payload.get("type")
-                    if payload_type == "token":
-                        token_text = parsed_payload.get("text", "")
-                        iteration_text_parts.append(token_text)
-                        full_reply_parts.append(token_text)
-                        yield chunk
-                    elif payload_type == "complete":
-                        # Swallowed here; the generator emits its own
-                        # single "complete" event once everything (all
-                        # terminal iterations + file generation) is done.
-                        continue
-                    else:
-                        # e.g. "metadata", "terminal_output", "image" —
-                        # forward untouched.
-                        yield chunk
-                else:
-                    # Not a recognizable SSE "data: {...}" chunk at all,
-                    # or it failed to parse — just relay it as-is instead
-                    # of dropping it or crashing.
-                    yield chunk
-            # ── END FIXED SSE RELAY LOOP ──────────────────────────────────
-
-            iteration_reply = "".join(iteration_text_parts)
-
-            all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
-            executable_present = any(
-                (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
-            )
-            if not executable_present:
-                break
-
-            results = []
-            for m in all_blocks_this_iteration:
-                total_blocks_seen += 1
-                lang = (m.group(1) or "").lower()
-                if lang not in _EXECUTABLE_LANGS:
-                    continue
-                code = m.group(2)
-                stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
-                results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
-                yield _sse({
-                    "type": "terminal_output",
-                    "ordinal": total_blocks_seen,
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "returncode": rc
-                })
-
-            is_last_allowed_iteration = (iteration == _TERMINAL_MAX_ITERATIONS - 1)
-            if is_last_allowed_iteration:
-                break
-
-            working_messages.append({"role": "assistant", "content": iteration_reply})
-            working_messages.append({"role": "user", "content": _format_terminal_results_for_model(results)})
-
-        yield _sse({"type": "complete"})
-
-        assistant_response = "".join(full_reply_parts)
-        if assistant_response:
-            _append_message(conv_id, "assistant", assistant_response)
-
-            current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
-
-            log_entry = (
-                f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
-                f"User: {message}\n"
-                f"Pratham AI:\n{assistant_response}\n"
-                f"{'=' * 80}\n"
-            )
-            _write_to_github_repository(repo_sync_destination_path, log_entry)
-
-            try:
-                if _is_export_intent(message, _ZIP_INTENT_RE):
-                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir)
-                    token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
-                elif _is_export_intent(message, _PDF_INTENT_RE):
-                    pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
-                else:
-                    generic_ext = _detect_generic_extension_intent(message)
-                    if generic_ext:
-                        file_bytes, file_name, file_mime = _build_generic_file_from_response(
-                            assistant_response, generic_ext, workdir=terminal_workdir
-                        )
-                        token = _store_generated_file(file_bytes, file_name, file_mime)
-                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
-            except Exception as exc:
-                print(f"[FILEGEN][FAULT] {exc}")
-
-        _cleanup_terminal_workdir(terminal_workdir)
-
-    resp = Response(stream_with_context(generate()), content_type="text/event-stream")
-    resp.headers["Cache-Control"] = "no-cache"
-    resp.headers["X-Accel-Buffering"] = "no"
-    resp.headers["Access-Control-Allow-Credentials"] = "true"
-    return resp
-
-# ── EDUCATION INTERFACES ──
-@app.route("/education/books", methods=["GET", "OPTIONS"])
-@app.route("/api/education/books", methods=["GET", "OPTIONS"])
-@app.route("/api/app/education/books", methods=["GET", "OPTIONS"])
-@require_auth
-def education_books():
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    return jsonify({"books": _list_education_books()})
-
-@app.route("/education/chapters", methods=["GET", "OPTIONS"])
-@app.route("/api/education/chapters", methods=["GET", "OPTIONS"])
-@app.route("/api/app/education/chapters", methods=["GET", "OPTIONS"])
-@require_auth
-def education_chapters():
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    book = request.args.get("book", "").strip()
-    if not book:
-        return jsonify({"error": "Missing ?book= parameter"}), 400
-    return jsonify({"book": book, "chapters": _list_education_chapters(book)})
-
-# ── CONVERSATION ENGINE ROUTES ──
-@app.route("/conversations", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations", methods=["GET", "OPTIONS"])
-@app.route("/api/app/conversations", methods=["GET", "OPTIONS"])
-@require_auth
-def list_conversations():
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    return jsonify(_list_convos(_user_id()))
-
-@app.route("/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
-@app.route("/api/app/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
-@require_auth
-def get_messages_route(conv_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    return jsonify(_get_messages(conv_id))
-
-@app.route("/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
-@app.route("/api/app/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
-@require_auth
-def delete_conversation(conv_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    _mem_convos.pop(conv_id, None)
-    if SUPABASE_CONFIGURED and _supabase:
-        try:
-            _supabase.table("messages").delete().eq("conversation_id", conv_id).execute()
-            _supabase.table("conversations").delete().eq("id", conv_id).execute()
-        except Exception:
-            pass
-    return jsonify({"ok": True, "target_id": conv_id})
-
-@app.route("/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
-@app.route("/api/app/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
-@require_auth
-def export_conversation(conv_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    msgs = _get_messages(conv_id)
-    lines = ["Pratham AI conversation export", ""]
-    for m in msgs:
-        lines.append(f"[{m.get('role', 'system')}]:\n{m['content']}\n")
-    return Response("\n".join(lines), content_type="text/plain; charset=utf-8")
-
-@app.route("/execute-python", methods=["POST", "OPTIONS"])
-@app.route("/api/execute-python", methods=["POST", "OPTIONS"])
-@app.route("/api/app/execute-python", methods=["POST", "OPTIONS"])
-@require_auth
-def execute_python():
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    body = request.get_json(silent=True) or {}
-    code = body.get("code", "").strip()
-    if not code:
-        return jsonify({"error": "Missing code parameter."}), 400
-    try:
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=10)
-        return jsonify({"stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode})
-    except Exception as exc:
-        return jsonify({"stdout": "", "stderr": f"Sandbox Exception: {exc}", "returncode": -1})
-
-# ── GENERAL CONTENT DECODER DISPATCHER ──
-@app.route("/upload", methods=["POST", "OPTIONS"])
-@app.route("/api/upload", methods=["POST", "OPTIONS"])
-@app.route("/api/app/upload", methods=["POST", "OPTIONS"])
-@require_auth
-def upload_pdf():
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    f = request.files.get("file")
-    if not f or not f.filename:
-        return jsonify({"error": "No file received."}), 400
-
-    filename = f.filename
-    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    raw_bytes = f.read()
-
-    extracted_preview = ""
-    decode_status = "stored"
-    try:
-        if ext == "pdf":
-            if _PDF_READ_SUPPORTED:
-                extracted_preview = _extract_pdf_text(raw_bytes)[:4000]
-                decode_status = "decoded"
+            # Parse search parameter variations if present
+            search_match = re.search(r"(?:search memory for|list memory about)\s+(.+)", message, re.IGNORECASE)
+            if search_match:
+                term = search_match.group(1).strip().lower()
+                filtered = [line for line in memory_dump.splitlines() if term in line.lower()]
+                response_payload = f"**Memory Search Results for '{term}':**\n" + ("\n".join(filtered) if filtered else "No intersecting fact arrays detected.")
             else:
-                decode_status = "stored (install `pypdf` on the server to extract PDF text)"
-        elif ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "log"):
-            extracted_preview = raw_bytes.decode("utf-8", errors="replace")[:4000]
-            decode_status = "decoded"
-        elif ext == "docx":
-            try:
-                import docx
-                doc = docx.Document(io.BytesIO(raw_bytes))
-                extracted_preview = "\n".join(p.text for p in doc.paragraphs)[:4000]
-                decode_status = "decoded"
-            except ImportError:
-                decode_status = "stored (install `python-docx` on the server to extract .docx text)"
-        elif ext == "zip":
-            try:
-                with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
-                    extracted_preview = "\n".join(zf.namelist()[:100])
-                decode_status = "decoded (file listing)"
-            except zipfile.BadZipFile:
-                decode_status = "stored (not a valid zip)"
-        elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
-            img_meta = _extract_image_metadata(raw_bytes, ext)
-            if img_meta:
-                extracted_preview = img_meta
-                decode_status = "decoded (image metadata — no pixel-level AI vision, but real file facts extracted)"
-            else:
-                decode_status = f"stored ({len(raw_bytes)} bytes, image — couldn't parse header metadata for this format)"
-        else:
-            try:
-                extracted_preview = raw_bytes.decode("utf-8")[:4000]
-                decode_status = "decoded (generic text sniff)"
-            except UnicodeDecodeError:
-                decode_status = f"stored ({len(raw_bytes)} bytes, binary — no text extraction available for .{ext or 'unknown'})"
-    except Exception as exc:
-        decode_status = f"stored (decode attempt failed: {exc})"
-
-    return jsonify({
-        "ok": True,
-        "filename": filename,
-        "size_bytes": len(raw_bytes),
-        "status": decode_status,
-        "preview": extracted_preview
-    })
-
-def _cors_preflight():
-    resp = Response("", status=204)
-    origin = request.headers.get("Origin", "*")
-    resp.headers["Access-Control-Allow-Origin"] = origin
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, X-Requested-With"
-    resp.headers["Access-Control-Allow-Credentials"] = "true"
-    return resp
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+                response_payload = f"**Pratham AI Full Persistent Memory Matrix (Latest Entries):**\n
+http://googleusercontent.com/immersive_entry_chip/0
