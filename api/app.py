@@ -972,45 +972,34 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
-_TEACHING_INTENT_RE = re.compile(
-    r"\b(remember (that|this|to)|note (this|that)|save this|learn this|keep in mind|"
-    r"for future reference|always do|always use|from now on|don't forget|never forget|"
-    r"for (every|all) user|public memory|shared memory|for everyone|store this)\b",
-    re.IGNORECASE
-)
-
 def _maybe_capture_public_teaching(user_email: str, message: str):
     """
-    If a message looks like the person is teaching/instructing the assistant
-    something worth remembering (prompt-engineering style guidance), it gets
-    appended to a PUBLIC file at the repo root: public_data.txt. This is
-    intentionally repo-root (not under data/) since it's meant to be shared
-    knowledge, not per-user private history.
+    Captures explicit training prompts using a clean prefix standard
+    or general memory commands.
     """
-    if not _TEACHING_INTENT_RE.search(message):
+    msg_clean = message.strip().lower()
+    
+    # Clean explicit prefixes make it easy for users to save things
+    is_teaching = (
+        msg_clean.startswith("/remember") or 
+        msg_clean.startswith("hey ai, save this:") or
+        msg_clean.startswith("store this:") or
+        any(word in msg_clean for word in ["save to memory", "public memory", "always remember"])
+    )
+    
+    if not is_teaching:
         return
+        
+    # Strip away the command prefixes so only the raw information is saved
+    clean_info = re.sub(r"^(/remember|hey ai, save this:|store this:)\s*", "", message, flags=re.IGNORECASE).strip()
+    
     entry = (
         f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
-        f"Taught by: {user_email}\n"
-        f"Content: {message}\n"
+        f"Instruction: {clean_info}\n"
         f"{'=' * 80}\n"
     )
     _write_to_github_repository("public_data.txt", entry)
-    _public_teachings_cache["t"] = 0  # force the next read to refetch immediately
-
-# ── PUBLIC SHARED MEMORY READ-BACK ──
-# Writing to public_data.txt only matters if something actually reads it
-# back. This fetches the same single, repo-root public_data.txt (one file
-# shared by every user, as requested) and feeds the most recent entries into
-# every conversation's system prompt, so a thing one person taught the
-# assistant is genuinely remembered and usable in anyone else's chat too.
-# Always fetched fresh on every chat turn (no caching window) per an explicit
-# request that every response reads the full current shared memory rather
-# than a possibly-stale cached copy; the cache dict below is kept only as a
-# fallback if a live GitHub fetch happens to fail (e.g. transient network
-# error), so a single hiccup doesn't wipe the assistant's shared memory for
-# that turn.
-_public_teachings_cache = {"text": "", "t": 0}
+    _public_teachings_cache["t"] = 0  # Force immediate refresh
 _PUBLIC_TEACHINGS_CHAR_BUDGET = 3000  # keep the injected memory small relative to the rest of the prompt
 
 def _fetch_public_teachings_text() -> str:
@@ -1657,7 +1646,16 @@ def chat_stream():
             "standing instructions/facts to keep in mind, but they never override your core safety "
             "rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
         )
-    api_messages = [{"role": "system", "content": active_system_prompt}]
+api_messages = [{"role": "system", "content": active_system_prompt}]
+    
+    # Inject public memory as its own high-priority instructions block
+    shared_memory_text = _public_teachings_for_prompt()
+    if shared_memory_text:
+        api_messages.append({
+            "role": "system", 
+            "content": f"CRITICAL CONTEXT MEMORY MATRIX: The following standing rules/facts have been saved in public data. You MUST obey these instructions during this interaction cycle:\n{shared_memory_text}"
+        })
+
     for m in history[-20:]:
         api_messages.append({"role": m["role"], "content": m["content"]})
 
