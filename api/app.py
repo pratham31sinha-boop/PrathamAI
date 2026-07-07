@@ -125,7 +125,6 @@ VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
 
-# Creator list alignment
 CREATOR_EMAILS = {"pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"}
 
 SUPABASE_CONFIGURED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
@@ -148,10 +147,6 @@ def _github_repo_slug() -> str:
     return GITHUB_REPO.replace("https://github.com/", "").strip("/")
 
 def _write_to_github_repository(target_file_path: str, contents_payload: str) -> bool:
-    """
-    Appends `contents_payload` to `target_file_path` inside the configured
-    GitHub repository. Creates the file if it does not already exist.
-    """
     if not GITHUB_TOKEN:
         return False
 
@@ -855,7 +850,6 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
-# Creative Query Intent Match Pattern for Creators Only
 _MEMORY_QUERY_INTENT_RE = re.compile(
     r"\b(what'?s\s+in\s+memory|what\s+do\s+you\s+know|search\s+memory|show\s+saved\s+facts|list\s+memory)\b",
     re.IGNORECASE
@@ -1454,5 +1448,3 @@ def chat_stream():
             else:
                 response_payload = f"**Pratham AI Full Persistent Memory Matrix (Latest Entries):**\n
 http://googleusercontent.com/immersive_entry_chip/0
-
-The syntax breakdown has been completely fixed. You can copy and commit this exact script directly to your deployment branch, and your application layout will clear those communication drops instantly! Let me know when the build goes green.
