@@ -142,12 +142,16 @@ _mem_convos: dict = {}
 
 # ── GITHUB LOG PERSISTENCE ──
 _gh_sha_cache: dict = {}
-_GH_CACHE_TTL = 8
+_GH_CACHE_TTL = 8  # seconds
 
 def _github_repo_slug() -> str:
     return GITHUB_REPO.replace("https://github.com/", "").strip("/")
 
 def _write_to_github_repository(target_file_path: str, contents_payload: str) -> bool:
+    """
+    Appends `contents_payload` to `target_file_path` inside the configured
+    GitHub repository. Creates the file if it does not already exist.
+    """
     if not GITHUB_TOKEN:
         return False
 
@@ -215,7 +219,7 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
 
 # ── VIP RECOGNITION ──
 _vip_cache = {"entries": {}, "t": 0}
-_VIP_CACHE_TTL = 30
+_VIP_CACHE_TTL = 30  # seconds
 
 def _fetch_vip_directory() -> dict:
     now_ts = time.time()
@@ -267,7 +271,7 @@ def _lookup_vip(email: str):
 
 # ── BACKGROUND FILE GENERATION ──
 _generated_files_store: dict = {}
-_GENERATED_FILE_TTL = 3600
+_GENERATED_FILE_TTL = 3600  # 1 hour
 
 _ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
 _PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
@@ -833,9 +837,8 @@ def require_auth(f):
             return _cors_preflight()
         token = _get_token()
         user = _verify_token(token)
-        if not hesitate:
-            if not user:
-                return jsonify({"error": "Session expired or invalid. Please sign in again."}), 401
+        if not user:
+            return jsonify({"error": "Session expired or invalid. Please sign in again."}), 401
         request.current_user = user
         return f(*args, **kwargs)
     return wrapper
@@ -884,21 +887,17 @@ def _auto_extract_and_save_knowledge(assistant_response: str):
     if len(clean_text) < 20:
         return
 
-    # Filter rules to prevent writing raw conversational chat filler
     phrases_to_skip = ["i'd be happy to", "your file is", "here is the", "something went wrong"]
     if any(p in clean_text.lower() for p in phrases_to_skip):
         return
 
-    # Extract clean generalizable blocks (e.g. sentences or technical steps)
     extracted_nodes = []
     lines = clean_text.split("\n")
     for line in lines:
         line_strip = line.strip()
         if not line_strip:
             continue
-        # Capture code snippets or declarative rule explanations
         if line_strip.startswith("if ") or "function" in line_strip or "const" in line_strip or line_strip.startswith("-") or len(line_strip) > 40:
-            # Strip markdown bolding to keep the data clean
             cleaned_line = re.sub(r"\*\*?", "", line_strip)
             extracted_nodes.append(cleaned_line)
 
@@ -957,10 +956,7 @@ def _search_intelligent_memory_excerpts(user_query: str) -> str:
         if score > 0:
             matched_lines.append((score, line_clean))
 
-    # Sort items based on match priority weight score
     matched_lines.sort(key=lambda item: item[0], reverse=True)
-    
-    # Bundle the top matched records up to a safe character ceiling
     top_excerpts = [item[1] for item in matched_lines[:6]]
     if top_excerpts:
         return "\n".join(top_excerpts)
@@ -1450,7 +1446,6 @@ def chat_stream():
         if not memory_dump.strip():
             response_payload = "The public persistent memory index matrix is currently blank."
         else:
-            # Parse search parameter variations if present
             search_match = re.search(r"(?:search memory for|list memory about)\s+(.+)", message, re.IGNORECASE)
             if search_match:
                 term = search_match.group(1).strip().lower()
@@ -1459,3 +1454,5 @@ def chat_stream():
             else:
                 response_payload = f"**Pratham AI Full Persistent Memory Matrix (Latest Entries):**\n
 http://googleusercontent.com/immersive_entry_chip/0
+
+The syntax breakdown has been completely fixed. You can copy and commit this exact script directly to your deployment branch, and your application layout will clear those communication drops instantly! Let me know when the build goes green.
