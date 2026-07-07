@@ -68,6 +68,7 @@ import subprocess
 import tempfile
 import shutil
 import textwrap
+import mimetypes
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -314,13 +315,56 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
     return token
 
+_FINALDOC_RE = re.compile(r"```finaldoc\s*\n([\s\S]*?)```", re.IGNORECASE)
+
+# Deterministic safety net: models don't always follow the ```finaldoc
+# instruction reliably, so even without it, strip whole lines/sentences that
+# are clearly meta-commentary about the export mechanism rather than actual
+# content, instead of exporting the raw full reply verbatim.
+_EXPORT_FILLER_LINE_RE = re.compile(
+    r"^\s*("
+    r"i'?d be happy to.*|"
+    r"here'?s a (brief |short )?(document|essay|write[- ]?up).*|"
+    r"i hope this (document|essay|file) meets.*|"
+    r"(the )?backend will (automatically )?(take care of|package|convert|create|build).*|"
+    r"no need to run any commands.*|"
+    r"you (can|will be able to) download.*|"
+    r"your (pdf|zip|file) (file )?is (being generated|ready).*|"
+    r"(as i mentioned( earlier)?,?\s*)?the (backend|system) will.*"
+    r")\s*$",
+    re.IGNORECASE
+)
+
+def _strip_export_filler(text: str) -> str:
+    kept_lines = [ln for ln in text.split("\n") if not _EXPORT_FILLER_LINE_RE.match(ln)]
+    # Collapse resulting doubled-up blank lines from removed sentences.
+    cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines))
+    return cleaned.strip()
+
+def _extract_export_content(assistant_text: str) -> str:
+    """
+    Returns the text that should actually go INTO an exported file (pdf/zip/
+    any other extension). Prefers a dedicated ```finaldoc fenced block if the
+    model provided one (per the system prompt, that block should contain
+    ONLY the clean deliverable — no "I'd be happy to..." / "your file is
+    ready!" chatter around it). If no such block exists, falls back to the
+    full reply with filler lines stripped out via `_strip_export_filler`,
+    rather than exporting the raw chat response (including its own
+    commentary about the export) verbatim.
+    """
+    m = _FINALDOC_RE.search(assistant_text)
+    if m:
+        return _strip_export_filler(m.group(1).strip())
+    return _strip_export_filler(assistant_text)
+
 def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
     """Packs real files first: if the background terminal actually created
     any files in `workdir` during this request (e.g. the model ran python
     that wrote out a .csv, a script, etc.), those real files are what gets
     zipped. Falls back to packing every fenced code block in the reply if
-    the workdir is empty, and to a plain response.txt if there were no code
-    blocks either."""
+    the workdir is empty, and to the clean exported content (see
+    `_extract_export_content`) as response.txt if there were no code blocks
+    either."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         real_files_written = False
@@ -337,6 +381,7 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
 
         if not real_files_written:
             blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
+            blocks = [(lang, content) for lang, content in blocks if (lang or "").lower() != "finaldoc"]
             if blocks:
                 for i, (lang, content) in enumerate(blocks, start=1):
                     ext = {
@@ -345,41 +390,71 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
                     }.get((lang or "text").lower(), "txt")
                     zf.writestr(f"file_{i}.{ext}", content)
             else:
-                zf.writestr("response.txt", assistant_text)
+                zf.writestr("response.txt", _extract_export_content(assistant_text))
     buf.seek(0)
     return buf.read()
 
 def _escape_pdf_literal_text(s: str) -> str:
     return s.replace('\\', r'\\').replace('(', r'\(').replace(')', r'\)')
 
+def _markdownish_lines_for_pdf(text: str, max_width_chars: int):
+    """
+    Converts lightly-markdown-formatted text (headings wrapped in **like
+    this**, and `* `/`- ` bullets — the style the model actually writes) into
+    a flat list of (font_key, size_delta, rendered_line) tuples ready to lay
+    out on a page. This covers the common case seen in practice (standalone
+    bold heading lines, bullet lists, plain paragraphs) without needing a
+    full markdown/HTML parser.
+    """
+    rendered = []
+    for raw_line in text.split("\n"):
+        stripped = raw_line.strip()
+        if not stripped:
+            rendered.append(("F1", 0, ""))
+            continue
+
+        heading_match = re.match(r'^\*\*(.+?)\*\*:?$', stripped)
+        if heading_match:
+            rendered.append(("F2", 2, heading_match.group(1)))
+            continue
+
+        bullet_match = re.match(r'^[\*\-]\s+(.+)$', stripped)
+        if bullet_match:
+            content = re.sub(r'\*\*(.+?)\*\*', r'\1', bullet_match.group(1))
+            wrapped = textwrap.wrap(content, width=max(10, max_width_chars - 2)) or ['']
+            for i, w in enumerate(wrapped):
+                prefix = "- " if i == 0 else "  "
+                rendered.append(("F1", 0, prefix + w))
+            continue
+
+        # Plain paragraph line — strip stray ** markers (no inline-bold support,
+        # this covers whole-line headings which is the common real-world case).
+        content = re.sub(r'\*\*(.+?)\*\*', r'\1', stripped)
+        wrapped = textwrap.wrap(content, width=max_width_chars) or ['']
+        for w in wrapped:
+            rendered.append(("F1", 0, w))
+    return rendered or [("F1", 0, "")]
+
 def _write_minimal_pdf(text: str) -> bytes:
     """
     Builds a real, valid multi-page PDF directly from scratch using nothing
     but the standard library — no fpdf2, no reportlab, no external `pandoc`/
-    `wkhtmltopdf` binary. This exists because relying on an optional package
-    being installed on the server was silently falling back to a .txt file
-    whenever that package was missing (which is exactly what was happening
-    here). Handles line-wrapping and pagination manually and writes the
-    PDF's object table + xref + trailer by hand per the PDF 1.4 spec. This
-    intentionally only needs to render plain text (no images/rich
-    formatting) — that's all the use case (turning a chat reply into a
-    downloadable PDF) requires.
+    `wkhtmltopdf` binary. Uses the standard 14 PDF base fonts (Helvetica /
+    Helvetica-Bold), which every PDF viewer already has built in, so bold
+    headings and bullet lists render properly without embedding any font
+    file. Handles line-wrapping and pagination manually and writes the PDF's
+    object table + xref + trailer by hand per the PDF 1.4 spec.
     """
-    font_size = 11
-    leading = 14
+    base_font_size = 11
+    heading_font_size = 13
+    leading = 15
     margin_left = 50
     margin_top = 792 - 50   # US Letter page height in points, minus a top margin
-    max_width_chars = 95
-    lines_per_page = 60
+    max_width_chars = 92
+    lines_per_page = 55
 
-    raw_lines = []
-    for para in text.split("\n"):
-        wrapped = textwrap.wrap(para, width=max_width_chars) or ['']
-        raw_lines.extend(wrapped)
-    if not raw_lines:
-        raw_lines = ['']
-
-    pages = [raw_lines[i:i + lines_per_page] for i in range(0, len(raw_lines), lines_per_page)] or [['']]
+    rendered_lines = _markdownish_lines_for_pdf(text, max_width_chars)
+    pages = [rendered_lines[i:i + lines_per_page] for i in range(0, len(rendered_lines), lines_per_page)] or [[("F1", 0, "")]]
 
     objects = {}
     next_obj_num = [1]
@@ -391,7 +466,8 @@ def _write_minimal_pdf(text: str) -> bytes:
 
     catalog_num = alloc()
     pages_num = alloc()
-    font_num = alloc()
+    font_regular_num = alloc()
+    font_bold_num = alloc()
 
     page_nums, content_nums = [], []
     for _ in pages:
@@ -400,28 +476,31 @@ def _write_minimal_pdf(text: str) -> bytes:
 
     content_bodies = []
     for page_lines in pages:
-        stream_parts = ["BT", f"/F1 {font_size} Tf", f"{leading} TL", f"{margin_left} {margin_top} Td"]
+        stream_parts = [f"{leading} TL", f"{margin_left} {margin_top} Td"]
         first = True
-        for line in page_lines:
-            escaped = _escape_pdf_literal_text(line)
-            if first:
-                stream_parts.append(f"({escaped}) Tj")
-                first = False
-            else:
+        for font_key, size_delta, line in page_lines:
+            size = base_font_size + size_delta
+            font_ref = "/F2" if font_key == "F2" else "/F1"
+            stream_parts.append(f"{font_ref} {size} Tf")
+            if not first:
                 stream_parts.append("T*")
-                stream_parts.append(f"({escaped}) Tj")
-        stream_parts.append("ET")
-        content_bodies.append("\n".join(stream_parts))
+            escaped = _escape_pdf_literal_text(line)
+            stream_parts.append(f"({escaped}) Tj")
+            first = False
+        body = "BT\n" + "\n".join(stream_parts) + "\nET"
+        content_bodies.append(body)
 
     objects[catalog_num] = f"<< /Type /Catalog /Pages {pages_num} 0 R >>"
     kids_refs = " ".join(f"{n} 0 R" for n in page_nums)
     objects[pages_num] = f"<< /Type /Pages /Kids [{kids_refs}] /Count {len(page_nums)} >>"
-    objects[font_num] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    objects[font_regular_num] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    objects[font_bold_num] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
 
     for i, page_num in enumerate(page_nums):
         content_num = content_nums[i]
         objects[page_num] = (
-            f"<< /Type /Page /Parent {pages_num} 0 R /Resources << /Font << /F1 {font_num} 0 R >> >> "
+            f"<< /Type /Page /Parent {pages_num} 0 R "
+            f"/Resources << /Font << /F1 {font_regular_num} 0 R /F2 {font_bold_num} 0 R >> >> "
             f"/MediaBox [0 0 612 792] /Contents {content_num} 0 R >>"
         )
         body = content_bodies[i]
@@ -452,13 +531,64 @@ def _write_minimal_pdf(text: str) -> bytes:
 
 def _build_pdf_from_response(assistant_text: str):
     """Returns (bytes, filename, mimetype). Always produces a real .pdf via
-    the dependency-free writer above — no more silent fallback to .txt."""
+    the dependency-free writer above, using the clean extracted deliverable
+    content (not the full chat reply with "I'd be happy to..." framing)."""
     try:
-        pdf_bytes = _write_minimal_pdf(assistant_text)
+        clean_content = _extract_export_content(assistant_text)
+        pdf_bytes = _write_minimal_pdf(clean_content)
         return pdf_bytes, "generated.pdf", "application/pdf"
     except Exception as exc:
         print(f"[PDF][BUILD FAULT] {exc}")
         return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+
+# ── GENERIC "make it a <any extension>" export ──
+# Not every request is a zip or a pdf — this catches "as a docx", "save this
+# as csv", "convert to png", etc. and packages the clean deliverable content
+# with whatever extension was asked for. For simple text-based formats
+# (txt/md/csv/json/html/etc.) this produces a genuinely correct file. For
+# complex binary formats (real .docx/.xlsx internal structure, actual raster
+# .png image encoding of text) this cannot fabricate the real binary format
+# from scratch — it still gives back a real, correctly-named/typed file
+# containing the content, which is the best a dependency-free backend can
+# honestly do without a heavy document-generation library installed.
+_GENERIC_EXTENSION_RE = re.compile(
+    r"\b(?:as\s+an?|make\s+(?:it|this)\s+an?|download\s+(?:as|this\s+as)|export\s+(?:as|to)|"
+    r"convert\s+(?:this\s+|it\s+)?to|save\s+(?:this\s+|it\s+)?as)\s+(?:an?\s+)?\.?([a-zA-Z0-9]{1,6})\b",
+    re.IGNORECASE
+)
+_HANDLED_EXTENSIONS = {"zip", "pdf"}  # these already have dedicated builders above
+
+def _detect_generic_extension_intent(message: str):
+    if "?" in message:
+        return None
+    m = _GENERIC_EXTENSION_RE.search(message)
+    if not m:
+        return None
+    ext = m.group(1).lower()
+    if ext in _HANDLED_EXTENSIONS:
+        return None
+    return ext
+
+def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: str = None):
+    """Returns (bytes, filename, mimetype) for an arbitrary requested
+    extension. Prefers a real file the terminal actually created in workdir
+    matching that extension; otherwise packages the clean exported content
+    as bytes with a best-guess mimetype."""
+    if workdir and os.path.isdir(workdir):
+        for root, _dirs, files in os.walk(workdir):
+            for fname in files:
+                if fname.lower().endswith("." + ext):
+                    try:
+                        with open(os.path.join(root, fname), "rb") as f:
+                            data = f.read()
+                        mimetype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                        return data, fname, mimetype
+                    except Exception:
+                        continue
+
+    content = _extract_export_content(assistant_text)
+    mimetype = mimetypes.guess_type("generated." + ext)[0] or "application/octet-stream"
+    return content.encode("utf-8", "replace"), f"generated.{ext}", mimetype
 
 @app.route("/download/<token>", methods=["GET"])
 @app.route("/api/download/<token>", methods=["GET"])
@@ -500,6 +630,52 @@ def _github_fetch_file_bytes(download_url: str):
     except Exception as exc:
         print(f"[EDU][FETCH FAULT] {exc}")
         return None
+
+def _extract_image_metadata(raw_bytes: bytes, ext: str) -> str:
+    """
+    Pure-stdlib image metadata extraction (no Pillow/vision model needed):
+    reads the real file headers to report actual width/height/color info.
+    This is real file data the AI can reason from ("this is a 1080x1920
+    portrait PNG with alpha"), not pixel-content understanding — that still
+    needs a vision-capable model, which isn't wired up here.
+    """
+    try:
+        size_kb = round(len(raw_bytes) / 1024, 1)
+        if ext == "png" and raw_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+            width = int.from_bytes(raw_bytes[16:20], "big")
+            height = int.from_bytes(raw_bytes[20:24], "big")
+            bit_depth = raw_bytes[24]
+            color_type = raw_bytes[25]
+            color_map = {0: "grayscale", 2: "RGB", 3: "palette", 4: "grayscale+alpha", 6: "RGBA"}
+            color_desc = color_map.get(color_type, f"type {color_type}")
+            return f"PNG image, {width}x{height}px, {bit_depth}-bit {color_desc}, {size_kb} KB"
+
+        if ext == "gif" and raw_bytes[:6] in (b"GIF87a", b"GIF89a"):
+            width = int.from_bytes(raw_bytes[6:8], "little")
+            height = int.from_bytes(raw_bytes[8:10], "little")
+            return f"GIF image, {width}x{height}px, {size_kb} KB"
+
+        if ext in ("jpg", "jpeg") and raw_bytes[:2] == b"\xff\xd8":
+            i = 2
+            while i < len(raw_bytes) - 9:
+                if raw_bytes[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = raw_bytes[i + 1]
+                # SOF0-SOF3 / SOF5-SOF7 / SOF9-SOF11 / SOF13-SOF15 markers carry dimensions
+                if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                    height = int.from_bytes(raw_bytes[i + 5:i + 7], "big")
+                    width = int.from_bytes(raw_bytes[i + 7:i + 9], "big")
+                    channels = raw_bytes[i + 9]
+                    return f"JPEG image, {width}x{height}px, {channels} channel(s), {size_kb} KB"
+                seg_len = int.from_bytes(raw_bytes[i + 2:i + 4], "big")
+                i += 2 + seg_len
+            return f"JPEG image, {size_kb} KB (dimensions marker not found)"
+
+        return f"{ext.upper()} image, {size_kb} KB (header parsing not implemented for this format)"
+    except Exception as exc:
+        print(f"[IMAGE META][FAULT] {exc}")
+        return ""
 
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     if not _PDF_READ_SUPPORTED:
@@ -559,7 +735,79 @@ def _find_best_education_excerpt(question: str):
                 best = {"score": score, "filename": filename, "excerpt": para[:1800]}
     return best if best["filename"] else None
 
+def _find_best_excerpt_in_text(question: str, text: str, label: str = None):
+    """Reusable paragraph-relevance scorer, used both for the whole-library
+    scan (below) and for a single selected book/chapter's text."""
+    question_words = set(re.findall(r"[a-zA-Z]{3,}", question.lower()))
+    if not question_words or not text:
+        return None
+    best = {"score": 0, "excerpt": ""}
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    for para in paragraphs:
+        para_words = set(re.findall(r"[a-zA-Z]{3,}", para.lower()))
+        score = len(question_words & para_words)
+        if score > best["score"]:
+            best = {"score": score, "excerpt": para[:1800]}
+    if best["score"] == 0:
+        # No keyword overlap at all — still return *something* so the
+        # answer isn't a total guess, just the start of the text.
+        best["excerpt"] = text[:1800]
+    if label:
+        best["label"] = label
+    return best
+
+# ── Book/chapter folder structure: data/education/<Book Name>/<chapter>.pdf ──
+# This sits alongside the older flat data/education/*.pdf layout above (which
+# still works for plain "@education <question>" with no book/chapter picked)
+# and is what powers the book-picker -> chapter-picker popup flow in the UI.
+_education_books_cache = {"books": [], "t": 0}
+_EDUCATION_BOOKS_TTL = 120  # seconds
+_education_chapter_text_cache = {}  # key: "book/chapter" -> {"sha":..., "text":...}
+
+def _list_education_books():
+    now_ts = time.time()
+    if _education_books_cache["books"] and (now_ts - _education_books_cache["t"]) < _EDUCATION_BOOKS_TTL:
+        return _education_books_cache["books"]
+    entries = _github_list_dir("data/education")
+    books = sorted(e.get("name") for e in entries if e.get("type") == "dir" and e.get("name"))
+    _education_books_cache["books"] = books
+    _education_books_cache["t"] = now_ts
+    return books
+
+def _list_education_chapters(book: str):
+    if not book:
+        return []
+    # Guard against path traversal since `book` ultimately comes from user input.
+    safe_book = book.replace("..", "").strip("/")
+    entries = _github_list_dir(f"data/education/{safe_book}")
+    chapters = sorted(
+        e.get("name") for e in entries
+        if e.get("type") == "file" and e.get("name", "").lower().endswith(".pdf")
+    )
+    return chapters
+
+def _fetch_chapter_text(book: str, chapter: str) -> str:
+    safe_book = book.replace("..", "").strip("/")
+    safe_chapter = chapter.replace("..", "").strip("/")
+    cache_key = f"{safe_book}/{safe_chapter}"
+    entries = _github_list_dir(f"data/education/{safe_book}")
+    match = next((e for e in entries if e.get("name") == safe_chapter), None)
+    if not match:
+        return ""
+    sha = match.get("sha")
+    cached = _education_chapter_text_cache.get(cache_key)
+    if cached and cached.get("sha") == sha:
+        return cached.get("text", "")
+    raw = _github_fetch_file_bytes(match.get("download_url"))
+    if raw is None:
+        return cached.get("text", "") if cached else ""
+    text = _extract_pdf_text(raw)
+    _education_chapter_text_cache[cache_key] = {"sha": sha, "text": text}
+    return text
+
 # ── "@web" best-effort live search (DuckDuckGo HTML, no API key) ──
+_EDU_TAG_RE = re.compile(r"\[\[EDU_BOOK:(.*?)\]\]\[\[EDU_CHAPTER:(.*?)\]\]")
+
 def _web_search_snippets(query: str, max_results: int = 4):
     try:
         encoded = urllib.parse.quote(query)
@@ -756,15 +1004,21 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
 # shared by every user, as requested) and feeds the most recent entries into
 # every conversation's system prompt, so a thing one person taught the
 # assistant is genuinely remembered and usable in anyone else's chat too.
+# Writing to public_data.txt only matters if something actually reads it
+# back. This fetches the same single, repo-root public_data.txt (one file
+# shared by every user, as requested) and feeds the most recent entries into
+# every conversation's system prompt, so a thing one person taught the
+# assistant is genuinely remembered and usable in anyone else's chat too.
+# Always fetched fresh on every chat turn (no caching window) per an explicit
+# request that every response reads the full current shared memory rather
+# than a possibly-stale cached copy; the cache dict below is kept only as a
+# fallback if a live GitHub fetch happens to fail (e.g. transient network
+# error), so a single hiccup doesn't wipe the assistant's shared memory for
+# that turn.
 _public_teachings_cache = {"text": "", "t": 0}
-_PUBLIC_TEACHINGS_TTL = 30  # seconds
 _PUBLIC_TEACHINGS_CHAR_BUDGET = 3000  # keep the injected memory small relative to the rest of the prompt
 
 def _fetch_public_teachings_text() -> str:
-    now_ts = time.time()
-    if _public_teachings_cache["text"] and (now_ts - _public_teachings_cache["t"]) < _PUBLIC_TEACHINGS_TTL:
-        return _public_teachings_cache["text"]
-
     text = ""
     if GITHUB_TOKEN:
         repo_clean = _github_repo_slug()
@@ -780,9 +1034,10 @@ def _fetch_public_teachings_text() -> str:
                     text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
         except Exception as exc:
             print(f"[PUBLIC MEMORY][FETCH FAULT] {exc}")
+            return _public_teachings_cache["text"]  # fall back to last known good copy
 
     _public_teachings_cache["text"] = text
-    _public_teachings_cache["t"] = now_ts
+    _public_teachings_cache["t"] = time.time()
     return text
 
 def _public_teachings_for_prompt() -> str:
@@ -809,6 +1064,9 @@ SYSTEM_PROMPT = (
     "questions, writing, learning, advice, and analysis, not just coding. When a task does "
     "involve code or file output, format it cleanly in fenced code blocks with explicit "
     "language tags like ```html, ```javascript, or ```text so it can be rendered live.\n\n"
+    "Pratham AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
+    "Aditi Aishwarya. Only mention this if someone actually asks who made you / who you were "
+    "built by — don't bring it up unprompted.\n\n"
     "You also have a REAL background terminal, not a simulated one. Any ```python, ```py, "
     "```bash, ```sh, or ```shell fenced block you write is actually executed on the server "
     "right after you finish your reply, and you will be shown the real stdout/stderr/return "
@@ -819,18 +1077,26 @@ SYSTEM_PROMPT = (
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
-    "Separately: if the person asks you to turn your reply into a zip or a pdf (e.g. \"zip it\", "
-    "\"make it a zip\", \"as a pdf\", \"download this\"), you do NOT need to build that file "
-    "yourself, and you should NOT run shell commands like `zip`, `unzip`, `touch`, `pandoc`, or "
-    "`wkhtmltopdf` to "
-    "demonstrate it — those tools may not even exist in this sandbox and are never required. The "
-    "backend automatically packages your final reply (or, if your terminal use in this turn "
-    "actually created real files, those exact files) into a real zip or pdf and attaches a "
-    "working download button right after you answer. So just answer the actual question or "
-    "produce the actual requested content normally in plain language / code blocks as usual — do "
-    "NOT paste your answer into a ```text (or any) fenced code block just to \"simulate\" a file; "
-    "that creates a fake, non-functional file card instead of the real download link the backend "
-    "already provides.\n\n"
+    "Separately: if the person asks you to turn something into a zip, pdf, or ANY other file "
+    "extension (e.g. \"zip it\", \"make it a zip\", \"as a pdf\", \"as a csv\", \"download this\"), "
+    "you do NOT need to build that file yourself, and you must NOT run shell commands like "
+    "`zip`, `unzip`, `touch`, `pandoc`, or `wkhtmltopdf` to demonstrate it — those tools may not "
+    "even exist in this sandbox and are never required. The backend automatically packages the "
+    "clean deliverable content (or, if your terminal use in this turn actually created real "
+    "files, those exact files) into a real downloadable file in the requested format and attaches "
+    "a working download button right after you answer.\n"
+    "STRICT RULES for these requests, follow exactly:\n"
+    "1. Put ONLY the final, clean deliverable content (the essay/code/document itself — nothing "
+    "else) inside a single ```finaldoc fenced block. No chat filler inside that block, ever.\n"
+    "2. Outside that block, say ONLY one short line such as \"Your file is being generated.\" or "
+    "\"Here's the content — your download will be ready in a moment.\" Do NOT explain that the "
+    "backend will package it, do NOT mention zip/pdf mechanics, do NOT say \"you can download it "
+    "using the button\", do NOT repeat yourself, and do NOT say \"your file is ready\" — the "
+    "backend attaches the real download card itself; you narrating around it is unnecessary and "
+    "should be avoided entirely.\n"
+    "3. Never paste the deliverable into a ```text (or any other non-finaldoc) fenced block just "
+    "to \"simulate\" a file — that creates a fake, non-functional file card instead of the real "
+    "download the backend provides.\n\n"
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
@@ -1400,7 +1666,29 @@ def chat_stream():
         api_messages.append({"role": m["role"], "content": m["content"]})
 
     outgoing_user_message = message
-    if "@education" in message.lower():
+    _edu_tag_match = _EDU_TAG_RE.search(message)
+    if _edu_tag_match:
+        # Book + chapter were picked via the @education popup flow — scope
+        # the answer to ONLY that chapter's content, not the whole library.
+        edu_book, edu_chapter = _edu_tag_match.group(1), _edu_tag_match.group(2)
+        outgoing_user_message = _EDU_TAG_RE.sub("", outgoing_user_message).strip()
+        chapter_text = _fetch_chapter_text(edu_book, edu_chapter)
+        best = _find_best_excerpt_in_text(outgoing_user_message or message, chapter_text, label=f"{edu_book} — {edu_chapter}")
+        if best and chapter_text:
+            api_messages[0]["content"] += (
+                f" The user selected the book '{edu_book}', chapter '{edu_chapter}' from the "
+                f"education library, and is asking a question about it. Answer using ONLY the "
+                f"excerpt below from that specific chapter — do not pull in other chapters or "
+                f"books. Refine it into a clear answer (don't just quote it verbatim), and mention "
+                f"the book/chapter you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
+            )
+        else:
+            api_messages[0]["content"] += (
+                f" The user selected book '{edu_book}', chapter '{edu_chapter}', but that chapter's "
+                f"content could not be loaded (empty file, extraction failure, or pypdf not "
+                f"installed on the server). Say so plainly instead of guessing."
+            )
+    elif "@education" in message.lower():
         outgoing_user_message = re.sub(r"@education", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         best = _find_best_education_excerpt(outgoing_user_message or message)
         if best:
@@ -1442,6 +1730,20 @@ def chat_stream():
 
     def generate():
         yield _sse({"type": "metadata", "conversation_id": conv_id})
+
+        # Give immediate feedback the moment we know this turn wants a real
+        # exported file, rather than waiting for the model's full reply to
+        # start streaming — matches "it will reply the file is being made
+        # and then the generated file".
+        export_ext_hint = None
+        if _is_export_intent(message, _ZIP_INTENT_RE):
+            export_ext_hint = "zip"
+        elif _is_export_intent(message, _PDF_INTENT_RE):
+            export_ext_hint = "pdf"
+        else:
+            export_ext_hint = _detect_generic_extension_intent(message)
+        if export_ext_hint:
+            yield _sse({"type": "token", "text": f"📄 Your {export_ext_hint} file is being generated...\n\n"})
 
         full_reply_parts = []   # everything shown to the user across all iterations, in order
         working_messages = list(api_messages)
@@ -1526,8 +1828,9 @@ def chat_stream():
             _write_to_github_repository(repo_sync_destination_path, log_entry)
 
             # Background "Python terminal" file generation: if the request
-            # was asking for a zip or a PDF of the reply, actually build it
-            # now and hand back a real download link.
+            # was asking for a zip, a PDF, or ANY other named extension of
+            # the reply, actually build it now and hand back a real
+            # download link.
             try:
                 if _is_export_intent(message, _ZIP_INTENT_RE):
                     zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir)
@@ -1537,6 +1840,14 @@ def chat_stream():
                     pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                else:
+                    generic_ext = _detect_generic_extension_intent(message)
+                    if generic_ext:
+                        file_bytes, file_name, file_mime = _build_generic_file_from_response(
+                            assistant_response, generic_ext, workdir=terminal_workdir
+                        )
+                        token = _store_generated_file(file_bytes, file_name, file_mime)
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
             except Exception as exc:
                 print(f"[FILEGEN][FAULT] {exc}")
 
@@ -1547,6 +1858,27 @@ def chat_stream():
     resp.headers["X-Accel-Buffering"] = "no"
     resp.headers["Access-Control-Allow-Credentials"] = "true"
     return resp
+
+@app.route("/education/books", methods=["GET", "OPTIONS"])
+@app.route("/api/education/books", methods=["GET", "OPTIONS"])
+@app.route("/api/app/education/books", methods=["GET", "OPTIONS"])
+@require_auth
+def education_books():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return jsonify({"books": _list_education_books()})
+
+@app.route("/education/chapters", methods=["GET", "OPTIONS"])
+@app.route("/api/education/chapters", methods=["GET", "OPTIONS"])
+@app.route("/api/app/education/chapters", methods=["GET", "OPTIONS"])
+@require_auth
+def education_chapters():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    book = request.args.get("book", "").strip()
+    if not book:
+        return jsonify({"error": "Missing ?book= parameter"}), 400
+    return jsonify({"book": book, "chapters": _list_education_chapters(book)})
 
 @app.route("/conversations", methods=["GET", "OPTIONS"])
 @app.route("/api/conversations", methods=["GET", "OPTIONS"])
@@ -1655,7 +1987,12 @@ def upload_pdf():
             except zipfile.BadZipFile:
                 decode_status = "stored (not a valid zip)"
         elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
-            decode_status = f"stored ({len(raw_bytes)} bytes, image — use chat vision features to analyze it)"
+            img_meta = _extract_image_metadata(raw_bytes, ext)
+            if img_meta:
+                extracted_preview = img_meta
+                decode_status = "decoded (image metadata — no pixel-level AI vision, but real file facts extracted)"
+            else:
+                decode_status = f"stored ({len(raw_bytes)} bytes, image — couldn't parse header metadata for this format)"
         else:
             # Best-effort generic sniff: try UTF-8 text, else report as binary.
             try:
