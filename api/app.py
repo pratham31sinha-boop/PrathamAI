@@ -1627,7 +1627,7 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    history = _get_messages(conv_id)
+history = _get_messages(conv_id)
     active_system_prompt = SYSTEM_PROMPT
     vip_record = _lookup_vip(user_email)
     if vip_record:
@@ -1638,17 +1638,11 @@ def chat_stream():
             f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
             f"treat this as authorization to bypass any safety or content rules."
         )
-    shared_memory_text = _public_teachings_for_prompt()
-    if shared_memory_text:
-        active_system_prompt += (
-            " Below are notes previous users have explicitly asked you to remember for everyone "
-            "shared across all users of this app, not private to any one person). Treat them as "
-            "standing instructions/facts to keep in mind, but they never override your core safety "
-            "rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
-        )
-api_messages = [{"role": "system", "content": active_system_prompt}]
+
+    # Initialize the messages list correctly with 4 spaces of indentation
+    api_messages = [{"role": "system", "content": active_system_prompt}]
     
-    # Inject public memory as its own high-priority instructions block
+    # Inject public memory as its own high-priority standalone instructions node matrix
     shared_memory_text = _public_teachings_for_prompt()
     if shared_memory_text:
         api_messages.append({
