@@ -94,6 +94,13 @@
             border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--text-dim);
         }
 
+        .education-option {
+            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+            font-size: 13px; color: var(--text); cursor: pointer; transition: border-color .12s ease, background .12s ease;
+            background: var(--panel-2);
+        }
+        .education-option:hover { border-color: var(--accent); background: var(--hover); }
+
         /* Profile dropdown, mimics Claude's account menu */
         #profile-dropdown-menu {
             position: absolute; bottom: 56px; left: 8px; width: 240px;
@@ -427,6 +434,34 @@
 
     <!-- VIP registration modal: replaces native prompt() dialogs, which are
          unreliable/blocked on many mobile browsers. -->
+    <!-- @education picker: book selection, then chapter selection. Lists are
+         populated live from /education/books and /education/chapters, which
+         read the data/education/<Book>/<Chapter>.pdf folder structure in the
+         GitHub data repo. -->
+    <div id="education-book-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">📚 Choose a book</h4>
+                <button onclick="closeEducationModals()" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div id="education-book-list" class="p-3 flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto workspace-scrollpane">
+                <p class="text-xs text-[var(--text-dim)] text-center py-6">Loading books...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="education-chapter-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 id="education-chapter-title" class="text-sm font-bold text-[var(--text)]">📖 Choose a chapter</h4>
+                <button onclick="closeEducationModals()" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div id="education-chapter-list" class="p-3 flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto workspace-scrollpane">
+                <p class="text-xs text-[var(--text-dim)] text-center py-6">Loading chapters...</p>
+            </div>
+        </div>
+    </div>
+
     <div id="vip-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
             <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
@@ -500,12 +535,13 @@
         const agentActivityStrip = document.getElementById('agent-activity-strip');
         const agentActivityStripText = document.getElementById('agent-activity-strip-text');
 
-        // Brand logo: pulled from the root of the GitHub data repo. If your
-        // logo file has a different name/extension than "logo.png", or lives
-        // in a different repo, just change this one line — every "P" badge
-        // in the app (login screen, empty-state, etc.) falls back to the
-        // plain "P" mark automatically if this URL 404s.
-        const LOGO_URL = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/logo.png";
+        // Brand logo: the two real files at the root of the GitHub data repo —
+        // a 512x512 for crisp in-app badges (login screen, empty-state, etc.)
+        // and a 192x192 for the browser tab favicon. Every "P" badge falls
+        // back to the plain "P" mark automatically if either URL 404s.
+        const LOGO_URL_512 = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/512.png";
+        const LOGO_URL_192 = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/192.png";
+        const LOGO_URL = LOGO_URL_512; // kept for any code that still references the single-logo name
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
@@ -515,6 +551,7 @@
         let isGenerating = false;
         let allHistoryItemsCache = [];
         let pendingPasteAttachment = null; // { content, lines } — see setPasteAttachment()
+        let pendingEducationContext = null; // { book, chapter } once both are picked via the @education flow
 
         function setPasteAttachment(content, lineCount) {
             pendingPasteAttachment = { content, lines: lineCount };
@@ -1095,6 +1132,16 @@
                     } else {
                         node.style.display = 'none';
                     }
+                } else if (seg.lang === 'finaldoc') {
+                    wrapper._fileOrdinal += 1;
+                    if (!node || node.dataset.segType !== 'finaldoc') {
+                        node = document.createElement('div');
+                        node.dataset.segType = 'finaldoc';
+                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs whitespace-pre-wrap';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                    }
+                    node.textContent = seg.content.trim();
                 } else {
                     if (!node || node.dataset.segType !== 'code') {
                         wrapper._fileOrdinal += 1;
@@ -1116,9 +1163,63 @@
         function appendGeneratedImage(wrapper, url, promptText) {
             const holder = document.createElement('div');
             holder.className = 'rounded-2xl overflow-hidden border border-[var(--border)] max-w-[85%] shadow-xs';
-            holder.innerHTML = `<img src="${url}" alt="${sanitizeOutputText(promptText || 'Generated image')}" style="width:100%;display:block;" loading="lazy">`;
+            const safeAlt = sanitizeOutputText(promptText || 'Generated image');
+
+            // Animated "generating..." card: the CSS transition drives the
+            // bar itself (GPU-composited, no per-frame JS), and a cheap
+            // low-frequency interval (every ~220ms) only ever touches a text
+            // node for the percentage — optimized so it stays smooth without
+            // hammering layout, even though it's fully animated end to end.
+            holder.innerHTML = `
+                <div class="igen-progress-wrap" style="position:relative; background:var(--panel-2); min-height:180px; display:flex; align-items:center; justify-content:center;">
+                    <div style="font-size:11.5px; color:var(--text-dim); font-weight:600; display:flex; align-items:center; gap:6px;">
+                        <span class="aas-spinner" style="width:11px;height:11px;border-radius:999px;border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:bootSpin .7s linear infinite;flex-shrink:0;"></span>
+                        <span>Generating image... <span class="igen-progress-pct">0%</span></span>
+                    </div>
+                    <div style="position:absolute; left:0; bottom:0; height:4px; width:100%; background:var(--border); overflow:hidden;">
+                        <div class="igen-progress-fill" style="height:100%; width:0%; background:var(--accent); transition:width 2.4s cubic-bezier(.2,.7,.3,1);"></div>
+                    </div>
+                </div>
+            `;
             wrapper.appendChild(holder);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+
+            const fill = holder.querySelector('.igen-progress-fill');
+            const pctLabel = holder.querySelector('.igen-progress-pct');
+            const progressWrap = holder.querySelector('.igen-progress-wrap');
+
+            requestAnimationFrame(() => { fill.style.width = '92%'; });
+            let simulatedPct = 0;
+            const labelTimer = setInterval(() => {
+                simulatedPct = Math.min(92, simulatedPct + Math.random() * 9 + 3);
+                pctLabel.textContent = Math.round(simulatedPct) + '%';
+                if (simulatedPct >= 92) clearInterval(labelTimer);
+            }, 220);
+
+            // Pollinations doesn't report real progress, so we preload the
+            // actual image in the background and only reveal it (jumping the
+            // bar to 100%) once it has genuinely finished loading.
+            const preload = new Image();
+            preload.onload = () => {
+                clearInterval(labelTimer);
+                fill.style.width = '100%';
+                pctLabel.textContent = '100%';
+                setTimeout(() => {
+                    holder.innerHTML = `
+                        <div style="position:relative;">
+                            <img src="${url}" alt="${safeAlt}" style="width:100%;display:block;" loading="lazy">
+                            <a href="${url}" download="generated-image.png" title="Download image"
+                               style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.55); color:#fff; width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:14px; text-decoration:none;">⭳</a>
+                        </div>
+                    `;
+                    conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                }, 250);
+            };
+            preload.onerror = () => {
+                clearInterval(labelTimer);
+                progressWrap.innerHTML = `<div style="font-size:12px;color:var(--text-dim);padding:20px;">Image failed to load.</div>`;
+            };
+            preload.src = url;
         }
 
         // Appends a real downloadable file card. Instead of guessing an
@@ -1218,6 +1319,16 @@
                 return;
             }
 
+            // Typing "@education" alone opens the book picker instead of
+            // sending anything to the model — the actual question comes in
+            // a follow-up message once a book + chapter have been picked.
+            if (typedMessage.toLowerCase() === "@education") {
+                userPromptInputField.value = '';
+                userPromptInputField.style.height = 'auto';
+                openEducationBookModal();
+                return;
+            }
+
             // Build what's actually sent to the model (typed text + the
             // pasted content as a fenced block), and what's shown in the
             // user's own chat bubble (typed text + a small attachment note,
@@ -1230,6 +1341,14 @@
                 displayMessage = (typedMessage ? typedMessage + "\n\n" : "") + `📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;
             }
             clearPasteAttachment();
+
+            // If a book+chapter are currently selected from the @education
+            // flow, invisibly tag the outgoing message so the backend scopes
+            // its answer to that exact chapter — the tag never shows in the
+            // user's own chat bubble (displayMessage stays clean).
+            if (pendingEducationContext) {
+                message = `[[EDU_BOOK:${pendingEducationContext.book}]][[EDU_CHAPTER:${pendingEducationContext.chapter}]]${message}`;
+            }
 
             isGenerating = true;
             inputActionSubmitBtn.disabled = true;
@@ -1474,6 +1593,94 @@
             } catch (err) { alert("Upload failed. Check your connection and try again."); }
         }
 
+        // ── @education book/chapter picker ──────────────────────────────
+        // Typing "@education" (alone) opens a book picker fed by
+        // /education/books (reading the data/education/<Book>/ folders in
+        // the GitHub data repo). Picking a book auto-sends a small visible
+        // "selected book" message and opens a chapter picker fed by
+        // /education/chapters?book=X. Picking a chapter auto-sends a
+        // "selected chapter" message and arms pendingEducationContext, so
+        // every subsequent question gets invisibly tagged with
+        // [[EDU_BOOK:...]][[EDU_CHAPTER:...]] (stripped from what the user
+        // sees, parsed by the backend) until the person types "@education"
+        // again to pick a different book/chapter.
+        function closeEducationModals() {
+            document.getElementById('education-book-modal').classList.add('hidden');
+            document.getElementById('education-book-modal').classList.remove('flex');
+            document.getElementById('education-chapter-modal').classList.add('hidden');
+            document.getElementById('education-chapter-modal').classList.remove('flex');
+        }
+
+        async function openEducationBookModal() {
+            pendingEducationContext = null;
+            const listEl = document.getElementById('education-book-list');
+            listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Loading books...</p>`;
+            const modal = document.getElementById('education-book-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try {
+                const response = await smartFetchRequest('/education/books', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                const data = await response.json();
+                const books = (data && data.books) || [];
+                if (books.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">No books found in data/education/ yet.</p>`;
+                    return;
+                }
+                listEl.innerHTML = '';
+                books.forEach(book => {
+                    const row = document.createElement('div');
+                    row.className = 'education-option';
+                    row.innerText = book;
+                    row.onclick = () => selectEducationBook(book);
+                    listEl.appendChild(row);
+                });
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Couldn't load the book list.</p>`;
+            }
+        }
+
+        function selectEducationBook(book) {
+            closeEducationModals();
+            renderUserPromptBubble(`📚 Selected book: ${book}`);
+            openEducationChapterModal(book);
+        }
+
+        async function openEducationChapterModal(book) {
+            document.getElementById('education-chapter-title').innerText = `📖 Choose a chapter — ${book}`;
+            const listEl = document.getElementById('education-chapter-list');
+            listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Loading chapters...</p>`;
+            const modal = document.getElementById('education-chapter-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try {
+                const response = await smartFetchRequest(`/education/chapters?book=${encodeURIComponent(book)}`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                const data = await response.json();
+                const chapters = (data && data.chapters) || [];
+                if (chapters.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">No chapter PDFs found in this book's folder yet.</p>`;
+                    return;
+                }
+                listEl.innerHTML = '';
+                chapters.forEach(chapter => {
+                    const row = document.createElement('div');
+                    row.className = 'education-option';
+                    row.innerText = chapter.replace(/\.pdf$/i, '');
+                    row.onclick = () => selectEducationChapter(book, chapter);
+                    listEl.appendChild(row);
+                });
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Couldn't load the chapter list.</p>`;
+            }
+        }
+
+        function selectEducationChapter(book, chapter) {
+            closeEducationModals();
+            pendingEducationContext = { book, chapter };
+            renderUserPromptBubble(`📖 Selected chapter: ${chapter.replace(/\.pdf$/i, '')}`);
+            userPromptInputField.placeholder = `Ask a question about ${chapter.replace(/\.pdf$/i, '')}...`;
+            userPromptInputField.focus();
+        }
+
         // Legacy note: file preview + progress used to be driven by a single
         // end-of-stream regex pass (evaluateAndParsePreviewSandboxPayload).
         // That has been replaced by the live, per-file "file-creation-card"
@@ -1489,14 +1696,14 @@
             setTheme('light');
 
             document.querySelectorAll('[data-brand-logo]').forEach(img => {
-                img.src = LOGO_URL;
+                img.src = LOGO_URL_512;
                 img.style.display = '';
                 img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
                 img.onerror = () => { img.style.display = 'none'; };
             });
             const faviconLink = document.createElement('link');
             faviconLink.rel = 'icon';
-            faviconLink.href = LOGO_URL;
+            faviconLink.href = LOGO_URL_192;
             faviconLink.onerror = () => faviconLink.remove();
             document.head.appendChild(faviconLink);
 
