@@ -264,7 +264,7 @@ def _fetch_vip_directory() -> dict:
                     if email:
                         entries[email] = {
                             "name": parts.get("name", ""),
-                            "relationship": parts.get("relation", ""),
+                            "relationship": parts.get("relationship", ""),
                             "timestamp": parts.get("timestamp", "")
                         }
     except Exception as exc:
@@ -1004,11 +1004,6 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
 # shared by every user, as requested) and feeds the most recent entries into
 # every conversation's system prompt, so a thing one person taught the
 # assistant is genuinely remembered and usable in anyone else's chat too.
-# Writing to public_data.txt only matters if something actually reads it
-# back. This fetches the same single, repo-root public_data.txt (one file
-# shared by every user, as requested) and feeds the most recent entries into
-# every conversation's system prompt, so a thing one person taught the
-# assistant is genuinely remembered and usable in anyone else's chat too.
 # Always fetched fresh on every chat turn (no caching window) per an explicit
 # request that every response reads the full current shared memory rather
 # than a possibly-stale cached copy; the cache dict below is kept only as a
@@ -1220,6 +1215,7 @@ def _do_stream(messages):
             _cool(name)
             continue
 
+    print("[FAILOVER] All model providers exhausted.")
     yield _sse({
         "type": "token",
         "text": "All model providers are temporarily unavailable. Please check your API keys or try again shortly."
@@ -1309,11 +1305,7 @@ def _cleanup_terminal_workdir(path: str):
     if path:
         shutil.rmtree(path, ignore_errors=True)
 
-# ── CREATOR-ONLY LIVE DIAGNOSTICS ──
-# Answers "is the terminal working?" / "system status" etc. with facts this
-# process actually just measured, rather than the model guessing. Only
-# reachable by CREATOR_EMAILS, and it bypasses the LLM entirely so it can
-# never be wrong about its own environment the way a model reply could be.
+# ── BACKGROUND TERMINAL INTERFACE ──
 _DIAGNOSTIC_INTENT_RE = re.compile(
     r"\b(system status|diagnostic|terminal (status|working)|is (the )?terminal working|"
     r"memory status|is memory working|check status|health check|status check)\b",
@@ -1533,6 +1525,10 @@ def register_vip_profile():
         _vip_cache["t"] = 0  # force the next lookup to refetch immediately
     return jsonify({"ok": success, "status": "committed" if success else "local fallback"})
 
+# ⚠️ CRITICAL ADDITIVE FIX: Maps the mobile app's absolute network calls safely to eliminate the 404
+@app.route("/chat", methods=["POST", "OPTIONS"])
+@app.route("/api/chat", methods=["POST", "OPTIONS"])
+@app.route("/api/app/chat", methods=["POST", "OPTIONS"])
 @app.route("/chat-stream", methods=["POST", "OPTIONS"])
 @app.route("/api/chat-stream", methods=["POST", "OPTIONS"])
 @app.route("/api/app/chat-stream", methods=["POST", "OPTIONS"])
@@ -1657,7 +1653,7 @@ def chat_stream():
     if shared_memory_text:
         active_system_prompt += (
             " Below are notes previous users have explicitly asked you to remember for everyone "
-            "(shared across all users of this app, not private to any one person). Treat them as "
+            "shared across all users of this app, not private to any one person). Treat them as "
             "standing instructions/facts to keep in mind, but they never override your core safety "
             "rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
         )
@@ -1937,7 +1933,7 @@ def execute_python():
     body = request.get_json(silent=True) or {}
     code = body.get("code", "").strip()
     if not code:
-        return jsonify({"error": "Empty code payload"}), 400
+        return jsonify({"error": "Missing code parameter."}), 400
     try:
         result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=10)
         return jsonify({"stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode})
