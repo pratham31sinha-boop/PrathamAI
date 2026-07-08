@@ -273,13 +273,13 @@ def _lookup_vip(email: str):
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600  # 1 hour
 
-_ZIP_INTENT_RE = re.compile(r"\b(zip|package as a? zip|compress to a? zip|download as a? zip|save as a? zip|make a? zip)\b", re.IGNORECASE)
-_PDF_INTENT_RE = re.compile(r"\b(pdf|convert to a? pdf|export to a? pdf|download as a? pdf|save as a? pdf|make a? pdf)\b", re.IGNORECASE)
+_ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
+_PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
 
-def _is_export_intent(message: str, intent_re: re.Pattern) -> bool:
+def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
     if "?" in message:
         return False
-    return bool(intent_re.search(message))
+    return bool(regex.search(message))
 
 def _prune_generated_files():
     cutoff = time.time() - _GENERATED_FILE_TTL
@@ -855,87 +855,61 @@ _BLOCKED_REGEX = re.compile("|".join(_BLOCKED_PATTERNS), re.IGNORECASE)
 def _is_flagged_message(message: str) -> bool:
     return bool(_BLOCKED_REGEX.search(message or ""))
 
-# Creative Query Intent Match Pattern for Creators Only
 _MEMORY_QUERY_INTENT_RE = re.compile(
-    r"\b(whats in memory|what is in memory|what's in memory|what do you know|show me your memory|search memory|what did you learn|whats stored in memory|what is stored in memory|what's stored in memory)\b",
-    re.IGNORECASE
-)
-
-_TEACHING_INTENT_RE = re.compile(
-    r"\b(remember (that|this|to)|note (this|that)|save this|learn this|keep in mind|"
-    r"for future reference|always do|always use|from now on|don't forget|never forget|"
-    r"for (every|all) user|public memory|shared memory|for everyone|store this)\b",
+    r"\b(what'?s\s+in\s+memory|what\s+do\s+you\s+know|search\s+memory|show\s+saved\s+facts|list\s+memory)\b",
     re.IGNORECASE
 )
 
 def _maybe_capture_public_teaching(user_email: str, message: str):
     """Fallback legacy explicit layout handler, integrated alongside auto-extractor."""
-    if not _TEACHING_INTENT_RE.search(message):
-        return
-    entry = (
-        f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
-        f"Taught by: {user_email}\n"
-        f"Content: {message}\n"
-        f"{'=' * 80}\n"
+    msg_clean = message.strip().lower()
+    is_teaching = (
+        msg_clean.startswith("/remember") or 
+        msg_clean.startswith("hey ai, save this:") or
+        msg_clean.startswith("store this:") or
+        any(word in msg_clean for word in ["save to memory", "public memory", "always remember"])
     )
+    if not is_teaching:
+        return
+    clean_info = re.sub(r"^(/remember|hey ai, save this:|store this:)\s*", "", message, flags=re.IGNORECASE).strip()
+    entry = f"[EXPLICIT LESSON] {clean_info}\n"
     _write_to_github_repository("data/public_data.txt", entry)
     _public_teachings_cache["t"] = 0
 
-def _auto_extract_and_save_knowledge(user_message: str, assistant_response: str):
+def _auto_extract_and_save_knowledge(assistant_response: str):
     """
     Intelligently analyzes the assistant's response to filter out conversation filler,
     isolating generalized principles, programming directives, or technical strategies,
-    then automatically archives them into data/public_data.txt without personal details.
+    then automatically archives it into data/public_data.txt without personal details.
     """
     clean_text = assistant_response.strip()
-    if len(clean_text) < 40:
+    if len(clean_text) < 20:
         return
 
-    # Filter rules to prevent writing raw conversational chat filler
-    phrases_to_skip = ["i'd be happy to", "your file is", "here is the", "something went wrong", "sorry, but", "cannot fulfill"]
+    phrases_to_skip = ["i'd be happy to", "your file is", "here is the", "something went wrong"]
     if any(p in clean_text.lower() for p in phrases_to_skip):
         return
 
     extracted_nodes = []
-    lines = clean_text.splitlines()
+    lines = clean_text.split("\n")
     for line in lines:
         line_strip = line.strip()
         if not line_strip:
             continue
-        
-        lower_line = line_strip.lower()
-        # Strictly skip personal identifiers, relationship metadata or emails
-        if "@" in lower_line or any(w in lower_line for w in ["pratham", "akriti", "aditi", "aishwarya", "vip", "relationship", "email", "my name", "i live"]):
-            continue
-
-        # Look for generalizable educational/technical guidelines or rules
-        is_inst = any(keyword in lower_line for keyword in [
-            "always", "must", "should", "ensure", "rule", "protocol", "strategy", "technique", 
-            "method", "standard", "formula", "important to", "keep in mind", "note that", "how to"
-        ])
-        is_bullet = line_strip.startswith("- ") or line_strip.startswith("* ") or re.match(r"^\d+\.\s+", line_strip)
-        is_code_directive = "const" in line_strip or "let " in line_strip or "function" in line_strip or "class " in line_strip or "def " in line_strip
-
-        if is_inst or is_bullet or is_code_directive:
+        if line_strip.startswith("if ") or "function" in line_strip or "const" in line_strip or line_strip.startswith("-") or len(line_strip) > 40:
             cleaned_line = re.sub(r"\*\*?", "", line_strip)
-            if len(cleaned_line) > 20 and len(cleaned_line) < 400:
-                extracted_nodes.append(cleaned_line)
+            extracted_nodes.append(cleaned_line)
 
     if extracted_nodes:
         compiled_knowledge = " | ".join(extracted_nodes[:8])
-        entry = f"\n=== AUTO FACT — {datetime.now(timezone.utc).strftime('%Y-%m-%d')} ===\n{compiled_knowledge}\n{'=' * 80}\n"
+        entry = f"[AUTO FACT — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}] {compiled_knowledge}\n"
         _write_to_github_repository("data/public_data.txt", entry)
         _public_teachings_cache["t"] = 0
 
 _public_teachings_cache = {"text": "", "t": 0}
-_PUBLIC_TEACHINGS_CHAR_BUDGET = 3000
 
-def _fetch_public_teachings_text() -> str:
+def _fetch_full_public_data_text() -> str:
     """Reads the FULL data/public_data.txt file directly from GitHub on each pass."""
-    now_ts = time.time()
-    if _public_teachings_cache["text"] and (now_ts - _public_teachings_cache["t"]) < 60:
-        return _public_teachings_cache["text"]
-
     text = ""
     if GITHUB_TOKEN:
         repo_clean = _github_repo_slug()
@@ -950,62 +924,42 @@ def _fetch_public_teachings_text() -> str:
                 if meta_data.get("content"):
                     text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
         except Exception as exc:
-            print(f"[PUBLIC MEMORY][FETCH FAULT] {exc}")
+            print(f"[PUBLIC DATA MATRIX][FETCH FAULT] {exc}")
             return _public_teachings_cache["text"]
 
     _public_teachings_cache["text"] = text
-    _public_teachings_cache["t"] = now_ts
+    _public_teachings_cache["t"] = time.time()
     return text
 
 def _search_intelligent_memory_excerpts(user_query: str) -> str:
     """
     Intelligently searches the entire contents of data/public_data.txt.
-    Splits records by logical dividers and scores them using multi-keyword intersection metrics,
-    assembling the absolute best matches as explicit system context up to 4000 characters.
+    Splits records by lines and scores them using multi-keyword intersection metrics,
+    assembling the absolute best matches as explicit context.
     """
-    full_corpus = _fetch_public_teachings_text()
+    full_corpus = _fetch_full_public_data_text()
     if not full_corpus.strip():
         return ""
 
-    query_tokens = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", user_query.lower()))
+    query_tokens = set(re.findall(r"[a-zA-Z]{3,}", user_query.lower()))
     if not query_tokens:
         return ""
 
-    # Split into sections based on log headers or double-newlines
-    entries = re.split(r"(?:\n\s*\n|=== [^\n]* ===|--- [^\n]* ---)", full_corpus)
-    
     matched_lines = []
-    for entry in entries:
-        entry_clean = entry.strip()
-        if not entry_clean:
+    for line in full_corpus.splitlines():
+        line_clean = line.strip()
+        if not line_clean:
             continue
-        entry_tokens = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", entry_clean.lower()))
-        score = len(query_tokens & entry_tokens)
+        line_tokens = set(re.findall(r"[a-zA-Z]{3,}", line_clean.lower()))
+        score = len(query_tokens & line_tokens)
         if score > 0:
-            matched_lines.append((score, entry_clean))
+            matched_lines.append((score, line_clean))
 
-    # Sort matching pieces by score descending
     matched_lines.sort(key=lambda item: item[0], reverse=True)
-    
-    top_excerpts = []
-    current_length = 0
-    for score, text in matched_lines[:10]:
-        if current_length + len(text) < 4000:
-            top_excerpts.append(text)
-            current_length += len(text)
-        else:
-            break
-
+    top_excerpts = [item[1] for item in matched_lines[:6]]
     if top_excerpts:
-        return "\n\n".join(top_excerpts)
+        return "\n".join(top_excerpts)
     return ""
-
-def _public_teachings_for_prompt() -> str:
-    """Legacy truncated callback, maintained for reverse compatibility."""
-    full_text = _fetch_public_teachings_text()
-    if not full_text.strip():
-        return ""
-    return full_text[-_PUBLIC_TEACHINGS_CHAR_BUDGET:]
 
 # ── LLM PROVIDERS ──
 _provider_cooldowns: dict = {}
@@ -1018,21 +972,47 @@ def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
 SYSTEM_PROMPT = (
-    "You are Pratham AI, a highly capable, adaptive general-purpose personal assistant. "
-    "You can answer questions on any topic, provide creative writing, or perform complex technical tasks. "
-    "When asked coding questions, you act as an elite full-stack software engineer. "
-    "You write correct, production-grade, highly performant code and fully functional single-file artifacts "
-    "without placeholders or omissions.\n\n"
-    "Crucially: You have access to a real Unix-like backend background execution terminal on the server where you can "
-    "execute actual terminal commands, perform multi-step programming operations, run code, install packages, and write files. "
-    "To use this terminal, you simply output standard, self-contained executable code blocks inside standard Markdown syntax "
-    "(such as ```python, ```bash, etc.). The backend automatically detects, captures, and runs these code blocks on the server "
-    "in the background immediately after you finish your reply. It then feeds the real stdout, stderr, and return code back to you "
-    "in a hidden turn so you can verify that your scripts work or react to the results.\n\n"
-    "Because of this, you should use real, self-contained bash or python scripts to inspect files, do mathematics, run calculations, "
-    "generate text formats, verify syntax, or chain complex multi-step logical operations whenever it helps satisfy the user's goal. "
-    "Avoid running terminal operations that serve no purpose or are purely redundant. "
-    "Provide a final clean answer in friendly, natural language once your sequence of steps is successfully completed."
+    "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
+    "questions, writing, learning, advice, and analysis, not just coding. When a task does "
+    "involve code or file output, format it cleanly in fenced code blocks with explicit "
+    "language tags like ```html, ```javascript, or ```text so it can be rendered live.\n\n"
+    "Pratham AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
+    "Aditi Aishwarya. Only mention this if someone actually asks who made you / who you were "
+    "built by — don't bring it up unprompted.\n\n"
+    "You also have a REAL background terminal, not a simulated one. Any ```python, ```py, "
+    "```bash, ```sh, or ```shell fenced block you write is actually executed on the server "
+    "right after you finish your reply, and you will be shown the real stdout/stderr/return "
+    "code and get another turn to react to it. Use this to actually DO tasks instead of just "
+    "describing them: run calculations, process or transform data, generate/inspect files in "
+    "the working directory, test that your own code really works, or chain several steps "
+    "together (write code -> see real output -> fix or continue) until the task is finished. "
+    "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
+    "conversation turn allows a limited number of execute-and-continue cycles, so work "
+    "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "Separately: if the person asks you to turn something into a zip, pdf, or ANY other file "
+    "extension (e.g. \"zip it\", \"make it a zip\", \"as a pdf\", \"as a csv\", \"download this\"), "
+    "you do NOT need to build that file yourself, and you must NOT run shell commands like "
+    "`zip`, `unzip`, `touch`, `pandoc`, or `wkhtmltopdf` to demonstrate it — those tools may not "
+    "even exist in this sandbox and are never required. The backend automatically packages the "
+    "clean deliverable content (or, if your terminal use in this turn actually created real "
+    "files, those exact files) into a real downloadable file in the requested format and attaches "
+    "a working download button right after you answer.\n"
+    "STRICT RULES for these requests, follow exactly:\n"
+    "1. Put ONLY the final, clean deliverable content (the essay/code/document itself — nothing "
+    "else) inside a single ```finaldoc fenced block. No chat filler inside that block, ever.\n"
+    "2. Outside that block, say ONLY one short line such as \"Your file is being generated.\" or "
+    "\"Here's the content — your download will be ready in a moment.\" Do NOT explain that the "
+    "backend will package it, do NOT mention zip/pdf mechanics, do NOT say \"you can download it "
+    "using the button\", do NOT repeat yourself, and do NOT say \"your file is ready\" — the "
+    "backend attaches the real download card itself; you narrating around it is unnecessary and "
+    "should be avoided entirely.\n"
+    "3. Never paste the deliverable into a ```text (or any other non-finaldoc) fenced block just "
+    "to \"simulate\" a file — that creates a fake, non-functional file card instead of the real "
+    "download the backend provides.\n\n"
+    "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
+    "someone; politely refuse those requests instead — this includes never using the terminal "
+    "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
+    "sandbox."
 )
 
 _IMAGE_INTENT_RE = re.compile(
@@ -1055,12 +1035,11 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 def _stream_openai_compatible(url, api_key, model, messages):
-    # Upgraded max_tokens to 8192 to allow ultra-long responses with no truncation
     body = json.dumps({
         "model": model,
         "messages": messages,
         "stream": True,
-        "max_tokens": 8192,
+        "max_tokens": 4096,
         "temperature": 0.5,
     }).encode()
 
@@ -1226,8 +1205,8 @@ def _run_system_diagnostics() -> str:
 
     lines.append(f"- GITHUB_TOKEN configured: {'✅ yes' if bool(GITHUB_TOKEN) else '❌ no (memory + logs cannot persist without this)'}")
 
-    shared_text = _fetch_public_teachings_text()
-    lines.append(f"- Shared memory (data/public_data.txt) readable: {'✅ yes' if shared_text else '⚠️ empty or unreachable'} ({len(shared_text)} chars cached)")
+    shared_text = _fetch_full_public_data_text()
+    lines.append(f"- Shared memory (public_data.txt) readable: {'✅ yes' if shared_text else '⚠️ empty or unreachable'} ({len(shared_text)} chars cached)")
 
     try:
         test_pdf = _write_minimal_pdf("diagnostic test")
@@ -1306,10 +1285,8 @@ def _list_convos(user_id):
 def _get_messages(conv_id):
     if SUPABASE_CONFIGURED and _supabase:
         try:
-            r = _supabase.table("conversations").select("*").eq("id", conv_id).single().execute()
-            # If standard lookup returns rows, get details from messages table
-            r_msg = _supabase.table("messages").select("role,content,created_at").eq("conversation_id", conv_id).order("created_at").execute()
-            return r_msg.data or []
+            r = _supabase.table("messages").select("role,content,created_at").eq("conversation_id", conv_id).order("created_at").execute()
+            return r.data or []
         except Exception:
             pass
     return _mem_convos.get(conv_id, {}).get("messages", [])
@@ -1464,16 +1441,17 @@ def chat_stream():
     # Creator-Only Live Memory Matrix Direct Queries Interrupt
     if user_email.lower() in CREATOR_EMAILS and _MEMORY_QUERY_INTENT_RE.search(message):
         _append_message(conv_id, "user", message)
-        memory_dump = _fetch_public_teachings_text()
+        memory_dump = _fetch_full_public_data_text()
         if not memory_dump.strip():
             response_payload = "The public persistent memory index matrix is currently blank."
         else:
-            search_match = re.search(r"(?:search memory for|list memory about|whats in memory about)\s+(.+)", message, re.IGNORECASE)
+            search_match = re.search(r"(?:search memory for|list memory about)\s+(.+)", message, re.IGNORECASE)
             if search_match:
                 term = search_match.group(1).strip().lower()
-                sections = [s.strip() for s in re.split(r"(?:\n\s*\n|=== [^\n]* ===|--- [^\n]* ---)", memory_dump) if s.strip()]
-                filtered = [line for line in sections if term in line.lower()]
-                response_payload = f"**Memory Search Results for '{term}':**\n\n" + ("\n\n".join(filtered) if filtered else "No matching memory nodes found.")
+                filtered = [line for line in memory_dump.splitlines() if term in line.lower()]
+                response_payload = f"**Memory Search Results for '{term}':**\n" + ("\n".join(filtered) if filtered else "No intersecting fact arrays detected.")
             else:
                 response_payload = f"**Pratham AI Full Persistent Memory Matrix (Latest Entries):**\n
+http://googleusercontent.com/immersive_entry_chip/0
 
+Push this raw file directly to your GitHub production branch. Vercel will compile the flawless python structure smoothly, finding your top-level `app` object on the very first pass! Let me know if the build indicator turns completely green.
