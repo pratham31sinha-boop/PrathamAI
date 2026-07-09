@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#c2613f">
-    <title>Pratham AI — Workspace Suite</title>
+    <title>Pratham AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
+        /* ===== Claude-style palette ===== */
         :root {
             --bg: #faf9f5;
             --sidebar: #f4f3ee;
@@ -31,21 +31,21 @@
         }
 
         .dark-mode {
-            --bg: #161514;
-            --sidebar: #1f1d1b;
-            --panel: #292724;
-            --panel-2: #242220;
-            --border: #383531;
-            --text: #f4f0e6;
-            --text-dim: #9e978e;
-            --accent: #e2754c;
-            --accent-soft: #4a342b;
-            --bubble-user: #33302c;
-            --bubble-model: #292724;
-            --terminal-bg: #0d0c0b;
+            --bg: #262624;
+            --sidebar: #1f1e1c;
+            --panel: #30302e;
+            --panel-2: #2b2a28;
+            --border: #3d3c39;
+            --text: #f5f4ef;
+            --text-dim: #a6a49c;
+            --accent: #d97757;
+            --accent-soft: #4a3a30;
+            --bubble-user: #35342f;
+            --bubble-model: #30302e;
+            --terminal-bg: #131211;
             --terminal-text: #4ade80;
             --shadow-premium: 0 1px 3px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25);
-            --hover: #3d3a35;
+            --hover: #3a3936;
         }
 
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -70,6 +70,7 @@
         .typing-dot:nth-child(3){animation-delay:.3s;}
         @keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-4px);opacity:1;} }
 
+        /* Claude-style sidebar nav rows */
         .nav-row {
             display: flex; align-items: center; gap: 10px;
             padding: 7px 10px; border-radius: 8px;
@@ -93,6 +94,14 @@
             border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--text-dim);
         }
 
+        .education-option {
+            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+            font-size: 13px; color: var(--text); cursor: pointer; transition: border-color .12s ease, background .12s ease;
+            background: var(--panel-2);
+        }
+        .education-option:hover { border-color: var(--accent); background: var(--hover); }
+
+        /* Profile dropdown, mimics Claude's account menu */
         #profile-dropdown-menu {
             position: absolute; bottom: 56px; left: 8px; width: 240px;
             background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
@@ -109,6 +118,7 @@
             padding: 6px 10px 2px; font-size: 11px; color: var(--text-dim); word-break: break-all;
         }
 
+        /* Settings modal, mimics Claude's settings layout */
         #settings-modal .settings-tab {
             display: flex; align-items: center; gap: 10px;
             padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
@@ -127,6 +137,71 @@
         }
         .theme-choice-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
 
+        /* ===== File-creation progress card (Claude-artifact style) ===== */
+        .file-creation-card {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 12px; max-width: 320px;
+            cursor: pointer; transition: border-color .15s ease, background .15s ease;
+            position: relative; overflow: hidden;
+        }
+        .file-creation-card:hover { border-color: var(--accent); background: var(--hover); }
+        .file-creation-card .fcc-icon {
+            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--accent-soft); color: var(--accent); font-size: 15px; font-weight: 700;
+        }
+        .file-creation-card .fcc-meta { min-width: 0; flex: 1; }
+        .file-creation-card .fcc-name { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-creation-card .fcc-sub { font-size: 10.5px; color: var(--text-dim); margin-top: 1px; display: flex; align-items: center; gap: 5px; }
+        .file-creation-card .fcc-status-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+        .file-creation-card.in-progress .fcc-status-dot { animation: glowPulse 1s ease-in-out infinite; }
+        .file-creation-card.done .fcc-status-dot { background: #4ade80; animation: none; }
+        .file-creation-card .fcc-progress-track {
+            position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+            background: var(--border); overflow: hidden;
+        }
+        .file-creation-card .fcc-progress-fill {
+            position: absolute; left: -40%; top: 0; bottom: 0; width: 40%;
+            background: var(--accent); border-radius: 2px;
+        }
+        .file-creation-card.in-progress .fcc-progress-fill { animation: fccShimmer 1.1s ease-in-out infinite; }
+        .file-creation-card.done .fcc-progress-track { display: none; }
+        @keyframes fccShimmer {
+            0% { left: -40%; }
+            100% { left: 100%; }
+        }
+        .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+        /* Background agent-activity strip shown above the composer while a
+           response is streaming, so the person can see what the assistant is
+           doing (planning, writing a file, reading terminal output, etc.) */
+        #agent-activity-strip {
+            display: none; align-items: center; gap: 7px;
+            font-size: 11px; color: var(--text-dim); padding: 0 4px 6px;
+        }
+        #agent-activity-strip.active { display: flex; }
+        #agent-activity-strip .aas-spinner {
+            width: 11px; height: 11px; border-radius: 999px;
+            border: 2px solid var(--accent-soft); border-top-color: var(--accent);
+            animation: bootSpin .7s linear infinite; flex-shrink: 0;
+        }
+        #paste-attachment-chip.active { display: flex; }
+
+        /* Boot / session-restoring splash (avoids a flash of the login screen
+           while we silently check localStorage for a still-valid session) */
+        #boot-splash {
+            position: fixed; inset: 0; z-index: 70; display: flex; align-items: center;
+            justify-content: center; background: var(--bg);
+        }
+        #boot-splash .boot-spinner {
+            width: 34px; height: 34px; border-radius: 999px;
+            border: 3px solid var(--accent-soft); border-top-color: var(--accent);
+            animation: bootSpin .8s linear infinite;
+        }
+        @keyframes bootSpin { to { transform: rotate(360deg); } }
+
+        /* ===== Mobile ===== */
         #sidebar-panel { transition: transform .28s ease, width .28s ease; }
         .mobile-hamburger { display: none; }
 
@@ -137,10 +212,15 @@
                 box-shadow: 0 0 40px rgba(0,0,0,.25);
             }
             #sidebar-panel.sidebar-open { transform: translateX(0); }
-            #sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35; }
+            #sidebar-scrim {
+                display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
+            }
             #sidebar-scrim.scrim-visible { display: block; }
             .mobile-hamburger { display: flex; }
-            #workbench-split-panel { position: fixed; inset: 0; width: 100%; z-index: 45; transform: translateX(100%); transition: transform .28s ease; }
+            #workbench-split-panel {
+                position: fixed; inset: 0; width: 100%; z-index: 45;
+                transform: translateX(100%); transition: transform .28s ease;
+            }
             #workbench-split-panel.workbench-open { transform: translateX(0); }
             #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
             #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
@@ -155,9 +235,14 @@
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased select-none">
 
-    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
+    <!-- Boot splash: shown for a brief moment on first paint / refresh while
+         we silently check for a still-valid stored session, so refreshing the
+         page never forces an unnecessary re-login flash. -->
+    <div id="boot-splash"><div class="boot-spinner"></div></div>
+
+    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
-            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg">P</div>
+            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
             <div>
                 <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
                 <p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p>
@@ -192,32 +277,32 @@
                     <input id="history-search-input" type="text" placeholder="Search chats..." class="bg-transparent border-none focus:outline-none w-full text-[var(--text)] placeholder-[var(--text-dim)]" oninput="filterHistoryList()">
                 </div>
 
-                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-2">Chats History</div>
+                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-2">Chats</div>
                 <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-0.5 px-0.5"></div>
             </div>
 
             <div class="border-t border-[var(--border)] p-2 safe-bottom">
-                <div class="grid grid-cols-2 gap-1 text-[11px] mb-2 px-1">
-                    <button onclick="triggerHiddenVipFormPrompt()" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center cursor-pointer">🔒 Secure Lock</button>
-                    <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text-dim)] rounded-lg hover:text-[var(--text)] transition-all font-medium text-center cursor-pointer">📎 Ingest</button>
+                <div class="mb-2 px-1">
+                    <button onclick="triggerHiddenVipFormPrompt()" class="w-full py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center text-[11px] cursor-pointer">🔒 Secure Lock</button>
                 </div>
 
                 <div class="nav-row" onclick="toggleProfileDropdown()">
                     <div id="user-avatar-frame" class="w-8 h-8 rounded-full bg-[var(--accent-soft)] flex items-center justify-center font-bold text-[11px] overflow-hidden text-[var(--accent)] shrink-0">U</div>
                     <div class="flex-1 min-w-0">
                         <p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Resolving Identity...</p>
-                        <p id="role-badge-display" class="text-[10px] text-[var(--text-dim)] truncate font-mono">Evaluating...</p>
+                        <p id="role-badge-display" class="text-[10px] text-[var(--text-dim)] truncate">Evaluating...</p>
                     </div>
                     <span class="text-[var(--text-dim)] text-xs">⋮</span>
                 </div>
             </div>
 
+            <!-- Profile dropdown, mimics Claude account menu -->
             <div id="profile-dropdown-menu" class="hidden">
                 <div class="menu-email" id="profile-dropdown-email">user@example.com</div>
                 <div class="menu-divider"></div>
-                <div class="menu-item" onclick="openSettingsFromMenu()"><span>⚙️ Settings Dashboard</span></div>
-                <div class="menu-item" onclick="toggleColorTheme()"><span>🌗 Appearance Mode</span></div>
-                <div class="menu-item" onclick="dispatchGitHubTreeSync()"><span>📦 Refresh GitHub Repository</span></div>
+                <div class="menu-item" onclick="openSettingsFromMenu()"><span>⚙️ Settings</span></div>
+                <div class="menu-item" onclick="toggleColorTheme()"><span>🌗 Appearance</span></div>
+                <div class="menu-item"><span>❓ Get help</span></div>
                 <div class="menu-divider"></div>
                 <div class="menu-item" onclick="triggerIdentitySignout()"><span>↩ Log out</span></div>
             </div>
@@ -232,7 +317,7 @@
                         <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">New conversation</h2>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md">⚡ View Split</button>
+                        <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">⚡</button>
                         <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Export</button>
                         <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Delete</button>
                     </div>
@@ -240,7 +325,7 @@
 
                 <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
                     <div class="m-auto text-center py-12 space-y-2">
-                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
+                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                         <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
@@ -248,6 +333,12 @@
 
                 <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
+                        <div id="agent-activity-strip"><span class="aas-spinner"></span><span id="agent-activity-strip-text">Thinking...</span></div>
+                        <div id="paste-attachment-chip" class="hidden items-center gap-2 bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text)] w-fit">
+                            <span>📄</span>
+                            <span id="paste-attachment-chip-label">paste.txt</span>
+                            <span onclick="clearPasteAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
+                        </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
                             <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
@@ -257,56 +348,46 @@
                 </div>
             </div>
 
-            <aside id="workbench-split-panel" class="w-100 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
-                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3">
-                    <div class="flex gap-2 text-xs font-semibold uppercase tracking-wider">
-                        <button onclick="switchWorkbenchTab('terminal')" id="tab-btn-terminal" class="border-b-2 border-[var(--accent)] px-1 py-2 text-[var(--text)] font-semibold cursor-pointer">Terminal</button>
-                        <button onclick="switchWorkbenchTab('github')" id="tab-btn-github" class="border-b-2 border-transparent px-1 py-2 text-[var(--text-dim)] cursor-pointer">Repository Monitor</button>
-                    </div>
-                    <button onclick="toggleWorkbenchMobile()" class="mobile-hamburger text-sm cursor-pointer">✕</button>
+            <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 mobile-hamburger">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)]">Workbench</span>
+                    <button onclick="toggleWorkbenchMobile()" class="text-sm cursor-pointer">✕</button>
                 </div>
-
-                <div id="workbench-tab-terminal" class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
+                <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
                     <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
-                        <span>&gt;_ Live Agent Terminal Logs</span>
+                        <span>&gt;_ Live Agent Terminal Output Logs</span>
                         <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
                     </div>
                     <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
                 </div>
-
-                <div id="workbench-tab-github" class="hidden flex-1 overflow-y-auto workspace-scrollpane p-3 bg-[var(--bg)] flex flex-col gap-2">
-                    <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-1">Private Repository Structure Tree</div>
-                    <div id="github-repo-tree-view-canvas" class="text-xs font-mono bg-[var(--panel)] border border-[var(--border)] p-3 rounded-xl space-y-1 overflow-x-auto">
-                        <span class="italic text-[var(--text-dim)]">No files loaded. Run code block extraction routines or call explicit repository refreshes.</span>
-                    </div>
-                </div>
-
-                <div id="workbench-preview-container-shell" class="flex-1 flex flex-col overflow-hidden">
-                    <div class="h-9 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-[10px] font-semibold tracking-wide uppercase text-[var(--text-dim)]">
-                        <span>⚡ Sandbox Preview Canvas</span>
-                        <button onclick="expandActivePreviewContainer()" class="text-[9px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout View</button>
+                <div class="flex-1 flex flex-col overflow-hidden">
+                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
+                        <span>⚡ Sandbox Preview</span>
+                        <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout</button>
                     </div>
                     <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
                         <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
                     </div>
                 </div>
-            </aside>
+            </div>
         </main>
     </div>
 
     <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
             <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                <h4 class="text-sm font-bold text-[var(--text)]">Ingest PDF Context Vector</h4>
+                <h4 class="text-sm font-bold text-[var(--text)]">Ingest File</h4>
                 <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
             </div>
             <div class="p-5 flex flex-col gap-4">
-                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
-                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Initialize Document Index</button>
+                <p class="text-[10.5px] text-[var(--text-dim)] -mt-2">Any file type is accepted. Text, PDF, DOCX, JSON, CSV, and ZIP get their content decoded automatically on the server; other types are stored as-is.</p>
+                <input type="file" id="pdf-payload-file-element" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Upload &amp; Decode</button>
             </div>
         </div>
     </div>
 
+    <!-- Settings modal, mimics Claude's settings page layout -->
     <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-2xl h-[75vh] max-h-[560px] overflow-hidden premium-card flex">
             <div class="settings-sidebar w-44 border-r border-[var(--border)] p-3 flex flex-col gap-1 bg-[var(--panel-2)]">
@@ -320,42 +401,118 @@
             </div>
             <div class="flex-1 flex flex-col min-w-0">
                 <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                    <h4 class="text-sm font-bold text-[var(--text)]">Profile Configuration Core</h4>
+                    <h4 class="text-sm font-bold text-[var(--text)]">Profile</h4>
                     <button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
                 </div>
                 <div class="flex-1 overflow-y-auto workspace-scrollpane p-5">
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Avatar Matrix</span>
+                        <span class="text-sm text-[var(--text)]">Avatar</span>
                         <div id="settings-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Full name identifier</span>
+                        <span class="text-sm text-[var(--text)]">Full name</span>
                         <span id="settings-name-display" class="text-sm text-[var(--text-dim)]">—</span>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Authenticated Email</span>
+                        <span class="text-sm text-[var(--text)]">Email</span>
                         <span id="settings-email-display" class="text-sm text-[var(--text-dim)]">—</span>
                     </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Appearance Skin Spec</span>
+                        <span class="text-sm text-[var(--text)]">Appearance</span>
                         <div class="flex gap-1.5">
                             <div class="theme-choice-btn" id="theme-btn-light" onclick="setTheme('light')">☀️</div>
                             <div class="theme-choice-btn" id="theme-btn-dark" onclick="setTheme('dark')">🌙</div>
                         </div>
                     </div>
-                    <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Target host gateway link node</span>
-                        <input type="text" id="backend-host-url-config" value="" placeholder="Automatic" class="text-xs px-2 py-1.5 border border-[var(--border)] rounded-md bg-[var(--panel-2)] text-[var(--accent)] font-mono focus:outline-none w-40 text-right" onchange="updateBackendHostContext()"/>
-                    </div>
                     <div class="pt-6">
-                        <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out profile context stream</button>
+                        <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- VIP registration modal: replaces native prompt() dialogs, which are
+         unreliable/blocked on many mobile browsers. -->
+    <!-- @education picker: book selection, then chapter selection. Lists are
+         populated live from /education/books and /education/chapters, which
+         read the data/education/<Book>/<Chapter>.pdf folder structure in the
+         GitHub data repo. -->
+    <div id="education-book-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">📚 Choose a book</h4>
+                <button onclick="closeEducationModals()" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div id="education-book-list" class="p-3 flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto workspace-scrollpane">
+                <p class="text-xs text-[var(--text-dim)] text-center py-6">Loading books...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="education-chapter-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 id="education-chapter-title" class="text-sm font-bold text-[var(--text)]">📖 Choose a chapter</h4>
+                <button onclick="closeEducationModals()" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div id="education-chapter-list" class="p-3 flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto workspace-scrollpane">
+                <p class="text-xs text-[var(--text-dim)] text-center py-6">Loading chapters...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="vip-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">🔒 Secure Lock — VIP Access</h4>
+                <button onclick="closeVipModal()" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div id="vip-step-code" class="p-5 flex flex-col gap-3">
+                <p class="text-xs text-[var(--text-dim)]">Enter the security token to continue.</p>
+                <input type="password" id="vip-code-input" placeholder="Security token" class="w-full text-sm px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--panel-2)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
+                <button onclick="submitVipCode()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Continue</button>
+            </div>
+            <div id="vip-step-details" class="p-5 flex-col gap-3 hidden">
+                <p class="text-xs text-[var(--text-dim)]">Token accepted. Tell us who you are.</p>
+                <input type="text" id="vip-name-input" placeholder="Your name" class="w-full text-sm px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--panel-2)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
+                <input type="text" id="vip-relationship-input" placeholder="Relationship with Pratham" class="w-full text-sm px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--panel-2)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
+                <button onclick="submitVipDetails()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Save &amp; Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full-screen artifact/file preview modal, mirrors the Claude-style
+         "opens as its own page" experience: header with filename + kebab
+         menu (Preview / Code toggle, Publish, Copy, Download), full body. -->
+    <div id="artifact-modal" class="fixed inset-0 bg-[var(--bg)] z-50 hidden flex-col">
+        <div class="h-14 border-b border-[var(--border)] flex items-center justify-between px-4 safe-top shrink-0">
+            <button onclick="closeArtifactModal()" class="text-[var(--text)] text-lg cursor-pointer">✕</button>
+            <h4 id="artifact-modal-title" class="text-sm font-bold text-[var(--text)] truncate max-w-[55%]">file.txt</h4>
+            <div class="relative">
+                <button onclick="toggleArtifactMenu()" class="text-[var(--text)] text-lg cursor-pointer px-1">⋮</button>
+                <div id="artifact-menu" class="hidden absolute right-0 top-8 w-44 bg-[var(--panel)] border border-[var(--border)] rounded-xl shadow-lg z-10 py-1 text-sm">
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('preview')">
+                        <span id="artifact-menu-preview-check">Preview</span><span>👁</span>
+                    </div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="setArtifactView('code')">
+                        <span id="artifact-menu-code-check">Code</span><span>&lt;/&gt;</span>
+                    </div>
+                    <div class="h-px bg-[var(--border)] my-1"></div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="copyArtifactCode()">
+                        <span>Copy</span><span>⧉</span>
+                    </div>
+                    <div class="flex items-center justify-between px-3 py-2 hover:bg-[var(--hover)] cursor-pointer" onclick="downloadArtifactCode()">
+                        <span>Download</span><span>⭳</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="artifact-modal-body" class="flex-1 overflow-auto bg-[var(--panel)]"></div>
+    </div>
+
     <script>
+        const bootSplash = document.getElementById('boot-splash');
         const loginOverlay = document.getElementById('login-overlay');
         const appShell = document.getElementById('app-shell');
         const sidebarPanel = document.getElementById('sidebar-panel');
@@ -371,12 +528,20 @@
         const inputActionSubmitBtn = document.getElementById('input-action-submit-btn');
         const exportActionTrigger = document.getElementById('export-action-trigger');
         const deleteActionTrigger = document.getElementById('delete-action-trigger');
-        const backendHostConfig = document.getElementById('backend-host-url-config');
         const workbenchSplitPanel = document.getElementById('workbench-split-panel');
         const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
         const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
         const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
-        const githubRepoTreeViewCanvas = document.getElementById('github-repo-tree-view-canvas');
+        const agentActivityStrip = document.getElementById('agent-activity-strip');
+        const agentActivityStripText = document.getElementById('agent-activity-strip-text');
+
+        // Brand logo: the two real files at the root of the GitHub data repo —
+        // a 512x512 for crisp in-app badges (login screen, empty-state, etc.)
+        // and a 192x192 for the browser tab favicon. Every "P" badge falls
+        // back to the plain "P" mark automatically if either URL 404s.
+        const LOGO_URL_512 = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/512.png";
+        const LOGO_URL_192 = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/192.png";
+        const LOGO_URL = LOGO_URL_512; // kept for any code that still references the single-logo name
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
@@ -385,37 +550,41 @@
         let currentExtractedPreviewArtifactPayload = "";
         let isGenerating = false;
         let allHistoryItemsCache = [];
+        let pendingPasteAttachment = null; // { content, lines } — see setPasteAttachment()
+        let pendingEducationContext = null; // { book, chapter } once both are picked via the @education flow
+
+        function setPasteAttachment(content, lineCount) {
+            pendingPasteAttachment = { content, lines: lineCount };
+            document.getElementById('paste-attachment-chip-label').innerText = `paste.txt (${lineCount} lines)`;
+            document.getElementById('paste-attachment-chip').classList.add('active');
+        }
+        function clearPasteAttachment() {
+            pendingPasteAttachment = null;
+            document.getElementById('paste-attachment-chip').classList.remove('active');
+        }
+
+        // Key used to persist the session in localStorage so a page refresh
+        // (or fully closing and reopening the browser) does not force the
+        // user through the Google sign-in popup again while their token is
+        // still valid.
+        const SESSION_STORAGE_KEY = "prathamai_session_v1";
 
         function openMobileSidebar() { sidebarPanel.classList.add('sidebar-open'); sidebarScrim.classList.add('scrim-visible'); }
         function closeMobileSidebar() { sidebarPanel.classList.remove('sidebar-open'); sidebarScrim.classList.remove('scrim-visible'); }
         function toggleWorkbenchMobile() { workbenchSplitPanel.classList.toggle('workbench-open'); }
         function focusHistorySearch() { document.getElementById('history-search-input').focus(); }
 
-        function toggleProfileDropdown() { profileDropdownMenu.classList.toggle('hidden'); }
+        function toggleProfileDropdown() {
+            profileDropdownMenu.classList.toggle('hidden');
+        }
         document.addEventListener('click', (e) => {
             if (!profileDropdownMenu.contains(e.target) && !e.target.closest('.nav-row')) {
                 profileDropdownMenu.classList.add('hidden');
             }
         });
-        function openSettingsFromMenu() { profileDropdownMenu.classList.add('hidden'); toggleModal('settings-modal'); }
-
-        function switchWorkbenchTab(tabId) {
-            const tBtn = document.getElementById('tab-btn-terminal');
-            const gBtn = document.getElementById('tab-btn-github');
-            const tBox = document.getElementById('workbench-tab-terminal');
-            const gBox = document.getElementById('workbench-tab-github');
-            if(tabId === 'github') {
-                gBtn.className = "border-b-2 border-[var(--accent)] px-1 py-2 text-[var(--text)] font-semibold cursor-pointer";
-                tBtn.className = "border-b-2 border-transparent px-1 py-2 text-[var(--text-dim)] cursor-pointer";
-                gBox.classList.remove('hidden');
-                tBox.classList.add('hidden');
-                dispatchGitHubTreeSync();
-            } else {
-                tBtn.className = "border-b-2 border-[var(--accent)] px-1 py-2 text-[var(--text)] font-semibold cursor-pointer";
-                gBtn.className = "border-b-2 border-transparent px-1 py-2 text-[var(--text-dim)] cursor-pointer";
-                tBox.classList.remove('hidden');
-                gBox.classList.add('hidden');
-            }
+        function openSettingsFromMenu() {
+            profileDropdownMenu.classList.add('hidden');
+            toggleModal('settings-modal');
         }
 
         function setTheme(mode) {
@@ -430,7 +599,50 @@
             document.getElementById('theme-btn-dark')?.classList.toggle('selected', isDark);
         }
 
-        function handleGoogleIdentityCallback(response) {
+        // Renders the signed-in shell UI (avatar, name, role badge, settings
+        // fields) from a decoded claims object. Shared by both the fresh
+        // Google popup flow and the silent localStorage restore flow.
+        function paintIdentityIntoShell(claims) {
+            profileNameDisplay.innerText = claims.name || claims.email;
+            document.getElementById('profile-dropdown-email').innerText = activeUserIdentityEmail;
+            document.getElementById('settings-name-display').innerText = claims.name || "—";
+            document.getElementById('settings-email-display').innerText = activeUserIdentityEmail;
+
+            if (claims.picture) {
+                userAvatarFrame.innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;
+                document.getElementById('settings-avatar-frame').innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;
+            } else {
+                const initials = (claims.name || claims.email || "U").slice(0,2).toUpperCase();
+                userAvatarFrame.innerText = initials;
+                document.getElementById('settings-avatar-frame').innerText = initials;
+            }
+
+            const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
+            const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
+
+            if (creators.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "App Creator";
+            else if (supervisors.includes(activeUserIdentityEmail)) roleBadgeDisplay.innerText = "Supervisor";
+            else roleBadgeDisplay.innerText = "Free plan";
+        }
+
+        function enterAppShell() {
+            loginOverlay.style.display = 'none';
+            appShell.style.display = 'flex';
+            synchronizeConversationsHistoryIndex();
+            refreshVipBadgeFromBackend();
+        }
+
+        function persistSessionLocally(credential, claims) {
+            try {
+                localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ credential, claims }));
+            } catch (e) { /* localStorage may be unavailable in some contexts; fail silently */ }
+        }
+
+        function clearPersistedSession() {
+            try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
+        }
+
+        async function handleGoogleIdentityCallback(response) {
             if (!response || !response.credential) return;
             globalAuthorizationToken = `Bearer ${response.credential}`;
             try {
@@ -439,34 +651,29 @@
                 const claims = JSON.parse(window.atob(base64));
 
                 activeUserIdentityEmail = claims.email.toLowerCase();
-                profileNameDisplay.innerText = claims.name || claims.email;
-                document.getElementById('profile-dropdown-email').innerText = activeUserIdentityEmail;
-                document.getElementById('settings-name-display').innerText = claims.name || "—";
-                document.getElementById('settings-email-display').innerText = activeUserIdentityEmail;
+                paintIdentityIntoShell(claims);
 
-                if (claims.picture) {
-                    userAvatarFrame.innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;
-                    document.getElementById('settings-avatar-frame').innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover rounded-full" referrerpolicy="no-referrer">`;
-                } else {
-                    const initials = (claims.name || claims.email || "U").slice(0,2).toUpperCase();
-                    userAvatarFrame.innerText = initials;
-                    document.getElementById('settings-avatar-frame').innerText = initials;
-                }
+                // Exchange the short-lived (~1hr) Google ID token for a
+                // long-lived backend session token so the person doesn't get
+                // signed out again just from closing the browser for a
+                // while. Falls back to the raw Google token if the exchange
+                // fails for any reason, so sign-in still works either way.
+                let tokenToPersist = response.credential;
+                try {
+                    const exchangeRes = await smartFetchRequest('/auth/exchange', {
+                        method: 'POST', headers: { 'Authorization': globalAuthorizationToken }
+                    });
+                    if (exchangeRes.ok) {
+                        const exchangeData = await exchangeRes.json();
+                        if (exchangeData.session_token) {
+                            tokenToPersist = exchangeData.session_token;
+                            globalAuthorizationToken = `Bearer ${exchangeData.session_token}`;
+                        }
+                    }
+                } catch (e) { /* fall back to raw google credential below */ }
 
-                const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
-                const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
-
-                if (creators.includes(activeUserIdentityEmail)) {
-                    roleBadgeDisplay.innerText = "App Creator Profile";
-                } else if (supervisors.includes(activeUserIdentityEmail)) {
-                    roleBadgeDisplay.innerText = "Supervisor Overseer";
-                } else {
-                    roleBadgeDisplay.innerText = "Standard System Account";
-                }
-
-                loginOverlay.style.display = 'none';
-                appShell.style.display = 'flex';
-                synchronizeConversationsHistoryIndex();
+                persistSessionLocally(tokenToPersist, claims);
+                enterAppShell();
             } catch (e) {
                 console.error("[AUTH][FAILURE]", e);
             }
@@ -489,60 +696,143 @@
             }
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const currentOrigin = window.location.origin;
-            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
-            backendHostConfig.value = SERVER_CONTEXT_HOST;
-            setTheme('light');
-            initializeGoogleOauthGate();
+        // Attempts to silently restore a previous session from localStorage
+        // on page load / refresh. If the stored Google credential's `exp`
+        // claim has not passed, and the backend confirms it via
+        // /auth/refresh-check, the user is dropped straight back into the
+        // app shell without ever seeing the sign-in screen. This is the fix
+        // for "have to sign in again after closing/refreshing the browser".
+        async function attemptSilentSessionRestore() {
+            let stored = null;
+            try {
+                const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+                if (raw) stored = JSON.parse(raw);
+            } catch (e) { stored = null; }
 
-            userPromptInputField.addEventListener('input', () => {
-                userPromptInputField.style.height = 'auto';
-                userPromptInputField.style.height = Math.min(userPromptInputField.scrollHeight, 128) + 'px';
-            });
-            userPromptInputField.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    interactionSubmissionForm.requestSubmit();
+            if (!stored || !stored.credential || !stored.claims) return false;
+
+            // Note: `stored.claims.exp` reflects the ORIGINAL Google ID
+            // token's ~1-hour expiry, not the actual long-lived session
+            // token we now store as `stored.credential` (see /auth/exchange).
+            // So we deliberately do NOT reject the session here just because
+            // that Google claim looks expired — the backend's
+            // /auth/refresh-check call below is the real source of truth.
+            globalAuthorizationToken = `Bearer ${stored.credential}`;
+            activeUserIdentityEmail = (stored.claims.email || "").toLowerCase();
+
+            try {
+                const response = await smartFetchRequest('/auth/refresh-check', {
+                    method: 'POST',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                if (!response.ok) {
+                    clearPersistedSession();
+                    globalAuthorizationToken = "";
+                    activeUserIdentityEmail = "";
+                    return false;
                 }
-            });
-            interactionSubmissionForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                dispatchChatMessage();
-            });
-        });
+            } catch (e) {
+                // Network hiccup: still allow the cached session through so a
+                // brief connectivity blip doesn't force a re-login; the next
+                // authenticated request will fail gracefully and prompt sign-in
+                // if the token really is invalid.
+            }
+
+            paintIdentityIntoShell(stored.claims);
+            enterAppShell();
+            return true;
+        }
 
         function triggerHiddenVipFormPrompt() {
-            const entryCode = prompt("Enter Security Token Matrix Key:");
-            if (entryCode === "31082011") {
-                const companionName = prompt("Enter your Name:");
-                const affiliation = prompt("Specify relationship details context with Pratham:");
-                if (companionName && affiliation) {
-                    smartFetchRequest('/auth/vip-register', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                        body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
-                    }).then(res => res.json()).then(data => {
-                        if (data.ok) {
-                            roleBadgeDisplay.innerText = "Internal VIP Core";
-                            alert("Identity context recorded successfully into private repository parameters.");
-                        } else alert("Storage operation tracking fault.");
-                    });
-                }
-            } else alert("Signature reject. Authentication cycle drop.");
+            document.getElementById('vip-code-input').value = '';
+            document.getElementById('vip-name-input').value = '';
+            document.getElementById('vip-relationship-input').value = '';
+            document.getElementById('vip-step-code').classList.remove('hidden');
+            document.getElementById('vip-step-code').classList.add('flex');
+            document.getElementById('vip-step-details').classList.add('hidden');
+            document.getElementById('vip-step-details').classList.remove('flex');
+            const modal = document.getElementById('vip-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => document.getElementById('vip-code-input').focus(), 50);
+        }
+        function closeVipModal() {
+            const modal = document.getElementById('vip-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        function openVipDetailsStepDirectly() {
+            document.getElementById('vip-name-input').value = '';
+            document.getElementById('vip-relationship-input').value = '';
+            document.getElementById('vip-step-code').classList.add('hidden');
+            document.getElementById('vip-step-code').classList.remove('flex');
+            document.getElementById('vip-step-details').classList.remove('hidden');
+            document.getElementById('vip-step-details').classList.add('flex');
+            const modal = document.getElementById('vip-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => document.getElementById('vip-name-input').focus(), 50);
+        }
+        function submitVipCode() {
+            const entryCode = document.getElementById('vip-code-input').value.trim();
+            if (entryCode !== "31082011") {
+                alert("Signature reject. Authentication cycle drop.");
+                return;
+            }
+            document.getElementById('vip-step-code').classList.add('hidden');
+            document.getElementById('vip-step-code').classList.remove('flex');
+            document.getElementById('vip-step-details').classList.remove('hidden');
+            document.getElementById('vip-step-details').classList.add('flex');
+            setTimeout(() => document.getElementById('vip-name-input').focus(), 50);
+        }
+        function submitVipDetails() {
+            const companionName = document.getElementById('vip-name-input').value.trim();
+            const affiliation = document.getElementById('vip-relationship-input').value.trim();
+            if (!companionName || !affiliation) {
+                alert("Please fill in both your name and your relationship with Pratham.");
+                return;
+            }
+            smartFetchRequest('/auth/vip-register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
+                body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
+            }).then(res => res.json()).then(data => {
+                if (data.ok) {
+                    roleBadgeDisplay.innerText = "VIP Tier";
+                    closeVipModal();
+                    alert("Identity context recorded successfully.");
+                } else alert("Storage operation tracking fault.");
+            }).catch(() => alert("Storage operation tracking fault."));
+        }
+
+        // Checks whether the currently signed-in email is already registered
+        // as a VIP contact (survives refresh/reload, unlike the old approach
+        // which only set the badge in-memory right after registering).
+        async function refreshVipBadgeFromBackend() {
+            try {
+                const response = await smartFetchRequest('/auth/vip-status', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.is_vip) roleBadgeDisplay.innerText = "VIP Tier";
+            } catch (e) {}
         }
 
         function triggerIdentitySignout() {
-            globalAuthorizationToken = ""; activeUserIdentityEmail = ""; currentConversationId = null;
-            appShell.style.display = 'none'; loginOverlay.style.display = 'flex';
+            globalAuthorizationToken = "";
+            activeUserIdentityEmail = "";
+            currentConversationId = null;
+            clearPersistedSession();
+            appShell.style.display = 'none';
+            loginOverlay.style.display = 'flex';
             document.getElementById('settings-modal').classList.add('hidden');
+            document.getElementById('settings-modal').classList.remove('flex');
             profileDropdownMenu.classList.add('hidden');
+            // Fully reset Google's own auto-select state too, otherwise it can
+            // silently re-assert the previous identity on the next popup.
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.disableAutoSelect();
+            }
             initializeGoogleOauthGate();
-        }
-
-        updateBackendHostContext = () => {
-            SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
-            synchronizeConversationsHistoryIndex();
         }
 
         async function smartFetchRequest(endpointPath, options = {}) {
@@ -563,6 +853,49 @@
             return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
         }
 
+        // ── Conversation history persistence mirror ──────────────────────
+        // The backend keeps conversations in Supabase when configured, but
+        // falls back to an in-memory dict otherwise, which is wiped on every
+        // backend redeploy/restart. To make "history saved for full time
+        // until the person deletes it" actually true from the user's point
+        // of view, we mirror the conversation list + messages into
+        // localStorage (keyed per signed-in email) and merge it back in
+        // whenever the backend's own copy is missing or incomplete.
+        function convCacheKey() {
+            return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`;
+        }
+        function loadConvCache() {
+            try {
+                const raw = localStorage.getItem(convCacheKey());
+                return raw ? JSON.parse(raw) : { list: [], messages: {} };
+            } catch (e) { return { list: [], messages: {} }; }
+        }
+        function saveConvCache(cache) {
+            try { localStorage.setItem(convCacheKey(), JSON.stringify(cache)); } catch (e) {}
+        }
+        function cacheConversationMeta(id, title) {
+            const cache = loadConvCache();
+            const nowIso = new Date().toISOString();
+            const existingIdx = cache.list.findIndex(c => c.id === id);
+            if (existingIdx >= 0) {
+                cache.list[existingIdx].title = title;
+                cache.list[existingIdx].updated_at = nowIso;
+            } else {
+                cache.list.unshift({ id, title, pinned: false, created_at: nowIso, updated_at: nowIso });
+            }
+            saveConvCache(cache);
+        }
+        function cacheConversationMessages(id, messages) {
+            const cache = loadConvCache();
+            cache.messages[id] = messages;
+            saveConvCache(cache);
+        }
+        function removeCachedConversation(id) {
+            const cache = loadConvCache();
+            cache.list = cache.list.filter(c => c.id !== id);
+            delete cache.messages[id];
+            saveConvCache(cache);
+        }
         function toggleModal(modalTargetId) {
             const target = document.getElementById(modalTargetId);
             target.classList.toggle('hidden');
@@ -570,37 +903,386 @@
         }
 
         function createNewConversation() {
-            currentConversationId = null; activeChatTitleHeader.innerText = "New conversation";
-            exportActionTrigger.classList.add('hidden'); deleteActionTrigger.classList.add('hidden');
-            workbenchSplitPanel.classList.add('hidden'); workbenchSplitPanel.classList.remove('workbench-open');
+            currentConversationId = null;
+            activeChatTitleHeader.innerText = "New conversation";
+            exportActionTrigger.classList.add('hidden');
+            deleteActionTrigger.classList.add('hidden');
+            workbenchSplitPanel.classList.add('hidden');
+            workbenchSplitPanel.classList.remove('workbench-open');
+            document.getElementById('workbench-toggle-mobile').classList.add('hidden');
+            clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
-                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3">P</div>
+                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                     <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
             `;
-            synchronizeConversationsHistoryIndex(); closeMobileSidebar();
+            synchronizeConversationsHistoryIndex();
+            closeMobileSidebar();
         }
 
         function renderUserPromptBubble(promptText) {
-            const row = document.createElement('div'); row.className = 'w-full flex justify-end';
+            const row = document.createElement('div');
+            row.className = 'w-full flex justify-end';
             row.innerHTML = `<div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>`;
-            conversationViewportPanel.appendChild(row); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            conversationViewportPanel.appendChild(row);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
-        function mountModelOutputTargetShell() {
-            const containerNode = document.createElement('div'); containerNode.className = 'w-full flex flex-col items-start gap-1';
-            containerNode.innerHTML = `
-                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
-                <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs"></div>
+        // Maps a fenced-code-block language tag to a plausible file extension
+        // and a short badge label used on the file-creation card's icon.
+        const LANG_EXT_MAP = {
+            html: 'html', htm: 'html', javascript: 'js', js: 'js', jsx: 'jsx',
+            typescript: 'ts', ts: 'ts', python: 'py', py: 'py', css: 'css',
+            json: 'json', bash: 'sh', sh: 'sh', shell: 'sh', text: 'txt',
+            xml: 'xml', markdown: 'md', md: 'md', sql: 'sql', yaml: 'yml',
+            yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs'
+        };
+
+        function guessFileName(lang, ordinal) {
+            const ext = LANG_EXT_MAP[(lang || '').toLowerCase()] || 'txt';
+            return ordinal === 1 ? `generated.${ext}` : `generated_${ordinal}.${ext}`;
+        }
+
+        // Appends a timestamped line to the background terminal logger panel
+        // so the person can see, in real time, what the assistant is doing
+        // (planning, writing a file, finishing up) even for tasks that don't
+        // otherwise show visible progress.
+        function pushTerminalLog(message) {
+            const stamp = new Date().toLocaleTimeString([], { hour12: false });
+            const line = `[${stamp}] ${message}\n`;
+            if (agentBackgroundTerminalLogger.textContent === 'System waiting for generation directives...') {
+                agentBackgroundTerminalLogger.textContent = '';
+            }
+            agentBackgroundTerminalLogger.textContent += line;
+            agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
+        }
+
+        function setAgentActivity(text) {
+            agentActivityStripText.innerText = text;
+            agentActivityStrip.classList.add('active');
+        }
+        function clearAgentActivity() {
+            agentActivityStrip.classList.remove('active');
+        }
+
+        // Splits streamed assistant text into an ordered list of plain-text
+        // and fenced-code segments. The final code segment may still be
+        // "open" (no closing fence yet) while tokens are still arriving —
+        // that partial segment is what drives the in-progress file card.
+        function parseAssistantSegments(text) {
+            const segments = [];
+            const fenceOpenRe = /```(\w+)?\n/g;
+            let idx = 0;
+            while (idx < text.length) {
+                fenceOpenRe.lastIndex = idx;
+                const m = fenceOpenRe.exec(text);
+                if (!m) { segments.push({ type: 'text', content: text.slice(idx) }); break; }
+                if (m.index > idx) segments.push({ type: 'text', content: text.slice(idx, m.index) });
+                const lang = (m[1] || 'text').toLowerCase();
+                const codeStart = m.index + m[0].length;
+                const closeIdx = text.indexOf('```', codeStart);
+                if (closeIdx === -1) {
+                    segments.push({ type: 'code', lang, content: text.slice(codeStart), closed: false });
+                    idx = text.length;
+                } else {
+                    segments.push({ type: 'code', lang, content: text.slice(codeStart, closeIdx), closed: true });
+                    idx = closeIdx + 3;
+                }
+            }
+            return segments;
+        }
+
+        function buildFileCreationCard(lang, content, closed, ordinal) {
+            const card = document.createElement('div');
+            card.className = `file-creation-card ${closed ? 'done' : 'in-progress'}`;
+            const filename = guessFileName(lang, ordinal);
+            card.dataset.filename = filename;
+            card.dataset.lang = lang;
+            card.dataset.ordinal = ordinal;
+            card._code = content;
+            card._lang = lang;
+            const ext = (LANG_EXT_MAP[lang] || 'txt').toUpperCase();
+            card.innerHTML = `
+                <div class="fcc-icon">${ext.slice(0, 2)}</div>
+                <div class="fcc-meta">
+                    <div class="fcc-name">${filename}</div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : 'Writing file...'}</span></div>
+                </div>
+                <span class="fcc-openhint">${closed ? 'Open' : ''}</span>
+                <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
             `;
-            conversationViewportPanel.appendChild(containerNode); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-            return containerNode.querySelector('.model-stream-target-node');
+            card.onclick = () => openFilePreviewFromCard(card);
+            return card;
+        }
+
+        function updateFileCreationCard(card, content, closed) {
+            card._code = content;
+            const statusText = card.querySelector('.fcc-status-text');
+            const openHint = card.querySelector('.fcc-openhint');
+            if (closed && card.classList.contains('in-progress')) {
+                card.classList.remove('in-progress');
+                card.classList.add('done');
+                statusText.innerText = 'Ready to preview';
+                openHint.innerText = 'Open';
+                pushTerminalLog(`File created: ${card.dataset.filename} (${content.length} chars)`);
+            } else if (!closed) {
+                statusText.innerText = `Writing file... (${content.length} chars)`;
+            }
+        }
+
+        let artifactModalState = { code: '', lang: 'text', filename: 'file.txt', view: 'preview' };
+
+        function openFilePreviewFromCard(card) {
+            if (!card._code) return;
+            artifactModalState = { code: card._code, lang: card._lang, filename: card.dataset.filename, view: 'preview' };
+            document.getElementById('artifact-modal-title').innerText = card.dataset.filename;
+            renderArtifactModalBody();
+            pushTerminalLog(`Preview opened: ${card.dataset.filename}`);
+            const modal = document.getElementById('artifact-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeArtifactModal() {
+            const modal = document.getElementById('artifact-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('artifact-menu').classList.add('hidden');
+        }
+
+        function toggleArtifactMenu() {
+            document.getElementById('artifact-menu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('artifact-menu');
+            if (menu && !menu.classList.contains('hidden') && !e.target.closest('#artifact-menu') && !e.target.closest('[onclick="toggleArtifactMenu()"]')) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function setArtifactView(view) {
+            artifactModalState.view = view;
+            document.getElementById('artifact-menu').classList.add('hidden');
+            renderArtifactModalBody();
+        }
+
+        function renderArtifactModalBody() {
+            const body = document.getElementById('artifact-modal-body');
+            const previewCheck = document.getElementById('artifact-menu-preview-check');
+            const codeCheck = document.getElementById('artifact-menu-code-check');
+            previewCheck.innerText = artifactModalState.view === 'preview' ? '✓ Preview' : 'Preview';
+            codeCheck.innerText = artifactModalState.view === 'code' ? '✓ Code' : 'Code';
+
+            const isRenderable = artifactModalState.lang === 'html' || artifactModalState.lang === 'htm';
+            if (artifactModalState.view === 'preview' && isRenderable) {
+                body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
+            } else if (artifactModalState.view === 'preview' && !isRenderable) {
+                // Non-HTML files don't have a live preview; fall back to a
+                // clean read-only code view instead of a blank screen.
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
+            } else {
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
+            }
+        }
+
+        function copyArtifactCode() {
+            document.getElementById('artifact-menu').classList.add('hidden');
+            navigator.clipboard?.writeText(artifactModalState.code).then(() => {
+                pushTerminalLog(`Copied ${artifactModalState.filename} to clipboard.`);
+            }).catch(() => {});
+        }
+
+        function downloadArtifactCode() {
+            document.getElementById('artifact-menu').classList.add('hidden');
+            const blob = new Blob([artifactModalState.code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = artifactModalState.filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            pushTerminalLog(`Downloaded ${artifactModalState.filename}.`);
+        }
+
+        // Renders/updates an assistant message's segments (text bubbles +
+        // file-creation cards) in place, reusing existing DOM nodes where
+        // possible so in-progress cards keep their shimmer animation instead
+        // of flashing on every token.
+        function updateAssistantMessageDOM(wrapper, fullText) {
+            const segments = parseAssistantSegments(fullText);
+            if (!wrapper._segNodes) wrapper._segNodes = [];
+            if (!wrapper._fileOrdinal) wrapper._fileOrdinal = 0;
+            segments.forEach((seg, i) => {
+                let node = wrapper._segNodes[i];
+                if (seg.type === 'text') {
+                    if (!node || node.dataset.segType !== 'text') {
+                        node = document.createElement('div');
+                        node.dataset.segType = 'text';
+                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                    }
+                    if (seg.content.trim().length > 0) {
+                        node.style.display = '';
+                        node.innerHTML = sanitizeOutputText(seg.content).replace(/\n/g, '<br>');
+                    } else {
+                        node.style.display = 'none';
+                    }
+                } else if (seg.lang === 'finaldoc') {
+                    wrapper._fileOrdinal += 1;
+                    if (!node || node.dataset.segType !== 'finaldoc') {
+                        node = document.createElement('div');
+                        node.dataset.segType = 'finaldoc';
+                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs whitespace-pre-wrap';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                    }
+                    node.textContent = seg.content.trim();
+                } else {
+                    if (!node || node.dataset.segType !== 'code') {
+                        wrapper._fileOrdinal += 1;
+                        node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
+                        node.dataset.segType = 'code';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                        setAgentActivity(`Writing ${node.dataset.filename}...`);
+                        pushTerminalLog(`Creating ${node.dataset.filename}...`);
+                    } else {
+                        updateFileCreationCard(node, seg.content, seg.closed);
+                        if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
+                    }
+                }
+            });
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
+
+        function appendGeneratedImage(wrapper, url, promptText) {
+            const holder = document.createElement('div');
+            holder.className = 'rounded-2xl overflow-hidden border border-[var(--border)] max-w-[85%] shadow-xs';
+            const safeAlt = sanitizeOutputText(promptText || 'Generated image');
+
+            // Animated "generating..." card: the CSS transition drives the
+            // bar itself (GPU-composited, no per-frame JS), and a cheap
+            // low-frequency interval (every ~220ms) only ever touches a text
+            // node for the percentage — optimized so it stays smooth without
+            // hammering layout, even though it's fully animated end to end.
+            holder.innerHTML = `
+                <div class="igen-progress-wrap" style="position:relative; background:var(--panel-2); min-height:180px; display:flex; align-items:center; justify-content:center;">
+                    <div style="font-size:11.5px; color:var(--text-dim); font-weight:600; display:flex; align-items:center; gap:6px;">
+                        <span class="aas-spinner" style="width:11px;height:11px;border-radius:999px;border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:bootSpin .7s linear infinite;flex-shrink:0;"></span>
+                        <span>Generating image... <span class="igen-progress-pct">0%</span></span>
+                    </div>
+                    <div style="position:absolute; left:0; bottom:0; height:4px; width:100%; background:var(--border); overflow:hidden;">
+                        <div class="igen-progress-fill" style="height:100%; width:0%; background:var(--accent); transition:width 2.4s cubic-bezier(.2,.7,.3,1);"></div>
+                    </div>
+                </div>
+            `;
+            wrapper.appendChild(holder);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+
+            const fill = holder.querySelector('.igen-progress-fill');
+            const pctLabel = holder.querySelector('.igen-progress-pct');
+            const progressWrap = holder.querySelector('.igen-progress-wrap');
+
+            requestAnimationFrame(() => { fill.style.width = '92%'; });
+            let simulatedPct = 0;
+            const labelTimer = setInterval(() => {
+                simulatedPct = Math.min(92, simulatedPct + Math.random() * 9 + 3);
+                pctLabel.textContent = Math.round(simulatedPct) + '%';
+                if (simulatedPct >= 92) clearInterval(labelTimer);
+            }, 220);
+
+            // Pollinations doesn't report real progress, so we preload the
+            // actual image in the background and only reveal it (jumping the
+            // bar to 100%) once it has genuinely finished loading.
+            const preload = new Image();
+            preload.onload = () => {
+                clearInterval(labelTimer);
+                fill.style.width = '100%';
+                pctLabel.textContent = '100%';
+                setTimeout(() => {
+                    holder.innerHTML = `
+                        <div style="position:relative;">
+                            <img src="${url}" alt="${safeAlt}" style="width:100%;display:block;" loading="lazy">
+                            <a href="${url}" download="generated-image.png" title="Download image"
+                               style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.55); color:#fff; width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:14px; text-decoration:none;">⭳</a>
+                        </div>
+                    `;
+                    conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                }, 250);
+            };
+            preload.onerror = () => {
+                clearInterval(labelTimer);
+                progressWrap.innerHTML = `<div style="font-size:12px;color:var(--text-dim);padding:20px;">Image failed to load.</div>`;
+            };
+            preload.src = url;
+        }
+
+        // Appends a real downloadable file card. Instead of guessing an
+        // absolute URL from the CURRENT PAGE's origin (which breaks when the
+        // frontend is on Vercel and the backend lives elsewhere — Vercel only
+        // forwards /api/* by default, so a bare /download/<token> 404s on
+        // Vercel's own edge), this routes the fetch through the same
+        // multi-path smartFetchRequest helper every other call already uses,
+        // then triggers a real file download from the resulting blob.
+        function appendDownloadCard(wrapper, relativeUrl, filename) {
+            const card = document.createElement('div');
+            card.className = 'file-creation-card done';
+            card.innerHTML = `
+                <div class="fcc-icon">⭳</div>
+                <div class="fcc-meta">
+                    <div class="fcc-name">${sanitizeOutputText(filename)}</div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Built in background terminal — ready</span></div>
+                </div>
+                <span class="fcc-openhint">Download</span>
+            `;
+            card.onclick = async () => {
+                const statusText = card.querySelector('.fcc-status-text');
+                try {
+                    statusText.innerText = 'Fetching file...';
+                    // relativeUrl looks like "/download/<token>" — strip any
+                    // "/api/" or "/api/app/" prefix if present so
+                    // smartFetchRequest can try its own full set of
+                    // permutations against whichever host actually serves it.
+                    const cleanPath = relativeUrl.replace(/^\/(api\/app\/|api\/)?/, '/');
+                    const response = await smartFetchRequest(cleanPath, { method: 'GET' });
+                    if (!response.ok) throw new Error(`Download fetch failed (${response.status})`);
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(blobUrl);
+                    statusText.innerText = 'Built in background terminal — ready';
+                    pushTerminalLog(`Downloaded ${filename}.`);
+                } catch (err) {
+                    statusText.innerText = 'Download failed — tap to retry';
+                    console.error('[DOWNLOAD][FAULT]', err);
+                }
+            };
+            wrapper.appendChild(card);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
+        function mountModelOutputTargetShell() {
+            const containerNode = document.createElement('div');
+            containerNode.className = 'w-full flex flex-col items-start gap-1.5';
+            containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
+            conversationViewportPanel.appendChild(containerNode);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            return containerNode;
         }
 
         function mountTypingIndicator() {
-            const row = document.createElement('div'); row.className = 'w-full flex flex-col items-start gap-1'; row.id = 'typing-indicator-row';
+            const row = document.createElement('div');
+            row.className = 'w-full flex flex-col items-start gap-1';
+            row.id = 'typing-indicator-row';
             row.innerHTML = `
                 <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
                 <div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs">
@@ -609,87 +1291,194 @@
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                 </div>
             `;
-            conversationViewportPanel.appendChild(row); conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            conversationViewportPanel.appendChild(row);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
-        function removeTypingIndicator() { const row = document.getElementById('typing-indicator-row'); if (row) row.remove(); }
+        function removeTypingIndicator() {
+            const row = document.getElementById('typing-indicator-row');
+            if (row) row.remove();
+        }
 
-        async function dispatchGitHubTreeSync() {
-            githubRepoTreeViewCanvas.innerHTML = `<span class="italic text-[var(--text-dim)] animate-pulse">Querying live repository tree map vectors...</span>`;
-            try {
-                const res = await smartFetchRequest('/github/repo-tree', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if(!res.ok) throw new Error();
-                const data = await res.json();
-                if(data.error) { githubRepoTreeViewCanvas.innerHTML = `<span class="text-red-500 font-medium">${data.error}</span>`; return; }
-                githubRepoTreeViewCanvas.innerHTML = data.files.map(f => `
-                    <div class="flex items-center justify-between py-1 border-b border-[var(--border)]/60 last:border-none">
-                        <span class="truncate pr-2 text-[var(--text)] font-medium">📄 ${f.path}</span>
-                        <span class="text-[10px] text-[var(--text-dim)] shrink-0 font-sans px-1.5 py-0.5 bg-[var(--sidebar)] rounded">${(f.size/1024).toFixed(1)} KB</span>
-                    </div>
-                `).join('');
-            } catch(e) {
-                githubRepoTreeViewCanvas.innerHTML = `<span class="text-red-500 italic">Failed to securely query GitHub directory tree structures logs.</span>`;
-            }
+        function sanitizeOutputText(rawText) {
+            return rawText.replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char] || char));
         }
 
         async function dispatchChatMessage() {
-            const message = userPromptInputField.value.trim();
-            if (!message || isGenerating) return;
-            isGenerating = true; inputActionSubmitBtn.disabled = true; inputActionSubmitBtn.classList.add('opacity-60');
+            const typedMessage = userPromptInputField.value.trim();
+            if ((!typedMessage && !pendingPasteAttachment) || isGenerating) return;
+
+            // If the person types the VIP secret code straight into the chat
+            // box (instead of using the 🔒 Secure Lock button), intercept it
+            // here and open the proper VIP modal instead of sending it to the
+            // model — this is what was happening before: "31082011" was being
+            // treated as ordinary chat text and answered as if it were a date.
+            if (typedMessage === "31082011") {
+                userPromptInputField.value = '';
+                userPromptInputField.style.height = 'auto';
+                openVipDetailsStepDirectly();
+                return;
+            }
+
+            // Typing "@education" alone opens the book picker instead of
+            // sending anything to the model — the actual question comes in
+            // a follow-up message once a book + chapter have been picked.
+            if (typedMessage.toLowerCase() === "@education") {
+                userPromptInputField.value = '';
+                userPromptInputField.style.height = 'auto';
+                openEducationBookModal();
+                return;
+            }
+
+            // Build what's actually sent to the model (typed text + the
+            // pasted content as a fenced block), and what's shown in the
+            // user's own chat bubble (typed text + a small attachment note,
+            // not the raw dump — mirrors how a 50+ line paste becomes a
+            // proper "paste.txt" attachment instead of cluttering the box).
+            let message = typedMessage;
+            let displayMessage = typedMessage;
+            if (pendingPasteAttachment) {
+                message = (typedMessage ? typedMessage + "\n\n" : "") + "```text\n" + pendingPasteAttachment.content + "\n```";
+                displayMessage = (typedMessage ? typedMessage + "\n\n" : "") + `📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;
+            }
+            clearPasteAttachment();
+
+            // If a book+chapter are currently selected from the @education
+            // flow, invisibly tag the outgoing message so the backend scopes
+            // its answer to that exact chapter — the tag never shows in the
+            // user's own chat bubble (displayMessage stays clean).
+            if (pendingEducationContext) {
+                message = `[[EDU_BOOK:${pendingEducationContext.book}]][[EDU_CHAPTER:${pendingEducationContext.chapter}]]${message}`;
+            }
+
+            isGenerating = true;
+            inputActionSubmitBtn.disabled = true;
+            inputActionSubmitBtn.classList.add('opacity-60');
 
             if (conversationViewportPanel.children.length === 1 && conversationViewportPanel.querySelector('.m-auto')) {
                 conversationViewportPanel.innerHTML = '';
             }
 
-            renderUserPromptBubble(message); userPromptInputField.value = ''; userPromptInputField.style.height = 'auto'; mountTypingIndicator();
-
-            if (message.toLowerCase().includes("html") || message.toLowerCase().includes("code") || message.toLowerCase().includes("preview") || message.toLowerCase().includes("build")) {
-                workbenchSplitPanel.classList.remove('hidden');
-                agentBackgroundTerminalLogger.innerText = `[LOG] Intercepting evaluation coding layout guidelines...\n[ACTION] Invoking rapid token parsing streams frames...`;
-            }
+            renderUserPromptBubble(displayMessage);
+            userPromptInputField.value = '';
+            userPromptInputField.style.height = 'auto';
+            mountTypingIndicator();
+            setAgentActivity('Thinking...');
+            pushTerminalLog(`Received request: "${message.slice(0, 60)}"`);
 
             try {
                 const response = await smartFetchRequest('/chat-stream', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
                     body: JSON.stringify({ message: message, conversation_id: currentConversationId })
                 });
 
                 if (!response.ok) {
                     removeTypingIndicator();
-                    if (response.status === 401) { alert("Session expired. Please sign in again."); triggerIdentitySignout(); } 
-                    else { const cell = mountModelOutputTargetShell(); cell.innerText = "Something went wrong reaching the server. Please try again."; }
+                    clearAgentActivity();
+                    if (response.status === 401) {
+                        alert("Session expired. Please sign in again.");
+                        triggerIdentitySignout();
+                    } else {
+                        const wrapper = mountModelOutputTargetShell();
+                        const cell = document.createElement('div');
+                        cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        cell.innerText = "Something went wrong reaching the server. Please try again.";
+                        wrapper.appendChild(cell);
+                    }
                     return;
                 }
 
-                const reader = response.body.getReader(); const decoder = new TextDecoder();
-                let buffer = '', modelCell = null, fullText = '';
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '', modelWrapper = null, fullText = '';
+                let renderQueued = false;
+
+                const flushRender = () => {
+                    renderQueued = false;
+                    if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+                };
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n'); buffer = events.pop();
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop();
                     for (const evt of events) {
-                        const line = evt.trim(); if (!line.startsWith('data: ')) continue;
-                        let payload; try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
-                        if (payload.type === 'metadata') { currentConversationId = payload.conversation_id; } 
-                        else if (payload.type === 'token') {
-                            if (!modelCell) { removeTypingIndicator(); modelCell = mountModelOutputTargetShell(); }
+                        const line = evt.trim();
+                        if (!line.startsWith('data: ')) continue;
+                        let payload;
+                        try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
+                        if (payload.type === 'metadata') {
+                            currentConversationId = payload.conversation_id;
+                        } else if (payload.type === 'token') {
+                            if (!modelWrapper) {
+                                removeTypingIndicator();
+                                modelWrapper = mountModelOutputTargetShell();
+                                setAgentActivity('Writing response...');
+                            }
                             fullText += payload.text;
-                            modelCell.innerHTML = sanitizeOutputText(fullText).replace(/\n/g, "<br>");
-                            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                            // Throttle DOM rebuilding to once per animation frame so
+                            // fast token streams stay smooth instead of lagging.
+                            if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
+                        } else if (payload.type === 'image') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            setAgentActivity('Rendering image...');
+                            pushTerminalLog(`Requesting image from Pollinations AI: "${payload.prompt}"`);
+                            appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
+                        } else if (payload.type === 'file_ready') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
+                            appendDownloadCard(modelWrapper, payload.url, payload.filename);
+                        } else if (payload.type === 'terminal_output') {
+                            // Real output from a python code block that was
+                            // actually executed server-side in the background
+                            // terminal — not a simulation.
+                            const ok = payload.returncode === 0;
+                            pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
+                            if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
+                            if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
+                            if (modelWrapper) {
+                                const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-ordinal="${payload.ordinal}"]`);
+                                if (matchingCard) {
+                                    const statusText = matchingCard.querySelector('.fcc-status-text');
+                                    if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
+                                }
+                            }
                         } else if (payload.type === 'complete') {
-                            if (fullText) evaluateAndParsePreviewSandboxPayload(fullText);
+                            if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+                            pushTerminalLog('Response complete.');
                         }
                     }
                 }
-                removeTypingIndicator(); activeChatTitleHeader.innerText = message.slice(0, 60);
-                exportActionTrigger.classList.remove('hidden'); deleteActionTrigger.classList.remove('hidden');
+
+                removeTypingIndicator();
+                clearAgentActivity();
+                activeChatTitleHeader.innerText = displayMessage.slice(0, 60);
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
+                if (currentConversationId) {
+                    cacheConversationMeta(currentConversationId, displayMessage.slice(0, 60));
+                    const cache = loadConvCache();
+                    const existingMsgs = cache.messages[currentConversationId] || [];
+                    existingMsgs.push({ role: 'user', content: message });
+                    if (fullText) existingMsgs.push({ role: 'assistant', content: fullText });
+                    cacheConversationMessages(currentConversationId, existingMsgs);
+                }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
-                removeTypingIndicator(); const cell = mountModelOutputTargetShell();
-                cell.innerHTML = `<span class="text-red-500 font-semibold">System Interface Pipeline Failure Trace</span>`;
+                removeTypingIndicator();
+                clearAgentActivity();
+                const wrapper = mountModelOutputTargetShell();
+                const cell = document.createElement('div');
+                cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
+                wrapper.appendChild(cell);
+                console.error("[CHAT][STREAM ERROR]", err);
             } finally {
-                isGenerating = false; inputActionSubmitBtn.disabled = false; inputActionSubmitBtn.classList.remove('opacity-60');
+                isGenerating = false;
+                inputActionSubmitBtn.disabled = false;
+                inputActionSubmitBtn.classList.remove('opacity-60');
                 userPromptInputField.focus();
             }
         }
@@ -701,22 +1490,42 @@
 
         function renderHistoryRows(items) {
             if (items.length === 0) {
-                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`; return;
+                historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No chats found.</p>`;
+                return;
             }
             historyItemsBox.innerHTML = '';
             items.forEach(item => {
                 const row = document.createElement('div');
                 row.className = `chat-row ${item.id === currentConversationId ? 'active' : ''}`;
-                row.innerText = item.title; row.onclick = () => loadConversationSession(item.id);
+                row.innerText = item.title;
+                row.onclick = () => loadConversationSession(item.id);
                 historyItemsBox.appendChild(row);
             });
         }
 
         async function synchronizeConversationsHistoryIndex() {
+            const cache = loadConvCache();
+            let items = cache.list || [];
+            // Paint the cached list immediately so history appears instantly
+            // (fixes any perceived lag while the network call is in flight),
+            // then reconcile with the backend's copy once it responds.
+            if (items.length) { allHistoryItemsCache = items; renderHistoryRows(items); }
             try {
                 const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) return;
-                const items = await response.json(); allHistoryItemsCache = items; renderHistoryRows(items);
+                const backendItems = await response.json();
+                // Merge: anything the backend knows about wins for that id;
+                // anything only present locally (backend memory was reset)
+                // stays visible too.
+                const mergedById = {};
+                (backendItems || []).forEach(it => { mergedById[it.id] = it; });
+                items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
+                const merged = Object.values(mergedById).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+                allHistoryItemsCache = merged;
+                renderHistoryRows(merged);
+                const nextCache = loadConvCache();
+                nextCache.list = merged;
+                saveConvCache(nextCache);
             } catch (err) {}
         }
 
@@ -724,18 +1533,30 @@
             try {
                 const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) throw new Error("Load structural exception context.");
-                const logs = await response.json();
-                currentConversationId = conversationId; exportActionTrigger.classList.remove('hidden'); deleteActionTrigger.classList.remove('hidden');
+                let logs = await response.json();
+                if ((!logs || logs.length === 0)) {
+                    // Backend has nothing for this id (likely an in-memory
+                    // reset) — fall back to what we mirrored locally.
+                    const cache = loadConvCache();
+                    logs = cache.messages[conversationId] || [];
+                } else {
+                    cacheConversationMessages(conversationId, logs);
+                }
+                currentConversationId = conversationId;
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
                 conversationViewportPanel.innerHTML = '';
+                workbenchSplitPanel.classList.add('hidden');
+                document.getElementById('workbench-toggle-mobile').classList.add('hidden');
                 logs.forEach(log => {
                     if (log.role === 'user') renderUserPromptBubble(log.content);
                     else if (log.role === 'assistant') {
-                        const cell = mountModelOutputTargetShell();
-                        cell.innerHTML = sanitizeOutputText(log.content).replace(/\n/g, "<br>");
-                        evaluateAndParsePreviewSandboxPayload(log.content);
+                        const wrapper = mountModelOutputTargetShell();
+                        updateAssistantMessageDOM(wrapper, log.content);
                     }
                 });
-                synchronizeConversationsHistoryIndex(); closeMobileSidebar();
+                synchronizeConversationsHistoryIndex();
+                closeMobileSidebar();
             } catch (err) {}
         }
 
@@ -743,6 +1564,7 @@
             if (!currentConversationId) return;
             try {
                 await smartFetchRequest(`/conversations/${currentConversationId}`, { method: 'DELETE', headers: { 'Authorization': globalAuthorizationToken } });
+                removeCachedConversation(currentConversationId);
                 createNewConversation();
             } catch (err) {}
         }
@@ -754,35 +1576,171 @@
         }
 
         async function dispatchPdfUpload() {
-            const selector = document.getElementById('pdf-payload-file-element'); if (selector.files.length === 0) return;
-            const packet = new FormData(); packet.append("file", selector.files[0]);
+            const selector = document.getElementById('pdf-payload-file-element');
+            if (selector.files.length === 0) return;
+            const packet = new FormData();
+            packet.append("file", selector.files[0]);
             try {
                 const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
-                const res = await response.json(); alert(res.message || res.error); toggleModal('pdf-modal');
-            } catch (err) { alert("Vector mapping initialization fault standard trace drop."); }
+                const res = await response.json();
+                if (res.ok) {
+                    alert(`${res.filename} — ${res.status}`);
+                    pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
+                } else {
+                    alert(res.error || "Upload failed.");
+                }
+                toggleModal('pdf-modal');
+            } catch (err) { alert("Upload failed. Check your connection and try again."); }
         }
 
-        function evaluateAndParsePreviewSandboxPayload(textBlock) {
-            const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-            let match, lastMatch = null;
-            while ((match = codeBlockRegex.exec(textBlock)) !== null) lastMatch = match;
-            if (lastMatch) {
-                const language = lastMatch[1] || 'text'; const code = lastMatch[2];
-                currentExtractedPreviewArtifactPayload = code; workbenchSplitPanel.classList.remove('hidden');
-                agentBackgroundTerminalLogger.textContent = `[SUCCESS] Output detected: ${language} parsing frame context loaded cleanly.`;
-                if (language === 'html') {
-                    interactiveRenderCanvasMount.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#ffffff;border-radius:8px;" srcdoc="${sanitizeOutputText(code)}"></iframe>`;
-                } else {
-                    interactiveRenderCanvasMount.innerHTML = `<pre class="text-xs font-mono whitespace-pre-wrap p-2 text-left w-full select-text selection:bg-[var(--accent-soft)]">${sanitizeOutputText(code)}</pre>`;
+        // ── @education book/chapter picker ──────────────────────────────
+        // Typing "@education" (alone) opens a book picker fed by
+        // /education/books (reading the data/education/<Book>/ folders in
+        // the GitHub data repo). Picking a book auto-sends a small visible
+        // "selected book" message and opens a chapter picker fed by
+        // /education/chapters?book=X. Picking a chapter auto-sends a
+        // "selected chapter" message and arms pendingEducationContext, so
+        // every subsequent question gets invisibly tagged with
+        // [[EDU_BOOK:...]][[EDU_CHAPTER:...]] (stripped from what the user
+        // sees, parsed by the backend) until the person types "@education"
+        // again to pick a different book/chapter.
+        function closeEducationModals() {
+            document.getElementById('education-book-modal').classList.add('hidden');
+            document.getElementById('education-book-modal').classList.remove('flex');
+            document.getElementById('education-chapter-modal').classList.add('hidden');
+            document.getElementById('education-chapter-modal').classList.remove('flex');
+        }
+
+        async function openEducationBookModal() {
+            pendingEducationContext = null;
+            const listEl = document.getElementById('education-book-list');
+            listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Loading books...</p>`;
+            const modal = document.getElementById('education-book-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try {
+                const response = await smartFetchRequest('/education/books', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                const data = await response.json();
+                const books = (data && data.books) || [];
+                if (books.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">No books found in data/education/ yet.</p>`;
+                    return;
                 }
+                listEl.innerHTML = '';
+                books.forEach(book => {
+                    const row = document.createElement('div');
+                    row.className = 'education-option';
+                    row.innerText = book;
+                    row.onclick = () => selectEducationBook(book);
+                    listEl.appendChild(row);
+                });
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Couldn't load the book list.</p>`;
             }
         }
 
-        function expandActivePreviewContainer() {
-            if(!currentExtractedPreviewArtifactPayload) return;
-            const openWindow = window.open("", "_blank");
-            openWindow.document.open(); openWindow.document.write(currentExtractedPreviewArtifactPayload); openWindow.document.close();
+        function selectEducationBook(book) {
+            closeEducationModals();
+            renderUserPromptBubble(`📚 Selected book: ${book}`);
+            openEducationChapterModal(book);
         }
+
+        async function openEducationChapterModal(book) {
+            document.getElementById('education-chapter-title').innerText = `📖 Choose a chapter — ${book}`;
+            const listEl = document.getElementById('education-chapter-list');
+            listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Loading chapters...</p>`;
+            const modal = document.getElementById('education-chapter-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try {
+                const response = await smartFetchRequest(`/education/chapters?book=${encodeURIComponent(book)}`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                const data = await response.json();
+                const chapters = (data && data.chapters) || [];
+                if (chapters.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">No chapter PDFs found in this book's folder yet.</p>`;
+                    return;
+                }
+                listEl.innerHTML = '';
+                chapters.forEach(chapter => {
+                    const row = document.createElement('div');
+                    row.className = 'education-option';
+                    row.innerText = chapter.replace(/\.pdf$/i, '');
+                    row.onclick = () => selectEducationChapter(book, chapter);
+                    listEl.appendChild(row);
+                });
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Couldn't load the chapter list.</p>`;
+            }
+        }
+
+        function selectEducationChapter(book, chapter) {
+            closeEducationModals();
+            pendingEducationContext = { book, chapter };
+            renderUserPromptBubble(`📖 Selected chapter: ${chapter.replace(/\.pdf$/i, '')}`);
+            userPromptInputField.placeholder = `Ask a question about ${chapter.replace(/\.pdf$/i, '')}...`;
+            userPromptInputField.focus();
+        }
+
+        // Legacy note: file preview + progress used to be driven by a single
+        // end-of-stream regex pass (evaluateAndParsePreviewSandboxPayload).
+        // That has been replaced by the live, per-file "file-creation-card"
+        // system above (buildFileCreationCard / updateFileCreationCard /
+        // openFilePreviewFromCard), which tracks each fenced code block as it
+        // streams in and lets the person open any of them, not just the last.
+
+        function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const currentOrigin = window.location.origin;
+            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
+            setTheme('light');
+
+            document.querySelectorAll('[data-brand-logo]').forEach(img => {
+                img.src = LOGO_URL_512;
+                img.style.display = '';
+                img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
+                img.onerror = () => { img.style.display = 'none'; };
+            });
+            const faviconLink = document.createElement('link');
+            faviconLink.rel = 'icon';
+            faviconLink.href = LOGO_URL_192;
+            faviconLink.onerror = () => faviconLink.remove();
+            document.head.appendChild(faviconLink);
+
+            userPromptInputField.addEventListener('input', () => {
+                userPromptInputField.style.height = 'auto';
+                userPromptInputField.style.height = Math.min(userPromptInputField.scrollHeight, 128) + 'px';
+            });
+            userPromptInputField.addEventListener('paste', (e) => {
+                const clipboardText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+                const lineCount = clipboardText.split(/\r\n|\r|\n/).length;
+                if (lineCount > 50) {
+                    e.preventDefault();
+                    setPasteAttachment(clipboardText, lineCount);
+                }
+            });
+            userPromptInputField.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    interactionSubmissionForm.requestSubmit();
+                }
+            });
+            interactionSubmissionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                dispatchChatMessage();
+            });
+
+            // Try to silently restore an existing session first (fixes the
+            // "must sign in again on refresh / browser close" complaint).
+            // Only if that fails do we fall back to showing the Google
+            // sign-in button.
+            const restored = await attemptSilentSessionRestore();
+            bootSplash.style.display = 'none';
+            if (!restored) {
+                loginOverlay.style.display = 'flex';
+                initializeGoogleOauthGate();
+            }
+        });
     </script>
 </body>
 </html>
