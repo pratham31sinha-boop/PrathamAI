@@ -25,12 +25,6 @@ from flask import Flask, request, Response, jsonify, stream_with_context
 from flask_cors import CORS
 
 try:
-    from groq import Groq as GroqClient
-    _groq_sdk = True
-except ImportError:
-    _groq_sdk = False
-
-try:
     from supabase import create_client as _supabase_create
     _supabase_sdk = True
 except ImportError:
@@ -53,37 +47,35 @@ CORS(app, resources={
 
 # ── CENTRALIZED ENVIRONMENT ATTRIBUTE PARSING ──
 GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
+OPENROUTER_API_KEY   = os.environ.get("OPENROUTER_API_KEY", "").strip()
+CEREBRAS_API_KEY     = os.environ.get("CEREBRAS_API_KEY", "").strip()
+MISTRAL_API_KEY      = os.environ.get("MISTRAL_API_KEY", "").strip()
 SUPABASE_URL         = os.environ.get("SUPABASE_URL", "https://ksroorygbrhwpnqtjbxo.supabase.co").strip()
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 GITHUB_TOKEN         = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop").strip()
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
-OPENROUTER_API_KEY   = os.environ.get("OPENROUTER_API_KEY", "").strip()
 
-GROQ_CONFIGURED      = bool(GROQ_API_KEY)
 SUPABASE_CONFIGURED  = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
 
 _supabase = None
 if SUPABASE_CONFIGURED:
     try:
         _supabase = _supabase_create(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        print(f"[INIT] Core persistent layer connected to: {SUPABASE_URL}")
-    except Exception as exc:
-        print(f"[INIT][WARN] Supabase init sequence failed: {exc}")
+        print(f"[INIT] Persistent layer connected context established: {SUPABASE_URL}")
+    except Exception:
         SUPABASE_CONFIGURED = False
 
-_mem_convos: dict[str, dict] = {}
+_mem_convos: dict = {}
 
 # ── NATIVE PRIVATE REPOSITORY FILE PERSISTENCE ENGINE WRAPPER ──
 def _write_to_github_repository(target_file_path: str, contents_payload: str) -> bool:
-    """Writes or appends to target_file_path within the targeted private repository natively via HTTP."""
     if not GITHUB_TOKEN:
         print("[GITHUB][WARN] Environmental GITHUB_TOKEN context missing. Operations suspended.")
         return False
         
     repo_clean = GITHUB_REPO.replace("https://github.com/", "").strip("/")
     endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{target_file_path}"
-    
     sha_reference_token = None
     existing_content = ""
     
@@ -92,12 +84,11 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     )
     try:
-        with urllib.request.urlopen(req_lookup, timeout=15) as lookup_response:
+        with urllib.request.urlopen(req_lookup, timeout=5) as lookup_response:
             meta_data = json.loads(lookup_response.read().decode('utf-8'))
             sha_reference_token = meta_data.get("sha")
             if meta_data.get("content"):
-                decoded_raw = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
-                existing_content = decoded_raw
+                existing_content = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
     except Exception:
         pass
         
@@ -122,7 +113,7 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         method="PUT"
     )
     try:
-        with urllib.request.urlopen(request_dispatcher, timeout=20) as operation_result:
+        with urllib.request.urlopen(request_dispatcher, timeout=5) as operation_result:
             return operation_result.status in [200, 201]
     except Exception as exc:
         print(f"[GITHUB][CRITICAL FAULT] Matrix write failed for location context: {exc}")
@@ -147,26 +138,30 @@ def _verify_token(token: str) -> dict | None:
     if len(token.split('.')) == 3:
         try:
             payload_chunk = token.split('.')[1]
-            padded_chunk = payload_chunk + '=' * (4 - len(payload_chunk) % 4)
+            padded_chunk = payload_chunk + '=' * (-len(payload_chunk) % 4)
             claims = json.loads(base64.b64decode(padded_chunk).decode('utf-8'))
             
             if "accounts.google.com" in claims.get("iss", "") or "google.com" in claims.get("iss", ""):
+                exp = claims.get("exp", 0)
+                if exp and time.time() > exp:
+                    print("[AUTH][JWT] Intercepted expired token context frame. Access refused.")
+                    return None
                 user_email = claims.get("email", "").lower()
                 return {
                     "sub": claims.get("sub"),
                     "email": user_email,
                     "role": "standard",
-                    "user_metadata": {"full_name": claims.get("name"), "picture": claims.get("picture")}
+                    "user_metadata": {"full_name": "claims.get('name')", "picture": claims.get("picture")}
                 }
         except Exception as exc:
-            print(f"[AUTH][INTERNAL ERROR] Error decoding incoming token context matrix: {exc}")
+            print(f"[AUTH][INTERNAL ERROR] Error decoding incoming token structures: {exc}")
 
     if not SUPABASE_CONFIGURED or _supabase is None:
         return {
             "sub": "dev-user", 
             "email": "dev@local", 
             "role": "standard",
-            "user_metadata": {"full_name": "Fallback Dev Profile"}
+            "user_metadata": {"full_name": "Fallback Dev Profile Node"}
         }
     try:
         resp = _supabase.auth.get_user(token)
@@ -189,13 +184,13 @@ def require_auth(f):
         token = _get_token()
         user  = _verify_token(token)
         if not user:
-            return jsonify({"error": "Unauthorized Gate Verification Access Intercept."}), 401
+            return jsonify({"error": "Unauthorized Gate Verification Access Intercept: Active session profile dropped."}), 401
         request.current_user = user
         return f(*args, **kwargs)
     return wrapper
 
-# ── LLM DISTRIBUTED FAILOVER SYSTEM ──
-_provider_cooldowns: dict[str, float] = {}
+# ── LLM MULTI-PROVIDER FAILOVER PIPELINE OPTIMIZED ENGINE FOR SPEED ──
+_provider_cooldowns: dict = {}
 COOLDOWN_SECONDS = 60
 
 def _is_cooling(name: str) -> bool:
@@ -204,39 +199,35 @@ def _is_cooling(name: str) -> bool:
 def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
-GROQ_MODELS = ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
 SYSTEM_PROMPT = (
     "You are Pratham AI — an advanced full stack enterprise workspace assistant. "
-    "Always wrap output code contexts precisely within markdown blocks "
-    "using appropriate tags (like ```html or ```text) to drive the dynamic preview workbench layout canvas."
+    "Always wrap output code contexts precisely within markdown fenced blocks "
+    "using accurate tags (like ```html or ```text) to drive the dynamic preview workbench layout canvas."
 )
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
-def _stream_groq(messages: list[dict]):
-    if not GROQ_API_KEY or _is_cooling("groq"):
-        raise RuntimeError("Groq matrix unavailable or cooling down.")
-
+def _stream_openai_compatible(url: str, api_key: str, model: str, messages: list[dict]):
     body = json.dumps({
-        "model": GROQ_MODELS[0],
+        "model": model,
         "messages": messages,
         "stream": True,
         "max_tokens": 4096,
-        "temperature": 0.5,
+        "temperature": 0.4,
     }).encode()
 
     req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        url,
         data=body,
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
         },
         method="POST"
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=5) as resp:
         for raw_line in resp:
             line = raw_line.decode("utf-8", errors="replace").strip()
             if not line.startswith("data: "): continue
@@ -248,15 +239,48 @@ def _stream_groq(messages: list[dict]):
                 if token: yield _sse({"type": "token", "text": token})
             except Exception: continue
 
+def _stream_groq(messages):
+    if not GROQ_API_KEY or _is_cooling("groq"): raise RuntimeError("Groq matrix unavailable.")
+    yield from _stream_openai_compatible("https://api.groq.com/openai/v1/chat/completions", GROQ_API_KEY, "llama-3.3-70b-versatile", messages)
+
+def _stream_openrouter(messages):
+    if not OPENROUTER_API_KEY or _is_cooling("openrouter"): raise RuntimeError("OpenRouter matrix unavailable.")
+    yield from _stream_openai_compatible("https://openrouter.ai/api/v1/chat/completions", OPENROUTER_API_KEY, "meta-llama/llama-3.3-70b-instruct", messages)
+
+def _stream_cerebras(messages):
+    if not CEREBRAS_API_KEY or _is_cooling("cerebras"): raise RuntimeError("Cerebras matrix unavailable.")
+    yield from _stream_openai_compatible("https://api.cerebras.ai/v1/chat/completions", CEREBRAS_API_KEY, "llama3.3-70b", messages)
+
+def _stream_mistral(messages):
+    if not MISTRAL_API_KEY or _is_cooling("mistral"): raise RuntimeError("Mistral matrix unavailable.")
+    yield from _stream_openai_compatible("https://api.mistral.ai/v1/chat/completions", MISTRAL_API_KEY, "mistral-large-latest", messages)
+
+_PROVIDER_CHAIN = [
+    ("groq", _stream_groq),
+    ("openrouter", _stream_openrouter),
+    ("cerebras", _stream_cerebras),
+    ("mistral", _stream_mistral),
+]
+
 def _do_stream(messages: list[dict]):
-    try:
-        yield from _stream_groq(messages)
-    except Exception as exc:
-        print(f"[FAILOVER] Groq runtime context dropped: {exc}")
-        yield _sse({"type": "token", "text": "✨ **[Pratham AI Simulation Engine Mode active]**\n\nFallback local execution context simulated successfully."})
+    any_token_yielded = False
+    for name, fn in _PROVIDER_CHAIN:
+        try:
+            for chunk in fn(messages):
+                any_token_yielded = True
+                yield chunk
+            if any_token_yielded:
+                yield _sse({"type": "complete"})
+                return
+        except Exception as exc:
+            print(f"[FAILOVER LOOP ACTIVE] Provider Ring '{name}' flagged dropout: {exc}")
+            _cool(name)
+            continue
+
+    yield _sse({"type": "token", "text": "✨ **[Pratham AI Simulation Engine Mode active]**\n\nAll remote cluster endpoints metrics are temporarily saturated. Standby state link active inside virtual memories frame logs workspace."})
     yield _sse({"type": "complete"})
 
-# ── DATA ROUTING INTERFACES ──
+# ── DATA ROUTING HELPER LAYERS ──
 def _user_id() -> str:
     return getattr(request, "current_user", {}).get("sub", "anonymous")
 
@@ -311,12 +335,38 @@ def _append_message(conv_id: str, role: str, content: str):
         conv.setdefault("messages", []).append({"role": role, "content": content})
         conv["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-# ── ENDPOINT CONTROL RUNTIME MATRIX FUNCTIONS ──
+# ── ROUTING MATRIX OPERATIONS CONTROLS ENDPOINTS ──
 @app.route("/", methods=["GET"])
 @app.route("/api", methods=["GET"])
 @app.route("/api/app", methods=["GET"])
 def index_root():
     return jsonify({"message": "Pratham AI Engine Online Layer Active", "workspace_context": "ksroorygbrhwpnqtjbxo"})
+
+@app.route("/github/repo-tree", methods=["GET", "OPTIONS"])
+@app.route("/api/github/repo-tree", methods=["GET", "OPTIONS"])
+@app.route("/api/app/github/repo-tree", methods=["GET", "OPTIONS"])
+@require_auth
+def fetch_github_repository_tree_matrix():
+    if request.method == "OPTIONS": return _cors_preflight()
+    if not GITHUB_TOKEN: return jsonify({"error": "Missing GITHUB_TOKEN authorization context link."}), 400
+    
+    repo_clean = GITHUB_REPO.replace("https://github.com/", "").strip("/")
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/git/trees/main?recursive=1"
+    
+    req = urllib.request.Request(
+        endpoint_target_url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Flask-Backend"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            tree_data = json.loads(response.read().decode('utf-8'))
+            files_list = [
+                {"path": item["path"], "size": item.get("size", 0), "type": item["type"]}
+                for item in tree_data.get("tree", []) if item["type"] == "blob"
+            ]
+            return jsonify({"ok": True, "files": files_list})
+    except Exception as e:
+        return jsonify({"error": f"Failed querying remote private repo metrics node trees: {str(e)}"}), 500
 
 @app.route("/auth/vip-register", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/vip-register", methods=["POST", "OPTIONS"])
@@ -330,11 +380,11 @@ def register_vip_profile():
     email = body.get("email", _user_email()).strip()
     
     if not name or not relationship:
-        return jsonify({"error": "Incomplete configuration parameters schema mapping."}), 400
+        return jsonify({"error": "Empty configuration parameters schema mapping data rows errors."}), 400
         
     registration_row = f"Timestamp: {datetime.now(timezone.utc).isoformat()} | Email: {email} | Name: {name} | Relation Context: {relationship}\n"
     success = _write_to_github_repository("data/vip.txt", registration_row)
-    return jsonify({"ok": success, "status": "committed" if success else "fallback tracking layer active"})
+    return jsonify({"ok": success, "status": "committed" if success else "local fallback tracking sync"})
 
 @app.route("/chat-stream", methods=["POST", "OPTIONS"])
 @app.route("/api/chat-stream", methods=["POST", "OPTIONS"])
@@ -427,6 +477,11 @@ def get_messages_route(conv_id: str):
 def delete_conversation(conv_id: str):
     if request.method == "OPTIONS": return _cors_preflight()
     _mem_convos.pop(conv_id, None)
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            _supabase.table("messages").delete().eq("conversation_id", conv_id).execute()
+            _supabase.table("conversations").delete().eq("id", conv_id).execute()
+        except Exception: pass
     return jsonify({"ok": True, "target_id": conv_id})
 
 @app.route("/conversations/<conv_id>/export", methods=["GET", "OPTIONS"])
@@ -464,7 +519,7 @@ def upload_pdf():
     if request.method == "OPTIONS": return _cors_preflight()
     f = request.files.get("file")
     if not f or not f.filename.lower().endswith(".pdf"):
-        return jsonify({"error": "Fault mapping layout tracking parameter error vector data drops."}), 400
+        return jsonify({"error": "Fault mapping layout tracking parameter error vector data support format must be PDF."}), 400
     return jsonify({"ok": True, "filename": f.filename, "message": "File indexed securely."})
 
 def _cors_preflight():
