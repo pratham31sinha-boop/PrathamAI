@@ -49,6 +49,23 @@ Second pass — new features (nothing above was removed):
      not just PDF: txt/csv/json/md are read directly; .pdf via `pypdf` if
      installed; anything else gets a basic binary/text sniff instead of a
      hard rejection.
+
+Third pass — this pass ONLY (nothing above changed):
+ 14. Fixed a truncated/broken `chat_stream()` route: the creator-only live
+     memory matrix branch had an unterminated f-string and no return path.
+     Closed it out and gave it a proper SSE response.
+ 15. Implemented the rest of `chat_stream()`'s main body, which was missing
+     entirely: builds the system+history message list, detects image
+     requests (Pollinations), detects @education / @web tags and injects
+     matched context, runs the background terminal execute-and-continue
+     loop for python/bash code blocks, streams the final answer through
+     the provider failover chain, persists messages, logs the exchange to
+     GitHub, auto-extracts public knowledge, and (for zip/pdf/generic
+     export intents) attaches a real downloadable file.
+ 16. Added `_cors_preflight()`, which was called throughout the file
+     (in `require_auth` and every route's OPTIONS branch) but was never
+     defined anywhere in the file you sent.
+ 17. Added `app.run(...)` at the bottom so the file is actually launchable.
 """
 
 import os
@@ -139,6 +156,19 @@ if SUPABASE_CONFIGURED:
         SUPABASE_CONFIGURED = False
 
 _mem_convos: dict = {}
+
+# ── CORS PREFLIGHT HELPER ──
+def _cors_preflight():
+    """
+    Shared OPTIONS-request responder. Flask-CORS (configured above) already
+    injects the Access-Control-Allow-* headers into every outgoing response,
+    including this one, so this just needs to return a cheap empty 204 so
+    the browser's preflight check succeeds before the real POST/GET fires.
+    """
+    resp = Response("", status=204)
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return resp
 
 # ── GITHUB LOG PERSISTENCE ──
 _gh_sha_cache: dict = {}
@@ -1451,7 +1481,218 @@ def chat_stream():
                 filtered = [line for line in memory_dump.splitlines() if term in line.lower()]
                 response_payload = f"**Memory Search Results for '{term}':**\n" + ("\n".join(filtered) if filtered else "No intersecting fact arrays detected.")
             else:
-                response_payload = f"**Pratham AI Full Persistent Memory Matrix (Latest Entries):**\n
-http://googleusercontent.com/immersive_entry_chip/0
+                recent_lines = memory_dump.splitlines()[-40:]
+                response_payload = (
+                    "**Pratham AI Full Persistent Memory Matrix (Latest Entries):**\n"
+                    + ("\n".join(recent_lines) if recent_lines else "No entries found.")
+                )
 
-Push this raw file directly to your GitHub production branch. Vercel will compile the flawless python structure smoothly, finding your top-level `app` object on the very first pass! Let me know if the build indicator turns completely green.
+        _append_message(conv_id, "assistant", response_payload)
+
+        def generate_memory_dump():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": response_payload})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_memory_dump()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
+    # Creator-only live diagnostics interrupt
+    if user_email.lower() in CREATOR_EMAILS and _DIAGNOSTIC_INTENT_RE.search(message):
+        _append_message(conv_id, "user", message)
+        diagnostics_text = _run_system_diagnostics()
+        _append_message(conv_id, "assistant", diagnostics_text)
+
+        def generate_diagnostics():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": diagnostics_text})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_diagnostics()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
+    _append_message(conv_id, "user", message)
+    _maybe_capture_public_teaching(user_email, message)
+
+    # ── Image generation intent ──
+    image_prompt = _detect_image_prompt(message)
+    if image_prompt:
+        image_url = _pollinations_image_url(image_prompt)
+        response_payload = f"Here's your image for \"{image_prompt}\":\n\n![{image_prompt}]({image_url})"
+        _append_message(conv_id, "assistant", response_payload)
+
+        def generate_image_reply():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": response_payload})
+            yield _sse({"type": "complete"})
+
+        resp = Response(stream_with_context(generate_image_reply()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+
+    # ── Build the model message list, injecting @education / @web / shared-memory context ──
+    llm_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    history = _get_messages(conv_id)[-20:]
+    for h in history[:-1]:
+        llm_messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
+
+    context_blocks = []
+
+    if "@education" in message.lower():
+        edu_tag_match = _EDU_TAG_RE.search(message)
+        if edu_tag_match:
+            book, chapter = edu_tag_match.group(1), edu_tag_match.group(2)
+            chapter_text = _fetch_chapter_text(book, chapter)
+            excerpt = _find_best_excerpt_in_text(message, chapter_text, label=f"{book}/{chapter}")
+            if excerpt:
+                context_blocks.append(
+                    f"[EDUCATION SOURCE: {excerpt.get('label')}]\n{excerpt['excerpt']}\n[/EDUCATION SOURCE]"
+                )
+        else:
+            best = _find_best_education_excerpt(message)
+            if best:
+                context_blocks.append(
+                    f"[EDUCATION SOURCE: {best['filename']}]\n{best['excerpt']}\n[/EDUCATION SOURCE]"
+                )
+
+    if "@web" in message.lower():
+        web_query = re.sub(r"@web", "", message, flags=re.IGNORECASE).strip()
+        snippets = _web_search_snippets(web_query or message)
+        if snippets:
+            context_blocks.append("[LIVE WEB RESULTS]\n" + "\n".join(snippets) + "\n[/LIVE WEB RESULTS]")
+
+    shared_memory_excerpt = _search_intelligent_memory_excerpts(message)
+    if shared_memory_excerpt:
+        context_blocks.append(f"[SHARED PUBLIC MEMORY]\n{shared_memory_excerpt}\n[/SHARED PUBLIC MEMORY]")
+
+    vip_record = _lookup_vip(user_email)
+    if vip_record:
+        context_blocks.append(
+            f"[VIP CONTEXT] This user is registered as '{vip_record.get('name')}' "
+            f"({vip_record.get('relationship')}) to the creator. Be warm and personable "
+            f"accordingly, but do not overshare unrelated creator information.\n[/VIP CONTEXT]"
+        )
+
+    user_turn_content = message
+    if context_blocks:
+        user_turn_content = "\n\n".join(context_blocks) + f"\n\n[USER MESSAGE]\n{message}"
+
+    llm_messages.append({"role": "user", "content": user_turn_content})
+
+    # ── Background terminal execute-and-continue loop ──
+    workdir = _new_terminal_workdir()
+    accumulated_reply = ""
+    terminal_iterations = 0
+
+    try:
+        while terminal_iterations < _TERMINAL_MAX_ITERATIONS:
+            turn_text = ""
+            for chunk in _do_stream(llm_messages):
+                try:
+                    payload = json.loads(chunk[6:].strip())
+                except Exception:
+                    continue
+                if payload.get("type") == "token":
+                    turn_text += payload.get("text", "")
+
+            accumulated_reply += turn_text
+            executable_blocks = _extract_executable_blocks(turn_text)
+
+            if not executable_blocks:
+                break
+
+            terminal_iterations += 1
+            results = []
+            for lang, code in executable_blocks:
+                stdout, stderr, returncode = _run_code_block(lang, code, cwd=workdir)
+                results.append({"lang": lang, "stdout": stdout, "stderr": stderr, "returncode": returncode})
+
+            llm_messages.append({"role": "assistant", "content": turn_text})
+            llm_messages.append({"role": "user", "content": _format_terminal_results_for_model(results)})
+
+        final_reply_text = accumulated_reply.strip() or "I couldn't generate a response — please try again."
+
+        # ── File export intents (zip / pdf / generic extension) ──
+        download_token, download_filename, download_mimetype = None, None, None
+        if _is_export_intent(message, _ZIP_INTENT_RE):
+            data = _build_zip_from_response(final_reply_text, workdir=workdir)
+            download_filename, download_mimetype = "generated.zip", "application/zip"
+            download_token = _store_generated_file(data, download_filename, download_mimetype)
+        elif _is_export_intent(message, _PDF_INTENT_RE):
+            data, download_filename, download_mimetype = _build_pdf_from_response(final_reply_text)
+            download_token = _store_generated_file(data, download_filename, download_mimetype)
+        else:
+            generic_ext = _detect_generic_extension_intent(message)
+            if generic_ext:
+                data, download_filename, download_mimetype = _build_generic_file_from_response(
+                    final_reply_text, generic_ext, workdir=workdir
+                )
+                download_token = _store_generated_file(data, download_filename, download_mimetype)
+
+    finally:
+        _cleanup_terminal_workdir(workdir)
+
+    _append_message(conv_id, "assistant", final_reply_text)
+    _auto_extract_and_save_knowledge(final_reply_text)
+
+    current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    log_path = f"data/{user_email}/{current_date_formatted}.txt"
+    log_entry = (
+        f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
+        f"User: {message}\n"
+        f"Assistant: {final_reply_text}\n"
+        f"{'-' * 80}\n"
+    )
+    _write_to_github_repository(log_path, log_entry)
+
+    def generate_final_reply():
+        yield _sse({"type": "metadata", "conversation_id": conv_id})
+        yield _sse({"type": "token", "text": final_reply_text})
+        if download_token:
+            yield _sse({
+                "type": "file",
+                "download_url": f"/download/{download_token}",
+                "filename": download_filename,
+                "mimetype": download_mimetype
+            })
+        yield _sse({"type": "complete"})
+
+    resp = Response(stream_with_context(generate_final_reply()), content_type="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+
+@app.route("/conversations", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations", methods=["GET", "OPTIONS"])
+@require_auth
+def list_conversations():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return jsonify({"conversations": _list_convos(_user_id())})
+
+@app.route("/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@app.route("/api/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@app.route("/api/app/conversations/<conv_id>/messages", methods=["GET", "OPTIONS"])
+@require_auth
+def get_conversation_messages(conv_id):
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    conv = _get_convo(conv_id)
+    if not conv:
+        return jsonify({"error": "Conversation not found."}), 404
+    return jsonify({"messages": _get_messages(conv_id)})
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
