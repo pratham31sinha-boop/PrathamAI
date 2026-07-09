@@ -2,280 +2,482 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mobile Chess with Bot</title>
-    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pratham AI — Enterprise Suite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
     <style>
+        :root {
+            --bg: #f6f3ec;
+            --sidebar: #efe9dc;
+            --panel: #ffffff;
+            --border: #e3ddcc;
+            --text: #2c2a26;
+            --text-dim: #8a8478;
+            --accent: #c2613f;
+            --accent-soft: #e8d3c8;
+            --bubble-user: #efe6d8;
+            --bubble-model: #ffffff;
+            --terminal-bg: #1e1c19;
+            --terminal-text: #f4f0e6;
+        }
+
+        .dark-mode {
+            --bg: #141311;
+            --sidebar: #1d1a17;
+            --panel: #23201c;
+            --border: #36312a;
+            --text: #f3efe6;
+            --text-dim: #9c9486;
+            --accent: #e27555;
+            --accent-soft: #4a332a;
+            --bubble-user: #2d2923;
+            --bubble-model: #23201c;
+            --terminal-bg: #090807;
+            --terminal-text: #4ade80;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 10px;
-            background-color: #f0f0f0;
-            touch-action: manipulation;
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.2s ease, color 0.2s ease;
         }
-        #board-container {
-            max-width: 100%;
-            margin: 0 auto;
-            touch-action: none;
+        
+        .brand-serif {
+            font-family: 'Source Serif 4', serif;
         }
-        #board {
-            width: 100%;
-            max-width: 500px;
-            margin: 0 auto;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-        }
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin: 15px auto;
-            max-width: 500px;
-        }
-        button {
-            padding: 12px;
-            font-size: 16px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        button:disabled {
-            background-color: #cccccc;
-        }
-        .status {
-            text-align: center;
-            font-size: 18px;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-        .difficulty {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px auto;
-            max-width: 500px;
-        }
-        .difficulty label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+
+        .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
+        .workspace-scrollpane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9px; }
+        
+        #login-overlay {
+            background: var(--bg);
+            z-index: 100;
         }
     </style>
 </head>
-<body>
-    <h1 style="text-align: center;">Mobile Chess</h1>
-    <div class="status" id="status">Your turn (White)</div>
-    <div id="board-container">
-        <div id="board"></div>
-    </div>
-    <div class="controls">
-        <button id="newGameBtn">New Game</button>
-        <button id="undoBtn" disabled>Undo Move</button>
-    </div>
-    <div class="difficulty">
-        <label><input type="radio" name="difficulty" value="easy" checked> Easy</label>
-        <label><input type="radio" name="difficulty" value="medium"> Medium</label>
-        <label><input type="radio" name="difficulty" value="hard"> Hard</label>
+<body class="h-screen w-screen flex overflow-hidden antialiased select-none">
+
+    <div id="g_id_onload"
+         data-client_id="1098485250499-mockid.apps.googleusercontent.com"
+         data-context="signin"
+         data-ux_mode="popup"
+         data-callback="handleGoogleIdentityCallback"
+         data-auto_select="false">
     </div>
 
-    <script src="https://unpkg.com/chess.js@0.13.2/chess.js"></script>
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 transition-all duration-500">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl space-y-6">
+            <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
+            <p class="text-sm text-[var(--text-dim)]">Enterprise System Node Validation Portal</p>
+            <hr class="border-[var(--border)]">
+            
+            <div class="flex justify-center w-full py-2">
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-shape="rectangular"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-size="large"
+                     data-logo_alignment="left">
+                </div>
+            </div>
+            
+            <p class="text-[10px] text-[var(--text-dim)] font-mono">Workspace ID Context Reference: ksroorygbrhwpnqtjbxo</p>
+        </div>
+    </div>
+
+    <div id="app-shell" class="w-full h-full flex opacity-0 transition-opacity duration-500 pointer-events-none">
+        
+        <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between z-30 transition-all duration-300">
+            <div class="p-4 flex flex-col flex-1 overflow-hidden space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="brand-serif text-xl font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
+                    <button onclick="toggleColorTheme()" class="p-1 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md hover:border-[var(--accent)] transition-colors cursor-pointer">🌗 Mode</button>
+                </div>
+                
+                <div class="flex items-center gap-3 p-2 rounded-xl bg-[var(--panel)] border border-[var(--border)] shadow-xs">
+                    <div id="user-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--border)] flex items-center justify-center font-bold text-xs overflow-hidden text-[var(--text)]">U</div>
+                    <div class="flex-1 min-w-0">
+                        <p id="profile-name-display" class="text-xs font-semibold truncate text-[var(--text)]">Resolving Identity...</p>
+                        <p id="role-badge-display" class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-dim)]">Evaluating...</p>
+                    </div>
+                    <button onclick="triggerIdentitySignout()" class="text-xs text-[var(--accent)] font-medium hover:underline">Exit</button>
+                </div>
+
+                <button onclick="createNewConversation()" class="w-full flex items-center justify-center gap-2 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] py-2.5 px-4 rounded-xl text-sm font-medium hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer shadow-xs">
+                    ＋ New Conversation
+                </button>
+                
+                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-1">Active Indexes</div>
+                <div id="history-items-box" class="flex-1 overflow-y-auto workspace-scrollpane space-y-1 py-1 px-0.5"></div>
+            </div>
+
+            <div class="p-3 border-t border-[var(--border)] bg-[var(--sidebar)] flex flex-col gap-2">
+                <div class="p-2 bg-[var(--panel)] rounded-xl border border-[var(--border)]">
+                    <label class="text-[9px] uppercase font-bold text-[var(--text-dim)] tracking-wider block mb-1">Target Host Gateway</label>
+                    <input type="text" id="backend-host-url-config" value="" placeholder="Automatic origin resolution" class="w-full bg-[var(--bg)] text-xs px-2 py-1 border border-[var(--border)] rounded-md text-[var(--accent)] font-mono focus:outline-none" onchange="updateBackendHostContext()"/>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-1 text-[11px]">
+                    <button onclick="triggerHiddenVipFormPrompt()" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all text-center cursor-pointer shadow-xs">🔒 Secure Lock</button>
+                    <button onclick="toggleModal('pdf-modal')" class="py-1.5 bg-[var(--panel)] border border-[var(--border)] text-[var(--text-dim)] rounded-lg hover:text-[var(--text)] transition-all font-medium text-center cursor-pointer shadow-xs">📎 Ingest Vectors</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 h-full flex flex-row min-w-0 bg-[var(--bg)]">
+            
+            <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
+                <header class="h-14 border-b border-[var(--border)] px-4 flex items-center justify-between bg-[var(--panel)] z-20">
+                    <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">Pipeline Channel Standard Core</h2>
+                    <div class="flex items-center gap-2">
+                        <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">Export</button>
+                        <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden shadow-xs">Drop</button>
+                    </div>
+                </header>
+
+                <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
+                    <div class="m-auto text-center py-12 space-y-2">
+                        <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
+                        <p class="text-xs text-[var(--text-dim)] max-w-xs">Submit queries or request structured file components code execution frames.</p>
+                    </div>
+                </div>
+
+                <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-4 z-20">
+                    <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
+                        <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all">
+                            <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI... (Use @education to search vectors)" class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center bg-[var(--accent)] text-white rounded-full hover:opacity-90 transition-opacity shadow-xs cursor-pointer text-sm font-bold">↑</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+                <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
+                    <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
+                        <span>&gt;_ Live Agent Terminal Output Logs</span>
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    </div>
+                    <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
+                </div>
+
+                <div class="flex-1 flex flex-col overflow-hidden">
+                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
+                        <span>⚡ Sandbox Preview Canvas Component</span>
+                        <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout View</button>
+                    </div>
+                    <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
+                        <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="pdf-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">Ingest PDF Context Vector</h4>
+                <button onclick="toggleModal('pdf-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div class="p-5 flex flex-col gap-4">
+                <input type="file" id="pdf-payload-file-element" accept=".pdf" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
+                <button onclick="dispatchPdfUpload()" class="w-full py-2 bg-[var(--accent)] text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Initialize Document Index</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Game state
-        let game = new Chess();
-        let board = null;
-        let difficulty = 'easy';
-        let undoStack = [];
+        const loginOverlay = document.getElementById('login-overlay');
+        const appShell = document.getElementById('app-shell');
+        
+        const sidebarPanel = document.getElementById('sidebar-panel');
+        const historyItemsBox = document.getElementById('history-items-box');
+        const activeChatTitleHeader = document.getElementById('active-chat-title-header');
+        const conversationViewportPanel = document.getElementById('conversation-viewport-panel');
+        const interactionSubmissionForm = document.getElementById('interaction-submission-form');
+        const userPromptInputField = document.getElementById('user-prompt-input-field');
+        const roleBadgeDisplay = document.getElementById('role-badge-display');
+        const profileNameDisplay = document.getElementById('profile-name-display');
+        const userAvatarFrame = document.getElementById('user-avatar-frame');
+        
+        const exportActionTrigger = document.getElementById('export-action-trigger');
+        const deleteActionTrigger = document.getElementById('delete-action-trigger');
+        const backendHostConfig = document.getElementById('backend-host-url-config');
+        
+        const workbenchSplitPanel = document.getElementById('workbench-split-panel');
+        const agentBackgroundTerminalLogger = document.getElementById('agent-background-terminal-logger');
+        const interactiveRenderCanvasMount = document.getElementById('interactive-render-canvas-mount');
 
-        // Initialize the board
-        function initBoard() {
-            const config = {
-                draggable: true,
-                position: 'start',
-                onDragStart: onDragStart,
-                onDrop: onDrop,
-                onSnapEnd: onSnapEnd,
-                orientation: 'white'
-            };
-            board = Chessboard('board', config);
-        }
+        let currentConversationId = null;
+        let globalAuthorizationToken = "";
+        let SERVER_CONTEXT_HOST = "";
+        let activeUserIdentityEmail = "";
+        let currentExtractedPreviewArtifactPayload = "";
 
-        // Board event handlers
-        function onDragStart(source, piece, position, orientation) {
-            // Do not pick up pieces if the game is over
-            if (game.game_over()) return false;
-
-            // Only pick up pieces for the side to move
-            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
-                return false;
-            }
-        }
-
-        function onDrop(source, target) {
-            // See if the move is legal
-            const move = game.move({
-                from: source,
-                to: target,
-                promotion: 'q' // Always promote to queen for simplicity
-            });
-
-            // Illegal move
-            if (move === null) return 'snapback';
-
-            // Save move to undo stack
-            undoStack.push({
-                fen: game.fen(),
-                move: move
-            });
-
-            // Update status
-            updateStatus();
-
-            // Make the bot move after a short delay
-            setTimeout(makeBotMove, 250);
-        }
-
-        function onSnapEnd() {
-            board.position(game.fen());
-        }
-
-        // Bot move logic
-        function makeBotMove() {
-            if (game.game_over()) return;
-
-            const possibleMoves = game.moves();
-            if (possibleMoves.length === 0) return;
-
-            let move;
-
-            // Different difficulty levels
-            if (difficulty === 'easy') {
-                // Random move
-                move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-            } else if (difficulty === 'medium') {
-                // 50% chance of random move, 50% chance of "best" move
-                if (Math.random() < 0.5) {
-                    move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-                } else {
-                    // Try to find a capture or check
-                    const captureMoves = possibleMoves.filter(m => m.includes('x'));
-                    const checkMoves = possibleMoves.filter(m => m.includes('+'));
-
-                    if (checkMoves.length > 0) {
-                        move = checkMoves[Math.floor(Math.random() * checkMoves.length)];
-                    } else if (captureMoves.length > 0) {
-                        move = captureMoves[Math.floor(Math.random() * captureMoves.length)];
-                    } else {
-                        move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-                    }
-                }
-            } else { // hard
-                // Try to find the "best" move
-                const captureMoves = possibleMoves.filter(m => m.includes('x'));
-                const checkMoves = possibleMoves.filter(m => m.includes('+'));
-
-                if (checkMoves.length > 0) {
-                    move = checkMoves[Math.floor(Math.random() * checkMoves.length)];
-                } else if (captureMoves.length > 0) {
-                    move = captureMoves[Math.floor(Math.random() * captureMoves.length)];
-                } else {
-                    // Look for pawn moves or central control
-                    const pawnMoves = possibleMoves.filter(m => m[0] === m[0].toLowerCase());
-                    const centralMoves = possibleMoves.filter(m =>
-                        (m.includes('e4') || m.includes('e5') || m.includes('d4') || m.includes('d5')) &&
-                        !m.includes('x')
-                    );
-
-                    if (centralMoves.length > 0) {
-                        move = centralMoves[Math.floor(Math.random() * centralMoves.length)];
-                    } else if (pawnMoves.length > 0) {
-                        move = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
-                    } else {
-                        move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-                    }
-                }
-            }
-
-            // Make the move
-            game.move(move);
-
-            // Save move to undo stack
-            undoStack.push({
-                fen: game.fen(),
-                move: game.history({ verbose: true }).pop()
-            });
-
-            // Update board and status
-            board.position(game.fen());
-            updateStatus();
-        }
-
-        // Update game status
-        function updateStatus() {
-            const statusEl = document.getElementById('status');
-            let status = '';
-
-            if (game.in_checkmate()) {
-                status = 'Game over, ' + (game.turn() === 'w' ? 'Black' : 'White') + ' is in checkmate.';
-            } else if (game.in_draw()) {
-                status = 'Game over, drawn position';
-            } else {
-                status = (game.turn() === 'w' ? 'Your turn (White)' : 'Bot is thinking...');
-
-                if (game.in_check()) {
-                    status += ', ' + (game.turn() === 'w' ? 'White' : 'Black') + ' is in check';
-                }
-            }
-
-            statusEl.textContent = status;
-
-            // Enable/disable undo button
-            document.getElementById('undoBtn').disabled = undoStack.length === 0;
-        }
-
-        // New game
-        function newGame() {
-            game.reset();
-            board.start();
-            undoStack = [];
-            updateStatus();
-        }
-
-        // Undo move
-        function undoMove() {
-            if (undoStack.length >= 2) {
-                // Pop the last two moves (player and bot)
-                undoStack.pop();
-                const prevState = undoStack.pop();
-
-                game.load(prevState.fen);
-                board.position(prevState.fen);
-                updateStatus();
-            } else if (undoStack.length === 1) {
-                // Only one move to undo (player's move before bot moved)
-                const prevState = undoStack.pop();
-                game.load(prevState.fen);
-                board.position(prevState.fen);
-                updateStatus();
-            }
-        }
-
-        // Event listeners
-        document.getElementById('newGameBtn').addEventListener('click', newGame);
-        document.getElementById('undoBtn').addEventListener('click', undoMove);
-
-        // Difficulty change
-        document.querySelectorAll('input[name="difficulty"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                difficulty = this.value;
-            });
+        window.addEventListener('DOMContentLoaded', () => {
+            const currentOrigin = window.location.origin;
+            SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
+            backendHostConfig.value = SERVER_CONTEXT_HOST;
         });
 
-        // Initialize the game
-        initBoard();
-        updateStatus();
-    </script>
-</body>
-</html>
+        function toggleColorTheme() {
+            document.documentElement.classList.toggle('dark-mode');
+        }
+
+        function handleGoogleIdentityCallback(response) {
+            if (!response.credential) return;
+            globalAuthorizationToken = `Bearer ${response.credential}`;
+            
+            try {
+                const base64Url = response.credential.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const claims = JSON.parse(window.atob(base64));
+                
+                activeUserIdentityEmail = claims.email.toLowerCase();
+                profileNameDisplay.innerText = claims.name || claims.email;
+                if(claims.picture) {
+                    userAvatarFrame.innerHTML = `<img src="${claims.picture}" class="w-full h-full object-cover" referrerpolicy="no-referrer">`;
+                }
+                
+                const creators = ["pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"];
+                const supervisors = ["aditiaishwaryam11@gmail.com", "akritiaishwaryam17@gmail.com"];
+                
+                if (creators.includes(activeUserIdentityEmail)) {
+                    roleBadgeDisplay.innerText = "App Creator Profile";
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded";
+                } else if (supervisors.includes(activeUserIdentityEmail)) {
+                    roleBadgeDisplay.innerText = "Supervisor Administrator";
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded";
+                } else {
+                    roleBadgeDisplay.innerText = "Validated System User";
+                    roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded";
+                }
+                
+                loginOverlay.classList.add('opacity-0', 'pointer-events-none');
+                appShell.classList.remove('opacity-0', 'pointer-events-none');
+                
+                synchronizeConversationsHistoryIndex();
+            } catch(e) {
+                console.error("[AUTH][FAILURE] Token mapping dynamic assertion failure loop: ", e);
+            }
+        }
+
+        function triggerHiddenVipFormPrompt() {
+            const entryCode = prompt("Enter Security Token Matrix Key:");
+            if (entryCode === "31082011") {
+                const companionName = prompt("Enter your Name:");
+                const affiliation = prompt("Specify relationship details context with Pratham:");
+                
+                if(companionName && affiliation) {
+                    smartFetchRequest('/auth/vip-register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': globalAuthorizationToken
+                        },
+                        body: JSON.stringify({ name: companionName, relationship: affiliation, email: activeUserIdentityEmail })
+                    }).then(res => res.json()).then(data => {
+                        if(data.ok) {
+                            roleBadgeDisplay.innerText = "Internal Core VIP Tier";
+                            roleBadgeDisplay.className = "text-[9px] font-bold uppercase tracking-wider text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded";
+                            alert("Identity context recorded into vault file workspace successfully.");
+                        } else {
+                            alert("Storage operation tracking fault.");
+                        }
+                    });
+                }
+            } else {
+                alert("Signature reject. Authentication cycle drop.");
+            }
+        }
+
+        function triggerIdentitySignout() {
+            globalAuthorizationToken = "";
+            activeUserIdentityEmail = "";
+            loginOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            appShell.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function updateBackendHostContext() {
+            SERVER_CONTEXT_HOST = backendHostConfig.value.trim().replace(/\/$/, "");
+            synchronizeConversationsHistoryIndex();
+        }
+
+        async function smartFetchRequest(endpointPath, options = {}) {
+            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+            const pathPermutations = [
+                `${hostBase}/api/app${endpointPath}`,
+                `${hostBase}/api/app${endpointPath}/`,
+                `${hostBase}/api${endpointPath}`,
+                `${hostBase}${endpointPath}`,
+                `/api/app${endpointPath}`,
+                `/api${endpointPath}`,
+                `${endpointPath}`
+            ];
+
+            let lastResponse = null;
+            for (const targetUrl of pathPermutations) {
+                try {
+                    const response = await fetch(targetUrl, options);
+                    if (response.status !== 404) return response; 
+                    lastResponse = response;
+                } catch (err) {}
+            }
+            return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
+        }
+
+        function toggleModal(modalTargetId) {
+            const target = document.getElementById(modalTargetId);
+            target.classList.toggle('hidden');
+            target.classList.toggle('flex');
+        }
+
+        function createNewConversation() {
+            currentConversationId = null;
+            activeChatTitleHeader.innerText = "Pipeline Channel Standard Core";
+            exportActionTrigger.classList.add('hidden');
+            deleteActionTrigger.classList.add('hidden');
+            workbenchSplitPanel.classList.add('hidden');
+            conversationViewportPanel.innerHTML = `
+                <div class="m-auto text-center py-12 space-y-2">
+                    <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
+                    <p class="text-xs text-[var(--text-dim)] max-w-xs">Submit queries or request structured file components code execution frames.</p>
+                </div>
+            `;
+            synchronizeConversationsHistoryIndex();
+        }
+
+        function renderUserPromptBubble(promptText) {
+            const row = document.createElement('div');
+            row.className = 'w-full flex justify-end';
+            row.innerHTML = `
+                <div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">
+                    ${sanitizeOutputText(promptText)}
+                </div>
+            `;
+            conversationViewportPanel.appendChild(row);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+        }
+
+        function mountModelOutputTargetShell() {
+            const containerNode = document.createElement('div');
+            containerNode.className = 'w-full flex flex-col items-start gap-1';
+            containerNode.innerHTML = `
+                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
+                <div class="model-stream-target-node bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[90%] leading-relaxed break-words shadow-xs"></div>
+            `;
+            conversationViewportPanel.appendChild(containerNode);
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            return containerNode.querySelector('.model-stream-target-node');
+        }
+
+        function sanitizeOutputText(rawText) {
+            return rawText.replace(/[&<>'"]/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[char] || char));
+        }
+
+        async function synchronizeConversationsHistoryIndex() {
+            try {
+                const response = await smartFetchRequest(`/conversations`, {
+                    method: 'GET',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                if(!response.ok) return;
+                const items = await response.json();
+                
+                if (items.length === 0) {
+                    historyItemsBox.innerHTML = `<p class="text-[10px] text-[var(--text-dim)] text-center py-4">No logged history vectors found.</p>`;
+                    return;
+                }
+
+                historyItemsBox.innerHTML = '';
+                items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = `flex items-center justify-between p-2 rounded-xl text-xs group transition-all cursor-pointer ${item.id === currentConversationId ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-semibold' : 'text-[var(--text)] hover:bg-[var(--accent-soft)]/40'}`;
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2 truncate flex-1" onclick="loadConversationSession('${item.id}')">
+                            <span>💬</span>
+                            <span class="truncate">${sanitizeOutputText(item.title)}</span>
+                        </div>
+                    `;
+                    historyItemsBox.appendChild(row);
+                });
+            } catch (err) {}
+        }
+
+        async function loadConversationSession(conversationId) {
+            try {
+                const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, {
+                    method: 'GET',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                if(!response.ok) throw new Error("Load structural exception context.");
+                const logs = await response.json();
+                
+                currentConversationId = conversationId;
+                exportActionTrigger.classList.remove('hidden');
+                deleteActionTrigger.classList.remove('hidden');
+                
+                conversationViewportPanel.innerHTML = '';
+                logs.forEach(log => {
+                    if(log.role === 'user') {
+                        renderUserPromptBubble(log.content);
+                    } else if (log.role === 'assistant') {
+                        const cell = mountModelOutputTargetShell();
+                        cell.innerHTML = sanitizeOutputText(log.content).replace(/\n/g, "<br>");
+                        evaluateAndParsePreviewSandboxPayload(log.content);
+                    }
+                });
+                synchronizeConversationsHistoryIndex();
+            } catch (err) {}
+        }
+
+        async function triggerSessionDelete() {
+            if (!currentConversationId) return;
+            try {
+                await smartFetchRequest(`/conversations/${currentConversationId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': globalAuthorizationToken }
+                });
+                createNewConversation();
+            } catch (err) {}
+        }
+
+        function triggerSessionExport() {
+            if(!currentConversationId) return;
+            const hostBase = SERVER_CONTEXT_HOST.replace(/\/$/, "");
+            window.open(`${hostBase}/api/app/conversations/${currentConversationId}/export?Authorization=${encodeURIComponent(globalAuthorizationToken)}`, '_blank');
+        }
+
+        async function dispatchPdfUpload() {
+            const selector = document.getElementById('pdf-payload-file-element');
+            if(selector.files.length === 0) return;
+            const packet = new FormData();
+            packet.append("file", selector.files[0]);
+            try {
+                const response = await smartFetchRequest(`/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': globalAuthorizationToken },
+                    body: packet
+                });
+                const res = await response.json();
+                alert(res.message || res.error);
+                toggleModal('pdf-modal');
+            } catch(err) {
+                alert("Vector mapping initialization fault standard trace drop.");
+            }
+        }
+
+        function evaluateAndParsePreviewSandboxPayload(textBlock) {
+            const codeBlockRegex = /
+http://googleusercontent.com/immersive_entry_chip/0
