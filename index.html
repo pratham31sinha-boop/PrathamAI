@@ -173,6 +173,27 @@
         }
         .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
 
+        /* Workbench Preview/Files tab buttons */
+        #workbench-tab-preview, #workbench-tab-files {
+            cursor: pointer; color: var(--text-dim); background: transparent; border: none;
+            transition: background .12s ease, color .12s ease;
+        }
+        #workbench-tab-preview.wb-tab-active, #workbench-tab-files.wb-tab-active {
+            background: var(--accent-soft); color: var(--accent);
+        }
+        .wb-file-row {
+            display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+            border: 1px solid var(--border); border-radius: 9px; background: var(--panel);
+            font-size: 11.5px; color: var(--text);
+        }
+        .wb-file-row .wb-file-ext {
+            width: 26px; height: 26px; border-radius: 7px; background: var(--accent-soft);
+            color: var(--accent); font-size: 9px; font-weight: 700; display: flex;
+            align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .wb-file-row .wb-file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wb-file-row .wb-file-meta { font-size: 9.5px; color: var(--text-dim); }
+
         /* Background agent-activity strip shown above the composer while a
            response is streaming, so the person can see what the assistant is
            doing (planning, writing a file, reading terminal output, etc.) */
@@ -362,11 +383,23 @@
                 </div>
                 <div class="flex-1 flex flex-col overflow-hidden">
                     <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
-                        <span>⚡ Sandbox Preview</span>
+                        <div class="flex items-center gap-1">
+                            <button id="workbench-tab-preview" onclick="setWorkbenchTab('preview')" class="px-2 py-1 rounded text-[10px] tracking-wide">⚡ Preview</button>
+                            <button id="workbench-tab-files" onclick="setWorkbenchTab('files')" class="px-2 py-1 rounded text-[10px] tracking-wide">📁 Files</button>
+                        </div>
                         <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout</button>
                     </div>
                     <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
                         <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
+                    </div>
+                    <!-- Real Files tab: lists every file actually generated in this
+                         conversation, fed by GET /conversations/<id>/files (server
+                         reconstructs the list from real fenced code blocks in the
+                         saved conversation — not simulated repo activity). -->
+                    <div id="workbench-files-panel" class="hidden flex-1 bg-[var(--bg)] overflow-y-auto workspace-scrollpane p-2">
+                        <div id="workbench-files-list" class="flex flex-col gap-1.5">
+                            <p class="text-xs text-[var(--text-dim)] text-center py-6">No files yet in this conversation.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1690,6 +1723,61 @@
 
         function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
 
+        // ── Real Files tab (Preview / Files toggle within the Workbench) ──
+        let activeWorkbenchTab = 'preview';
+
+        function setWorkbenchTab(tab) {
+            activeWorkbenchTab = tab;
+            document.getElementById('workbench-tab-preview').classList.toggle('wb-tab-active', tab === 'preview');
+            document.getElementById('workbench-tab-files').classList.toggle('wb-tab-active', tab === 'files');
+            document.getElementById('interactive-render-canvas-mount').classList.toggle('hidden', tab !== 'preview');
+            document.getElementById('interactive-render-canvas-mount').classList.toggle('flex', tab === 'preview');
+            document.getElementById('workbench-files-panel').classList.toggle('hidden', tab !== 'files');
+            document.getElementById('workbench-files-panel').classList.toggle('flex', tab === 'files');
+            document.getElementById('workbench-files-panel').classList.toggle('flex-col', tab === 'files');
+            if (tab === 'files') loadWorkbenchFiles();
+        }
+
+        function formatByteSize(n) {
+            if (n < 1024) return `${n} B`;
+            if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+            return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        async function loadWorkbenchFiles() {
+            const listEl = document.getElementById('workbench-files-list');
+            if (!currentConversationId) {
+                listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Start a conversation to see generated files here.</p>`;
+                return;
+            }
+            listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Loading files...</p>`;
+            try {
+                const response = await smartFetchRequest(`/conversations/${currentConversationId}/files`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                const data = await response.json();
+                const files = (data && data.files) || [];
+                if (files.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">No files yet in this conversation.</p>`;
+                    return;
+                }
+                listEl.innerHTML = '';
+                files.forEach(file => {
+                    const ext = (file.lang || 'txt').slice(0, 3).toUpperCase();
+                    const row = document.createElement('div');
+                    row.className = 'wb-file-row';
+                    row.innerHTML = `
+                        <div class="wb-file-ext">${ext}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="wb-file-name">${sanitizeOutputText(file.filename)}</div>
+                            <div class="wb-file-meta">${formatByteSize(file.size_bytes || 0)}${file.created_at ? ' · ' + new Date(file.created_at).toLocaleTimeString([], {hour12:false}) : ''}</div>
+                        </div>
+                    `;
+                    listEl.appendChild(row);
+                });
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Couldn't load files for this conversation.</p>`;
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
@@ -1734,6 +1822,7 @@
             // "must sign in again on refresh / browser close" complaint).
             // Only if that fails do we fall back to showing the Google
             // sign-in button.
+            setWorkbenchTab('preview');
             const restored = await attemptSilentSessionRestore();
             bootSplash.style.display = 'none';
             if (!restored) {
