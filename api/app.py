@@ -49,6 +49,15 @@ Second pass — new features (nothing above was removed):
      not just PDF: txt/csv/json/md are read directly; .pdf via `pypdf` if
      installed; anything else gets a basic binary/text sniff instead of a
      hard rejection.
+
+Third pass — direct file-creation channel (nothing above was removed):
+ 14. The model can now emit ```createfile:<filename.ext>\n<content>\n```
+     fenced blocks to directly write a real file into the same background
+     terminal working directory used for code execution — no need to write
+     python/bash just to produce a file. Every such file is registered in
+     the conversation's file registry (same one the Workbench "Files" tab
+     already reads from) and immediately gets a real, downloadable
+     file-ready card, exactly like a zip/pdf export does.
 """
 
 import os
@@ -360,11 +369,11 @@ def _extract_export_content(assistant_text: str) -> str:
 def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
     """Packs real files first: if the background terminal actually created
     any files in `workdir` during this request (e.g. the model ran python
-    that wrote out a .csv, a script, etc.), those real files are what gets
-    zipped. Falls back to packing every fenced code block in the reply if
-    the workdir is empty, and to the clean exported content (see
-    `_extract_export_content`) as response.txt if there were no code blocks
-    either."""
+    that wrote out a .csv, a script, etc., OR used a ```createfile: block),
+    those real files are what gets zipped. Falls back to packing every
+    fenced code block in the reply if the workdir is empty, and to the
+    clean exported content (see `_extract_export_content`) as response.txt
+    if there were no code blocks either."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         real_files_written = False
@@ -1156,6 +1165,16 @@ SYSTEM_PROMPT = (
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "For creating a file directly (when you just need to write out a file's full contents, not "
+    "compute or process anything), use a ```createfile:<filename.ext> fenced block, e.g.\n"
+    "```createfile:notes.md\n<full file content goes here>\n```\n"
+    "The backend writes this as a REAL file in your working terminal directory immediately — no "
+    "python/bash needed just to produce a file. It shows up right away as its own downloadable "
+    "file card, exactly like other generated files. You can emit multiple ```createfile: blocks "
+    "in one reply (e.g. several files of a small project at once), and later ```python/```bash "
+    "blocks in the same reply can read/use files you created this way, since they share the same "
+    "working directory. Prefer ```createfile: over python's open()/write() for simple file output; "
+    "reserve python/bash for when you actually need to compute, transform, or execute something.\n\n"
     "Separately: if the person asks you to turn something into a zip, pdf, or ANY other file "
     "extension (e.g. \"zip it\", \"make it a zip\", \"as a pdf\", \"as a csv\", \"download this\"), "
     "you do NOT need to build that file yourself, and you must NOT run shell commands like "
@@ -1329,6 +1348,37 @@ _TERMINAL_MAX_ITERATIONS = 4          # hard cap on agent "run code, see result,
 _TERMINAL_BLOCK_TIMEOUT = 15          # seconds per executed block
 _TERMINAL_OUTPUT_CHAR_LIMIT = 4000    # per-stream truncation so huge output can't blow up context/UI
 
+# ── DIRECT FILE-CREATION CHANNEL (additive) ──
+# The model can write a ```createfile:<filename>\n<content>\n``` block to
+# directly create a real file in the terminal workdir, without needing to
+# write python/bash to do it. This is faster and more reliable than asking
+# the model to open()/echo a file via code execution for simple file output,
+# and it's what the frontend renders as its own small file-creation card
+# (see LANG_EXT_MAP / guessFileName handling for the "createfile:" prefix
+# on the frontend side).
+_CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
+
+def _extract_createfile_blocks(text: str):
+    """Returns [(filename, content), ...] for every ```createfile:name block
+    in `text`, in the order they appear."""
+    out = []
+    for m in _CREATEFILE_RE.finditer(text):
+        filename = m.group(1).strip().replace("..", "").lstrip("/")
+        if filename:
+            out.append((filename, m.group(2)))
+    return out
+
+def _write_direct_file(workdir: str, filename: str, content: str) -> dict:
+    """Actually writes the file to the real scratch directory (creating any
+    subfolders implied by the filename), and returns its real path/size —
+    this is genuine disk I/O in the same working directory python/bash
+    blocks in this request use, not a simulation."""
+    full_path = os.path.join(workdir, filename)
+    os.makedirs(os.path.dirname(full_path) or workdir, exist_ok=True)
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return {"filename": filename, "size_bytes": len(content.encode("utf-8")), "path": full_path}
+
 def _extract_executable_blocks(text: str):
     """Returns a list of (lang, code) for every fenced block whose language
     tag is one we know how to actually execute."""
@@ -1378,10 +1428,11 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
 
 def _new_terminal_workdir() -> str:
     """Creates a fresh, guaranteed-writable scratch directory for one
-    chat-stream request's terminal session. All executed blocks within that
-    same request share this directory, so a file written in one block (e.g.
-    step 1 generates data.csv) can be read by a later block (step 2 processes
-    data.csv) within the same multi-step agent loop."""
+    chat-stream request's terminal session. All executed blocks AND all
+    ```createfile: blocks within that same request share this directory, so
+    a file written in one block (e.g. step 1 generates data.csv, or a
+    createfile block writes config.json) can be read by a later block (step
+    2 processes data.csv) within the same multi-step agent loop."""
     return tempfile.mkdtemp(prefix="pratham_ai_terminal_")
 
 def _cleanup_terminal_workdir(path: str):
@@ -1430,16 +1481,24 @@ def _run_system_diagnostics() -> str:
     except Exception as exc:
         shell_ok, err = False, str(exc)
     lines.append(f"- Shell terminal + writable scratch dir: {'✅ working' if shell_ok else '❌ NOT working'}{f' ({err.strip()[:150]})' if not shell_ok and err else ''}")
+
+    # 3. Direct createfile channel (writes a real file without python/bash)
+    try:
+        written = _write_direct_file(workdir, "diagnostic_probe.txt", "createfile channel test")
+        createfile_ok = os.path.isfile(written["path"]) and written["size_bytes"] > 0
+    except Exception as exc:
+        createfile_ok = False
+    lines.append(f"- Direct createfile channel: {'✅ working' if createfile_ok else '❌ NOT working'}")
     _cleanup_terminal_workdir(workdir)
 
-    # 3. GitHub token / write path
+    # 4. GitHub token / write path
     lines.append(f"- GITHUB_TOKEN configured: {'✅ yes' if bool(GITHUB_TOKEN) else '❌ no (memory + logs cannot persist without this)'}")
 
-    # 4. Shared public memory read-back
+    # 5. Shared public memory read-back
     shared_text = _fetch_full_public_data_text()
     lines.append(f"- Shared memory (public_data.txt) readable: {'✅ yes' if shared_text else '⚠️ empty or unreachable'} ({len(shared_text)} chars cached)")
 
-    # 5. PDF generation (pure-python writer, no external deps needed anymore)
+    # 6. PDF generation (pure-python writer, no external deps needed anymore)
     try:
         test_pdf = _write_minimal_pdf("diagnostic test")
         pdf_ok = test_pdf[:4] == b"%PDF"
@@ -1447,7 +1506,7 @@ def _run_system_diagnostics() -> str:
         pdf_ok = False
     lines.append(f"- PDF generation (built-in, no fpdf2/pandoc needed): {'✅ working' if pdf_ok else '❌ NOT working'}")
 
-    # 6. LLM providers configured
+    # 7. LLM providers configured
     provider_flags = {
         "Groq": bool(GROQ_API_KEY), "OpenRouter": bool(OPENROUTER_API_KEY),
         "Cerebras": bool(CEREBRAS_API_KEY), "Mistral": bool(MISTRAL_API_KEY)
@@ -1455,7 +1514,7 @@ def _run_system_diagnostics() -> str:
     configured = [name for name, ok in provider_flags.items() if ok]
     lines.append(f"- LLM providers configured: {', '.join(configured) if configured else '❌ none — chat will not work'}")
 
-    # 7. Persistent conversation storage
+    # 8. Persistent conversation storage
     lines.append(f"- Supabase persistent storage: {'✅ connected' if SUPABASE_CONFIGURED else '⚠️ not configured (falling back to in-memory, wiped on restart)'}")
 
     return "\n".join(lines)
@@ -1925,6 +1984,23 @@ def chat_stream():
 
             iteration_reply = "".join(iteration_text_parts)
 
+            # ── Direct file-creation blocks (```createfile:name) — handled
+            # before code execution so a reply that both creates files AND
+            # runs code (e.g. writes config.json then a script that reads
+            # it) has the files on disk first. ──
+            for filename, content in _extract_createfile_blocks(iteration_reply):
+                try:
+                    written = _write_direct_file(terminal_workdir, filename, content)
+                    file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
+                    _register_session_file(conv_id, filename, file_ext, written["size_bytes"])
+                    with open(written["path"], "rb") as fh:
+                        file_bytes = fh.read()
+                    mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+                    token = _store_generated_file(file_bytes, filename, mimetype)
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
+                except Exception as exc:
+                    print(f"[CREATEFILE][FAULT] {exc}")
+
             # ── Walk every fenced block in this iteration's reply, in order ──
             all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
             executable_present = any(
@@ -2095,6 +2171,75 @@ def execute_python():
         return jsonify({"stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode})
     except Exception as exc:
         return jsonify({"stdout": "", "stderr": f"Sandbox Exception: {exc}", "returncode": -1})
+
+# ── DIRECT TERMINAL ENDPOINT (creator/dev use — not tied to a chat turn) ──
+# Lets the frontend (or you, via curl/Postman) run arbitrary python/bash
+# directly against a fresh scratch workdir and get real stdout/stderr back,
+# without going through the LLM at all. This is the same execution engine
+# chat-stream's agent loop uses (_run_code_block + _new_terminal_workdir),
+# just exposed directly. Handy for testing the terminal itself, or for a
+# future "raw terminal" UI panel.
+@app.route("/terminal/run", methods=["POST", "OPTIONS"])
+@app.route("/api/terminal/run", methods=["POST", "OPTIONS"])
+@app.route("/api/app/terminal/run", methods=["POST", "OPTIONS"])
+@require_auth
+def terminal_run_direct():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    lang = (body.get("lang") or "python").strip().lower()
+    code = (body.get("code") or "").strip()
+    if not code:
+        return jsonify({"error": "Empty code payload"}), 400
+    if lang not in _EXECUTABLE_LANGS:
+        return jsonify({"error": f"Unsupported lang '{lang}'. Use one of: {sorted(_EXECUTABLE_LANGS)}"}), 400
+
+    workdir = _new_terminal_workdir()
+    try:
+        stdout, stderr, rc = _run_code_block(lang, code, cwd=workdir)
+        # Surface any files the code actually created, same shape the
+        # Workbench "Files" tab expects, so a direct terminal call can also
+        # produce real downloadable file cards.
+        created_files = []
+        for root, _dirs, files in os.walk(workdir):
+            for fname in files:
+                full_path = os.path.join(root, fname)
+                with open(full_path, "rb") as fh:
+                    data = fh.read()
+                mimetype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                token = _store_generated_file(data, fname, mimetype)
+                created_files.append({"filename": fname, "size_bytes": len(data), "url": f"/download/{token}"})
+        return jsonify({"stdout": stdout, "stderr": stderr, "returncode": rc, "files": created_files})
+    finally:
+        _cleanup_terminal_workdir(workdir)
+
+# ── DIRECT FILE-CREATION ENDPOINT (creator/dev use) ──
+# Same idea as /terminal/run but for the createfile channel directly: write
+# one or more named files to a fresh scratch workdir and get back real
+# download links, without needing a chat message or the LLM at all.
+@app.route("/terminal/create-file", methods=["POST", "OPTIONS"])
+@app.route("/api/terminal/create-file", methods=["POST", "OPTIONS"])
+@app.route("/api/app/terminal/create-file", methods=["POST", "OPTIONS"])
+@require_auth
+def terminal_create_file_direct():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    filename = (body.get("filename") or "").strip().replace("..", "").lstrip("/")
+    content = body.get("content", "")
+    if not filename:
+        return jsonify({"error": "Missing 'filename'."}), 400
+
+    workdir = _new_terminal_workdir()
+    try:
+        written = _write_direct_file(workdir, filename, content)
+        with open(written["path"], "rb") as fh:
+            data = fh.read()
+        mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        token = _store_generated_file(data, filename, mimetype)
+        return jsonify({"ok": True, "filename": filename, "size_bytes": written["size_bytes"], "url": f"/download/{token}"})
+    finally:
+        _cleanup_terminal_workdir(workdir)
 
 @app.route("/upload", methods=["POST", "OPTIONS"])
 @app.route("/api/upload", methods=["POST", "OPTIONS"])
@@ -2304,7 +2449,8 @@ def _register_session_file(conv_id: str, filename: str, lang: str, size: int, do
 @require_auth
 def list_session_files(conv_id):
     """Real Files-tab data source: files actually produced in this
-    conversation, not simulated GitHub activity."""
+    conversation (via createfile blocks, code execution that wrote files,
+    or exports), not simulated GitHub activity."""
     if request.method == "OPTIONS":
         return _cors_preflight()
     files = list(_session_files_registry.get(conv_id, []))
@@ -2315,6 +2461,14 @@ def list_session_files(conv_id):
                 continue
             for lang_match, code_match in _CODE_BLOCK_RE.findall(m.get("content", "")):
                 if (lang_match or "").lower() == "finaldoc":
+                    continue
+                if (lang_match or "").lower().startswith("createfile:"):
+                    filename = lang_match.split(":", 1)[1].strip()
+                    files.append({
+                        "filename": filename, "lang": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
+                        "size_bytes": len(code_match.encode("utf-8")), "created_at": m.get("created_at"),
+                        "download_url": None
+                    })
                     continue
                 ordinal += 1
                 ext = {"html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
