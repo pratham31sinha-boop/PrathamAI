@@ -394,8 +394,9 @@
                     </div>
                     <!-- Real Files tab: lists every file actually generated in this
                          conversation, fed by GET /conversations/<id>/files (server
-                         reconstructs the list from real fenced code blocks in the
-                         saved conversation — not simulated repo activity). -->
+                         reconstructs the list from real createfile/code blocks and
+                         registered terminal output in the saved conversation — not
+                         simulated repo activity). -->
                     <div id="workbench-files-panel" class="hidden flex-1 bg-[var(--bg)] overflow-y-auto workspace-scrollpane p-2">
                         <div id="workbench-files-list" class="flex flex-col gap-1.5">
                             <p class="text-xs text-[var(--text-dim)] text-center py-6">No files yet in this conversation.</p>
@@ -973,7 +974,14 @@
             yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs'
         };
 
+        // ```createfile:<filename> blocks carry their real filename directly
+        // in the fence tag (e.g. "createfile:notes.md") — guessFileName just
+        // needs to peel that prefix off instead of guessing from a language.
         function guessFileName(lang, ordinal) {
+            if (lang && lang.toLowerCase().startsWith('createfile:')) {
+                const explicitName = lang.slice('createfile:'.length).trim();
+                if (explicitName) return explicitName;
+            }
             const ext = LANG_EXT_MAP[(lang || '').toLowerCase()] || 'txt';
             return ordinal === 1 ? `generated.${ext}` : `generated_${ordinal}.${ext}`;
         }
@@ -1004,9 +1012,13 @@
         // and fenced-code segments. The final code segment may still be
         // "open" (no closing fence yet) while tokens are still arriving —
         // that partial segment is what drives the in-progress file card.
+        // The fence-open pattern also matches ```createfile:<name> tags (not
+        // just bare \w+ language tags), so direct file-creation blocks are
+        // parsed into their own segment exactly like a language-tagged code
+        // block, and get the same in-progress -> done file-card treatment.
         function parseAssistantSegments(text) {
             const segments = [];
-            const fenceOpenRe = /```(\w+)?\n/g;
+            const fenceOpenRe = /```(createfile:[^\n`]+|\w+)?\n/g;
             let idx = 0;
             while (idx < text.length) {
                 fenceOpenRe.lastIndex = idx;
@@ -1036,12 +1048,16 @@
             card.dataset.ordinal = ordinal;
             card._code = content;
             card._lang = lang;
-            const ext = (LANG_EXT_MAP[lang] || 'txt').toUpperCase();
+            const isDirect = lang && lang.toLowerCase().startsWith('createfile:');
+            const extForBadge = isDirect
+                ? (filename.includes('.') ? filename.split('.').pop() : 'txt')
+                : (LANG_EXT_MAP[lang] || 'txt');
+            const ext = extForBadge.toUpperCase();
             card.innerHTML = `
                 <div class="fcc-icon">${ext.slice(0, 2)}</div>
                 <div class="fcc-meta">
                     <div class="fcc-name">${filename}</div>
-                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : 'Writing file...'}</span></div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : (isDirect ? 'Writing file to terminal...' : 'Writing file...')}</span></div>
                 </div>
                 <span class="fcc-openhint">${closed ? 'Open' : ''}</span>
                 <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
@@ -1108,7 +1124,9 @@
             previewCheck.innerText = artifactModalState.view === 'preview' ? '✓ Preview' : 'Preview';
             codeCheck.innerText = artifactModalState.view === 'code' ? '✓ Code' : 'Code';
 
-            const isRenderable = artifactModalState.lang === 'html' || artifactModalState.lang === 'htm';
+            const langLower = (artifactModalState.lang || '').toLowerCase();
+            const isRenderable = langLower === 'html' || langLower === 'htm' ||
+                (langLower.startsWith('createfile:') && /\.(html?|htm)$/i.test(artifactModalState.filename));
             if (artifactModalState.view === 'preview' && isRenderable) {
                 body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
             } else if (artifactModalState.view === 'preview' && !isRenderable) {
@@ -1718,8 +1736,9 @@
         // end-of-stream regex pass (evaluateAndParsePreviewSandboxPayload).
         // That has been replaced by the live, per-file "file-creation-card"
         // system above (buildFileCreationCard / updateFileCreationCard /
-        // openFilePreviewFromCard), which tracks each fenced code block as it
-        // streams in and lets the person open any of them, not just the last.
+        // openFilePreviewFromCard), which tracks each fenced code block
+        // (including direct ```createfile: blocks) as it streams in and lets
+        // the person open any of them, not just the last.
 
         function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
 
