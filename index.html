@@ -1179,7 +1179,7 @@
                     }
                     if (seg.content.trim().length > 0) {
                         node.style.display = '';
-                        node.innerHTML = sanitizeOutputText(seg.content).replace(/\n/g, '<br>');
+                        node.innerHTML = renderLightMarkdown(seg.content);
                     } else {
                         node.style.display = 'none';
                     }
@@ -1348,6 +1348,78 @@
         function removeTypingIndicator() {
             const row = document.getElementById('typing-indicator-row');
             if (row) row.remove();
+        }
+
+        // Lightweight markdown renderer for assistant text bubbles: headings,
+        // bold, bullet/numbered lists, and REAL <table> rendering for pipe
+        // tables — so structured answers (comparisons, specs, step lists)
+        // render as actual formatted content instead of a flat wall of text
+        // with literal ** and | characters.
+        function renderLightMarkdown(raw) {
+            const escaped = sanitizeOutputText(raw);
+            const lines = escaped.split('\n');
+            let html = '';
+            let i = 0;
+            let inList = false;
+            let listType = null;
+
+            const closeList = () => {
+                if (inList) { html += listType === 'ol' ? '</ol>' : '</ul>'; inList = false; listType = null; }
+            };
+            const inlineFormat = (s) => s
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/(?<!\*)\*(?!\*)(.+?)\*(?!\*)/g, '<em>$1</em>')
+                .replace(/`([^`]+?)`/g, '<code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:0.9em;">$1</code>');
+
+            while (i < lines.length) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                // Table block: a header row followed by a |---|---| separator row
+                if (trimmed.startsWith('|') && lines[i + 1] && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+                    closeList();
+                    const headerCells = trimmed.split('|').map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''));
+                    let tableHtml = '<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:0.9em;"><thead><tr>';
+                    headerCells.forEach(c => tableHtml += `<th style="text-align:left;padding:6px 10px;border-bottom:2px solid var(--border);color:var(--accent);">${inlineFormat(c)}</th>`);
+                    tableHtml += '</tr></thead><tbody>';
+                    i += 2;
+                    while (i < lines.length && lines[i].trim().startsWith('|')) {
+                        const rowCells = lines[i].trim().split('|').map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''));
+                        tableHtml += '<tr>';
+                        rowCells.forEach(c => tableHtml += `<td style="padding:6px 10px;border-bottom:1px solid var(--border);">${inlineFormat(c)}</td>`);
+                        tableHtml += '</tr>';
+                        i++;
+                    }
+                    tableHtml += '</tbody></table>';
+                    html += tableHtml;
+                    continue;
+                }
+
+                const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
+                if (headingMatch) {
+                    closeList();
+                    const level = Math.min(headingMatch[1].length + 1, 5); // ## -> h3, ### -> h4, etc.
+                    const sizes = { 2: '1.3em', 3: '1.15em', 4: '1.05em', 5: '1em' };
+                    html += `<div style="font-weight:700;font-size:${sizes[level] || '1em'};margin:${i === 0 ? '0' : '14px'} 0 6px;color:var(--text);">${inlineFormat(headingMatch[2])}</div>`;
+                    i++; continue;
+                }
+
+                const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+                const numberedMatch = trimmed.match(/^\d+[.)]\s+(.*)$/);
+                if (bulletMatch || numberedMatch) {
+                    const wantType = bulletMatch ? 'ul' : 'ol';
+                    if (!inList || listType !== wantType) { closeList(); html += wantType === 'ol' ? '<ol style="margin:4px 0 8px 20px;">' : '<ul style="margin:4px 0 8px 20px;">'; inList = true; listType = wantType; }
+                    html += `<li style="margin:2px 0;">${inlineFormat((bulletMatch || numberedMatch)[1])}</li>`;
+                    i++; continue;
+                }
+
+                closeList();
+                if (trimmed === '') { html += '<div style="height:6px;"></div>'; }
+                else { html += `<div style="margin:2px 0;">${inlineFormat(line)}</div>`; }
+                i++;
+            }
+            closeList();
+            return html;
         }
 
         function sanitizeOutputText(rawText) {
