@@ -1066,18 +1066,28 @@
             return card;
         }
 
+        // Counts lines the same simple way a text editor's status bar would
+        // (number of \n plus one for the trailing partial/last line), which
+        // is far more meaningful than a raw character count for judging the
+        // size of a generated file (e.g. a ~5000-line file vs. a short one).
+        function countLines(text) {
+            if (!text) return 0;
+            return text.split('\n').length;
+        }
+
         function updateFileCreationCard(card, content, closed) {
             card._code = content;
             const statusText = card.querySelector('.fcc-status-text');
             const openHint = card.querySelector('.fcc-openhint');
+            const lineCount = countLines(content);
             if (closed && card.classList.contains('in-progress')) {
                 card.classList.remove('in-progress');
                 card.classList.add('done');
                 statusText.innerText = 'Ready to preview';
                 openHint.innerText = 'Open';
-                pushTerminalLog(`File created: ${card.dataset.filename} (${content.length} chars)`);
+                pushTerminalLog(`File created: ${card.dataset.filename} (${lineCount} lines, ${content.length} chars)`);
             } else if (!closed) {
-                statusText.innerText = `Writing file... (${content.length} chars)`;
+                statusText.innerText = `Writing file... (${lineCount} lines)`;
             }
         }
 
@@ -1859,7 +1869,7 @@
                         <div class="wb-file-ext">${ext}</div>
                         <div class="flex-1 min-w-0">
                             <div class="wb-file-name">${sanitizeOutputText(file.filename)}</div>
-                            <div class="wb-file-meta">${formatByteSize(file.size_bytes || 0)}${file.created_at ? ' · ' + new Date(file.created_at).toLocaleTimeString([], {hour12:false}) : ''}</div>
+                            <div class="wb-file-meta">${file.line_count ? file.line_count + ' lines · ' : ''}${formatByteSize(file.size_bytes || 0)}${file.created_at ? ' · ' + new Date(file.created_at).toLocaleTimeString([], {hour12:false}) : ''}</div>
                         </div>
                     `;
                     listEl.appendChild(row);
