@@ -366,17 +366,24 @@ def _extract_export_content(assistant_text: str) -> str:
         return _strip_export_filler(m.group(1).strip())
     return _strip_export_filler(assistant_text)
 
-def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
-    """Packs real files first: if the background terminal actually created
-    any files in `workdir` during this request (e.g. the model ran python
-    that wrote out a .csv, a script, etc., OR used a ```createfile: block),
-    those real files are what gets zipped. Falls back to packing every
-    fenced code block in the reply if the workdir is empty, and to the
-    clean exported content (see `_extract_export_content`) as response.txt
-    if there were no code blocks either."""
+def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverable_name: str = "content.txt") -> bytes:
+    """
+    Fix for the "zip contains the wrong content" bug: the clean deliverable
+    (the ```finaldoc block, or the filler-stripped full reply — see
+    `_extract_export_content`) is ALWAYS written into the zip under
+    `deliverable_name` first, since that's the thing the person actually
+    asked for. Any REAL files the background terminal created in `workdir`
+    during this same request (via python/bash execution or a ```createfile:
+    block) are added alongside as extras, not as a silent replacement — so a
+    request like "write an essay, zip it" reliably gets the essay in the
+    zip, even if unrelated scratch files exist in the terminal's workdir
+    from something else the model did in the same turn.
+    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        real_files_written = False
+        deliverable_text = _extract_export_content(assistant_text)
+        zf.writestr(deliverable_name, deliverable_text)
+
         if workdir and os.path.isdir(workdir):
             for root, _dirs, files in os.walk(workdir):
                 for fname in files:
@@ -384,22 +391,8 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None) -> bytes:
                     arcname = os.path.relpath(full_path, workdir)
                     try:
                         zf.write(full_path, arcname)
-                        real_files_written = True
                     except Exception:
                         continue
-
-        if not real_files_written:
-            blocks = re.findall(r"```(\w+)?\n([\s\S]*?)```", assistant_text)
-            blocks = [(lang, content) for lang, content in blocks if (lang or "").lower() != "finaldoc"]
-            if blocks:
-                for i, (lang, content) in enumerate(blocks, start=1):
-                    ext = {
-                        "html": "html", "javascript": "js", "js": "js", "python": "py", "py": "py",
-                        "css": "css", "json": "json", "bash": "sh", "text": "txt"
-                    }.get((lang or "text").lower(), "txt")
-                    zf.writestr(f"file_{i}.{ext}", content)
-            else:
-                zf.writestr("response.txt", _extract_export_content(assistant_text))
     buf.seek(0)
     return buf.read()
 
@@ -567,6 +560,54 @@ _GENERIC_EXTENSION_RE = re.compile(
 )
 _HANDLED_EXTENSIONS = {"zip", "pdf"}  # these already have dedicated builders above
 
+# ── CONTENT-AWARE EXPORT FILENAME ──
+# Fixes "zip file has the wrong name" — previously every zip was named the
+# generic "pratham_ai_output.zip" regardless of what was actually inside it.
+# This derives a real topic-based filename from the user's own request (e.g.
+# "write an essay on climate change and zip it" -> "essay_on_climate_change.zip"),
+# falling back to a title line inside the deliverable content itself, and
+# only using a generic name as a last resort.
+_EXPORT_STOPWORDS = {
+    "write", "make", "made", "create", "created", "generate", "generated", "give", "give me",
+    "download", "convert", "save", "export", "please", "pls", "plz", "can", "you", "the",
+    "a", "an", "this", "it", "into", "to", "as", "in", "on", "of", "for", "me", "and",
+    "file", "files", "zip", "pdf", "format", "form", "output", "document", "doc", "now",
+    "want", "need", "my", "with", "using", "having",
+}
+
+def _derive_export_basename(message: str, deliverable_text: str = "") -> str:
+    """Best-effort topic slug for export filenames. Tries, in order:
+    1. A short markdown heading (# Title / **Title**) at the top of the
+       cleaned deliverable content, since the model is asked to lead with
+       a clear title for exported documents.
+    2. The user's own request message with command/format stopwords
+       stripped out (so "write an essay on the french revolution as a pdf"
+       becomes "essay-french-revolution").
+    3. A generic "pratham_ai_output" fallback if neither yields anything
+       usable.
+    """
+    # 1. Try a heading/title line from the deliverable itself.
+    if deliverable_text:
+        first_lines = deliverable_text.strip().split("\n")[:3]
+        for line in first_lines:
+            stripped = line.strip().lstrip("#").strip()
+            stripped = re.sub(r'^\*\*(.+?)\*\*$', r'\1', stripped).strip()
+            if 3 <= len(stripped) <= 80 and not stripped.lower().startswith(("here", "sure", "okay", "i'd")):
+                slug = re.sub(r"[^a-zA-Z0-9]+", "-", stripped).strip("-").lower()
+                if slug:
+                    return slug[:60]
+
+    # 2. Fall back to the user's request text, stopwords stripped.
+    words = re.findall(r"[a-zA-Z0-9]+", message.lower())
+    meaningful = [w for w in words if w not in _EXPORT_STOPWORDS and len(w) > 1]
+    if meaningful:
+        slug = "-".join(meaningful[:8])
+        if slug:
+            return slug[:60]
+
+    # 3. Last resort.
+    return "pratham_ai_output"
+
 def _detect_generic_extension_intent(message: str):
     if "?" in message:
         return None
@@ -577,6 +618,39 @@ def _detect_generic_extension_intent(message: str):
     if ext in _HANDLED_EXTENSIONS:
         return None
     return ext
+
+
+_STOPWORDS = {"a","an","the","of","on","in","to","for","and","or","about","write","make","create",
+              "please","me","my","this","that","as","zip","pdf","file","download","essay","report",
+              "document","it","into","generate","draft","short","long","give"}
+
+def _derive_export_filename(user_message: str, ext: str, fallback_content: str = "") -> str:
+    """
+    Builds a human-meaningful filename (e.g. "climate_change_essay.zip" instead
+    of a generic "pratham_ai_output.zip") from the actual topic of the
+    request. Strips common command/stopwords ("write", "essay", "as a zip",
+    etc.) and keeps the meaningful nouns, falling back to the first line of
+    the generated content, then to a generic name only as a last resort.
+    """
+    def slugify(words, max_words=6):
+        cleaned = [w.lower() for w in words if w.lower() not in _STOPWORDS and len(w) > 1]
+        cleaned = cleaned[:max_words]
+        slug = "_".join(re.sub(r"[^a-zA-Z0-9]", "", w) for w in cleaned if re.sub(r"[^a-zA-Z0-9]", "", w))
+        return slug
+
+    words = re.findall(r"[a-zA-Z0-9']+", user_message)
+    slug = slugify(words)
+
+    if not slug and fallback_content:
+        first_line = fallback_content.strip().split("\n", 1)[0]
+        first_line = re.sub(r'^\*\*|\*\*$', '', first_line.strip())
+        words = re.findall(r"[a-zA-Z0-9']+", first_line)
+        slug = slugify(words)
+
+    if not slug:
+        slug = "pratham_ai_output"
+
+    return f"{slug}.{ext}"
 
 def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: str = None):
     """Returns (bytes, filename, mimetype) for an arbitrary requested
@@ -1195,6 +1269,16 @@ SYSTEM_PROMPT = (
     "3. Never paste the deliverable into a ```text (or any other non-finaldoc) fenced block just "
     "to \"simulate\" a file — that creates a fake, non-functional file card instead of the real "
     "download the backend provides.\n\n"
+    "FORMATTING: always format replies clearly using markdown — use ## / ### headings for sections, "
+    "**bold** for key terms, numbered/bulleted lists for steps or lists, and real markdown tables "
+    "(| col | col |) whenever data is naturally tabular (comparisons, specs, schedules, pros/cons). "
+    "Never dump a wall of unformatted prose when structure would help; never fake a table with plain "
+    "dashes or spaces — use real markdown table syntax so it renders as an actual table.\n\n"
+    "IMAGES: you cannot generate images yourself, but this app has a real image generator wired in "
+    "(Pollinations AI). Whenever someone asks for an image/picture/art/graphic/illustration, just "
+    "describe what you'll generate in one short sentence — the backend detects the request and "
+    "actually renders and returns a real image automatically; you never need to say you can't make "
+    "images.\n\n"
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
@@ -1203,7 +1287,9 @@ SYSTEM_PROMPT = (
 
 # ── IMAGE GENERATION (Pollinations AI — no API key required) ──
 _IMAGE_INTENT_RE = re.compile(
-    r"^/image\s+(.+)$|\b(?:generate|create|draw|make|paint)\b.{0,20}\b(?:image|picture|photo|art|illustration|drawing)\b(?:\s+(?:of|showing|depicting))?\s*(.*)$",
+    r"^/image\s+(.+)$|"
+    r"\b(?:generate|create|draw|make|paint|design|render)\b.{0,25}\b(?:image|img|picture|pic|photo|art|artwork|illustration|drawing|wallpaper|poster|graphic|graphics)s?\b"
+    r"(?:\s+(?:of|showing|depicting|with))?\s*(.*)$",
     re.IGNORECASE
 )
 
@@ -2061,19 +2147,23 @@ def chat_stream():
             # download link.
             try:
                 if _is_export_intent(message, _ZIP_INTENT_RE):
-                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir)
-                    token = _store_generated_file(zip_bytes, "pratham_ai_output.zip", "application/zip")
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "pratham_ai_output.zip"})
+                    zip_name = _derive_export_filename(message, "zip", assistant_response)
+                    inner_name = _derive_export_filename(message, "txt", assistant_response)
+                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name)
+                    token = _store_generated_file(zip_bytes, zip_name, "application/zip")
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
                 elif _is_export_intent(message, _PDF_INTENT_RE):
-                    pdf_bytes, pdf_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                    pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                    pdf_name = _derive_export_filename(message, "pdf", assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
                 else:
                     generic_ext = _detect_generic_extension_intent(message)
                     if generic_ext:
-                        file_bytes, file_name, file_mime = _build_generic_file_from_response(
+                        file_bytes, _default_name, file_mime = _build_generic_file_from_response(
                             assistant_response, generic_ext, workdir=terminal_workdir
                         )
+                        file_name = _derive_export_filename(message, generic_ext, assistant_response)
                         token = _store_generated_file(file_bytes, file_name, file_mime)
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
             except Exception as exc:
