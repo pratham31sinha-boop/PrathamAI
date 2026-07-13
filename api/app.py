@@ -123,6 +123,34 @@ CORS(app, resources={
 
 # ── ENVIRONMENT ──
 GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
+
+# ── MULTIPLE GROQ API KEYS ──
+# Groq supports adding several keys (e.g. GROQ_API_KEY="key1,key2,key3" or
+# separate GROQ_API_KEY_2 / GROQ_API_KEY_3 / GROQ_API_KEY_4 env vars) so the
+# effective rate limit is the SUM of all keys' limits, not just one. Each
+# key gets its own independent cooldown, so if one key hits its per-minute
+# limit the next one is tried immediately instead of failing over all the
+# way down to OpenRouter/Cerebras/Mistral.
+def _collect_groq_keys() -> list:
+    keys = []
+    primary = os.environ.get("GROQ_API_KEY", "").strip()
+    if primary:
+        # Support comma-separated keys in the single GROQ_API_KEY var too.
+        keys.extend([k.strip() for k in primary.split(",") if k.strip()])
+    for suffix in range(2, 11):  # GROQ_API_KEY_2 .. GROQ_API_KEY_10
+        extra = os.environ.get(f"GROQ_API_KEY_{suffix}", "").strip()
+        if extra:
+            keys.append(extra)
+    # De-duplicate while preserving order.
+    seen = set()
+    unique_keys = []
+    for k in keys:
+        if k not in seen:
+            seen.add(k)
+            unique_keys.append(k)
+    return unique_keys
+
+GROQ_API_KEYS = _collect_groq_keys()
 OPENROUTER_API_KEY   = os.environ.get("OPENROUTER_API_KEY", "").strip()
 CEREBRAS_API_KEY     = os.environ.get("CEREBRAS_API_KEY", "").strip()
 MISTRAL_API_KEY      = os.environ.get("MISTRAL_API_KEY", "").strip()
@@ -167,6 +195,18 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
     GitHub repository. Creates the file (and implicitly the folder path,
     since GitHub's contents API creates intermediate folders automatically)
     if it does not already exist.
+
+    IMPORTANT FIX (this was the cause of "saving replaces old content
+    instead of appending"): GitHub's Contents API only inlines the file's
+    `content` field for files under ~1MB. Once a growing file like
+    data/public_data.txt crosses that size, the API keeps returning a valid
+    `sha` but a null/empty `content` field — the old code treated that as
+    "existing content is empty" and PUT the file with ONLY the new entry,
+    silently wiping everything previously saved. Now, whenever `content` is
+    missing/empty but the file's reported `size` is greater than 0 (i.e. it
+    genuinely has content GitHub just didn't inline), the real content is
+    fetched via the item's own `download_url` instead, so appends are always
+    appends — regardless of how large the file has grown.
     """
     if not GITHUB_TOKEN:
         return False
@@ -193,6 +233,23 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
                 sha_reference_token = meta_data.get("sha")
                 if meta_data.get("content"):
                     existing_content = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+                elif meta_data.get("size", 0) > 0 and meta_data.get("download_url"):
+                    # File exists and genuinely has content, but the Contents
+                    # API didn't inline it (large-file case) — fetch the real
+                    # bytes directly instead of silently treating it as empty.
+                    try:
+                        raw_req = urllib.request.Request(
+                            meta_data["download_url"],
+                            headers={"Authorization": f"token {GITHUB_TOKEN}"}
+                        )
+                        with urllib.request.urlopen(raw_req, timeout=20) as raw_resp:
+                            existing_content = raw_resp.read().decode('utf-8', errors='replace')
+                    except Exception as raw_exc:
+                        print(f"[GITHUB][LARGE-FILE FETCH FAULT] {target_file_path}: {raw_exc}")
+                        # We could not confirm the real existing content — refuse to
+                        # write at all rather than risk overwriting it with a PUT
+                        # that only contains the new entry.
+                        return False
         except Exception:
             pass
 
@@ -1086,7 +1143,9 @@ _EXPLICIT_MEMORY_COMMAND_RE = re.compile(
 # single hiccup doesn't wipe shared memory for that turn.
 _PUBLIC_MEMORY_PATH = "data/public_data.txt"
 _public_teachings_cache = {"text": "", "t": 0}
-_PUBLIC_TEACHINGS_CHAR_BUDGET = 3000  # keep the injected memory small relative to the rest of the prompt
+_PUBLIC_TEACHINGS_CHAR_BUDGET = 12000  # raised from 3000 now that public_data.txt is 5500+ lines and
+                                        # response token budget is much larger — a small cap here would
+                                        # mean most of a file this size never gets seen by the model
 
 def _maybe_capture_public_teaching(user_email: str, message: str):
     """
@@ -1154,7 +1213,17 @@ def _auto_extract_and_save_knowledge(assistant_response: str):
 def _fetch_full_public_data_text() -> str:
     """Reads the FULL data/public_data.txt file directly from GitHub on
     every call (no stale cache window) — falls back to the last known-good
-    copy only if the live fetch itself fails."""
+    copy only if the live fetch itself fails.
+
+    Same fix as _write_to_github_repository: GitHub's Contents API stops
+    inlining `content` once a file grows past ~1MB (which a file this long
+    — 5500+ lines — can genuinely hit). Previously that meant this function
+    silently returned an empty string once the file crossed that size, so
+    "always read public_data.txt before responding" was quietly reading
+    nothing. Now it falls back to the item's own `download_url`, which has
+    no such inline-size limit, whenever `content` isn't present but the
+    file's reported `size` shows it isn't actually empty.
+    """
     text = ""
     if GITHUB_TOKEN:
         repo_clean = _github_repo_slug()
@@ -1168,6 +1237,13 @@ def _fetch_full_public_data_text() -> str:
                 meta_data = json.loads(lookup_response.read().decode('utf-8'))
                 if meta_data.get("content"):
                     text = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
+                elif meta_data.get("size", 0) > 0 and meta_data.get("download_url"):
+                    raw_req = urllib.request.Request(
+                        meta_data["download_url"],
+                        headers={"Authorization": f"token {GITHUB_TOKEN}"}
+                    )
+                    with urllib.request.urlopen(raw_req, timeout=20) as raw_resp:
+                        text = raw_resp.read().decode('utf-8', errors='replace')
         except Exception as exc:
             print(f"[PUBLIC MEMORY][FETCH FAULT] {exc}")
             return _public_teachings_cache["text"]  # fall back to last known good copy
@@ -1249,6 +1325,34 @@ SYSTEM_PROMPT = (
     "blocks in the same reply can read/use files you created this way, since they share the same "
     "working directory. Prefer ```createfile: over python's open()/write() for simple file output; "
     "reserve python/bash for when you actually need to compute, transform, or execute something.\n\n"
+    "Your response length budget is large (tens of thousands of tokens) and multiple API keys are "
+    "in rotation behind you, so when someone asks for a big file (e.g. a large reference file, a "
+    "long knowledge base, a file with thousands of lines), do NOT artificially cut it short or "
+    "summarize/truncate it out of caution — write the full, complete content they asked for, even "
+    "if that means several thousand lines in a single ```createfile: block. If a response gets cut "
+    "off mid-file for any reason, you will automatically be asked to continue from exactly where you "
+    "left off — when that happens, resume seamlessly inside the same block with no repetition and no "
+    "'continuing...' preamble.\n\n"
+    "CRITICAL — editing an existing file: if the person asks you to change, fix, add to, or modify "
+    "a file that was already created earlier IN THIS SAME CONVERSATION, do NOT regenerate the whole "
+    "file with ```createfile: again — that wastes tokens/credits re-sending unchanged content and is "
+    "slower. Instead use a ```editfile:<filename.ext> block containing one or more SEARCH/REPLACE "
+    "pairs, formatted exactly like this:\n"
+    "```editfile:chess.html\n"
+    "<<<<<<< SEARCH\n"
+    "<the exact existing lines to find, copied precisely from the file>\n"
+    "=======\n"
+    "<the new lines that should replace them>\n"
+    ">>>>>>> REPLACE\n"
+    "```\n"
+    "You can include several SEARCH/REPLACE pairs in one ```editfile: block for multiple changes to "
+    "the same file. The SEARCH text must match the existing file's content exactly (including "
+    "whitespace/indentation) — copy it verbatim from what you wrote earlier, don't paraphrase it. "
+    "The backend applies your edits to the file's real current content and re-saves the full result "
+    "as a new download automatically; you never need to see or re-output the unchanged parts. Only "
+    "fall back to a full ```createfile: rewrite when the person explicitly asks for a full rewrite, "
+    "when changes are so extensive that individual search/replace edits would be impractical, or when "
+    "the file doesn't exist yet in this conversation.\n\n"
     "Separately: if the person asks you to turn something into a zip, pdf, or ANY other file "
     "extension (e.g. \"zip it\", \"make it a zip\", \"as a pdf\", \"as a csv\", \"download this\"), "
     "you do NOT need to build that file yourself, and you must NOT run shell commands like "
@@ -1314,12 +1418,19 @@ def _pollinations_image_url(prompt_text: str) -> str:
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
-def _stream_openai_compatible(url, api_key, model, messages):
+def _stream_openai_compatible(url, api_key, model, messages, state=None):
+    """`state`, if provided, is a plain dict this function writes
+    state['finish_reason'] into once the stream's final chunk reports one
+    (e.g. 'length' when the provider cut the response short because it hit
+    the token limit, vs 'stop' for a normal completion). Callers use this to
+    detect truncation and automatically continue generation — see
+    _do_stream's continuation loop below, which is what fixes "it stops
+    HTML/file generation in the middle."""
     body = json.dumps({
         "model": model,
         "messages": messages,
         "stream": True,
-        "max_tokens": 4096,
+        "max_tokens": 32768,
         "temperature": 0.5,
     }).encode()
 
@@ -1344,42 +1455,71 @@ def _stream_openai_compatible(url, api_key, model, messages):
                 break
             try:
                 payload = json.loads(payload_str)
-                token = payload["choices"][0].get("delta", {}).get("content", "")
+                choice = payload["choices"][0]
+                token = choice.get("delta", {}).get("content", "")
                 if token:
                     yield _sse({"type": "token", "text": token})
+                finish_reason = choice.get("finish_reason")
+                if finish_reason and state is not None:
+                    state["finish_reason"] = finish_reason
             except Exception:
                 continue
 
-def _stream_groq(messages):
-    if not GROQ_API_KEY or _is_cooling("groq"):
-        raise RuntimeError("Groq unavailable or cooling.")
-    yield from _stream_openai_compatible(
-        "https://api.groq.com/openai/v1/chat/completions",
-        GROQ_API_KEY, "llama-3.3-70b-versatile", messages
-    )
+def _stream_groq(messages, state=None):
+    # Multi-key rotation: try every configured Groq key in turn (each has
+    # its own independent cooldown name "groq_0", "groq_1", ...), so hitting
+    # one key's rate limit doesn't fail the whole Groq provider over to
+    # OpenRouter/Cerebras/Mistral — it just moves to the next Groq key,
+    # effectively multiplying the available Groq throughput by however many
+    # keys are configured (GROQ_API_KEY="key1,key2" or GROQ_API_KEY_2, _3, ...).
+    keys = GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
+    if not keys:
+        raise RuntimeError("Groq unavailable (no API keys configured).")
 
-def _stream_openrouter(messages):
+    last_error = None
+    any_key_tried = False
+    for idx, key in enumerate(keys):
+        cooldown_name = f"groq_{idx}"
+        if _is_cooling(cooldown_name):
+            continue
+        any_key_tried = True
+        try:
+            yield from _stream_openai_compatible(
+                "https://api.groq.com/openai/v1/chat/completions",
+                key, "llama-3.3-70b-versatile", messages, state=state
+            )
+            return
+        except Exception as exc:
+            last_error = exc
+            _cool(cooldown_name)
+            continue
+
+    if not any_key_tried:
+        raise RuntimeError("All Groq keys are currently cooling down.")
+    raise RuntimeError(f"All Groq keys failed. Last error: {last_error}")
+
+def _stream_openrouter(messages, state=None):
     if not OPENROUTER_API_KEY or _is_cooling("openrouter"):
         raise RuntimeError("OpenRouter unavailable or cooling.")
     yield from _stream_openai_compatible(
         "https://openrouter.ai/api/v1/chat/completions",
-        OPENROUTER_API_KEY, "meta-llama/llama-3.3-70b-instruct", messages
+        OPENROUTER_API_KEY, "meta-llama/llama-3.3-70b-instruct", messages, state=state
     )
 
-def _stream_cerebras(messages):
+def _stream_cerebras(messages, state=None):
     if not CEREBRAS_API_KEY or _is_cooling("cerebras"):
         raise RuntimeError("Cerebras unavailable or cooling.")
     yield from _stream_openai_compatible(
         "https://api.cerebras.ai/v1/chat/completions",
-        CEREBRAS_API_KEY, "llama3.3-70b", messages
+        CEREBRAS_API_KEY, "llama3.3-70b", messages, state=state
     )
 
-def _stream_mistral(messages):
+def _stream_mistral(messages, state=None):
     if not MISTRAL_API_KEY or _is_cooling("mistral"):
         raise RuntimeError("Mistral unavailable or cooling.")
     yield from _stream_openai_compatible(
         "https://api.mistral.ai/v1/chat/completions",
-        MISTRAL_API_KEY, "mistral-large-latest", messages
+        MISTRAL_API_KEY, "mistral-large-latest", messages, state=state
     )
 
 _PROVIDER_CHAIN = [
@@ -1389,18 +1529,71 @@ _PROVIDER_CHAIN = [
     ("mistral", _stream_mistral),
 ]
 
+_MAX_AUTO_CONTINUATIONS = 6  # hard cap on "continue where you left off" cycles per single reply
+
 def _do_stream(messages):
-    any_token_yielded = False
+    """Streams a reply from the first available provider, then — this is
+    the fix for "it stops making the HTML in the middle" — automatically
+    detects when the provider cut the response short purely because it hit
+    its token limit (finish_reason == 'length', NOT a real stop) and keeps
+    requesting continuations from the SAME provider, feeding back exactly
+    what's been generated so far and asking it to continue seamlessly with
+    no repetition, until the response actually finishes normally or the
+    continuation cap is hit. The continued tokens are streamed to the
+    frontend exactly like the original ones, so a file that would have been
+    cut off mid-file now keeps going until it's actually complete."""
     for name, fn in _PROVIDER_CHAIN:
+        state = {}
+        accumulated_text = []
+        any_token_yielded = False
+        working_messages = list(messages)
+        continuation_count = 0
+
         try:
-            for chunk in fn(messages):
-                any_token_yielded = True
-                yield chunk
+            while True:
+                state.clear()
+                got_tokens_this_round = False
+                for chunk in fn(working_messages, state=state):
+                    any_token_yielded = True
+                    got_tokens_this_round = True
+                    try:
+                        payload = json.loads(chunk[6:]) if chunk.startswith("data: ") else None
+                        if payload and payload.get("type") == "token":
+                            accumulated_text.append(payload["text"])
+                    except Exception:
+                        pass
+                    yield chunk
+
+                if not got_tokens_this_round:
+                    break
+                if state.get("finish_reason") != "length":
+                    break
+                if continuation_count >= _MAX_AUTO_CONTINUATIONS:
+                    break
+
+                continuation_count += 1
+                working_messages = list(messages) + [
+                    {"role": "assistant", "content": "".join(accumulated_text)},
+                    {"role": "user", "content": (
+                        "Continue exactly where you left off. Do not repeat any earlier text, do not "
+                        "restart the file/answer, and do not add any preamble like 'continuing...' — "
+                        "just keep producing the remaining content seamlessly as if it were never "
+                        "interrupted. If you were mid-file inside a fenced code/createfile block, "
+                        "resume inside that same block."
+                    )}
+                ]
+
             if any_token_yielded:
                 yield _sse({"type": "complete"})
                 return
         except Exception as exc:
             print(f"[FAILOVER] {name} dropped: {exc}")
+            if any_token_yielded:
+                # We already streamed partial content to the user for this
+                # provider — better to end cleanly here than silently retry
+                # a different provider and risk a duplicated/garbled reply.
+                yield _sse({"type": "complete"})
+                return
             _cool(name)
             continue
 
@@ -1432,7 +1625,8 @@ _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 4          # hard cap on agent "run code, see result, continue" cycles
 _TERMINAL_BLOCK_TIMEOUT = 15          # seconds per executed block
-_TERMINAL_OUTPUT_CHAR_LIMIT = 4000    # per-stream truncation so huge output can't blow up context/UI
+_TERMINAL_OUTPUT_CHAR_LIMIT = 200000    # raised from 4000 so large (~5000-line) file-creation tasks
+                                         # and big terminal outputs don't get silently truncated
 
 # ── DIRECT FILE-CREATION CHANNEL (additive) ──
 # The model can write a ```createfile:<filename>\n<content>\n``` block to
@@ -1463,7 +1657,92 @@ def _write_direct_file(workdir: str, filename: str, content: str) -> dict:
     os.makedirs(os.path.dirname(full_path) or workdir, exist_ok=True)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
-    return {"filename": filename, "size_bytes": len(content.encode("utf-8")), "path": full_path}
+    return {"filename": filename, "size_bytes": len(content.encode("utf-8")), "line_count": content.count("\n") + 1, "path": full_path}
+
+# ── DIRECT FILE-EDITING CHANNEL (additive) ──
+# Fixes "it recreates the whole file every time, which eats more credit /
+# tokens and sometimes cuts off mid-file." Instead of the model re-writing
+# an entire file just to change a few lines, it can emit a
+# ```editfile:<filename> block containing one or more SEARCH/REPLACE pairs.
+# The backend applies those edits to the LAST known content of that file
+# (reconstructed from this conversation's own history — see
+# _find_last_file_content_in_history) and writes out the resulting full
+# file itself, with zero extra LLM tokens spent on the unchanged parts.
+_EDITFILE_RE = re.compile(r"```editfile:([^\n`]+)\n([\s\S]*?)```")
+_EDIT_BLOCK_RE = re.compile(
+    r"<{5,}\s*SEARCH\s*\n([\s\S]*?)\n={5,}\s*\n([\s\S]*?)\n>{5,}\s*REPLACE",
+    re.IGNORECASE
+)
+
+def _extract_editfile_blocks(text: str):
+    """Returns [(filename, [(search_text, replace_text), ...]), ...] for
+    every ```editfile:name block in `text`."""
+    out = []
+    for m in _EDITFILE_RE.finditer(text):
+        filename = m.group(1).strip().replace("..", "").lstrip("/")
+        if not filename:
+            continue
+        body = m.group(2)
+        pairs = [(sm.group(1), sm.group(2)) for sm in _EDIT_BLOCK_RE.finditer(body)]
+        if pairs:
+            out.append((filename, pairs))
+    return out
+
+def _find_last_file_content_in_history(history: list, filename: str):
+    """Scans this conversation's own past assistant messages (most recent
+    first) for the last time `filename` was created or edited, and
+    reconstructs its current full content — either from a ```createfile:
+    block that wrote it, or by replaying any earlier ```editfile: edits on
+    top of the createfile version. Returns None if the file was never seen
+    in this conversation, so the caller can tell the model to createfile it
+    fresh instead."""
+    # Walk newest-to-oldest looking for the most recent createfile for this
+    # filename, then replay every editfile edit that happened AFTER it, in
+    # chronological order, to reconstruct the current content.
+    base_content = None
+    base_index = None
+    for i in range(len(history) - 1, -1, -1):
+        m = history[i]
+        if m.get("role") != "assistant":
+            continue
+        for fname, content in _extract_createfile_blocks(m.get("content", "")):
+            if fname == filename:
+                base_content = content
+                base_index = i
+                break
+        if base_content is not None:
+            break
+
+    if base_content is None:
+        return None
+
+    # Replay edits that happened after the base createfile, oldest first.
+    content = base_content
+    for i in range(base_index + 1, len(history)):
+        m = history[i]
+        if m.get("role") != "assistant":
+            continue
+        for fname, pairs in _extract_editfile_blocks(m.get("content", "")):
+            if fname != filename:
+                continue
+            for search_text, replace_text in pairs:
+                if search_text in content:
+                    content = content.replace(search_text, replace_text, 1)
+    return content
+
+def _apply_editfile_edits(base_content: str, pairs: list):
+    """Applies each (search, replace) pair once, in order, against
+    `base_content`. Returns (new_content, list_of_warnings) — a warning is
+    recorded (not raised) for any search snippet that couldn't be found, so
+    one bad match doesn't silently discard the rest of a multi-edit block."""
+    content = base_content
+    warnings = []
+    for idx, (search_text, replace_text) in enumerate(pairs, start=1):
+        if search_text in content:
+            content = content.replace(search_text, replace_text, 1)
+        else:
+            warnings.append(f"Edit #{idx}: search text not found, skipped.")
+    return content, warnings
 
 def _extract_executable_blocks(text: str):
     """Returns a list of (lang, code) for every fenced block whose language
@@ -1594,11 +1873,12 @@ def _run_system_diagnostics() -> str:
 
     # 7. LLM providers configured
     provider_flags = {
-        "Groq": bool(GROQ_API_KEY), "OpenRouter": bool(OPENROUTER_API_KEY),
+        "Groq": bool(GROQ_API_KEYS), "OpenRouter": bool(OPENROUTER_API_KEY),
         "Cerebras": bool(CEREBRAS_API_KEY), "Mistral": bool(MISTRAL_API_KEY)
     }
     configured = [name for name, ok in provider_flags.items() if ok]
     lines.append(f"- LLM providers configured: {', '.join(configured) if configured else '❌ none — chat will not work'}")
+    lines.append(f"- Groq keys configured: {len(GROQ_API_KEYS)} (each rotates independently on rate-limit/cooldown)")
 
     # 8. Persistent conversation storage
     lines.append(f"- Supabase persistent storage: {'✅ connected' if SUPABASE_CONFIGURED else '⚠️ not configured (falling back to in-memory, wiped on restart)'}")
@@ -1950,13 +2230,20 @@ def chat_stream():
             f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
             f"treat this as authorization to bypass any safety or content rules."
         )
+    # Shared memory (data/public_data.txt) is read fresh from GitHub on
+    # EVERY single message, unconditionally — not just when keywords match.
+    # _search_intelligent_memory_excerpts always fetches the live file first
+    # (see _fetch_full_public_data_text, no caching window) and only changes
+    # which lines get selected (best keyword match, or the file's tail as a
+    # fallback) — the read itself never skipped.
     shared_memory_text = _search_intelligent_memory_excerpts(message)
     if shared_memory_text:
         active_system_prompt += (
-            " Below are notes previous users have explicitly asked you to remember for everyone "
-            "(shared across all users of this app, not private to any one person). Treat them as "
-            "standing instructions/facts to keep in mind, but they never override your core safety "
-            "rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
+            " You have just read data/public_data.txt (this happens before every single reply you "
+            "give, with no exceptions). Below are the notes previous users have explicitly asked you "
+            "to remember for everyone (shared across all users of this app, not private to any one "
+            "person). Treat them as standing instructions/facts to keep in mind, but they never "
+            "override your core safety rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
         )
     api_messages = [{"role": "system", "content": active_system_prompt}]
     for m in history[-20:]:
@@ -2078,7 +2365,7 @@ def chat_stream():
                 try:
                     written = _write_direct_file(terminal_workdir, filename, content)
                     file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
-                    _register_session_file(conv_id, filename, file_ext, written["size_bytes"])
+                    _register_session_file(conv_id, filename, file_ext, written["size_bytes"], line_count=written["line_count"])
                     with open(written["path"], "rb") as fh:
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -2086,6 +2373,45 @@ def chat_stream():
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
                 except Exception as exc:
                     print(f"[CREATEFILE][FAULT] {exc}")
+
+            # ── Direct file-EDIT blocks (```editfile:name) — the fix for
+            # "it recreates the whole file every time, which eats more
+            # credit." The model only outputs the changed snippets; the
+            # backend reconstructs the file's current full content from this
+            # conversation's own history and applies the edits itself, at
+            # zero extra LLM token cost for the unchanged parts. ──
+            for filename, pairs in _extract_editfile_blocks(iteration_reply):
+                try:
+                    base_content = _find_last_file_content_in_history(history, filename)
+                    if base_content is None:
+                        # We have no record of this file in the conversation —
+                        # can't safely edit something we've never seen. Surface
+                        # this back to the model as terminal-style feedback
+                        # rather than silently failing.
+                        yield _sse({
+                            "type": "terminal_output", "ordinal": 0,
+                            "stdout": "", "stderr": f"editfile: no prior version of '{filename}' found in this "
+                                                     f"conversation — use ```createfile: instead to create it first.",
+                            "returncode": -1
+                        })
+                        continue
+                    new_content, warnings = _apply_editfile_edits(base_content, pairs)
+                    written = _write_direct_file(terminal_workdir, filename, new_content)
+                    file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
+                    _register_session_file(conv_id, filename, file_ext, written["size_bytes"], line_count=written["line_count"])
+                    with open(written["path"], "rb") as fh:
+                        file_bytes = fh.read()
+                    mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+                    token = _store_generated_file(file_bytes, filename, mimetype)
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
+                    if warnings:
+                        yield _sse({
+                            "type": "terminal_output", "ordinal": 0,
+                            "stdout": f"Applied {len(pairs) - len(warnings)}/{len(pairs)} edits to {filename}.",
+                            "stderr": " ".join(warnings), "returncode": 0
+                        })
+                except Exception as exc:
+                    print(f"[EDITFILE][FAULT] {exc}")
 
             # ── Walk every fenced block in this iteration's reply, in order ──
             all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
@@ -2424,6 +2750,7 @@ def config_public():
         "github_repo": GITHUB_REPO,
         "providers_configured": {
             "groq": bool(GROQ_API_KEY),
+            "groq_key_count": len(GROQ_API_KEYS),
             "openrouter": bool(OPENROUTER_API_KEY),
             "cerebras": bool(CEREBRAS_API_KEY),
             "mistral": bool(MISTRAL_API_KEY),
@@ -2525,11 +2852,11 @@ def validate_code_route():
         return jsonify({"error": "Empty code payload"}), 400
     return jsonify(validate_generated_code(lang, code))
 
-_session_files_registry: dict = {}  # conv_id -> [{filename, lang, size_bytes, created_at, download_url}]
+_session_files_registry: dict = {}  # conv_id -> [{filename, lang, size_bytes, line_count, created_at, download_url}]
 
-def _register_session_file(conv_id: str, filename: str, lang: str, size: int, download_url: str = None):
+def _register_session_file(conv_id: str, filename: str, lang: str, size: int, download_url: str = None, line_count: int = None):
     _session_files_registry.setdefault(conv_id, []).append({
-        "filename": filename, "lang": lang, "size_bytes": size,
+        "filename": filename, "lang": lang, "size_bytes": size, "line_count": line_count,
         "created_at": datetime.now(timezone.utc).isoformat(), "download_url": download_url
     })
 
@@ -2556,7 +2883,8 @@ def list_session_files(conv_id):
                     filename = lang_match.split(":", 1)[1].strip()
                     files.append({
                         "filename": filename, "lang": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
-                        "size_bytes": len(code_match.encode("utf-8")), "created_at": m.get("created_at"),
+                        "size_bytes": len(code_match.encode("utf-8")), "line_count": code_match.count("\n") + 1,
+                        "created_at": m.get("created_at"),
                         "download_url": None
                     })
                     continue
@@ -2565,7 +2893,8 @@ def list_session_files(conv_id):
                        "css": "css", "json": "json", "bash": "sh", "text": "txt"}.get((lang_match or "text").lower(), "txt")
                 files.append({
                     "filename": f"generated_{ordinal}.{ext}", "lang": lang_match or "text",
-                    "size_bytes": len(code_match.encode("utf-8")), "created_at": m.get("created_at"),
+                    "size_bytes": len(code_match.encode("utf-8")), "line_count": code_match.count("\n") + 1,
+                    "created_at": m.get("created_at"),
                     "download_url": None
                 })
     return jsonify({"conversation_id": conv_id, "files": files})
