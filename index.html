@@ -974,12 +974,14 @@
             yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs'
         };
 
-        // ```createfile:<filename> blocks carry their real filename directly
-        // in the fence tag (e.g. "createfile:notes.md") — guessFileName just
-        // needs to peel that prefix off instead of guessing from a language.
+        // ```createfile:<filename> and ```editfile:<filename> blocks carry
+        // their real filename directly in the fence tag (e.g.
+        // "createfile:notes.md" or "editfile:chess.html") — guessFileName
+        // just needs to peel that prefix off instead of guessing from a
+        // language.
         function guessFileName(lang, ordinal) {
-            if (lang && lang.toLowerCase().startsWith('createfile:')) {
-                const explicitName = lang.slice('createfile:'.length).trim();
+            if (lang && (lang.toLowerCase().startsWith('createfile:') || lang.toLowerCase().startsWith('editfile:'))) {
+                const explicitName = lang.slice(lang.indexOf(':') + 1).trim();
                 if (explicitName) return explicitName;
             }
             const ext = LANG_EXT_MAP[(lang || '').toLowerCase()] || 'txt';
@@ -1012,13 +1014,14 @@
         // and fenced-code segments. The final code segment may still be
         // "open" (no closing fence yet) while tokens are still arriving —
         // that partial segment is what drives the in-progress file card.
-        // The fence-open pattern also matches ```createfile:<name> tags (not
-        // just bare \w+ language tags), so direct file-creation blocks are
-        // parsed into their own segment exactly like a language-tagged code
-        // block, and get the same in-progress -> done file-card treatment.
+        // The fence-open pattern also matches ```createfile:<name> and
+        // ```editfile:<name> tags (not just bare \w+ language tags), so
+        // both direct file-creation and file-editing blocks are parsed into
+        // their own segment exactly like a language-tagged code block, and
+        // get the same in-progress -> done file-card treatment.
         function parseAssistantSegments(text) {
             const segments = [];
-            const fenceOpenRe = /```(createfile:[^\n`]+|\w+)?\n/g;
+            const fenceOpenRe = /```((?:createfile|editfile):[^\n`]+|\w+)?\n/g;
             let idx = 0;
             while (idx < text.length) {
                 fenceOpenRe.lastIndex = idx;
@@ -1048,16 +1051,19 @@
             card.dataset.ordinal = ordinal;
             card._code = content;
             card._lang = lang;
-            const isDirect = lang && lang.toLowerCase().startsWith('createfile:');
-            const extForBadge = isDirect
+            const langLowerForBadge = (lang || '').toLowerCase();
+            const isDirect = langLowerForBadge.startsWith('createfile:');
+            const isEdit = langLowerForBadge.startsWith('editfile:');
+            const extForBadge = (isDirect || isEdit)
                 ? (filename.includes('.') ? filename.split('.').pop() : 'txt')
                 : (LANG_EXT_MAP[lang] || 'txt');
             const ext = extForBadge.toUpperCase();
+            const inProgressLabel = isEdit ? 'Applying edits...' : (isDirect ? 'Writing file to terminal...' : 'Writing file...');
             card.innerHTML = `
                 <div class="fcc-icon">${ext.slice(0, 2)}</div>
                 <div class="fcc-meta">
                     <div class="fcc-name">${filename}</div>
-                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : (isDirect ? 'Writing file to terminal...' : 'Writing file...')}</span></div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : inProgressLabel}</span></div>
                 </div>
                 <span class="fcc-openhint">${closed ? 'Open' : ''}</span>
                 <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
@@ -1136,7 +1142,7 @@
 
             const langLower = (artifactModalState.lang || '').toLowerCase();
             const isRenderable = langLower === 'html' || langLower === 'htm' ||
-                (langLower.startsWith('createfile:') && /\.(html?|htm)$/i.test(artifactModalState.filename));
+                ((langLower.startsWith('createfile:') || langLower.startsWith('editfile:')) && /\.(html?|htm)$/i.test(artifactModalState.filename));
             if (artifactModalState.view === 'preview' && isRenderable) {
                 body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
             } else if (artifactModalState.view === 'preview' && !isRenderable) {
