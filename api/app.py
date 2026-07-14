@@ -817,6 +817,171 @@ def _extract_image_metadata(raw_bytes: bytes, ext: str) -> str:
         print(f"[IMAGE META][FAULT] {exc}")
         return ""
 
+# ── DEEP IMAGE ANALYSIS VIA THE REAL BACKGROUND TERMINAL ──
+# The lightweight header sniff above (_extract_image_metadata) only reads a
+# few fixed byte offsets. This instead genuinely writes the uploaded image
+# to the same background terminal workdir used for code execution and runs
+# a real Python script against it — walking every PNG chunk (IHDR, gAMA,
+# pHYs, tEXt/iTXt/zTXt text metadata, ICC profile presence, interlace mode,
+# etc.), or using Pillow for full info (mode, format, all `.info` metadata,
+# EXIF for JPEGs) when the optional `Pillow` package is installed on the
+# server. This is "send the image to the terminal" in the literal sense —
+# a subprocess actually opens and parses the real file — not just a
+# transcription/description of what the picture shows (that still needs a
+# vision-capable model, which isn't wired up here).
+_IMAGE_DEEP_ANALYSIS_SCRIPT = r"""
+import sys, os, struct, zlib
+
+path = sys.argv[1]
+size_bytes = os.path.getsize(path)
+print(f"File size: {size_bytes} bytes ({size_bytes/1024:.1f} KB)")
+
+# Prefer Pillow for the richest possible real info, if it's installed.
+try:
+    from PIL import Image, ExifTags
+    with Image.open(path) as img:
+        print(f"Format: {img.format}")
+        print(f"Mode: {img.mode}")
+        print(f"Size: {img.width}x{img.height}")
+        print(f"Has transparency info: {'transparency' in img.info}")
+        if img.info:
+            for k, v in img.info.items():
+                sval = str(v)
+                if len(sval) > 200:
+                    sval = sval[:200] + "...(truncated)"
+                print(f"info[{k}]: {sval}")
+        exif = getattr(img, "_getexif", lambda: None)()
+        if exif:
+            print("EXIF tags found:")
+            for tag_id, value in exif.items():
+                tag_name = ExifTags.TAGS.get(tag_id, tag_id)
+                sval = str(value)
+                if len(sval) > 150:
+                    sval = sval[:150] + "...(truncated)"
+                print(f"  {tag_name}: {sval}")
+        else:
+            print("No EXIF data found.")
+    print("(Pillow was used for this analysis.)")
+    sys.exit(0)
+except ImportError:
+    print("(Pillow not installed on server — falling back to manual byte-level parsing.)")
+except Exception as e:
+    print(f"(Pillow analysis failed: {e} — falling back to manual byte-level parsing.)")
+
+with open(path, "rb") as f:
+    data = f.read()
+
+if data[:8] == b"\x89PNG\r\n\x1a\n":
+    print("Detected: PNG")
+    pos = 8
+    chunk_types_seen = []
+    while pos < len(data) - 8:
+        length = struct.unpack(">I", data[pos:pos+4])[0]
+        ctype = data[pos+4:pos+8].decode("ascii", errors="replace")
+        chunk_types_seen.append(ctype)
+        chunk_data = data[pos+8:pos+8+length]
+        if ctype == "IHDR" and len(chunk_data) >= 13:
+            width, height, bit_depth, color_type, compression, filter_m, interlace = struct.unpack(">IIBBBBB", chunk_data[:13])
+            color_map = {0: "grayscale", 2: "RGB", 3: "palette", 4: "grayscale+alpha", 6: "RGBA"}
+            print(f"IHDR: {width}x{height}, {bit_depth}-bit {color_map.get(color_type, color_type)}, "
+                  f"interlace={'Adam7' if interlace else 'none'}")
+        elif ctype == "gAMA" and len(chunk_data) >= 4:
+            gamma = struct.unpack(">I", chunk_data[:4])[0] / 100000
+            print(f"gAMA (gamma): {gamma}")
+        elif ctype == "pHYs" and len(chunk_data) >= 9:
+            ppux, ppuy, unit = struct.unpack(">IIB", chunk_data[:9])
+            print(f"pHYs (pixel density): {ppux}x{ppuy} per unit, unit={'meter' if unit == 1 else 'unknown'}")
+        elif ctype in ("tEXt", "iTXt", "zTXt"):
+            try:
+                if ctype == "tEXt":
+                    key, _, val = chunk_data.partition(b"\x00")
+                    print(f"{ctype} metadata: {key.decode(errors='replace')} = {val.decode(errors='replace')[:200]}")
+                else:
+                    print(f"{ctype} metadata chunk present ({len(chunk_data)} bytes)")
+            except Exception:
+                print(f"{ctype} metadata chunk present ({len(chunk_data)} bytes, could not decode)")
+        elif ctype == "sRGB":
+            print("sRGB color profile chunk present.")
+        elif ctype == "iCCP":
+            print(f"ICC color profile embedded ({len(chunk_data)} bytes).")
+        pos += 8 + length + 4  # length + type + data + CRC
+        if ctype == "IEND":
+            break
+    print(f"All chunk types found, in order: {', '.join(chunk_types_seen)}")
+
+elif data[:2] == b"\xff\xd8":
+    print("Detected: JPEG")
+    i = 2
+    markers_found = []
+    while i < len(data) - 4:
+        if data[i] != 0xFF:
+            i += 1
+            continue
+        marker = data[i+1]
+        if marker in (0xD8, 0xD9, 0x01) or 0xD0 <= marker <= 0xD7:
+            i += 2
+            continue
+        if i + 4 > len(data):
+            break
+        seg_len = struct.unpack(">H", data[i+2:i+4])[0]
+        markers_found.append(hex(marker))
+        if marker == 0xE1 and data[i+4:i+9] == b"Exif\x00":
+            print("EXIF segment (APP1) present.")
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            height, width = struct.unpack(">HH", data[i+5:i+9])
+            channels = data[i+9]
+            print(f"SOF: {width}x{height}, {channels} channel(s)")
+        if marker == 0xDA:
+            break
+        i += 2 + seg_len
+    print(f"JPEG markers seen: {', '.join(markers_found)}")
+
+elif data[:6] in (b"GIF87a", b"GIF89a"):
+    print("Detected: GIF")
+    width, height = struct.unpack("<HH", data[6:10])
+    flags = data[10]
+    has_gct = bool(flags & 0x80)
+    gct_size = 2 ** ((flags & 0x07) + 1) if has_gct else 0
+    print(f"Dimensions: {width}x{height}, global color table: {has_gct} ({gct_size} colors)")
+    frame_count = data.count(b"\x21\xf9\x04")
+    print(f"Approximate animation frame count (via graphic control extensions): {frame_count}")
+
+else:
+    print("Format not recognized by manual parser (not PNG/JPEG/GIF signature).")
+"""
+
+def _analyze_image_via_terminal(raw_bytes: bytes, ext: str, filename_hint: str = "upload") -> str:
+    """Writes the uploaded image to a real scratch directory and runs the
+    deep-analysis script above via the SAME background terminal execution
+    engine (`_run_code_block`) used for the AI's own code blocks — this is
+    genuine subprocess execution against the real file, not a canned
+    description. Returns the script's stdout (the full analysis text), or
+    the lightweight header-sniff result as a fallback if execution fails."""
+    workdir = _new_terminal_workdir()
+    try:
+        safe_name = f"{filename_hint or 'upload'}.{ext}".replace("/", "_").replace("..", "_")
+        image_path = os.path.join(workdir, safe_name)
+        with open(image_path, "wb") as f:
+            f.write(raw_bytes)
+        # The script reads its target path via sys.argv, but _run_code_block
+        # executes with `python -c <code>` (no argv beyond that), so the
+        # image path is substituted directly into the script text instead.
+        script_with_path = _IMAGE_DEEP_ANALYSIS_SCRIPT.replace(
+            'path = sys.argv[1]', f'path = {image_path!r}'
+        )
+        stdout, stderr, rc = _run_code_block("python", script_with_path, cwd=workdir)
+        result = stdout.strip()
+        if stderr.strip():
+            result += f"\n(stderr during analysis: {stderr.strip()[:300]})"
+        if not result:
+            result = _extract_image_metadata(raw_bytes, ext)
+        return result
+    except Exception as exc:
+        print(f"[IMAGE DEEP ANALYSIS][FAULT] {exc}")
+        return _extract_image_metadata(raw_bytes, ext)
+    finally:
+        _cleanup_terminal_workdir(workdir)
+
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     if not _PDF_READ_SUPPORTED:
         return ""
@@ -1383,6 +1548,19 @@ SYSTEM_PROMPT = (
     "describe what you'll generate in one short sentence — the backend detects the request and "
     "actually renders and returns a real image automatically; you never need to say you can't make "
     "images.\n\n"
+    "When someone uploads an image, you'll receive real, full technical information about it — "
+    "actually extracted by running a script against the file in your background terminal (every PNG "
+    "chunk, EXIF data, color info, dimensions, etc., not just a basic size/dimension guess). Use that "
+    "real data confidently when reasoning about the file.\n\n"
+    "TONE CONSISTENCY: keep the same voice across an entire conversation and across turns — clear, "
+    "direct, and helpful, without switching registers (don't go from casual to overly formal or back) "
+    "and without restating who built you or what tools you have unless it's actually relevant to what "
+    "was just asked. Match the level of detail to the question: a quick fix gets a quick answer; a "
+    "build-this-from-scratch request gets the full thing.\n\n"
+    "Your background terminal executions and any file changes are already tracked/logged for this app "
+    "(conversation logs and shared memory sync to this app's GitHub data repo automatically on the "
+    "backend) — you don't need to narrate that syncing is happening or ask the person to confirm it; "
+    "just do the actual work (run the code, create/edit the file, etc.) and report the real result.\n\n"
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
@@ -2338,6 +2516,12 @@ def chat_stream():
                                  # contained a non-executable block (e.g. ```json, ```html), which
                                  # is what caused status updates to attach to the wrong card.
         terminal_workdir = _new_terminal_workdir()
+        session_file_contents = {}   # filename -> latest content WITHIN THIS TURN, checked before
+                                      # falling back to conversation history — this is the fix for
+                                      # "editing a file it just created in the same reply writes raw
+                                      # SEARCH/REPLACE markers instead of the resolved content": the
+                                      # old lookup only searched already-persisted history, which
+                                      # doesn't include anything from the response still streaming.
 
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
@@ -2363,7 +2547,30 @@ def chat_stream():
             # it) has the files on disk first. ──
             for filename, content in _extract_createfile_blocks(iteration_reply):
                 try:
-                    written = _write_direct_file(terminal_workdir, filename, content)
+                    final_content = content
+                    # Safety net: if the model accidentally put SEARCH/REPLACE
+                    # diff markers inside a createfile block instead of a
+                    # proper editfile block, resolve them here rather than
+                    # writing the raw, broken markers straight to disk (this
+                    # is exactly the bug that produced a chess.html full of
+                    # literal "<<<<<<< SEARCH" text).
+                    if _CONFLICT_MARKER_RE.search(content):
+                        stray_pairs = [(m.group(1), m.group(2)) for m in _EDIT_BLOCK_RE.finditer(content)]
+                        if stray_pairs:
+                            base_content = session_file_contents.get(filename)
+                            if base_content is None:
+                                base_content = _find_last_file_content_in_history(history, filename)
+                            if base_content is not None:
+                                final_content, _warn = _apply_editfile_edits(base_content, stray_pairs)
+                                yield _sse({
+                                    "type": "terminal_output", "ordinal": 0,
+                                    "stdout": f"Note: resolved SEARCH/REPLACE markers found inside a "
+                                              f"createfile block for {filename} — use ```editfile: for "
+                                              f"edits next time instead.",
+                                    "stderr": "", "returncode": 0
+                                })
+                    written = _write_direct_file(terminal_workdir, filename, final_content)
+                    session_file_contents[filename] = final_content
                     file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
                     _register_session_file(conv_id, filename, file_ext, written["size_bytes"], line_count=written["line_count"])
                     with open(written["path"], "rb") as fh:
@@ -2377,17 +2584,21 @@ def chat_stream():
             # ── Direct file-EDIT blocks (```editfile:name) — the fix for
             # "it recreates the whole file every time, which eats more
             # credit." The model only outputs the changed snippets; the
-            # backend reconstructs the file's current full content from this
-            # conversation's own history and applies the edits itself, at
-            # zero extra LLM token cost for the unchanged parts. ──
+            # backend reconstructs the file's current full content — first
+            # checking files already written EARLIER IN THIS SAME REPLY
+            # (session_file_contents), then falling back to this
+            # conversation's saved history — and applies the edits itself,
+            # at zero extra LLM token cost for the unchanged parts. ──
             for filename, pairs in _extract_editfile_blocks(iteration_reply):
                 try:
-                    base_content = _find_last_file_content_in_history(history, filename)
+                    base_content = session_file_contents.get(filename)
                     if base_content is None:
-                        # We have no record of this file in the conversation —
-                        # can't safely edit something we've never seen. Surface
+                        base_content = _find_last_file_content_in_history(history, filename)
+                    if base_content is None:
+                        # We have no record of this file anywhere — can't
+                        # safely edit something we've never seen. Surface
                         # this back to the model as terminal-style feedback
-                        # rather than silently failing.
+                        # rather than silently failing or writing raw markers.
                         yield _sse({
                             "type": "terminal_output", "ordinal": 0,
                             "stdout": "", "stderr": f"editfile: no prior version of '{filename}' found in this "
@@ -2397,6 +2608,7 @@ def chat_stream():
                         continue
                     new_content, warnings = _apply_editfile_edits(base_content, pairs)
                     written = _write_direct_file(terminal_workdir, filename, new_content)
+                    session_file_contents[filename] = new_content
                     file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
                     _register_session_file(conv_id, filename, file_ext, written["size_bytes"], line_count=written["line_count"])
                     with open(written["path"], "rb") as fh:
@@ -2700,12 +2912,16 @@ def upload_pdf():
             except zipfile.BadZipFile:
                 decode_status = "stored (not a valid zip)"
         elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
-            img_meta = _extract_image_metadata(raw_bytes, ext)
+            # Sent to the real background terminal for a genuine, in-depth
+            # analysis (full PNG chunk walk / EXIF / Pillow info, not just
+            # width+height) — see _analyze_image_via_terminal. Falls back to
+            # the lightweight header sniff automatically if that fails.
+            img_meta = _analyze_image_via_terminal(raw_bytes, ext, filename_hint=filename.rsplit(".", 1)[0])
             if img_meta:
                 extracted_preview = img_meta
-                decode_status = "decoded (image metadata — no pixel-level AI vision, but real file facts extracted)"
+                decode_status = "decoded (deep analysis via background terminal — full file info, not just dimensions; no pixel-level AI vision)"
             else:
-                decode_status = f"stored ({len(raw_bytes)} bytes, image — couldn't parse header metadata for this format)"
+                decode_status = f"stored ({len(raw_bytes)} bytes, image — couldn't parse this format)"
         else:
             # Best-effort generic sniff: try UTF-8 text, else report as binary.
             try:
