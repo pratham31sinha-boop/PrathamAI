@@ -1909,7 +1909,7 @@
             userPromptInputField.addEventListener('paste', (e) => {
                 const clipboardText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
                 const lineCount = clipboardText.split(/\r\n|\r|\n/).length;
-                if (lineCount > 50) {
+                if (lineCount > 30) {
                     e.preventDefault();
                     setPasteAttachment(clipboardText, lineCount);
                 }
