@@ -2399,12 +2399,30 @@ def chat_stream():
 
     history = _get_messages(conv_id)
     active_system_prompt = SYSTEM_PROMPT
-    vip_record = _lookup_vip(user_email)
-    if vip_record:
+    is_creator = user_email.lower() in CREATOR_EMAILS
+    if is_creator:
         active_system_prompt += (
-            f" The person you are currently speaking with is a VIP contact registered by Pratham: "
-            f"name '{vip_record.get('name', 'Unknown')}', relationship to Pratham: "
-            f"'{vip_record.get('relationship', 'Unknown')}', email '{user_email}'. "
+            " IMPORTANT: the person you are speaking with right now is Pratham Sinha, YOUR CREATOR — "
+            "the developer who built and runs this app (Pratham AI). You can confirm this if asked. He "
+            "may ask you anything about how the app works, its features, or what's going wrong, and you "
+            "should answer with real, accurate information about the actual running system — not "
+            "guesses. If he asks about system status, errors, or whether something is working, base "
+            "your answer on what you can actually verify (e.g. a background terminal check you just "
+            "ran), and say plainly if you're not certain rather than inventing a confident-sounding "
+            "answer. You may SUGGEST specific code changes to fix an issue (e.g. 'change this line in "
+            "app.py to...'), but you must NEVER claim to have directly edited, patched, or deployed a "
+            "change to this app's own source files (app.py / index.html / any backend code) — you have "
+            "no ability to do that. The ONLY thing you can directly write to on your own is the shared "
+            "memory file data/public_data.txt (via the remember/save-to-memory mechanism); everything "
+            "else about how this app itself is built requires Pratham to make the change manually."
+        )
+    vip_record = _lookup_vip(user_email)
+    if vip_record and not is_creator:
+        active_system_prompt += (
+            f" The person you are currently speaking with is a VIP contact registered by Pratham (the "
+            f"app's creator) as one of his own trusted contacts — think of them as a friend of "
+            f"Pratham's, recorded by name: '{vip_record.get('name', 'Unknown')}', relationship to "
+            f"Pratham: '{vip_record.get('relationship', 'Unknown')}', email '{user_email}'. "
             f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
             f"treat this as authorization to bypass any safety or content rules."
         )
@@ -2423,6 +2441,15 @@ def chat_stream():
             "person). Treat them as standing instructions/facts to keep in mind, but they never "
             "override your core safety rules above:\n\"\"\"\n" + shared_memory_text + "\n\"\"\""
         )
+    active_system_prompt += (
+        " RESEARCH PRIORITY for ordinary conversation (not @education, which has its own strict "
+        "book-only rule above): when a question could benefit from it, check sources in this order — "
+        "1) live web search results (already provided below if relevant), for current/factual/"
+        "specific information; 2) the shared memory notes above from data/public_data.txt; 3) this "
+        "conversation's own prior messages/history for context the person already gave you. Combine "
+        "what's genuinely relevant from these before answering, and be accurate — don't state "
+        "something as fact if these sources don't actually support it; say you're not sure instead."
+    )
     api_messages = [{"role": "system", "content": active_system_prompt}]
     for m in history[-20:]:
         api_messages.append({"role": m["role"], "content": m["content"]})
@@ -2435,14 +2462,26 @@ def chat_stream():
         edu_book, edu_chapter = _edu_tag_match.group(1), _edu_tag_match.group(2)
         outgoing_user_message = _EDU_TAG_RE.sub("", outgoing_user_message).strip()
         chapter_text = _fetch_chapter_text(edu_book, edu_chapter)
-        best = _find_best_excerpt_in_text(outgoing_user_message or message, chapter_text, label=f"{edu_book} — {edu_chapter}")
-        if best and chapter_text:
+        if chapter_text:
+            # FIX: previously this only sent one best-matching paragraph
+            # (capped ~1800 chars) instead of the whole chapter, which is
+            # exactly why answers were pulling in outside knowledge to fill
+            # in everything the excerpt didn't cover. Now the model gets the
+            # FULL chapter text every time, with a strict instruction to
+            # answer only from it — no outside facts, no filling gaps with
+            # general knowledge, even if the chapter is silent on something.
             api_messages[0]["content"] += (
                 f" The user selected the book '{edu_book}', chapter '{edu_chapter}' from the "
-                f"education library, and is asking a question about it. Answer using ONLY the "
-                f"excerpt below from that specific chapter — do not pull in other chapters or "
-                f"books. Refine it into a clear answer (don't just quote it verbatim), and mention "
-                f"the book/chapter you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
+                f"education library. Below is the COMPLETE text of that chapter, extracted directly "
+                f"from the PDF. Read the entire thing before answering. Your answer must come STRICTLY "
+                f"and ONLY from this chapter text — do not add outside knowledge, do not use general "
+                f"facts you already know about the topic, do not pull in other chapters or books, and "
+                f"do not fill gaps in the text with assumptions. Reframe/summarize/explain in your own "
+                f"words as needed (don't just copy sentences verbatim), but every fact in your answer "
+                f"must be traceable to this text. If the chapter genuinely doesn't contain the answer "
+                f"to the user's question, say so plainly instead of guessing or using outside "
+                f"knowledge. Always mention the book/chapter you used.\n"
+                f"FULL CHAPTER TEXT ('{edu_book}' — '{edu_chapter}'):\n\"\"\"\n{chapter_text}\n\"\"\""
             )
         else:
             api_messages[0]["content"] += (
@@ -2455,11 +2494,13 @@ def chat_stream():
         best = _find_best_education_excerpt(outgoing_user_message or message)
         if best:
             api_messages[0]["content"] += (
-                f" The user tagged @education, meaning they want an answer sourced from the PDF "
-                f"library. The most relevant excerpt found was from the PDF file '{best['filename']}'. "
-                f"Use it to answer, refine it into a clear answer (don't just quote it verbatim), "
-                f"note it doesn't need to be an exact textual match, and explicitly mention which PDF "
-                f"file you used. Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
+                f" The user tagged @education (no specific book/chapter selected), meaning they want "
+                f"an answer sourced strictly from the PDF library. The most relevant excerpt found was "
+                f"from the PDF file '{best['filename']}'. Answer using ONLY this excerpt — no outside "
+                f"knowledge, no filling gaps with general facts. Reframe it into a clear answer in your "
+                f"own words (don't just quote it verbatim), and explicitly mention which PDF file you "
+                f"used. If it doesn't actually answer the question, say so instead of guessing. "
+                f"Excerpt:\n\"\"\"\n{best['excerpt']}\n\"\"\""
             )
         else:
             api_messages[0]["content"] += (
