@@ -2552,13 +2552,24 @@ def chat_stream():
         # exported file, rather than waiting for the model's full reply to
         # start streaming — matches "it will reply the file is being made
         # and then the generated file".
+        #
+        # FIX: the @education flow tags messages with an invisible
+        # [[EDU_BOOK:...]][[EDU_CHAPTER:....pdf]] prefix (the chapter's real
+        # filename, which usually ends in .pdf). Checking export intent
+        # against the RAW message meant that literal ".pdf" in the hidden
+        # tag falsely triggered "the user wants a PDF export" on every
+        # single @education chapter question — that's exactly what produced
+        # the "📄 Your pdf file is being generated..." + an unwanted PDF
+        # download on a plain question. Export intent is now checked against
+        # the message with that invisible tag stripped out first.
+        export_intent_check_message = _EDU_TAG_RE.sub("", message)
         export_ext_hint = None
-        if _is_export_intent(message, _ZIP_INTENT_RE):
+        if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
             export_ext_hint = "zip"
-        elif _is_export_intent(message, _PDF_INTENT_RE):
+        elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
             export_ext_hint = "pdf"
         else:
-            export_ext_hint = _detect_generic_extension_intent(message)
+            export_ext_hint = _detect_generic_extension_intent(export_intent_check_message)
         if export_ext_hint:
             yield _sse({"type": "token", "text": f"📄 Your {export_ext_hint} file is being generated...\n\n"})
 
@@ -2737,26 +2748,29 @@ def chat_stream():
             # Background "Python terminal" file generation: if the request
             # was asking for a zip, a PDF, or ANY other named extension of
             # the reply, actually build it now and hand back a real
-            # download link.
+            # download link. Uses export_intent_check_message (the EDU tag
+            # stripped out) for the same reason as the early hint above —
+            # so a @education chapter's ".pdf" filename never falsely
+            # triggers this.
             try:
-                if _is_export_intent(message, _ZIP_INTENT_RE):
-                    zip_name = _derive_export_filename(message, "zip", assistant_response)
-                    inner_name = _derive_export_filename(message, "txt", assistant_response)
+                if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
+                    zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
+                    inner_name = _derive_export_filename(export_intent_check_message, "txt", assistant_response)
                     zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name)
                     token = _store_generated_file(zip_bytes, zip_name, "application/zip")
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
-                elif _is_export_intent(message, _PDF_INTENT_RE):
+                elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
                     pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                    pdf_name = _derive_export_filename(message, "pdf", assistant_response)
+                    pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
                 else:
-                    generic_ext = _detect_generic_extension_intent(message)
+                    generic_ext = _detect_generic_extension_intent(export_intent_check_message)
                     if generic_ext:
                         file_bytes, _default_name, file_mime = _build_generic_file_from_response(
                             assistant_response, generic_ext, workdir=terminal_workdir
                         )
-                        file_name = _derive_export_filename(message, generic_ext, assistant_response)
+                        file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
                         token = _store_generated_file(file_bytes, file_name, file_mime)
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
             except Exception as exc:
