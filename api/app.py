@@ -212,7 +212,8 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         return False
 
     repo_clean = _github_repo_slug()
-    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{target_file_path}"
+    encoded_target_path = "/".join(urllib.parse.quote(segment, safe="") for segment in target_file_path.split("/") if segment)
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{encoded_target_path}"
 
     sha_reference_token = None
     existing_content = ""
@@ -746,10 +747,23 @@ _education_cache = {"files": {}, "listing_t": 0}
 _EDUCATION_LISTING_TTL = 120  # seconds
 
 def _github_list_dir(path: str):
+    """
+    IMPORTANT FIX: folder/file names with spaces (e.g. "Social Science",
+    "Chapter 1 Understanding Civilisation.pdf") were being inserted into the
+    GitHub API URL completely raw. urllib does NOT auto-encode spaces (or
+    other special characters) in a URL string, so a request like
+    ".../contents/data/education/Social Science" was malformed and GitHub
+    quietly returned nothing usable — which is exactly why book listing
+    worked (folder names without spaces resolved fine) but chapter listing
+    for "Social Science" came back empty even though the files were really
+    there. Each path segment is now percent-encoded individually (keeping
+    the "/" separators intact) before the request is made.
+    """
     if not GITHUB_TOKEN:
         return []
     repo_clean = _github_repo_slug()
-    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{path}"
+    encoded_path = "/".join(urllib.parse.quote(segment, safe="") for segment in path.split("/") if segment)
+    endpoint_target_url = f"https://api.github.com/repos/{repo_clean}/contents/{encoded_path}"
     req_lookup = urllib.request.Request(
         endpoint_target_url,
         headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
