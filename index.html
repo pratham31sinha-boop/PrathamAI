@@ -454,8 +454,8 @@
                     <div class="settings-row">
                         <span class="text-sm text-[var(--text)]">Appearance</span>
                         <div class="flex gap-1.5">
-                            <div class="theme-choice-btn" id="theme-btn-light" onclick="setTheme('light')">☀️</div>
-                            <div class="theme-choice-btn" id="theme-btn-dark" onclick="setTheme('dark')">🌙</div>
+                            <div class="theme-choice-btn" id="theme-btn-light" onclick="setThemeManual('light')">☀️</div>
+                            <div class="theme-choice-btn" id="theme-btn-dark" onclick="setThemeManual('dark')">🌙</div>
                         </div>
                     </div>
                     <div class="pt-6">
@@ -621,16 +621,26 @@
             toggleModal('settings-modal');
         }
 
+        const THEME_STORAGE_KEY = "prathamai_theme_pref";
         function setTheme(mode) {
             if (mode === 'dark') document.documentElement.classList.add('dark-mode');
             else document.documentElement.classList.remove('dark-mode');
             document.getElementById('theme-btn-light').classList.toggle('selected', mode === 'light');
             document.getElementById('theme-btn-dark').classList.toggle('selected', mode === 'dark');
         }
+        // Manual variant: used by the actual UI buttons (Settings theme
+        // picker, sidebar Appearance toggle) — saves the choice so it's
+        // remembered and takes priority over the device's OS theme setting
+        // on future visits, per the person's explicit preference.
+        function setThemeManual(mode) {
+            setTheme(mode);
+            try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch (e) {}
+        }
         function toggleColorTheme() {
             const isDark = document.documentElement.classList.toggle('dark-mode');
             document.getElementById('theme-btn-light')?.classList.toggle('selected', !isDark);
             document.getElementById('theme-btn-dark')?.classList.toggle('selected', isDark);
+            try { localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'dark' : 'light'); } catch (e) {}
         }
 
         // Renders the signed-in shell UI (avatar, name, role badge, settings
@@ -956,10 +966,26 @@
             closeMobileSidebar();
         }
 
+        // Small reusable clipboard helper used by both the user-bubble and
+        // assistant-response copy buttons below.
+        function copyPlainText(text, triggerEl) {
+            navigator.clipboard?.writeText(text).then(() => {
+                if (triggerEl) {
+                    const original = triggerEl.innerText;
+                    triggerEl.innerText = 'Copied!';
+                    setTimeout(() => { triggerEl.innerText = original; }, 1200);
+                }
+            }).catch(() => {});
+        }
+
         function renderUserPromptBubble(promptText) {
             const row = document.createElement('div');
-            row.className = 'w-full flex justify-end';
-            row.innerHTML = `<div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>`;
+            row.className = 'w-full flex flex-col items-end gap-1';
+            row.innerHTML = `
+                <div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>
+                <button type="button" class="copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none">⧉ Copy</button>
+            `;
+            row.querySelector('.copy-msg-btn').onclick = (e) => copyPlainText(promptText, e.currentTarget);
             conversationViewportPanel.appendChild(row);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
@@ -1346,6 +1372,24 @@
             return containerNode;
         }
 
+        // Adds a small "Copy" action under a finished assistant response,
+        // copying the full raw reply text (markdown/code included) to the
+        // clipboard. Safe to call more than once on the same wrapper (e.g.
+        // once live after streaming completes, and skipped when restoring
+        // history since that path calls it exactly once already) — it
+        // removes any existing copy button first so there's never a
+        // duplicate.
+        function appendAssistantCopyButton(wrapper, fullText) {
+            const existing = wrapper.querySelector('.copy-msg-btn');
+            if (existing) existing.remove();
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none self-start';
+            btn.innerText = '⧉ Copy';
+            btn.onclick = (e) => copyPlainText(fullText, e.currentTarget);
+            wrapper.appendChild(btn);
+        }
+
         function mountTypingIndicator() {
             const row = document.createElement('div');
             row.className = 'w-full flex flex-col items-start gap-1';
@@ -1585,7 +1629,10 @@
                                 }
                             }
                         } else if (payload.type === 'complete') {
-                            if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
+                            if (modelWrapper) {
+                                updateAssistantMessageDOM(modelWrapper, fullText);
+                                appendAssistantCopyButton(modelWrapper, fullText);
+                            }
                             pushTerminalLog('Response complete.');
                         }
                     }
@@ -1692,6 +1739,7 @@
                     else if (log.role === 'assistant') {
                         const wrapper = mountModelOutputTargetShell();
                         updateAssistantMessageDOM(wrapper, log.content);
+                        appendAssistantCopyButton(wrapper, log.content);
                     }
                 });
                 synchronizeConversationsHistoryIndex();
@@ -1888,7 +1936,27 @@
         window.addEventListener('DOMContentLoaded', async () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
-            setTheme('light');
+
+            // Respect the device's own dark/light setting (phone or PC) on
+            // first load, instead of always forcing light mode. If the
+            // person has explicitly picked a theme before (via the
+            // Appearance toggle), that saved manual choice wins over the OS
+            // setting; only a first-ever visit falls back to the OS
+            // preference. The page also stays in sync if the OS theme
+            // changes while the app is open (e.g. phone auto dark-mode at
+            // sunset).
+            const THEME_STORAGE_KEY = "prathamai_theme_pref";
+            let savedTheme = null;
+            try { savedTheme = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
+            const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            setTheme(savedTheme || (systemPrefersDark ? 'dark' : 'light'));
+            if (window.matchMedia) {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                    let manualOverride = null;
+                    try { manualOverride = localStorage.getItem(THEME_STORAGE_KEY); } catch (err) {}
+                    if (!manualOverride) setTheme(e.matches ? 'dark' : 'light');
+                });
+            }
 
             document.querySelectorAll('[data-brand-logo]').forEach(img => {
                 img.src = LOGO_URL_512;
