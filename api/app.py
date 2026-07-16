@@ -2613,14 +2613,21 @@ def chat_stream():
         # code only checked "if chapter_text:" (truthy), so garbled/near-
         # empty text still got sent as if it were valid, and the model would
         # just quietly ignore unreadable context and answer generically
-        # instead. Now a real quality check runs first: readable-character
-        # ratio and minimum length, so a bad extraction gets reported
-        # honestly instead of silently producing an off-topic answer.
+        # instead. A real quality check runs first: readable-character ratio
+        # via the shared _text_extraction_quality_score (which correctly
+        # counts Devanagari danda punctuation ।॥, unlike an earlier version
+        # of this check) — so a bad extraction gets reported honestly.
+        #
+        # SECOND FIX: the minimum-length gate was previously 200 characters,
+        # which wrongly rejected legitimately GOOD extractions of short
+        # chapters — e.g. a Sanskrit lesson built around a single subhashita
+        # verse (like this exact chapter) can be well under 200 characters
+        # and still be completely correct. Dropped to 15 chars — long enough
+        # to filter out true empty/near-empty failures, short enough not to
+        # punish real short-verse chapters.
         extraction_looks_valid = False
-        if chapter_text and len(chapter_text.strip()) >= 200:
-            readable_chars = sum(1 for c in chapter_text if c.isalnum() or c.isspace() or c in ".,;:!?()-'\"")
-            readable_ratio = readable_chars / max(1, len(chapter_text))
-            extraction_looks_valid = readable_ratio >= 0.5
+        if chapter_text and len(chapter_text.strip()) >= 15:
+            extraction_looks_valid = _text_extraction_quality_score(chapter_text) >= 0.5
         if extraction_looks_valid:
             # FIX: previously this only sent one best-matching paragraph
             # (capped ~1800 chars) instead of the whole chapter, which is
