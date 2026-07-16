@@ -208,6 +208,7 @@
             animation: bootSpin .7s linear infinite; flex-shrink: 0;
         }
         #paste-attachment-chip.active { display: flex; }
+        #file-attachment-chip.active { display: flex; }
 
         /* Boot / session-restoring splash (avoids a flash of the login screen
            while we silently check localStorage for a still-valid session) */
@@ -254,7 +255,19 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen flex overflow-hidden antialiased select-none">
+<body class="h-screen w-screen flex overflow-hidden antialiased">
+    <style>
+        /* Text selection is allowed everywhere by default now (the old
+           select-none on <body> blocked drag-to-select copying of message
+           text, which is why the only way to copy was the Copy button).
+           UI chrome (buttons, nav rows, sidebar) still shouldn't become
+           selectable text just because you click-drag across the screen,
+           so selection is disabled specifically for those, not globally. */
+        button, .nav-row, .chat-row, .sidebar-panel > div:first-child,
+        header, .file-creation-card, .theme-choice-btn, #settings-modal .settings-tab {
+            user-select: none;
+        }
+    </style>
 
     <!-- Boot splash: shown for a brief moment on first paint / refresh while
          we silently check for a still-valid stored session, so refreshing the
@@ -359,6 +372,11 @@
                             <span>📄</span>
                             <span id="paste-attachment-chip-label">paste.txt</span>
                             <span onclick="clearPasteAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
+                        </div>
+                        <div id="file-attachment-chip" class="hidden items-center gap-2 bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text)] w-fit">
+                            <span id="file-attachment-chip-icon">📎</span>
+                            <span id="file-attachment-chip-label">file</span>
+                            <span onclick="clearFileAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
                         </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
@@ -573,8 +591,8 @@
         // a 512x512 for crisp in-app badges (login screen, empty-state, etc.)
         // and a 192x192 for the browser tab favicon. Every "P" badge falls
         // back to the plain "P" mark automatically if either URL 404s.
-        const LOGO_URL_512 = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/512.png";
-        const LOGO_URL_192 = "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/192.png";
+        const LOGO_URL_512 = "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-512.png";
+        const LOGO_URL_192 = "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-192.png";
         const LOGO_URL = LOGO_URL_512; // kept for any code that still references the single-logo name
 
         let currentConversationId = null;
@@ -585,6 +603,7 @@
         let isGenerating = false;
         let allHistoryItemsCache = [];
         let pendingPasteAttachment = null; // { content, lines } — see setPasteAttachment()
+        let pendingFileAttachment = null;  // { filename, analysisText, isImage } — see setFileAttachment()
         let pendingEducationContext = null; // { book, chapter } once both are picked via the @education flow
 
         function setPasteAttachment(content, lineCount) {
@@ -595,6 +614,24 @@
         function clearPasteAttachment() {
             pendingPasteAttachment = null;
             document.getElementById('paste-attachment-chip').classList.remove('active');
+        }
+
+        // Arms a pending file/image attachment (from the paperclip Ingest
+        // File upload) so its real, backend-analyzed content gets prepended
+        // to the NEXT message the person sends — this is what actually
+        // wires "upload an image -> python analyzes it -> AI sees the real
+        // analysis and can respond about it" into the chat, instead of the
+        // old behavior where upload just showed a one-off alert() and never
+        // reached the model at all.
+        function setFileAttachment(filename, analysisText, isImage) {
+            pendingFileAttachment = { filename, analysisText, isImage: !!isImage };
+            document.getElementById('file-attachment-chip-icon').innerText = isImage ? '🖼️' : '📎';
+            document.getElementById('file-attachment-chip-label').innerText = filename;
+            document.getElementById('file-attachment-chip').classList.add('active');
+        }
+        function clearFileAttachment() {
+            pendingFileAttachment = null;
+            document.getElementById('file-attachment-chip').classList.remove('active');
         }
 
         // Key used to persist the session in localStorage so a page refresh
@@ -1488,7 +1525,7 @@
 
         async function dispatchChatMessage() {
             const typedMessage = userPromptInputField.value.trim();
-            if ((!typedMessage && !pendingPasteAttachment) || isGenerating) return;
+            if ((!typedMessage && !pendingPasteAttachment && !pendingFileAttachment) || isGenerating) return;
 
             // If the person types the VIP secret code straight into the chat
             // box (instead of using the 🔒 Secure Lock button), intercept it
@@ -1524,6 +1561,21 @@
                 displayMessage = (typedMessage ? typedMessage + "\n\n" : "") + `📄 Attached: paste.txt (${pendingPasteAttachment.lines} lines)`;
             }
             clearPasteAttachment();
+
+            // Same idea for an uploaded file/image: its REAL backend-analyzed
+            // content (full PNG/EXIF breakdown for images, decoded text for
+            // PDFs/docs/etc — see _analyze_image_via_terminal /upload route)
+            // rides along in a fenced block so the model actually sees and
+            // can respond about the real file, not just a filename.
+            if (pendingFileAttachment) {
+                const kindLabel = pendingFileAttachment.isImage ? 'Image analysis' : 'File contents';
+                message = (message ? message + "\n\n" : "") +
+                    `[${kindLabel} for uploaded file "${pendingFileAttachment.filename}", extracted by the backend]\n` +
+                    "```text\n" + pendingFileAttachment.analysisText + "\n```";
+                displayMessage = (displayMessage ? displayMessage + "\n\n" : "") +
+                    `${pendingFileAttachment.isImage ? '🖼️' : '📎'} Attached: ${pendingFileAttachment.filename}`;
+            }
+            clearFileAttachment();
 
             // If a book+chapter are currently selected from the @education
             // flow, invisibly tag the outgoing message so the backend scopes
@@ -1765,14 +1817,24 @@
         async function dispatchPdfUpload() {
             const selector = document.getElementById('pdf-payload-file-element');
             if (selector.files.length === 0) return;
+            const uploadedFile = selector.files[0];
             const packet = new FormData();
-            packet.append("file", selector.files[0]);
+            packet.append("file", uploadedFile);
             try {
                 const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
                 const res = await response.json();
                 if (res.ok) {
-                    alert(`${res.filename} — ${res.status}`);
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
+                    const lowerName = (res.filename || '').toLowerCase();
+                    const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
+                    if (res.preview && res.preview.trim()) {
+                        // Arm the attachment so its real content/analysis
+                        // rides along with the person's NEXT message,
+                        // instead of the upload being a dead-end alert.
+                        setFileAttachment(res.filename, res.preview, isImage);
+                    } else {
+                        alert(`${res.filename} — ${res.status}`);
+                    }
                 } else {
                     alert(res.error || "Upload failed.");
                 }
