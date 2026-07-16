@@ -91,6 +91,30 @@ except ImportError:
     except ImportError:
         _PDF_READ_SUPPORTED = False
 
+# ── ADDITIONAL PDF TEXT EXTRACTORS FOR COMPLEX SCRIPTS (Devanagari/Sanskrit/Hindi) ──
+# pypdf/PyPDF2 use a fairly naive text-extraction algorithm that frequently
+# mangles or drops text in scripts with conjuncts/ligatures (Devanagari being
+# a textbook case) — this is a known, well-documented limitation of that
+# library, not something fixable with a regex. PyMuPDF (fitz) and
+# pdfplumber both use different, generally much more reliable extraction
+# approaches for exactly this kind of PDF. Both are OPTIONAL — if neither is
+# installed, extraction silently falls back to pypdf/PyPDF2 as before. To
+# actually get good Sanskrit/Hindi extraction, add ONE of these to your
+# requirements.txt (PyMuPDF is the strongest for Devanagari in practice):
+#   PyMuPDF   (import name: fitz)
+#   pdfplumber
+try:
+    import fitz as _fitz  # PyMuPDF
+    _FITZ_SUPPORTED = True
+except ImportError:
+    _FITZ_SUPPORTED = False
+
+try:
+    import pdfplumber as _pdfplumber
+    _PDFPLUMBER_SUPPORTED = True
+except ImportError:
+    _PDFPLUMBER_SUPPORTED = False
+
 try:
     from fpdf import FPDF as _FPDF
     _PDF_WRITE_SUPPORTED = True
@@ -996,15 +1020,85 @@ def _analyze_image_via_terminal(raw_bytes: bytes, ext: str, filename_hint: str =
     finally:
         _cleanup_terminal_workdir(workdir)
 
-def _extract_pdf_text(pdf_bytes: bytes) -> str:
+def _text_extraction_quality_score(text: str) -> float:
+    """Cheap 0.0-1.0 quality heuristic used to pick the best of several
+    extraction attempts: fraction of characters that are letters (any
+    script, via str.isalpha — this correctly counts Devanagari letters, not
+    just ASCII), digits, or normal punctuation/whitespace, versus control
+    characters / replacement characters / other extraction-noise symbols
+    that show up when a library mishandles a script's encoding."""
+    if not text or not text.strip():
+        return 0.0
+    good = sum(1 for c in text if c.isalpha() or c.isdigit() or c.isspace() or c in ".,;:!?()-'\"।॥")
+    return good / max(1, len(text))
+
+def _extract_pdf_text_with_pypdf(pdf_bytes: bytes) -> str:
     if not _PDF_READ_SUPPORTED:
         return ""
     try:
         reader = _PdfReader(io.BytesIO(pdf_bytes))
         return "\n".join((page.extract_text() or "") for page in reader.pages)
     except Exception as exc:
-        print(f"[EDU][EXTRACT FAULT] {exc}")
+        print(f"[EDU][EXTRACT FAULT pypdf] {exc}")
         return ""
+
+def _extract_pdf_text_with_fitz(pdf_bytes: bytes) -> str:
+    """PyMuPDF (fitz) — generally the most reliable of the three for
+    Devanagari/Indic scripts in practice, since it reads glyph positions
+    and Unicode mapping more robustly than pypdf's simpler approach."""
+    if not _FITZ_SUPPORTED:
+        return ""
+    try:
+        doc = _fitz.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            return "\n".join(page.get_text() for page in doc)
+        finally:
+            doc.close()
+    except Exception as exc:
+        print(f"[EDU][EXTRACT FAULT fitz] {exc}")
+        return ""
+
+def _extract_pdf_text_with_pdfplumber(pdf_bytes: bytes) -> str:
+    if not _PDFPLUMBER_SUPPORTED:
+        return ""
+    try:
+        with _pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            return "\n".join((page.extract_text() or "") for page in pdf.pages)
+    except Exception as exc:
+        print(f"[EDU][EXTRACT FAULT pdfplumber] {exc}")
+        return ""
+
+def _extract_pdf_text(pdf_bytes: bytes) -> str:
+    """
+    THE FIX for Sanskrit/Hindi (and any other complex-script) PDFs coming
+    back empty/garbled: instead of relying on pypdf alone (which is known to
+    mishandle Devanagari conjuncts/ligatures), this now runs every text
+    extractor that's actually installed on the server — PyMuPDF (fitz),
+    pdfplumber, and pypdf/PyPDF2 — scores each result's quality, and returns
+    whichever came out cleanest. If none are installed except pypdf, this
+    behaves exactly as before (no regression), but installing PyMuPDF or
+    pdfplumber on the server (add "PyMuPDF" or "pdfplumber" to
+    requirements.txt) will make Sanskrit/Hindi chapters extract properly
+    without any further code change needed.
+    """
+    candidates = []
+    fitz_text = _extract_pdf_text_with_fitz(pdf_bytes)
+    if fitz_text:
+        candidates.append(("fitz", fitz_text))
+    plumber_text = _extract_pdf_text_with_pdfplumber(pdf_bytes)
+    if plumber_text:
+        candidates.append(("pdfplumber", plumber_text))
+    pypdf_text = _extract_pdf_text_with_pypdf(pdf_bytes)
+    if pypdf_text:
+        candidates.append(("pypdf", pypdf_text))
+
+    if not candidates:
+        return ""
+
+    best_method, best_text = max(candidates, key=lambda item: _text_extraction_quality_score(item[1]))
+    print(f"[EDU][EXTRACT] used {best_method} (score={_text_extraction_quality_score(best_text):.2f}, "
+          f"{len(candidates)} extractor(s) available)")
+    return best_text
 
 def _refresh_education_library():
     now_ts = time.time()
@@ -1126,6 +1220,7 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
 
 # ── "@web" best-effort live search (DuckDuckGo HTML, no API key) ──
 _EDU_TAG_RE = re.compile(r"\[\[EDU_BOOK:(.*?)\]\]\[\[EDU_CHAPTER:(.*?)\]\]")
+_NO_WEB_SEARCH_TAG_RE = re.compile(r"\[\[NO_WEB_SEARCH\]\]")
 
 def _web_search_snippets(query: str, max_results: int = 4):
     try:
@@ -2089,6 +2184,11 @@ def _run_system_diagnostics() -> str:
     except Exception:
         pdf_ok = False
     lines.append(f"- PDF generation (built-in, no fpdf2/pandoc needed): {'✅ working' if pdf_ok else '❌ NOT working'}")
+    extractor_list = []
+    if _FITZ_SUPPORTED: extractor_list.append("PyMuPDF/fitz (best for Devanagari)")
+    if _PDFPLUMBER_SUPPORTED: extractor_list.append("pdfplumber")
+    if _PDF_READ_SUPPORTED: extractor_list.append("pypdf/PyPDF2 (weak on Devanagari)")
+    lines.append(f"- PDF text extractors installed: {', '.join(extractor_list) if extractor_list else '❌ none — @education PDF reading will not work'}")
 
     # 7. LLM providers configured
     provider_flags = {
@@ -2280,6 +2380,7 @@ def chat_stream():
     body = request.get_json(silent=True) or {}
     message = (body.get("message") or "").strip()
     conv_id = body.get("conversation_id") or None
+    web_search_disabled = bool(_NO_WEB_SEARCH_TAG_RE.search(message))
 
     if not message:
         return jsonify({"error": "Message content cannot be blank"}), 400
@@ -2495,7 +2596,7 @@ def chat_stream():
     for m in history[-20:]:
         api_messages.append({"role": m["role"], "content": m["content"]})
 
-    outgoing_user_message = message
+    outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", message).strip()
     _edu_tag_match = _EDU_TAG_RE.search(message)
     if _edu_tag_match:
         # Book + chapter were picked via the @education popup flow — scope
@@ -2579,11 +2680,13 @@ def chat_stream():
                 "data/education library (it may be empty, or the pypdf package may not be installed "
                 "on the server). Say so plainly instead of guessing."
             )
-    elif re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5:
+    elif not web_search_disabled and (re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5):
         # Web search now runs automatically on essentially every message
         # (the person no longer has to type "@web" each time). It's skipped
-        # only for very short/trivial messages (greetings, "ok", etc.) to
-        # avoid wasted latency on requests that clearly don't need it.
+        # only for very short/trivial messages (greetings, "ok", etc.), or
+        # when the person explicitly turned it off via the "Add to chat"
+        # sheet's Web search toggle (web_search_disabled).
+        outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", outgoing_user_message).strip()
         outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         results = _web_search_snippets(outgoing_user_message or message)
         if results:
@@ -3098,6 +3201,11 @@ def config_public():
             "mistral": bool(MISTRAL_API_KEY),
         },
         "pdf_read_supported": _PDF_READ_SUPPORTED,
+        "pdf_extractors_available": {
+            "pypdf_or_pypdf2": _PDF_READ_SUPPORTED,
+            "pymupdf_fitz": _FITZ_SUPPORTED,
+            "pdfplumber": _PDFPLUMBER_SUPPORTED,
+        },
         "session_token_ttl_days": SESSION_TOKEN_TTL_DAYS,
         "logo_512": "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-512.png",
         "logo_192": "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-192.png",
