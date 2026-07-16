@@ -379,7 +379,7 @@
                             <span onclick="clearFileAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
                         </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
-                            <button type="button" onclick="toggleModal('pdf-modal')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
+                            <button type="button" onclick="toggleModal('add-to-chat-sheet')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
                             <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
                             <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
                         </form>
@@ -435,6 +435,45 @@
                 <p class="text-[10.5px] text-[var(--text-dim)] -mt-2">Any file type is accepted. Text, PDF, DOCX, JSON, CSV, and ZIP get their content decoded automatically on the server; other types are stored as-is.</p>
                 <input type="file" id="pdf-payload-file-element" class="block w-full text-xs text-[var(--text-dim)] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--sidebar)] file:text-[var(--text)] hover:file:opacity-90 cursor-pointer"/>
                 <button onclick="dispatchPdfUpload()" class="w-full py-2 accent-gradient text-white font-semibold text-xs rounded-lg hover:opacity-90 transition-opacity cursor-pointer shadow-sm">Upload &amp; Decode</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- "Add to chat" bottom sheet — the paperclip button now opens this
+         (matches the requested Camera / Photos / Files / Web-search-toggle
+         layout) instead of jumping straight to the old Ingest File modal.
+         Camera/Photos/Files all funnel into the SAME real upload+analysis
+         pipeline as the Ingest File modal (dispatchPdfUpload), just via
+         different hidden file-input `accept`/`capture` attributes — nothing
+         about the underlying upload logic was removed or duplicated. -->
+    <input type="file" id="camera-capture-input" accept="image/*" capture="environment" class="hidden" onchange="dispatchQuickUpload(this)">
+    <input type="file" id="photos-picker-input" accept="image/*" class="hidden" onchange="dispatchQuickUpload(this)">
+    <input type="file" id="files-picker-input" class="hidden" onchange="dispatchQuickUpload(this)">
+    <div id="add-to-chat-sheet" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-end sm:items-center justify-center hidden p-0 sm:p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-t-2xl sm:rounded-2xl w-full max-w-sm overflow-hidden premium-card">
+            <div class="p-4 flex items-center justify-between">
+                <h4 class="text-sm font-bold text-[var(--text)]">Add to chat</h4>
+                <button onclick="toggleModal('add-to-chat-sheet')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <div class="px-4 pb-4 grid grid-cols-3 gap-2">
+                <button onclick="document.getElementById('camera-capture-input').click()" class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">📷</span><span class="text-[11px] text-[var(--text)] font-medium">Camera</span>
+                </button>
+                <button onclick="document.getElementById('photos-picker-input').click()" class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">🖼️</span><span class="text-[11px] text-[var(--text)] font-medium">Photos</span>
+                </button>
+                <button onclick="document.getElementById('files-picker-input').click()" class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">📁</span><span class="text-[11px] text-[var(--text)] font-medium">Files</span>
+                </button>
+            </div>
+            <div class="border-t border-[var(--border)] px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-base">🌐</span>
+                    <span class="text-xs font-medium text-[var(--text)]">Web search</span>
+                </div>
+                <button id="web-search-toggle-btn" onclick="toggleWebSearchPreference()" class="w-10 h-5.5 rounded-full relative transition-colors cursor-pointer" style="background: var(--accent);">
+                    <span id="web-search-toggle-knob" class="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white transition-transform" style="transform: translateX(16px);"></span>
+                </button>
             </div>
         </div>
     </div>
@@ -1585,6 +1624,13 @@
                 message = `[[EDU_BOOK:${pendingEducationContext.book}]][[EDU_CHAPTER:${pendingEducationContext.chapter}]]${message}`;
             }
 
+            // Web search toggle from the "Add to chat" sheet — off means an
+            // invisible marker tells the backend to skip its automatic web
+            // search for this turn (never shown in the user's own bubble).
+            if (!webSearchEnabled) {
+                message = `[[NO_WEB_SEARCH]]${message}`;
+            }
+
             isGenerating = true;
             inputActionSubmitBtn.disabled = true;
             inputActionSubmitBtn.classList.add('opacity-60');
@@ -1842,6 +1888,64 @@
             } catch (err) { alert("Upload failed. Check your connection and try again."); }
         }
 
+        // Camera / Photos / Files buttons in the "Add to chat" sheet all
+        // call this — same real /upload + analysis pipeline as
+        // dispatchPdfUpload above (nothing duplicated in behavior, just a
+        // separate quick-attach entry point since these fire from a plain
+        // <input type=file onchange=...> rather than a modal's own button).
+        async function dispatchQuickUpload(inputEl) {
+            if (!inputEl.files || inputEl.files.length === 0) return;
+            const uploadedFile = inputEl.files[0];
+            const packet = new FormData();
+            packet.append("file", uploadedFile);
+            toggleModal('add-to-chat-sheet');
+            try {
+                const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
+                const res = await response.json();
+                if (res.ok) {
+                    pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
+                    const lowerName = (res.filename || '').toLowerCase();
+                    const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
+                    if (res.preview && res.preview.trim()) {
+                        setFileAttachment(res.filename, res.preview, isImage);
+                    } else {
+                        alert(`${res.filename} — ${res.status}`);
+                    }
+                } else {
+                    alert(res.error || "Upload failed.");
+                }
+            } catch (err) {
+                alert("Upload failed. Check your connection and try again.");
+            } finally {
+                inputEl.value = ''; // allow re-selecting the same file next time
+            }
+        }
+
+        // Web search toggle in the "Add to chat" sheet. Persisted so the
+        // choice sticks across messages/reloads. When turned OFF, outgoing
+        // messages get an invisible [[NO_WEB_SEARCH]] marker the backend
+        // recognizes to skip its automatic web-search step for that turn.
+        const WEB_SEARCH_PREF_KEY = "prathamai_web_search_pref";
+        let webSearchEnabled = true;
+        function toggleWebSearchPreference() {
+            webSearchEnabled = !webSearchEnabled;
+            document.getElementById('web-search-toggle-btn').style.background = webSearchEnabled ? 'var(--accent)' : 'var(--border)';
+            document.getElementById('web-search-toggle-knob').style.transform = webSearchEnabled ? 'translateX(16px)' : 'translateX(0px)';
+            try { localStorage.setItem(WEB_SEARCH_PREF_KEY, webSearchEnabled ? '1' : '0'); } catch (e) {}
+        }
+        function initWebSearchPreferenceFromStorage() {
+            let stored = null;
+            try { stored = localStorage.getItem(WEB_SEARCH_PREF_KEY); } catch (e) {}
+            webSearchEnabled = stored !== '0';
+            const btn = document.getElementById('web-search-toggle-btn');
+            const knob = document.getElementById('web-search-toggle-knob');
+            if (btn && knob) {
+                btn.style.background = webSearchEnabled ? 'var(--accent)' : 'var(--border)';
+                knob.style.transform = webSearchEnabled ? 'translateX(16px)' : 'translateX(0px)';
+            }
+        }
+
+
         // ── @education book/chapter picker ──────────────────────────────
         // Typing "@education" (alone) opens a book picker fed by
         // /education/books (reading the data/education/<Book>/ folders in
@@ -2060,6 +2164,7 @@
             // Only if that fails do we fall back to showing the Google
             // sign-in button.
             setWorkbenchTab('preview');
+            initWebSearchPreferenceFromStorage();
             const restored = await attemptSilentSessionRestore();
             bootSplash.style.display = 'none';
             if (!restored) {
