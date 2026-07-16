@@ -1575,6 +1575,33 @@ SYSTEM_PROMPT = (
     "(conversation logs and shared memory sync to this app's GitHub data repo automatically on the "
     "backend) — you don't need to narrate that syncing is happening or ask the person to confirm it; "
     "just do the actual work (run the code, create/edit the file, etc.) and report the real result.\n\n"
+    "ACT WITH CONFIDENCE, DON'T STALL ON CLARIFYING QUESTIONS: if you can reasonably tell what the "
+    "person wants, just do it — pick the most sensible interpretation and build/answer it directly. "
+    "Only ask a clarifying question first when you are genuinely unsure and guessing wrong would waste "
+    "significant work (e.g. completely different possible meanings of the request). Do not ask "
+    "permission to proceed when you're already confident.\n\n"
+    "BE CONCISE, NOT BLOATED: don't pad answers with long lists of unrequested follow-up options (e.g. "
+    "ending every reply with 'Would you like me to: A) ... B) ... C) ...'). Give the actual answer/"
+    "deliverable, briefly note one natural next step ONLY if it's genuinely useful, and stop — don't "
+    "manufacture extra menu-style choices just to seem thorough. Long walls of text with excessive "
+    "headers/bullets for a simple question read as padding, not helpfulness — match response length to "
+    "what was actually asked.\n\n"
+    "NO ARTIFICIAL LENGTH LIMIT on files you create: when producing a file (via ```createfile: or "
+    "```finaldoc), there is no line-count ceiling you should self-impose — write however many lines the "
+    "task genuinely requires, even if that's several thousand, rather than truncating or summarizing to "
+    "keep it short.\n\n"
+    "WORKFLOW FOR LARGE/MULTI-PART TASKS: when a request has many distinct requirements (e.g. 'build a "
+    "full app with X, Y, Z, and W'), don't try to write everything in one unstructured pass. Instead: "
+    "(1) briefly list out the distinct requirements as a short checklist so both you and the person can "
+    "see the plan, (2) implement each item one at a time, in order, (3) once everything is implemented, "
+    "actually re-read back through the file(s) you produced looking for mistakes (syntax errors, missing "
+    "pieces, requirements you skipped), and (4) if you find an error, fix it by editing that SAME file "
+    "with ```editfile: (never by creating a duplicate/new file for the fix) before giving your final "
+    "answer.\n\n"
+    "FILE EXPORTS ONLY ON EXPLICIT REQUEST: only produce a zip/pdf/other export of your answer when the "
+    "person actually asks for the response in that format (e.g. 'zip it', 'as a pdf', 'download this'). "
+    "Do not proactively package a normal conversational answer as a downloadable file just because the "
+    "answer happens to be long — a long answer is still just a chat reply unless a file was requested.\n\n"
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
@@ -2476,7 +2503,24 @@ def chat_stream():
         edu_book, edu_chapter = _edu_tag_match.group(1), _edu_tag_match.group(2)
         outgoing_user_message = _EDU_TAG_RE.sub("", outgoing_user_message).strip()
         chapter_text = _fetch_chapter_text(edu_book, edu_chapter)
-        if chapter_text:
+        # FIX: "selected Sanskrit book but got an unrelated math answer" —
+        # pypdf (and most text-extraction libraries) frequently fail to
+        # extract readable text from PDFs using complex/Indic scripts
+        # (Devanagari conjuncts, ligatures, embedded fonts without a proper
+        # ToUnicode map) — the extraction can "succeed" (non-empty string)
+        # while actually returning garbage or almost nothing usable. The old
+        # code only checked "if chapter_text:" (truthy), so garbled/near-
+        # empty text still got sent as if it were valid, and the model would
+        # just quietly ignore unreadable context and answer generically
+        # instead. Now a real quality check runs first: readable-character
+        # ratio and minimum length, so a bad extraction gets reported
+        # honestly instead of silently producing an off-topic answer.
+        extraction_looks_valid = False
+        if chapter_text and len(chapter_text.strip()) >= 200:
+            readable_chars = sum(1 for c in chapter_text if c.isalnum() or c.isspace() or c in ".,;:!?()-'\"")
+            readable_ratio = readable_chars / max(1, len(chapter_text))
+            extraction_looks_valid = readable_ratio >= 0.5
+        if extraction_looks_valid:
             # FIX: previously this only sent one best-matching paragraph
             # (capped ~1800 chars) instead of the whole chapter, which is
             # exactly why answers were pulling in outside knowledge to fill
@@ -2496,6 +2540,19 @@ def chat_stream():
                 f"to the user's question, say so plainly instead of guessing or using outside "
                 f"knowledge. Always mention the book/chapter you used.\n"
                 f"FULL CHAPTER TEXT ('{edu_book}' — '{edu_chapter}'):\n\"\"\"\n{chapter_text}\n\"\"\""
+            )
+        elif chapter_text:
+            # Non-empty but failed the quality check — tell the model
+            # exactly this, so it says so honestly instead of guessing.
+            api_messages[0]["content"] += (
+                f" The user selected book '{edu_book}', chapter '{edu_chapter}'. The PDF text "
+                f"extraction for this file came back too short or badly garbled to be reliable — this "
+                f"commonly happens with PDFs in scripts like Devanagari/Sanskrit where the text layer "
+                f"isn't properly embedded. DO NOT attempt to answer using this broken extraction and DO "
+                f"NOT fall back to general/outside knowledge about the topic. Instead, tell the user "
+                f"plainly that this chapter's PDF couldn't be read reliably (extraction quality was too "
+                f"low, likely a script/font issue) and that they may need to re-upload a text-searchable "
+                f"version of the PDF."
             )
         else:
             api_messages[0]["content"] += (
@@ -3042,8 +3099,8 @@ def config_public():
         },
         "pdf_read_supported": _PDF_READ_SUPPORTED,
         "session_token_ttl_days": SESSION_TOKEN_TTL_DAYS,
-        "logo_512": "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/512.png",
-        "logo_192": "https://raw.githubusercontent.com/pratham31sinha-boop/data/main/192.png",
+        "logo_512": "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-512.png",
+        "logo_192": "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-192.png",
     })
 
 _rate_limit_buckets: dict = {}
