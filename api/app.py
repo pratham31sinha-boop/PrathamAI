@@ -91,18 +91,6 @@ except ImportError:
     except ImportError:
         _PDF_READ_SUPPORTED = False
 
-# ── ADDITIONAL PDF TEXT EXTRACTORS FOR COMPLEX SCRIPTS (Devanagari/Sanskrit/Hindi) ──
-# pypdf/PyPDF2 use a fairly naive text-extraction algorithm that frequently
-# mangles or drops text in scripts with conjuncts/ligatures (Devanagari being
-# a textbook case) — this is a known, well-documented limitation of that
-# library, not something fixable with a regex. PyMuPDF (fitz) and
-# pdfplumber both use different, generally much more reliable extraction
-# approaches for exactly this kind of PDF. Both are OPTIONAL — if neither is
-# installed, extraction silently falls back to pypdf/PyPDF2 as before. To
-# actually get good Sanskrit/Hindi extraction, add ONE of these to your
-# requirements.txt (PyMuPDF is the strongest for Devanagari in practice):
-#   PyMuPDF   (import name: fitz)
-#   pdfplumber
 try:
     import fitz as _fitz  # PyMuPDF
     _FITZ_SUPPORTED = True
@@ -148,24 +136,15 @@ CORS(app, resources={
 # ── ENVIRONMENT ──
 GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
 
-# ── MULTIPLE GROQ API KEYS ──
-# Groq supports adding several keys (e.g. GROQ_API_KEY="key1,key2,key3" or
-# separate GROQ_API_KEY_2 / GROQ_API_KEY_3 / GROQ_API_KEY_4 env vars) so the
-# effective rate limit is the SUM of all keys' limits, not just one. Each
-# key gets its own independent cooldown, so if one key hits its per-minute
-# limit the next one is tried immediately instead of failing over all the
-# way down to OpenRouter/Cerebras/Mistral.
 def _collect_groq_keys() -> list:
     keys = []
     primary = os.environ.get("GROQ_API_KEY", "").strip()
     if primary:
-        # Support comma-separated keys in the single GROQ_API_KEY var too.
         keys.extend([k.strip() for k in primary.split(",") if k.strip()])
-    for suffix in range(2, 11):  # GROQ_API_KEY_2 .. GROQ_API_KEY_10
+    for suffix in range(2, 11):
         extra = os.environ.get(f"GROQ_API_KEY_{suffix}", "").strip()
         if extra:
             keys.append(extra)
-    # De-duplicate while preserving order.
     seen = set()
     unique_keys = []
     for k in keys:
@@ -186,10 +165,6 @@ VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
 
-# Mirrors the creator list already hardcoded in the frontend's
-# paintIdentityIntoShell(), so the backend can also recognize these accounts
-# for creator-only features (like the live system-diagnostics short-circuit
-# below) without needing a separate database/table.
 CREATOR_EMAILS = {"pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"}
 
 SUPABASE_CONFIGURED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
@@ -205,33 +180,13 @@ if SUPABASE_CONFIGURED:
 _mem_convos: dict = {}
 
 # ── GITHUB LOG PERSISTENCE ──
-# Small short-lived cache so we don't hammer the GitHub API's "get sha"
-# lookup when several appends happen back to back for the same file path.
 _gh_sha_cache: dict = {}
-_GH_CACHE_TTL = 8  # seconds
+_GH_CACHE_TTL = 8
 
 def _github_repo_slug() -> str:
     return GITHUB_REPO.replace("https://github.com/", "").strip("/")
 
 def _write_to_github_repository(target_file_path: str, contents_payload: str) -> bool:
-    """
-    Appends `contents_payload` to `target_file_path` inside the configured
-    GitHub repository. Creates the file (and implicitly the folder path,
-    since GitHub's contents API creates intermediate folders automatically)
-    if it does not already exist.
-
-    IMPORTANT FIX (this was the cause of "saving replaces old content
-    instead of appending"): GitHub's Contents API only inlines the file's
-    `content` field for files under ~1MB. Once a growing file like
-    data/public_data.txt crosses that size, the API keeps returning a valid
-    `sha` but a null/empty `content` field — the old code treated that as
-    "existing content is empty" and PUT the file with ONLY the new entry,
-    silently wiping everything previously saved. Now, whenever `content` is
-    missing/empty but the file's reported `size` is greater than 0 (i.e. it
-    genuinely has content GitHub just didn't inline), the real content is
-    fetched via the item's own `download_url` instead, so appends are always
-    appends — regardless of how large the file has grown.
-    """
     if not GITHUB_TOKEN:
         return False
 
@@ -259,9 +214,6 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
                 if meta_data.get("content"):
                     existing_content = base64.b64decode(meta_data["content"].replace("\n", "")).decode('utf-8')
                 elif meta_data.get("size", 0) > 0 and meta_data.get("download_url"):
-                    # File exists and genuinely has content, but the Contents
-                    # API didn't inline it (large-file case) — fetch the real
-                    # bytes directly instead of silently treating it as empty.
                     try:
                         raw_req = urllib.request.Request(
                             meta_data["download_url"],
@@ -271,9 +223,6 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
                             existing_content = raw_resp.read().decode('utf-8', errors='replace')
                     except Exception as raw_exc:
                         print(f"[GITHUB][LARGE-FILE FETCH FAULT] {target_file_path}: {raw_exc}")
-                        # We could not confirm the real existing content — refuse to
-                        # write at all rather than risk overwriting it with a PUT
-                        # that only contains the new entry.
                         return False
         except Exception:
             pass
@@ -315,12 +264,9 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
         print(f"[GITHUB][FAULT] {exc}")
         return False
 
-# ── VIP RECOGNITION (reads back data/vip.txt so the bot can recognize a
-#    registered VIP contact by email and greet/treat them accordingly) ──
+# ── VIP RECOGNITION ──
 _vip_cache = {"entries": {}, "t": 0}
-_VIP_CACHE_TTL = 30  # seconds; short enough that a fresh registration is
-                      # picked up almost immediately, long enough to avoid
-                      # hitting GitHub on every single chat message.
+_VIP_CACHE_TTL = 30
 
 def _fetch_vip_directory() -> dict:
     now_ts = time.time()
@@ -370,26 +316,14 @@ def _lookup_vip(email: str):
         return None
     return _fetch_vip_directory().get(email.lower())
 
-# ── BACKGROUND FILE GENERATION ("the AI uses a Python terminal") ──
-# This is the real, executing counterpart to the frontend's animated file
-# cards: when the person's message asks for a zip or a PDF, the backend
-# actually builds that file in Python (zipfile from stdlib; PDF via the
-# optional fpdf2 package) and hands back a one-time download link.
+# ── BACKGROUND FILE GENERATION ──
 _generated_files_store: dict = {}
-_GENERATED_FILE_TTL = 3600  # 1 hour
+_GENERATED_FILE_TTL = 3600
 
 _ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
 _PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
 
 def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
-    """
-    Loose but practical intent check: true if the keyword ('zip'/'pdf')
-    appears anywhere in the message, UNLESS the message is clearly a
-    question about the format itself (contains '?') rather than a request
-    to package the reply as a file. This intentionally matches phrasings
-    like "zip it", "make it a zip", "as a pdf", "download this as zip",
-    etc. — the earlier stricter pattern missed most of these.
-    """
     if "?" in message:
         return False
     return bool(regex.search(message))
@@ -408,10 +342,6 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
 
 _FINALDOC_RE = re.compile(r"```finaldoc\s*\n([\s\S]*?)```", re.IGNORECASE)
 
-# Deterministic safety net: models don't always follow the ```finaldoc
-# instruction reliably, so even without it, strip whole lines/sentences that
-# are clearly meta-commentary about the export mechanism rather than actual
-# content, instead of exporting the raw full reply verbatim.
 _EXPORT_FILLER_LINE_RE = re.compile(
     r"^\s*("
     r"i'?d be happy to.*|"
@@ -428,39 +358,16 @@ _EXPORT_FILLER_LINE_RE = re.compile(
 
 def _strip_export_filler(text: str) -> str:
     kept_lines = [ln for ln in text.split("\n") if not _EXPORT_FILLER_LINE_RE.match(ln)]
-    # Collapse resulting doubled-up blank lines from removed sentences.
     cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines))
     return cleaned.strip()
 
 def _extract_export_content(assistant_text: str) -> str:
-    """
-    Returns the text that should actually go INTO an exported file (pdf/zip/
-    any other extension). Prefers a dedicated ```finaldoc fenced block if the
-    model provided one (per the system prompt, that block should contain
-    ONLY the clean deliverable — no "I'd be happy to..." / "your file is
-    ready!" chatter around it). If no such block exists, falls back to the
-    full reply with filler lines stripped out via `_strip_export_filler`,
-    rather than exporting the raw chat response (including its own
-    commentary about the export) verbatim.
-    """
     m = _FINALDOC_RE.search(assistant_text)
     if m:
         return _strip_export_filler(m.group(1).strip())
     return _strip_export_filler(assistant_text)
 
 def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverable_name: str = "content.txt") -> bytes:
-    """
-    Fix for the "zip contains the wrong content" bug: the clean deliverable
-    (the ```finaldoc block, or the filler-stripped full reply — see
-    `_extract_export_content`) is ALWAYS written into the zip under
-    `deliverable_name` first, since that's the thing the person actually
-    asked for. Any REAL files the background terminal created in `workdir`
-    during this same request (via python/bash execution or a ```createfile:
-    block) are added alongside as extras, not as a silent replacement — so a
-    request like "write an essay, zip it" reliably gets the essay in the
-    zip, even if unrelated scratch files exist in the terminal's workdir
-    from something else the model did in the same turn.
-    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         deliverable_text = _extract_export_content(assistant_text)
@@ -482,14 +389,6 @@ def _escape_pdf_literal_text(s: str) -> str:
     return s.replace('\\', r'\\').replace('(', r'\(').replace(')', r'\)')
 
 def _markdownish_lines_for_pdf(text: str, max_width_chars: int):
-    """
-    Converts lightly-markdown-formatted text (headings wrapped in **like
-    this**, and `* `/`- ` bullets — the style the model actually writes) into
-    a flat list of (font_key, size_delta, rendered_line) tuples ready to lay
-    out on a page. This covers the common case seen in practice (standalone
-    bold heading lines, bullet lists, plain paragraphs) without needing a
-    full markdown/HTML parser.
-    """
     rendered = []
     for raw_line in text.split("\n"):
         stripped = raw_line.strip()
@@ -511,8 +410,6 @@ def _markdownish_lines_for_pdf(text: str, max_width_chars: int):
                 rendered.append(("F1", 0, prefix + w))
             continue
 
-        # Plain paragraph line — strip stray ** markers (no inline-bold support,
-        # this covers whole-line headings which is the common real-world case).
         content = re.sub(r'\*\*(.+?)\*\*', r'\1', stripped)
         wrapped = textwrap.wrap(content, width=max_width_chars) or ['']
         for w in wrapped:
@@ -520,20 +417,11 @@ def _markdownish_lines_for_pdf(text: str, max_width_chars: int):
     return rendered or [("F1", 0, "")]
 
 def _write_minimal_pdf(text: str) -> bytes:
-    """
-    Builds a real, valid multi-page PDF directly from scratch using nothing
-    but the standard library — no fpdf2, no reportlab, no external `pandoc`/
-    `wkhtmltopdf` binary. Uses the standard 14 PDF base fonts (Helvetica /
-    Helvetica-Bold), which every PDF viewer already has built in, so bold
-    headings and bullet lists render properly without embedding any font
-    file. Handles line-wrapping and pagination manually and writes the PDF's
-    object table + xref + trailer by hand per the PDF 1.4 spec.
-    """
     base_font_size = 11
     heading_font_size = 13
     leading = 15
     margin_left = 50
-    margin_top = 792 - 50   # US Letter page height in points, minus a top margin
+    margin_top = 792 - 50
     max_width_chars = 92
     lines_per_page = 55
 
@@ -614,9 +502,6 @@ def _write_minimal_pdf(text: str) -> bytes:
     return buf.getvalue()
 
 def _build_pdf_from_response(assistant_text: str):
-    """Returns (bytes, filename, mimetype). Always produces a real .pdf via
-    the dependency-free writer above, using the clean extracted deliverable
-    content (not the full chat reply with "I'd be happy to..." framing)."""
     try:
         clean_content = _extract_export_content(assistant_text)
         pdf_bytes = _write_minimal_pdf(clean_content)
@@ -625,30 +510,13 @@ def _build_pdf_from_response(assistant_text: str):
         print(f"[PDF][BUILD FAULT] {exc}")
         return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
 
-# ── GENERIC "make it a <any extension>" export ──
-# Not every request is a zip or a pdf — this catches "as a docx", "save this
-# as csv", "convert to png", etc. and packages the clean deliverable content
-# with whatever extension was asked for. For simple text-based formats
-# (txt/md/csv/json/html/etc.) this produces a genuinely correct file. For
-# complex binary formats (real .docx/.xlsx internal structure, actual raster
-# .png image encoding of text) this cannot fabricate the real binary format
-# from scratch — it still gives back a real, correctly-named/typed file
-# containing the content, which is the best a dependency-free backend can
-# honestly do without a heavy document-generation library installed.
 _GENERIC_EXTENSION_RE = re.compile(
     r"\b(?:as\s+an?|make\s+(?:it|this)\s+an?|download\s+(?:as|this\s+as)|export\s+(?:as|to)|"
     r"convert\s+(?:this\s+|it\s+)?to|save\s+(?:this\s+|it\s+)?as)\s+(?:an?\s+)?\.?([a-zA-Z0-9]{1,6})\b",
     re.IGNORECASE
 )
-_HANDLED_EXTENSIONS = {"zip", "pdf"}  # these already have dedicated builders above
+_HANDLED_EXTENSIONS = {"zip", "pdf"}
 
-# ── CONTENT-AWARE EXPORT FILENAME ──
-# Fixes "zip file has the wrong name" — previously every zip was named the
-# generic "pratham_ai_output.zip" regardless of what was actually inside it.
-# This derives a real topic-based filename from the user's own request (e.g.
-# "write an essay on climate change and zip it" -> "essay_on_climate_change.zip"),
-# falling back to a title line inside the deliverable content itself, and
-# only using a generic name as a last resort.
 _EXPORT_STOPWORDS = {
     "write", "make", "made", "create", "created", "generate", "generated", "give", "give me",
     "download", "convert", "save", "export", "please", "pls", "plz", "can", "you", "the",
@@ -658,17 +526,6 @@ _EXPORT_STOPWORDS = {
 }
 
 def _derive_export_basename(message: str, deliverable_text: str = "") -> str:
-    """Best-effort topic slug for export filenames. Tries, in order:
-    1. A short markdown heading (# Title / **Title**) at the top of the
-       cleaned deliverable content, since the model is asked to lead with
-       a clear title for exported documents.
-    2. The user's own request message with command/format stopwords
-       stripped out (so "write an essay on the french revolution as a pdf"
-       becomes "essay-french-revolution").
-    3. A generic "pratham_ai_output" fallback if neither yields anything
-       usable.
-    """
-    # 1. Try a heading/title line from the deliverable itself.
     if deliverable_text:
         first_lines = deliverable_text.strip().split("\n")[:3]
         for line in first_lines:
@@ -679,7 +536,6 @@ def _derive_export_basename(message: str, deliverable_text: str = "") -> str:
                 if slug:
                     return slug[:60]
 
-    # 2. Fall back to the user's request text, stopwords stripped.
     words = re.findall(r"[a-zA-Z0-9]+", message.lower())
     meaningful = [w for w in words if w not in _EXPORT_STOPWORDS and len(w) > 1]
     if meaningful:
@@ -687,7 +543,6 @@ def _derive_export_basename(message: str, deliverable_text: str = "") -> str:
         if slug:
             return slug[:60]
 
-    # 3. Last resort.
     return "pratham_ai_output"
 
 def _detect_generic_extension_intent(message: str):
@@ -707,13 +562,6 @@ _STOPWORDS = {"a","an","the","of","on","in","to","for","and","or","about","write
               "document","it","into","generate","draft","short","long","give"}
 
 def _derive_export_filename(user_message: str, ext: str, fallback_content: str = "") -> str:
-    """
-    Builds a human-meaningful filename (e.g. "climate_change_essay.zip" instead
-    of a generic "pratham_ai_output.zip") from the actual topic of the
-    request. Strips common command/stopwords ("write", "essay", "as a zip",
-    etc.) and keeps the meaningful nouns, falling back to the first line of
-    the generated content, then to a generic name only as a last resort.
-    """
     def slugify(words, max_words=6):
         cleaned = [w.lower() for w in words if w.lower() not in _STOPWORDS and len(w) > 1]
         cleaned = cleaned[:max_words]
@@ -735,10 +583,6 @@ def _derive_export_filename(user_message: str, ext: str, fallback_content: str =
     return f"{slug}.{ext}"
 
 def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: str = None):
-    """Returns (bytes, filename, mimetype) for an arbitrary requested
-    extension. Prefers a real file the terminal actually created in workdir
-    matching that extension; otherwise packages the clean exported content
-    as bytes with a best-guess mimetype."""
     if workdir and os.path.isdir(workdir):
         for root, _dirs, files in os.walk(workdir):
             for fname in files:
@@ -768,21 +612,9 @@ def download_generated_file(token):
 
 # ── "@education" PDF-backed Q&A ──
 _education_cache = {"files": {}, "listing_t": 0}
-_EDUCATION_LISTING_TTL = 120  # seconds
+_EDUCATION_LISTING_TTL = 120
 
 def _github_list_dir(path: str):
-    """
-    IMPORTANT FIX: folder/file names with spaces (e.g. "Social Science",
-    "Chapter 1 Understanding Civilisation.pdf") were being inserted into the
-    GitHub API URL completely raw. urllib does NOT auto-encode spaces (or
-    other special characters) in a URL string, so a request like
-    ".../contents/data/education/Social Science" was malformed and GitHub
-    quietly returned nothing usable — which is exactly why book listing
-    worked (folder names without spaces resolved fine) but chapter listing
-    for "Social Science" came back empty even though the files were really
-    there. Each path segment is now percent-encoded individually (keeping
-    the "/" separators intact) before the request is made.
-    """
     if not GITHUB_TOKEN:
         return []
     repo_clean = _github_repo_slug()
@@ -810,13 +642,6 @@ def _github_fetch_file_bytes(download_url: str):
         return None
 
 def _extract_image_metadata(raw_bytes: bytes, ext: str) -> str:
-    """
-    Pure-stdlib image metadata extraction (no Pillow/vision model needed):
-    reads the real file headers to report actual width/height/color info.
-    This is real file data the AI can reason from ("this is a 1080x1920
-    portrait PNG with alpha"), not pixel-content understanding — that still
-    needs a vision-capable model, which isn't wired up here.
-    """
     try:
         size_kb = round(len(raw_bytes) / 1024, 1)
         if ext == "png" and raw_bytes[:8] == b"\x89PNG\r\n\x1a\n":
@@ -840,7 +665,6 @@ def _extract_image_metadata(raw_bytes: bytes, ext: str) -> str:
                     i += 1
                     continue
                 marker = raw_bytes[i + 1]
-                # SOF0-SOF3 / SOF5-SOF7 / SOF9-SOF11 / SOF13-SOF15 markers carry dimensions
                 if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
                     height = int.from_bytes(raw_bytes[i + 5:i + 7], "big")
                     width = int.from_bytes(raw_bytes[i + 7:i + 9], "big")
@@ -855,18 +679,6 @@ def _extract_image_metadata(raw_bytes: bytes, ext: str) -> str:
         print(f"[IMAGE META][FAULT] {exc}")
         return ""
 
-# ── DEEP IMAGE ANALYSIS VIA THE REAL BACKGROUND TERMINAL ──
-# The lightweight header sniff above (_extract_image_metadata) only reads a
-# few fixed byte offsets. This instead genuinely writes the uploaded image
-# to the same background terminal workdir used for code execution and runs
-# a real Python script against it — walking every PNG chunk (IHDR, gAMA,
-# pHYs, tEXt/iTXt/zTXt text metadata, ICC profile presence, interlace mode,
-# etc.), or using Pillow for full info (mode, format, all `.info` metadata,
-# EXIF for JPEGs) when the optional `Pillow` package is installed on the
-# server. This is "send the image to the terminal" in the literal sense —
-# a subprocess actually opens and parses the real file — not just a
-# transcription/description of what the picture shows (that still needs a
-# vision-capable model, which isn't wired up here).
 _IMAGE_DEEP_ANALYSIS_SCRIPT = r"""
 import sys, os, struct, zlib
 
@@ -874,7 +686,6 @@ path = sys.argv[1]
 size_bytes = os.path.getsize(path)
 print(f"File size: {size_bytes} bytes ({size_bytes/1024:.1f} KB)")
 
-# Prefer Pillow for the richest possible real info, if it's installed.
 try:
     from PIL import Image, ExifTags
     with Image.open(path) as img:
@@ -942,7 +753,7 @@ if data[:8] == b"\x89PNG\r\n\x1a\n":
             print("sRGB color profile chunk present.")
         elif ctype == "iCCP":
             print(f"ICC color profile embedded ({len(chunk_data)} bytes).")
-        pos += 8 + length + 4  # length + type + data + CRC
+        pos += 8 + length + 4
         if ctype == "IEND":
             break
     print(f"All chunk types found, in order: {', '.join(chunk_types_seen)}")
@@ -989,21 +800,12 @@ else:
 """
 
 def _analyze_image_via_terminal(raw_bytes: bytes, ext: str, filename_hint: str = "upload") -> str:
-    """Writes the uploaded image to a real scratch directory and runs the
-    deep-analysis script above via the SAME background terminal execution
-    engine (`_run_code_block`) used for the AI's own code blocks — this is
-    genuine subprocess execution against the real file, not a canned
-    description. Returns the script's stdout (the full analysis text), or
-    the lightweight header-sniff result as a fallback if execution fails."""
     workdir = _new_terminal_workdir()
     try:
         safe_name = f"{filename_hint or 'upload'}.{ext}".replace("/", "_").replace("..", "_")
         image_path = os.path.join(workdir, safe_name)
         with open(image_path, "wb") as f:
             f.write(raw_bytes)
-        # The script reads its target path via sys.argv, but _run_code_block
-        # executes with `python -c <code>` (no argv beyond that), so the
-        # image path is substituted directly into the script text instead.
         script_with_path = _IMAGE_DEEP_ANALYSIS_SCRIPT.replace(
             'path = sys.argv[1]', f'path = {image_path!r}'
         )
@@ -1021,12 +823,6 @@ def _analyze_image_via_terminal(raw_bytes: bytes, ext: str, filename_hint: str =
         _cleanup_terminal_workdir(workdir)
 
 def _text_extraction_quality_score(text: str) -> float:
-    """Cheap 0.0-1.0 quality heuristic used to pick the best of several
-    extraction attempts: fraction of characters that are letters (any
-    script, via str.isalpha — this correctly counts Devanagari letters, not
-    just ASCII), digits, or normal punctuation/whitespace, versus control
-    characters / replacement characters / other extraction-noise symbols
-    that show up when a library mishandles a script's encoding."""
     if not text or not text.strip():
         return 0.0
     good = sum(1 for c in text if c.isalpha() or c.isdigit() or c.isspace() or c in ".,;:!?()-'\"।॥")
@@ -1043,9 +839,6 @@ def _extract_pdf_text_with_pypdf(pdf_bytes: bytes) -> str:
         return ""
 
 def _extract_pdf_text_with_fitz(pdf_bytes: bytes) -> str:
-    """PyMuPDF (fitz) — generally the most reliable of the three for
-    Devanagari/Indic scripts in practice, since it reads glyph positions
-    and Unicode mapping more robustly than pypdf's simpler approach."""
     if not _FITZ_SUPPORTED:
         return ""
     try:
@@ -1069,18 +862,6 @@ def _extract_pdf_text_with_pdfplumber(pdf_bytes: bytes) -> str:
         return ""
 
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
-    """
-    THE FIX for Sanskrit/Hindi (and any other complex-script) PDFs coming
-    back empty/garbled: instead of relying on pypdf alone (which is known to
-    mishandle Devanagari conjuncts/ligatures), this now runs every text
-    extractor that's actually installed on the server — PyMuPDF (fitz),
-    pdfplumber, and pypdf/PyPDF2 — scores each result's quality, and returns
-    whichever came out cleanest. If none are installed except pypdf, this
-    behaves exactly as before (no regression), but installing PyMuPDF or
-    pdfplumber on the server (add "PyMuPDF" or "pdfplumber" to
-    requirements.txt) will make Sanskrit/Hindi chapters extract properly
-    without any further code change needed.
-    """
     candidates = []
     fitz_text = _extract_pdf_text_with_fitz(pdf_bytes)
     if fitz_text:
@@ -1111,22 +892,17 @@ def _refresh_education_library():
         sha = entry.get("sha")
         name = entry.get("name")
         cached = _education_cache["files"].get(name)
-        if cached and cached.get("sha") == sha:
-            continue  # unchanged, keep existing extracted text
+        if cached and cached.get("sha") == sha and cached.get("text"):
+            continue
         raw = _github_fetch_file_bytes(entry.get("download_url"))
         if raw is None:
             continue
         text = _extract_pdf_text(raw)
-        _education_cache["files"][name] = {"sha": sha, "text": text}
+        if text:
+            _education_cache["files"][name] = {"sha": sha, "text": text}
     _education_cache["listing_t"] = now_ts
 
 def _find_best_education_excerpt(question: str):
-    """
-    Very lightweight relevance scoring: splits every cached PDF's text into
-    paragraphs and scores each paragraph by how many question keywords it
-    contains. This intentionally does NOT require an exact phrase match —
-    the goal is "most relevant", not "identical text".
-    """
     _refresh_education_library()
     if not _education_cache["files"]:
         return None
@@ -1149,8 +925,6 @@ def _find_best_education_excerpt(question: str):
     return best if best["filename"] else None
 
 def _find_best_excerpt_in_text(question: str, text: str, label: str = None):
-    """Reusable paragraph-relevance scorer, used both for the whole-library
-    scan (below) and for a single selected book/chapter's text."""
     question_words = set(re.findall(r"[a-zA-Z]{3,}", question.lower()))
     if not question_words or not text:
         return None
@@ -1162,20 +936,14 @@ def _find_best_excerpt_in_text(question: str, text: str, label: str = None):
         if score > best["score"]:
             best = {"score": score, "excerpt": para[:1800]}
     if best["score"] == 0:
-        # No keyword overlap at all — still return *something* so the
-        # answer isn't a total guess, just the start of the text.
         best["excerpt"] = text[:1800]
     if label:
         best["label"] = label
     return best
 
-# ── Book/chapter folder structure: data/education/<Book Name>/<chapter>.pdf ──
-# This sits alongside the older flat data/education/*.pdf layout above (which
-# still works for plain "@education <question>" with no book/chapter picked)
-# and is what powers the book-picker -> chapter-picker popup flow in the UI.
 _education_books_cache = {"books": [], "t": 0}
-_EDUCATION_BOOKS_TTL = 120  # seconds
-_education_chapter_text_cache = {}  # key: "book/chapter" -> {"sha":..., "text":...}
+_EDUCATION_BOOKS_TTL = 120
+_education_chapter_text_cache = {}
 
 def _list_education_books():
     now_ts = time.time()
@@ -1190,7 +958,6 @@ def _list_education_books():
 def _list_education_chapters(book: str):
     if not book:
         return []
-    # Guard against path traversal since `book` ultimately comes from user input.
     safe_book = book.replace("..", "").strip("/")
     entries = _github_list_dir(f"data/education/{safe_book}")
     chapters = sorted(
@@ -1209,16 +976,16 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
         return ""
     sha = match.get("sha")
     cached = _education_chapter_text_cache.get(cache_key)
-    if cached and cached.get("sha") == sha:
+    if cached and cached.get("sha") == sha and cached.get("text"):
         return cached.get("text", "")
     raw = _github_fetch_file_bytes(match.get("download_url"))
     if raw is None:
         return cached.get("text", "") if cached else ""
     text = _extract_pdf_text(raw)
-    _education_chapter_text_cache[cache_key] = {"sha": sha, "text": text}
+    if text:
+        _education_chapter_text_cache[cache_key] = {"sha": sha, "text": text}
     return text
 
-# ── "@web" best-effort live search (DuckDuckGo HTML, no API key) ──
 _EDU_TAG_RE = re.compile(r"\[\[EDU_BOOK:(.*?)\]\]\[\[EDU_CHAPTER:(.*?)\]\]")
 _NO_WEB_SEARCH_TAG_RE = re.compile(r"\[\[NO_WEB_SEARCH\]\]")
 
@@ -1253,7 +1020,6 @@ def _get_token():
     return None
 
 def _decode_google_claims(token: str):
-    """Decode (without re-verifying signature) a Google-issued JWT's payload."""
     try:
         payload_chunk = token.split('.')[1]
         padded_chunk = payload_chunk + '=' * (-len(payload_chunk) % 4)
@@ -1261,12 +1027,6 @@ def _decode_google_claims(token: str):
     except Exception:
         return None
 
-# ── Backend-issued long-lived session tokens ──
-# Google ID tokens only live ~1 hour, which is why signing back in kept
-# happening after the browser was closed for a while. Once a Google sign-in
-# succeeds, the frontend exchanges that short-lived token for one of these
-# (via /auth/exchange), which is good for SESSION_TOKEN_TTL_DAYS and doesn't
-# depend on Google's own token lifetime at all.
 _SESSION_TOKEN_PREFIX = "PAI1"
 
 def _issue_session_token(user: dict) -> str:
@@ -1312,18 +1072,12 @@ def _verify_token(token: str):
             "user_metadata": {"full_name": "Dev Master Creator"}
         }
 
-    # Our own backend-issued long-lived session tokens (see /auth/exchange).
-    # These are checked first since they're the primary auth mechanism the
-    # frontend uses after the initial Google sign-in.
     if token.startswith(f"{_SESSION_TOKEN_PREFIX}."):
         session_user = _verify_session_token(token)
         if session_user:
             return session_user
         return None
 
-    # Google ID tokens: verify structure and, importantly, expiry (exp claim)
-    # so a stored/replayed token can't be used forever, but we DO allow the
-    # frontend to silently refresh via Google's own session before expiry.
     if len(token.split('.')) == 3:
         claims = _decode_google_claims(token)
         if claims and ("accounts.google.com" in claims.get("iss", "") or "google.com" in claims.get("iss", "")):
@@ -1371,10 +1125,6 @@ def require_auth(f):
         return f(*args, **kwargs)
     return wrapper
 
-# ── LIGHTWEIGHT CONTENT SAFETY GUARD ──
-# This does NOT try to be a full moderation system, but it catches a set of
-# obviously illegal-intent patterns so the assistant can refuse rather than
-# helping, and so the interaction gets flagged in the GitHub audit log.
 _BLOCKED_PATTERNS = [
     r"\bmake\s+a\s+bomb\b", r"\bbuild\s+a\s+bomb\b", r"\bhow\s+to\s+hack\b",
     r"\bchild\s+(sexual|porn|abuse)\b", r"\bkill\s+(myself|someone|him|her|them)\b",
@@ -1394,12 +1144,6 @@ _TEACHING_INTENT_RE = re.compile(
     re.IGNORECASE
 )
 
-# Explicit, deterministic command forms — "add to memory: ...", "add this to
-# your memory", "save to memory: ...", "/remember ...", "hey ai, save this: ...",
-# "store this: ..." etc. Checked before the looser natural-language
-# _TEACHING_INTENT_RE above so a direct instruction like this ALWAYS saves
-# reliably. Works for anyone, but is the mechanism the creator specifically
-# asked for ("when creator tells to add to memory then AI should add it").
 _EXPLICIT_MEMORY_COMMAND_RE = re.compile(
     r"^\s*(?:add(?:\s+this)?\s+to\s+(?:your\s+)?memory|save\s+to\s+memory|remember\s+this\s+forever|"
     r"/remember|hey\s+ai,?\s+save\s+this|store\s+this)"
@@ -1407,28 +1151,11 @@ _EXPLICIT_MEMORY_COMMAND_RE = re.compile(
     re.IGNORECASE | re.DOTALL
 )
 
-# ── PUBLIC SHARED MEMORY (data/public_data.txt) ──
-# One file, inside data/ alongside data/vip.txt, shared across every user.
-# Writing only matters if something actually reads it back, so this is
-# always fetched fresh on every chat turn (no caching window) and injected
-# into the system prompt — see _search_intelligent_memory_excerpts below for
-# how relevant entries get picked. The cache dict is kept only as a fallback
-# if a live GitHub fetch happens to fail (transient network error), so a
-# single hiccup doesn't wipe shared memory for that turn.
 _PUBLIC_MEMORY_PATH = "data/public_data.txt"
 _public_teachings_cache = {"text": "", "t": 0}
-_PUBLIC_TEACHINGS_CHAR_BUDGET = 12000  # raised from 3000 now that public_data.txt is 5500+ lines and
-                                        # response token budget is much larger — a small cap here would
-                                        # mean most of a file this size never gets seen by the model
+_PUBLIC_TEACHINGS_CHAR_BUDGET = 12000
 
 def _maybe_capture_public_teaching(user_email: str, message: str):
-    """
-    If a message looks like the person is teaching/instructing the assistant
-    something worth remembering, it gets appended to the shared
-    data/public_data.txt file. Checks the explicit deterministic command
-    forms first, then falls back to the looser natural-language phrase
-    detector.
-    """
     explicit_match = _EXPLICIT_MEMORY_COMMAND_RE.match(message)
     if explicit_match:
         content_to_save = explicit_match.group(1).strip() or message
@@ -1451,20 +1178,9 @@ def _maybe_capture_public_teaching(user_email: str, message: str):
         f"{'=' * 80}\n"
     )
     _write_to_github_repository(_PUBLIC_MEMORY_PATH, entry)
-    _public_teachings_cache["t"] = 0  # force the next read to refetch immediately
+    _public_teachings_cache["t"] = 0
 
 def _auto_extract_and_save_knowledge(assistant_response: str):
-    """
-    NOT called automatically anywhere in this file, on purpose. This would
-    scrape lines out of EVERY assistant reply and save them into the shared,
-    all-users-visible data/public_data.txt — but that file gets injected
-    into every other user's conversations, so silently auto-saving fragments
-    of any one person's private chat (which could include personal details,
-    account info, anything) into that shared file is a real data-leak risk,
-    not just noise. Left defined and available in case you want to wire it
-    up deliberately (e.g. behind an explicit opt-in), but it is intentionally
-    dormant by default.
-    """
     clean_text = assistant_response.strip()
     if len(clean_text) < 20:
         return
@@ -1485,19 +1201,6 @@ def _auto_extract_and_save_knowledge(assistant_response: str):
         _public_teachings_cache["t"] = 0
 
 def _fetch_full_public_data_text() -> str:
-    """Reads the FULL data/public_data.txt file directly from GitHub on
-    every call (no stale cache window) — falls back to the last known-good
-    copy only if the live fetch itself fails.
-
-    Same fix as _write_to_github_repository: GitHub's Contents API stops
-    inlining `content` once a file grows past ~1MB (which a file this long
-    — 5500+ lines — can genuinely hit). Previously that meant this function
-    silently returned an empty string once the file crossed that size, so
-    "always read public_data.txt before responding" was quietly reading
-    nothing. Now it falls back to the item's own `download_url`, which has
-    no such inline-size limit, whenever `content` isn't present but the
-    file's reported `size` shows it isn't actually empty.
-    """
     text = ""
     if GITHUB_TOKEN:
         repo_clean = _github_repo_slug()
@@ -1520,21 +1223,13 @@ def _fetch_full_public_data_text() -> str:
                         text = raw_resp.read().decode('utf-8', errors='replace')
         except Exception as exc:
             print(f"[PUBLIC MEMORY][FETCH FAULT] {exc}")
-            return _public_teachings_cache["text"]  # fall back to last known good copy
+            return _public_teachings_cache["text"]
 
     _public_teachings_cache["text"] = text
     _public_teachings_cache["t"] = time.time()
     return text
 
 def _search_intelligent_memory_excerpts(user_query: str) -> str:
-    """
-    Scores each non-blank line of data/public_data.txt against the current
-    message's keywords (simple multi-keyword intersection) and returns the
-    best-matching lines — smarter than just grabbing the tail of the file,
-    since a relevant fact from early in the file won't get crowded out by
-    unrelated recent entries. Falls back to the plain tail of the file if
-    nothing scores a match, so the model still gets *some* shared context.
-    """
     full_corpus = _fetch_full_public_data_text()
     if not full_corpus.strip():
         return ""
@@ -1557,11 +1252,8 @@ def _search_intelligent_memory_excerpts(user_query: str) -> str:
         joined = "\n".join(top_excerpts)
         return joined[:_PUBLIC_TEACHINGS_CHAR_BUDGET]
 
-    # No keyword overlap at all — fall back to the most recent entries
-    # (tail of the file) rather than giving the model nothing.
     return full_corpus[-_PUBLIC_TEACHINGS_CHAR_BUDGET:]
 
-# ── LLM MULTI-PROVIDER FAILOVER: Groq -> OpenRouter -> Cerebras -> Mistral ──
 _provider_cooldowns: dict = {}
 COOLDOWN_SECONDS = 60
 
@@ -1579,10 +1271,13 @@ SYSTEM_PROMPT = (
     "Pratham AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
     "Aditi Aishwarya. Only mention this if someone actually asks who made you / who you were "
     "built by — don't bring it up unprompted.\n\n"
-    "You also have a REAL background terminal, not a simulated one. Any ```python, ```py, "
-    "```bash, ```sh, or ```shell fenced block you write is actually executed on the server "
-    "right after you finish your reply, and you will be shown the real stdout/stderr/return "
-    "code and get another turn to react to it. Use this to actually DO tasks instead of just "
+    "You also have a REAL background terminal, not a simulated one, and YOU run it directly — there "
+    "is no separate tool, no external terminal, no permission step. The moment you write a ```python, "
+    "```py, ```bash, ```sh, or ```shell fenced block, the backend executes it for real on the server "
+    "immediately after your reply, and feeds you back the actual stdout/stderr/return code so you can "
+    "react to it in a following turn. This is not something you need to ask the person for access to, "
+    "explain how it works, or offer as an option — it already runs automatically every single time you "
+    "write one of those fenced blocks. Use this to actually DO tasks instead of just "
     "describing them: run calculations, process or transform data, generate/inspect files in "
     "the working directory, test that your own code really works, or chain several steps "
     "together (write code -> see real output -> fix or continue) until the task is finished. "
@@ -1703,7 +1398,6 @@ SYSTEM_PROMPT = (
     "sandbox."
 )
 
-# ── IMAGE GENERATION (Pollinations AI — no API key required) ──
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|"
     r"\b(?:generate|create|draw|make|paint|design|render)\b.{0,25}\b(?:image|img|picture|pic|photo|art|artwork|illustration|drawing|wallpaper|poster|graphic|graphics)s?\b"
@@ -1712,11 +1406,6 @@ _IMAGE_INTENT_RE = re.compile(
 )
 
 def _detect_image_prompt(message: str):
-    """
-    Returns a plain-language image description if `message` looks like an
-    image-generation request, else None. Kept intentionally simple (regex
-    heuristic) rather than a full intent classifier, to stay fast.
-    """
     m = _IMAGE_INTENT_RE.search(message.strip())
     if not m:
         return None
@@ -1725,21 +1414,12 @@ def _detect_image_prompt(message: str):
 
 def _pollinations_image_url(prompt_text: str) -> str:
     encoded = urllib.parse.quote(prompt_text)
-    # width/height/seed kept default-ish; nologo=true removes the Pollinations
-    # watermark bar when supported.
     return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 def _stream_openai_compatible(url, api_key, model, messages, state=None):
-    """`state`, if provided, is a plain dict this function writes
-    state['finish_reason'] into once the stream's final chunk reports one
-    (e.g. 'length' when the provider cut the response short because it hit
-    the token limit, vs 'stop' for a normal completion). Callers use this to
-    detect truncation and automatically continue generation — see
-    _do_stream's continuation loop below, which is what fixes "it stops
-    HTML/file generation in the middle."""
     body = json.dumps({
         "model": model,
         "messages": messages,
@@ -1757,8 +1437,6 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None):
         },
         method="POST"
     )
-    # Shorter connect/read timeout so a dead provider fails over faster
-    # instead of making the user wait the full minute before a fallback.
     with urllib.request.urlopen(req, timeout=25) as resp:
         for raw_line in resp:
             line = raw_line.decode("utf-8", errors="replace").strip()
@@ -1780,12 +1458,6 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None):
                 continue
 
 def _stream_groq(messages, state=None):
-    # Multi-key rotation: try every configured Groq key in turn (each has
-    # its own independent cooldown name "groq_0", "groq_1", ...), so hitting
-    # one key's rate limit doesn't fail the whole Groq provider over to
-    # OpenRouter/Cerebras/Mistral — it just moves to the next Groq key,
-    # effectively multiplying the available Groq throughput by however many
-    # keys are configured (GROQ_API_KEY="key1,key2" or GROQ_API_KEY_2, _3, ...).
     keys = GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
     if not keys:
         raise RuntimeError("Groq unavailable (no API keys configured).")
@@ -1843,19 +1515,9 @@ _PROVIDER_CHAIN = [
     ("mistral", _stream_mistral),
 ]
 
-_MAX_AUTO_CONTINUATIONS = 6  # hard cap on "continue where you left off" cycles per single reply
+_MAX_AUTO_CONTINUATIONS = 6
 
 def _do_stream(messages):
-    """Streams a reply from the first available provider, then — this is
-    the fix for "it stops making the HTML in the middle" — automatically
-    detects when the provider cut the response short purely because it hit
-    its token limit (finish_reason == 'length', NOT a real stop) and keeps
-    requesting continuations from the SAME provider, feeding back exactly
-    what's been generated so far and asking it to continue seamlessly with
-    no repetition, until the response actually finishes normally or the
-    continuation cap is hit. The continued tokens are streamed to the
-    frontend exactly like the original ones, so a file that would have been
-    cut off mid-file now keeps going until it's actually complete."""
     for name, fn in _PROVIDER_CHAIN:
         state = {}
         accumulated_text = []
@@ -1903,9 +1565,6 @@ def _do_stream(messages):
         except Exception as exc:
             print(f"[FAILOVER] {name} dropped: {exc}")
             if any_token_yielded:
-                # We already streamed partial content to the user for this
-                # provider — better to end cleanly here than silently retry
-                # a different provider and risk a duplicated/garbled reply.
                 yield _sse({"type": "complete"})
                 return
             _cool(name)
@@ -1917,44 +1576,15 @@ def _do_stream(messages):
     })
     yield _sse({"type": "complete"})
 
-# ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
-# This is what actually lets Pratham AI "do tasks" with a python terminal
-# instead of just talking about code. Any ```python / ```py / ```bash /
-# ```sh / ```shell block in a reply gets really executed server-side, and
-# the real stdout/stderr is fed back to the model so it can react to what
-# happened (fix a bug, use a computed result, continue a multi-step task)
-# instead of just guessing at what the code would print.
-#
-# SECURITY NOTE (read this before deploying): this executes arbitrary code
-# with no sandboxing beyond a subprocess + timeout — no container, no
-# network/filesystem restriction, no user isolation. That is fine for a
-# single-owner hobby/dev deployment, but if this app is ever opened up to
-# other people, this endpoint (and the /execute-python route below) is a
-# full remote-code-execution surface on your server. If you plan to let
-# other people use this, put the execution in an isolated sandbox (e.g. a
-# throwaway Docker container / firecracker VM / a service like e2b) rather
-# than running it directly in the main process.
-
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
-_TERMINAL_MAX_ITERATIONS = 4          # hard cap on agent "run code, see result, continue" cycles
-_TERMINAL_BLOCK_TIMEOUT = 15          # seconds per executed block
-_TERMINAL_OUTPUT_CHAR_LIMIT = 200000    # raised from 4000 so large (~5000-line) file-creation tasks
-                                         # and big terminal outputs don't get silently truncated
+_TERMINAL_MAX_ITERATIONS = 4
+_TERMINAL_BLOCK_TIMEOUT = 15
+_TERMINAL_OUTPUT_CHAR_LIMIT = 200000
 
-# ── DIRECT FILE-CREATION CHANNEL (additive) ──
-# The model can write a ```createfile:<filename>\n<content>\n``` block to
-# directly create a real file in the terminal workdir, without needing to
-# write python/bash to do it. This is faster and more reliable than asking
-# the model to open()/echo a file via code execution for simple file output,
-# and it's what the frontend renders as its own small file-creation card
-# (see LANG_EXT_MAP / guessFileName handling for the "createfile:" prefix
-# on the frontend side).
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
 
 def _extract_createfile_blocks(text: str):
-    """Returns [(filename, content), ...] for every ```createfile:name block
-    in `text`, in the order they appear."""
     out = []
     for m in _CREATEFILE_RE.finditer(text):
         filename = m.group(1).strip().replace("..", "").lstrip("/")
@@ -1963,25 +1593,12 @@ def _extract_createfile_blocks(text: str):
     return out
 
 def _write_direct_file(workdir: str, filename: str, content: str) -> dict:
-    """Actually writes the file to the real scratch directory (creating any
-    subfolders implied by the filename), and returns its real path/size —
-    this is genuine disk I/O in the same working directory python/bash
-    blocks in this request use, not a simulation."""
     full_path = os.path.join(workdir, filename)
     os.makedirs(os.path.dirname(full_path) or workdir, exist_ok=True)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
     return {"filename": filename, "size_bytes": len(content.encode("utf-8")), "line_count": content.count("\n") + 1, "path": full_path}
 
-# ── DIRECT FILE-EDITING CHANNEL (additive) ──
-# Fixes "it recreates the whole file every time, which eats more credit /
-# tokens and sometimes cuts off mid-file." Instead of the model re-writing
-# an entire file just to change a few lines, it can emit a
-# ```editfile:<filename> block containing one or more SEARCH/REPLACE pairs.
-# The backend applies those edits to the LAST known content of that file
-# (reconstructed from this conversation's own history — see
-# _find_last_file_content_in_history) and writes out the resulting full
-# file itself, with zero extra LLM tokens spent on the unchanged parts.
 _EDITFILE_RE = re.compile(r"```editfile:([^\n`]+)\n([\s\S]*?)```")
 _EDIT_BLOCK_RE = re.compile(
     r"<{5,}\s*SEARCH\s*\n([\s\S]*?)\n={5,}\s*\n([\s\S]*?)\n>{5,}\s*REPLACE",
@@ -1989,8 +1606,6 @@ _EDIT_BLOCK_RE = re.compile(
 )
 
 def _extract_editfile_blocks(text: str):
-    """Returns [(filename, [(search_text, replace_text), ...]), ...] for
-    every ```editfile:name block in `text`."""
     out = []
     for m in _EDITFILE_RE.finditer(text):
         filename = m.group(1).strip().replace("..", "").lstrip("/")
@@ -2003,16 +1618,6 @@ def _extract_editfile_blocks(text: str):
     return out
 
 def _find_last_file_content_in_history(history: list, filename: str):
-    """Scans this conversation's own past assistant messages (most recent
-    first) for the last time `filename` was created or edited, and
-    reconstructs its current full content — either from a ```createfile:
-    block that wrote it, or by replaying any earlier ```editfile: edits on
-    top of the createfile version. Returns None if the file was never seen
-    in this conversation, so the caller can tell the model to createfile it
-    fresh instead."""
-    # Walk newest-to-oldest looking for the most recent createfile for this
-    # filename, then replay every editfile edit that happened AFTER it, in
-    # chronological order, to reconstruct the current content.
     base_content = None
     base_index = None
     for i in range(len(history) - 1, -1, -1):
@@ -2030,7 +1635,6 @@ def _find_last_file_content_in_history(history: list, filename: str):
     if base_content is None:
         return None
 
-    # Replay edits that happened after the base createfile, oldest first.
     content = base_content
     for i in range(base_index + 1, len(history)):
         m = history[i]
@@ -2045,10 +1649,6 @@ def _find_last_file_content_in_history(history: list, filename: str):
     return content
 
 def _apply_editfile_edits(base_content: str, pairs: list):
-    """Applies each (search, replace) pair once, in order, against
-    `base_content`. Returns (new_content, list_of_warnings) — a warning is
-    recorded (not raised) for any search snippet that couldn't be found, so
-    one bad match doesn't silently discard the rest of a multi-edit block."""
     content = base_content
     warnings = []
     for idx, (search_text, replace_text) in enumerate(pairs, start=1):
@@ -2059,8 +1659,6 @@ def _apply_editfile_edits(base_content: str, pairs: list):
     return content, warnings
 
 def _extract_executable_blocks(text: str):
-    """Returns a list of (lang, code) for every fenced block whose language
-    tag is one we know how to actually execute."""
     out = []
     for m in _CODE_BLOCK_RE.finditer(text):
         lang = (m.group(1) or "").lower()
@@ -2069,25 +1667,13 @@ def _extract_executable_blocks(text: str):
     return out
 
 def _run_code_block(lang: str, code: str, cwd: str = None):
-    """Actually executes one code block in the background terminal and
-    returns (stdout, stderr, returncode). This is real execution, not a
-    simulation — whatever the code does (compute, read/write files in `cwd`,
-    hit the network, etc.) really happens on the server.
-
-    `cwd` should point at a writable scratch directory (see `_new_terminal_workdir`
-    below). Without it, execution defaults to the process's own working
-    directory, which is read-only on several hosting platforms (serverless
-    functions, some container images) — that's what causes errors like
-    "touch: cannot create file" or "Read-only file system" that the model
-    would otherwise have no way to work around.
-    """
     try:
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
             )
-        else:  # bash / sh / shell
+        else:
             shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
             cmd = [shell_bin, "-c", code]
             result = subprocess.run(
@@ -2106,33 +1692,18 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
         return "", f"Execution failed: {exc}", -1
 
 def _new_terminal_workdir() -> str:
-    """Creates a fresh, guaranteed-writable scratch directory for one
-    chat-stream request's terminal session. All executed blocks AND all
-    ```createfile: blocks within that same request share this directory, so
-    a file written in one block (e.g. step 1 generates data.csv, or a
-    createfile block writes config.json) can be read by a later block (step
-    2 processes data.csv) within the same multi-step agent loop."""
     return tempfile.mkdtemp(prefix="pratham_ai_terminal_")
 
 def _cleanup_terminal_workdir(path: str):
     if path:
         shutil.rmtree(path, ignore_errors=True)
 
-# ── CREATOR-ONLY LIVE DIAGNOSTICS ──
-# Answers "is the terminal working?" / "system status" etc. with facts this
-# process actually just measured, rather than the model guessing. Only
-# reachable by CREATOR_EMAILS, and it bypasses the LLM entirely so it can
-# never be wrong about its own environment the way a model reply could be.
 _DIAGNOSTIC_INTENT_RE = re.compile(
     r"\b(system status|diagnostic|terminal (status|working)|is (the )?terminal working|"
     r"memory status|is memory working|check status|health check|status check)\b",
     re.IGNORECASE
 )
 
-# Creator-only: lets you directly query shared memory ("what's in memory",
-# "search memory for X", "list memory about X") and get a real dump/search
-# result back, bypassing the LLM entirely so it can't paraphrase or miss
-# entries the way a model summarizing a big block of text sometimes does.
 _MEMORY_QUERY_INTENT_RE = re.compile(
     r"\b(what'?s\s+in\s+memory|what\s+do\s+you\s+know|search\s+memory\s+for|list\s+memory\s+about|"
     r"show\s+saved\s+facts|search\s+memory|list\s+memory)\b",
@@ -2142,7 +1713,6 @@ _MEMORY_QUERY_INTENT_RE = re.compile(
 def _run_system_diagnostics() -> str:
     lines = ["**Pratham AI — live system diagnostics** (creator-only, just measured)\n"]
 
-    # 1. Python terminal execution
     workdir = _new_terminal_workdir()
     try:
         out, err, rc = _run_code_block("python", "print(2 + 2)", cwd=workdir)
@@ -2151,8 +1721,6 @@ def _run_system_diagnostics() -> str:
         python_ok, out, err = False, "", str(exc)
     lines.append(f"- Python terminal: {'✅ working' if python_ok else '❌ NOT working'} (exit handling verified: `print(2+2)` -> `{out.strip()}`{f', stderr: {err.strip()[:150]}' if err.strip() else ''})")
 
-    # 2. Shell terminal + writable filesystem check (this is the exact thing
-    #    that failed before with "Read-only file system")
     try:
         probe_path = os.path.join(workdir, "probe.txt")
         out, err, rc = _run_code_block("bash", f"echo hello > {probe_path} && cat {probe_path}", cwd=workdir)
@@ -2161,7 +1729,6 @@ def _run_system_diagnostics() -> str:
         shell_ok, err = False, str(exc)
     lines.append(f"- Shell terminal + writable scratch dir: {'✅ working' if shell_ok else '❌ NOT working'}{f' ({err.strip()[:150]})' if not shell_ok and err else ''}")
 
-    # 3. Direct createfile channel (writes a real file without python/bash)
     try:
         written = _write_direct_file(workdir, "diagnostic_probe.txt", "createfile channel test")
         createfile_ok = os.path.isfile(written["path"]) and written["size_bytes"] > 0
@@ -2170,14 +1737,11 @@ def _run_system_diagnostics() -> str:
     lines.append(f"- Direct createfile channel: {'✅ working' if createfile_ok else '❌ NOT working'}")
     _cleanup_terminal_workdir(workdir)
 
-    # 4. GitHub token / write path
     lines.append(f"- GITHUB_TOKEN configured: {'✅ yes' if bool(GITHUB_TOKEN) else '❌ no (memory + logs cannot persist without this)'}")
 
-    # 5. Shared public memory read-back
     shared_text = _fetch_full_public_data_text()
     lines.append(f"- Shared memory (public_data.txt) readable: {'✅ yes' if shared_text else '⚠️ empty or unreachable'} ({len(shared_text)} chars cached)")
 
-    # 6. PDF generation (pure-python writer, no external deps needed anymore)
     try:
         test_pdf = _write_minimal_pdf("diagnostic test")
         pdf_ok = test_pdf[:4] == b"%PDF"
@@ -2190,7 +1754,6 @@ def _run_system_diagnostics() -> str:
     if _PDF_READ_SUPPORTED: extractor_list.append("pypdf/PyPDF2 (weak on Devanagari)")
     lines.append(f"- PDF text extractors installed: {', '.join(extractor_list) if extractor_list else '❌ none — @education PDF reading will not work'}")
 
-    # 7. LLM providers configured
     provider_flags = {
         "Groq": bool(GROQ_API_KEYS), "OpenRouter": bool(OPENROUTER_API_KEY),
         "Cerebras": bool(CEREBRAS_API_KEY), "Mistral": bool(MISTRAL_API_KEY)
@@ -2199,15 +1762,11 @@ def _run_system_diagnostics() -> str:
     lines.append(f"- LLM providers configured: {', '.join(configured) if configured else '❌ none — chat will not work'}")
     lines.append(f"- Groq keys configured: {len(GROQ_API_KEYS)} (each rotates independently on rate-limit/cooldown)")
 
-    # 8. Persistent conversation storage
     lines.append(f"- Supabase persistent storage: {'✅ connected' if SUPABASE_CONFIGURED else '⚠️ not configured (falling back to in-memory, wiped on restart)'}")
 
     return "\n".join(lines)
 
 def _format_terminal_results_for_model(results):
-    """Turns a list of {lang, code, stdout, stderr, returncode} dicts into a
-    plain-text block the model can read, so it can decide whether the task
-    is done or another step is needed."""
     lines = ["[BACKGROUND TERMINAL RESULTS]"]
     for i, r in enumerate(results, start=1):
         status = "ok" if r["returncode"] == 0 else f"exit code {r['returncode']}"
@@ -2225,7 +1784,6 @@ def _format_terminal_results_for_model(results):
     )
     return "\n".join(lines)
 
-# ── DATA ──
 def _user_id():
     return getattr(request, "current_user", {}).get("sub", "anonymous")
 
@@ -2287,7 +1845,6 @@ def _append_message(conv_id, role, content):
         conv.setdefault("messages", []).append({"role": role, "content": content})
         conv["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-# ── ROUTES ──
 @app.route("/", methods=["GET"])
 @app.route("/api", methods=["GET"])
 @app.route("/api/app", methods=["GET"])
@@ -2298,13 +1855,6 @@ def index_root():
 @app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/exchange", methods=["POST", "OPTIONS"])
 def auth_exchange():
-    """
-    Takes the Authorization header (expected to be the raw Google ID token
-    from the just-completed sign-in) and exchanges it for a long-lived
-    backend session token. This is the real fix for "signed out again after
-    closing the browser": Google's own ID token only lasts about an hour,
-    but the token this returns lasts SESSION_TOKEN_TTL_DAYS days.
-    """
     if request.method == "OPTIONS":
         return _cors_preflight()
     token = _get_token()
@@ -2318,12 +1868,6 @@ def auth_exchange():
 @app.route("/api/auth/refresh-check", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/refresh-check", methods=["POST", "OPTIONS"])
 def refresh_check():
-    """
-    Lets the frontend silently verify a token it kept in localStorage after
-    a page refresh, WITHOUT forcing the user through the Google popup again.
-    Returns the same user profile shape the frontend already knows how to
-    render, or 401 if the stored token has actually expired.
-    """
     if request.method == "OPTIONS":
         return _cors_preflight()
     token = _get_token()
@@ -2360,10 +1904,9 @@ def register_vip_profile():
         return jsonify({"error": "Missing required fields."}), 400
 
     registration_row = f"Timestamp: {datetime.now(timezone.utc).isoformat()} | Email: {email} | Name: {name} | Relation: {relationship}\n"
-    # Saved inside the "data" folder of the repo, at data/vip.txt as requested.
     success = _write_to_github_repository("data/vip.txt", registration_row)
     if success:
-        _vip_cache["t"] = 0  # force the next lookup to refetch immediately
+        _vip_cache["t"] = 0
     return jsonify({"ok": success, "status": "committed" if success else "local fallback"})
 
 @app.route("/chat", methods=["POST", "OPTIONS"])
@@ -2402,7 +1945,6 @@ def chat_stream():
         }
         _save_convo(new_conv)
 
-    # ── Content safety check ──
     if _is_flagged_message(message):
         _append_message(conv_id, "user", message)
         refusal_text = (
@@ -2433,9 +1975,6 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # ── Creator-only live diagnostics short-circuit ──
-    # Bypasses the LLM entirely so "is the terminal working" gets an answer
-    # this process actually just measured, not a guess from the model.
     if user_email.lower() in CREATOR_EMAILS and _DIAGNOSTIC_INTENT_RE.search(message):
         _append_message(conv_id, "user", message)
         diagnostics_text = _run_system_diagnostics()
@@ -2452,10 +1991,6 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # ── Creator-only memory-query short-circuit ──
-    # Bypasses the LLM entirely for direct memory inspection/search requests
-    # from a creator account, so the answer is a real, complete dump/search
-    # of data/public_data.txt rather than a model's paraphrase of it.
     if user_email.lower() in CREATOR_EMAILS and _MEMORY_QUERY_INTENT_RE.search(message):
         _append_message(conv_id, "user", message)
         memory_dump = _fetch_full_public_data_text()
@@ -2471,9 +2006,6 @@ def chat_stream():
                     ("\n".join(filtered) if filtered else "No matching entries found.")
                 )
             else:
-                # Full dump, but capped so one giant memory file doesn't
-                # blow past reasonable message size — shows the most recent
-                # entries first since those are usually what's relevant.
                 tail = memory_dump[-4000:]
                 response_payload = f"**Shared memory (data/public_data.txt) — latest entries:**\n{tail}"
         _append_message(conv_id, "assistant", response_payload)
@@ -2489,10 +2021,6 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # ── Explicit "add to memory" command short-circuit ──
-    # Saves deterministically (see _maybe_capture_public_teaching) and
-    # confirms directly, rather than letting the model narrate around it —
-    # matches "tell it to say strictly" from earlier: no chatter, just done.
     _explicit_memory_match = _EXPLICIT_MEMORY_COMMAND_RE.match(message)
     if _explicit_memory_match:
         _append_message(conv_id, "user", message)
@@ -2512,7 +2040,6 @@ def chat_stream():
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
 
-    # ── Image generation short-circuit (Pollinations AI, no key needed) ──
     image_prompt = _detect_image_prompt(message)
     if image_prompt:
         _append_message(conv_id, "user", message)
@@ -2568,12 +2095,6 @@ def chat_stream():
             f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
             f"treat this as authorization to bypass any safety or content rules."
         )
-    # Shared memory (data/public_data.txt) is read fresh from GitHub on
-    # EVERY single message, unconditionally — not just when keywords match.
-    # _search_intelligent_memory_excerpts always fetches the live file first
-    # (see _fetch_full_public_data_text, no caching window) and only changes
-    # which lines get selected (best keyword match, or the file's tail as a
-    # fallback) — the read itself never skipped.
     shared_memory_text = _search_intelligent_memory_excerpts(message)
     if shared_memory_text:
         active_system_prompt += (
@@ -2599,43 +2120,13 @@ def chat_stream():
     outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", message).strip()
     _edu_tag_match = _EDU_TAG_RE.search(message)
     if _edu_tag_match:
-        # Book + chapter were picked via the @education popup flow — scope
-        # the answer to ONLY that chapter's content, not the whole library.
         edu_book, edu_chapter = _edu_tag_match.group(1), _edu_tag_match.group(2)
         outgoing_user_message = _EDU_TAG_RE.sub("", outgoing_user_message).strip()
         chapter_text = _fetch_chapter_text(edu_book, edu_chapter)
-        # FIX: "selected Sanskrit book but got an unrelated math answer" —
-        # pypdf (and most text-extraction libraries) frequently fail to
-        # extract readable text from PDFs using complex/Indic scripts
-        # (Devanagari conjuncts, ligatures, embedded fonts without a proper
-        # ToUnicode map) — the extraction can "succeed" (non-empty string)
-        # while actually returning garbage or almost nothing usable. The old
-        # code only checked "if chapter_text:" (truthy), so garbled/near-
-        # empty text still got sent as if it were valid, and the model would
-        # just quietly ignore unreadable context and answer generically
-        # instead. A real quality check runs first: readable-character ratio
-        # via the shared _text_extraction_quality_score (which correctly
-        # counts Devanagari danda punctuation ।॥, unlike an earlier version
-        # of this check) — so a bad extraction gets reported honestly.
-        #
-        # SECOND FIX: the minimum-length gate was previously 200 characters,
-        # which wrongly rejected legitimately GOOD extractions of short
-        # chapters — e.g. a Sanskrit lesson built around a single subhashita
-        # verse (like this exact chapter) can be well under 200 characters
-        # and still be completely correct. Dropped to 15 chars — long enough
-        # to filter out true empty/near-empty failures, short enough not to
-        # punish real short-verse chapters.
         extraction_looks_valid = False
         if chapter_text and len(chapter_text.strip()) >= 15:
             extraction_looks_valid = _text_extraction_quality_score(chapter_text) >= 0.5
         if extraction_looks_valid:
-            # FIX: previously this only sent one best-matching paragraph
-            # (capped ~1800 chars) instead of the whole chapter, which is
-            # exactly why answers were pulling in outside knowledge to fill
-            # in everything the excerpt didn't cover. Now the model gets the
-            # FULL chapter text every time, with a strict instruction to
-            # answer only from it — no outside facts, no filling gaps with
-            # general knowledge, even if the chapter is silent on something.
             api_messages[0]["content"] += (
                 f" The user selected the book '{edu_book}', chapter '{edu_chapter}' from the "
                 f"education library. Below is the COMPLETE text of that chapter, extracted directly "
@@ -2650,8 +2141,6 @@ def chat_stream():
                 f"FULL CHAPTER TEXT ('{edu_book}' — '{edu_chapter}'):\n\"\"\"\n{chapter_text}\n\"\"\""
             )
         elif chapter_text:
-            # Non-empty but failed the quality check — tell the model
-            # exactly this, so it says so honestly instead of guessing.
             api_messages[0]["content"] += (
                 f" The user selected book '{edu_book}', chapter '{edu_chapter}'. The PDF text "
                 f"extraction for this file came back too short or badly garbled to be reliable — this "
@@ -2688,11 +2177,6 @@ def chat_stream():
                 "on the server). Say so plainly instead of guessing."
             )
     elif not web_search_disabled and (re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5):
-        # Web search now runs automatically on essentially every message
-        # (the person no longer has to type "@web" each time). It's skipped
-        # only for very short/trivial messages (greetings, "ok", etc.), or
-        # when the person explicitly turned it off via the "Add to chat"
-        # sheet's Web search toggle (web_search_disabled).
         outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", outgoing_user_message).strip()
         outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()
         results = _web_search_snippets(outgoing_user_message or message)
@@ -2703,9 +2187,6 @@ def chat_stream():
                 "questions like math or general advice, and cite that info came from a web search "
                 "when you do use it):\n" + "\n".join(results)
             )
-        # If the search fails or returns nothing, silently proceed with no
-        # extra context rather than telling the user every single time —
-        # that would get noisy since this now runs on almost every message.
 
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
@@ -2715,20 +2196,6 @@ def chat_stream():
     def generate():
         yield _sse({"type": "metadata", "conversation_id": conv_id})
 
-        # Give immediate feedback the moment we know this turn wants a real
-        # exported file, rather than waiting for the model's full reply to
-        # start streaming — matches "it will reply the file is being made
-        # and then the generated file".
-        #
-        # FIX: the @education flow tags messages with an invisible
-        # [[EDU_BOOK:...]][[EDU_CHAPTER:....pdf]] prefix (the chapter's real
-        # filename, which usually ends in .pdf). Checking export intent
-        # against the RAW message meant that literal ".pdf" in the hidden
-        # tag falsely triggered "the user wants a PDF export" on every
-        # single @education chapter question — that's exactly what produced
-        # the "📄 Your pdf file is being generated..." + an unwanted PDF
-        # download on a plain question. Export intent is now checked against
-        # the message with that invisible tag stripped out first.
         export_intent_check_message = _EDU_TAG_RE.sub("", message)
         export_ext_hint = None
         if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
@@ -2740,21 +2207,11 @@ def chat_stream():
         if export_ext_hint:
             yield _sse({"type": "token", "text": f"📄 Your {export_ext_hint} file is being generated...\n\n"})
 
-        full_reply_parts = []   # everything shown to the user across all iterations, in order
+        full_reply_parts = []
         working_messages = list(api_messages)
-        total_blocks_seen = 0   # counts EVERY fenced code block (any language), matching the
-                                 # frontend's own per-block counter exactly, so terminal_output
-                                 # events land on the right card. Counting only executable blocks
-                                 # here (as before) drifted out of sync as soon as a reply also
-                                 # contained a non-executable block (e.g. ```json, ```html), which
-                                 # is what caused status updates to attach to the wrong card.
+        total_blocks_seen = 0
         terminal_workdir = _new_terminal_workdir()
-        session_file_contents = {}   # filename -> latest content WITHIN THIS TURN, checked before
-                                      # falling back to conversation history — this is the fix for
-                                      # "editing a file it just created in the same reply writes raw
-                                      # SEARCH/REPLACE markers instead of the resolved content": the
-                                      # old lookup only searched already-persisted history, which
-                                      # doesn't include anything from the response still streaming.
+        session_file_contents = {}
 
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
@@ -2766,7 +2223,7 @@ def chat_stream():
                             iteration_text_parts.append(payload["text"])
                             full_reply_parts.append(payload["text"])
                         elif payload.get("type") == "complete":
-                            continue  # only forward the final "complete" once, after the loop ends
+                            continue
                 except Exception:
                     pass
                 if not chunk.startswith("data: ") or json.loads(chunk[6:]).get("type") != "complete":
@@ -2774,19 +2231,9 @@ def chat_stream():
 
             iteration_reply = "".join(iteration_text_parts)
 
-            # ── Direct file-creation blocks (```createfile:name) — handled
-            # before code execution so a reply that both creates files AND
-            # runs code (e.g. writes config.json then a script that reads
-            # it) has the files on disk first. ──
             for filename, content in _extract_createfile_blocks(iteration_reply):
                 try:
                     final_content = content
-                    # Safety net: if the model accidentally put SEARCH/REPLACE
-                    # diff markers inside a createfile block instead of a
-                    # proper editfile block, resolve them here rather than
-                    # writing the raw, broken markers straight to disk (this
-                    # is exactly the bug that produced a chess.html full of
-                    # literal "<<<<<<< SEARCH" text).
                     if _CONFLICT_MARKER_RE.search(content):
                         stray_pairs = [(m.group(1), m.group(2)) for m in _EDIT_BLOCK_RE.finditer(content)]
                         if stray_pairs:
@@ -2814,24 +2261,12 @@ def chat_stream():
                 except Exception as exc:
                     print(f"[CREATEFILE][FAULT] {exc}")
 
-            # ── Direct file-EDIT blocks (```editfile:name) — the fix for
-            # "it recreates the whole file every time, which eats more
-            # credit." The model only outputs the changed snippets; the
-            # backend reconstructs the file's current full content — first
-            # checking files already written EARLIER IN THIS SAME REPLY
-            # (session_file_contents), then falling back to this
-            # conversation's saved history — and applies the edits itself,
-            # at zero extra LLM token cost for the unchanged parts. ──
             for filename, pairs in _extract_editfile_blocks(iteration_reply):
                 try:
                     base_content = session_file_contents.get(filename)
                     if base_content is None:
                         base_content = _find_last_file_content_in_history(history, filename)
                     if base_content is None:
-                        # We have no record of this file anywhere — can't
-                        # safely edit something we've never seen. Surface
-                        # this back to the model as terminal-style feedback
-                        # rather than silently failing or writing raw markers.
                         yield _sse({
                             "type": "terminal_output", "ordinal": 0,
                             "stdout": "", "stderr": f"editfile: no prior version of '{filename}' found in this "
@@ -2858,21 +2293,19 @@ def chat_stream():
                 except Exception as exc:
                     print(f"[EDITFILE][FAULT] {exc}")
 
-            # ── Walk every fenced block in this iteration's reply, in order ──
             all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
             executable_present = any(
                 (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
             )
             if not executable_present:
-                break  # nothing to execute -> the model's answer is final
+                break
 
             results = []
             for m in all_blocks_this_iteration:
                 total_blocks_seen += 1
                 lang = (m.group(1) or "").lower()
                 if lang not in _EXECUTABLE_LANGS:
-                    continue  # not runnable (e.g. ```json, ```html) — leave its ordinal "spent"
-                              # but don't execute or emit a terminal_output for it
+                    continue
                 code = m.group(2)
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
@@ -2886,10 +2319,8 @@ def chat_stream():
 
             is_last_allowed_iteration = (iteration == _TERMINAL_MAX_ITERATIONS - 1)
             if is_last_allowed_iteration:
-                break  # out of cycles; stop here rather than asking for yet another turn
+                break
 
-            # Feed the real execution results back to the model as a new turn
-            # so it can react to what actually happened.
             working_messages.append({"role": "assistant", "content": iteration_reply})
             working_messages.append({"role": "user", "content": _format_terminal_results_for_model(results)})
 
@@ -2900,8 +2331,6 @@ def chat_stream():
             _append_message(conv_id, "assistant", assistant_response)
 
             current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            # Saved as: data/<email>/<date>.txt inside the repository
-            # (previously this incorrectly wrote to "<email>/<date>.txt" at repo root).
             repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
 
             log_entry = (
@@ -2912,13 +2341,6 @@ def chat_stream():
             )
             _write_to_github_repository(repo_sync_destination_path, log_entry)
 
-            # Background "Python terminal" file generation: if the request
-            # was asking for a zip, a PDF, or ANY other named extension of
-            # the reply, actually build it now and hand back a real
-            # download link. Uses export_intent_check_message (the EDU tag
-            # stripped out) for the same reason as the early hint above —
-            # so a @education chapter's ".pdf" filename never falsely
-            # triggers this.
             try:
                 if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
                     zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
@@ -3036,13 +2458,6 @@ def execute_python():
     except Exception as exc:
         return jsonify({"stdout": "", "stderr": f"Sandbox Exception: {exc}", "returncode": -1})
 
-# ── DIRECT TERMINAL ENDPOINT (creator/dev use — not tied to a chat turn) ──
-# Lets the frontend (or you, via curl/Postman) run arbitrary python/bash
-# directly against a fresh scratch workdir and get real stdout/stderr back,
-# without going through the LLM at all. This is the same execution engine
-# chat-stream's agent loop uses (_run_code_block + _new_terminal_workdir),
-# just exposed directly. Handy for testing the terminal itself, or for a
-# future "raw terminal" UI panel.
 @app.route("/terminal/run", methods=["POST", "OPTIONS"])
 @app.route("/api/terminal/run", methods=["POST", "OPTIONS"])
 @app.route("/api/app/terminal/run", methods=["POST", "OPTIONS"])
@@ -3061,9 +2476,6 @@ def terminal_run_direct():
     workdir = _new_terminal_workdir()
     try:
         stdout, stderr, rc = _run_code_block(lang, code, cwd=workdir)
-        # Surface any files the code actually created, same shape the
-        # Workbench "Files" tab expects, so a direct terminal call can also
-        # produce real downloadable file cards.
         created_files = []
         for root, _dirs, files in os.walk(workdir):
             for fname in files:
@@ -3077,10 +2489,6 @@ def terminal_run_direct():
     finally:
         _cleanup_terminal_workdir(workdir)
 
-# ── DIRECT FILE-CREATION ENDPOINT (creator/dev use) ──
-# Same idea as /terminal/run but for the createfile channel directly: write
-# one or more named files to a fresh scratch workdir and get back real
-# download links, without needing a chat message or the LLM at all.
 @app.route("/terminal/create-file", methods=["POST", "OPTIONS"])
 @app.route("/api/terminal/create-file", methods=["POST", "OPTIONS"])
 @app.route("/api/app/terminal/create-file", methods=["POST", "OPTIONS"])
@@ -3134,7 +2542,7 @@ def upload_pdf():
             decode_status = "decoded"
         elif ext == "docx":
             try:
-                import docx  # python-docx, optional dependency
+                import docx
                 doc = docx.Document(io.BytesIO(raw_bytes))
                 extracted_preview = "\n".join(p.text for p in doc.paragraphs)[:4000]
                 decode_status = "decoded"
@@ -3148,10 +2556,6 @@ def upload_pdf():
             except zipfile.BadZipFile:
                 decode_status = "stored (not a valid zip)"
         elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
-            # Sent to the real background terminal for a genuine, in-depth
-            # analysis (full PNG chunk walk / EXIF / Pillow info, not just
-            # width+height) — see _analyze_image_via_terminal. Falls back to
-            # the lightweight header sniff automatically if that fails.
             img_meta = _analyze_image_via_terminal(raw_bytes, ext, filename_hint=filename.rsplit(".", 1)[0])
             if img_meta:
                 extracted_preview = img_meta
@@ -3159,7 +2563,6 @@ def upload_pdf():
             else:
                 decode_status = f"stored ({len(raw_bytes)} bytes, image — couldn't parse this format)"
         else:
-            # Best-effort generic sniff: try UTF-8 text, else report as binary.
             try:
                 extracted_preview = raw_bytes.decode("utf-8")[:4000]
                 decode_status = "decoded (generic text sniff)"
@@ -3175,17 +2578,6 @@ def upload_pdf():
         "status": decode_status,
         "preview": extracted_preview
     })
-
-# ── ADD-ON PASS: /config/public, rate limiting, and real code validation ──
-# Strictly additive — no existing route/function/variable above this point
-# was touched. This implements the honestly-buildable parts of the earlier
-# workspace-suite spec: a public config endpoint, a simple rate limiter,
-# and REAL validators (actually parse/compile, not vibes) for generated
-# code. NOTE: the full OCR / object-detection / scene-understanding /
-# face-attribute image pipeline from that spec is NOT implemented here —
-# it needs real computer-vision models/services that a stdlib-only Flask
-# backend can't fabricate. Only the pure-Python image *metadata* sniff
-# (`_extract_image_metadata`, defined earlier) is real.
 
 import ast
 
@@ -3222,9 +2614,6 @@ _rate_limit_buckets: dict = {}
 _RATE_LIMIT_WINDOW_SECONDS = 60
 
 def rate_limit(max_requests: int):
-    """Caps a route to `max_requests` calls per user per rolling 60s
-    window. In-process (resets on redeploy) — fine for a single-instance
-    deployment; multi-instance would need a shared store like Redis."""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -3259,8 +2648,6 @@ def validate_python_block(code: str) -> dict:
         return {"valid": False, "error": str(exc)}
 
 def validate_html_block(code: str) -> dict:
-    """Lightweight structural check: balanced tags, common generation
-    mistakes caught (unclosed/mismatched tags). Not a full HTML5 parser."""
     void_elements = {"br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embed", "source", "track", "wbr"}
     tag_pattern = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*?(/?)>")
     stack, issues = [], []
@@ -3299,8 +2686,6 @@ def validate_generated_code(lang: str, code: str) -> dict:
 @require_auth
 @rate_limit(60)
 def validate_code_route():
-    """Lets the frontend validate a file-creation-card's content on demand
-    and show a real pass/fail badge instead of assuming it's correct."""
     if request.method == "OPTIONS":
         return _cors_preflight()
     body = request.get_json(silent=True) or {}
@@ -3309,7 +2694,7 @@ def validate_code_route():
         return jsonify({"error": "Empty code payload"}), 400
     return jsonify(validate_generated_code(lang, code))
 
-_session_files_registry: dict = {}  # conv_id -> [{filename, lang, size_bytes, line_count, created_at, download_url}]
+_session_files_registry: dict = {}
 
 def _register_session_file(conv_id: str, filename: str, lang: str, size: int, download_url: str = None, line_count: int = None):
     _session_files_registry.setdefault(conv_id, []).append({
@@ -3322,9 +2707,6 @@ def _register_session_file(conv_id: str, filename: str, lang: str, size: int, do
 @app.route("/api/app/conversations/<conv_id>/files", methods=["GET", "OPTIONS"])
 @require_auth
 def list_session_files(conv_id):
-    """Real Files-tab data source: files actually produced in this
-    conversation (via createfile blocks, code execution that wrote files,
-    or exports), not simulated GitHub activity."""
     if request.method == "OPTIONS":
         return _cors_preflight()
     files = list(_session_files_registry.get(conv_id, []))
