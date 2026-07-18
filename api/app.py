@@ -1225,6 +1225,8 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
     entries = _github_list_dir(f"data/education/{safe_book}")
     match = next((e for e in entries if e.get("name") == safe_chapter), None)
     if not match:
+        print(f"[EDU][FETCH][FAULT] chapter file not found: 'data/education/{safe_book}/{safe_chapter}' "
+              f"— available files in that folder: {[e.get('name') for e in entries]}")
         return ""
     sha = match.get("sha")
     cached = _education_chapter_text_cache.get(cache_key)
@@ -1232,8 +1234,17 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
         return cached.get("text", "")
     raw = _github_fetch_file_bytes(match.get("download_url"))
     if raw is None:
+        print(f"[EDU][FETCH][FAULT] GitHub download_url fetch returned None for {cache_key}")
         return cached.get("text", "") if cached else ""
+    if not (_PDF_READ_SUPPORTED or _FITZ_SUPPORTED or _PDFPLUMBER_SUPPORTED):
+        print(f"[EDU][FETCH][FAULT] no PDF extractor installed at all (pypdf/PyMuPDF/pdfplumber all "
+              f"missing) — add at least one to requirements.txt. Skipping extraction for {cache_key}.")
+        return ""
     text = _extract_pdf_text(raw)
+    if not text:
+        print(f"[EDU][FETCH][FAULT] extractor chain ran but returned empty text for {cache_key} "
+              f"(pypdf={_PDF_READ_SUPPORTED}, fitz={_FITZ_SUPPORTED}, pdfplumber={_PDFPLUMBER_SUPPORTED}) "
+              f"— likely a font/encoding issue in this specific PDF, not a missing package.")
     if text:
         _education_chapter_text_cache[cache_key] = {"sha": sha, "text": text}
     return text
