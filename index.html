@@ -240,6 +240,21 @@
         .step-list .step-icon.done { color: #4ade80; }
         .step-list .step-icon.running { color: var(--accent); }
 
+        /* ===== "Thinking..." collapsible wrapper — click to expand and see
+           the full activity feed (matches Codex/Cursor-style: header row
+           shows a one-line summary, body reveals every step). ===== */
+        .thinking-wrap { margin: 6px 0; max-width: 400px; }
+        .thinking-header {
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+            font-size: 13px; color: var(--text-dim); padding: 4px 0; user-select: none;
+        }
+        .thinking-header .tw-caret { font-size: 9px; transition: transform .15s ease; }
+        .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); }
+        .thinking-header .tw-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: glowPulse 1s ease-in-out infinite; }
+        .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
+        .thinking-body { display: none; padding-left: 4px; }
+        .thinking-wrap.expanded .thinking-body { display: block; }
+
         /* Workbench Preview/Files tab buttons */
         #workbench-tab-preview, #workbench-tab-files {
             cursor: pointer; color: var(--text-dim); background: transparent; border: none;
@@ -1274,17 +1289,46 @@
             if (detailHtml !== undefined) card.querySelector('.ac-body').innerHTML = detailHtml;
         }
 
-        // ── Compact step-list (Claude-style: icon + thin connector + one
-        // line of muted text, no card box) — used instead of the bulkier
-        // activity-card above for the inline "what's happening now" trail. ──
+        // ── Compact step-list, now nested inside a collapsible "Thinking..."
+        // wrapper (click header to expand/collapse and see every step) —
+        // matches the requested Codex/Cursor-style activity feed. ──
         let _activeStepList = null;
+        let _activeThinkingWrap = null;
+        function getThinkingWrap(wrapper) {
+            if (_activeThinkingWrap && wrapper.contains(_activeThinkingWrap)) return _activeThinkingWrap;
+            const wrap = document.createElement('div');
+            wrap.className = 'thinking-wrap expanded';
+            wrap.innerHTML = `
+                <div class="thinking-header">
+                    <span class="tw-caret">▶</span>
+                    <span class="tw-dot"></span>
+                    <span class="tw-summary">Thinking...</span>
+                </div>
+                <div class="thinking-body"></div>
+            `;
+            wrap.querySelector('.thinking-header').onclick = () => wrap.classList.toggle('expanded');
+            wrapper.appendChild(wrap);
+            _activeThinkingWrap = wrap;
+            _activeStepList = null; // force a fresh step-list inside the new wrap
+            return wrap;
+        }
         function getStepList(wrapper) {
-            if (_activeStepList && wrapper.contains(_activeStepList)) return _activeStepList;
+            const wrap = getThinkingWrap(wrapper);
+            if (_activeStepList && wrap.contains(_activeStepList)) return _activeStepList;
             const list = document.createElement('div');
             list.className = 'step-list';
-            wrapper.appendChild(list);
+            wrap.querySelector('.thinking-body').appendChild(list);
             _activeStepList = list;
             return list;
+        }
+        function _refreshThinkingSummary() {
+            if (!_activeThinkingWrap || !_activeStepList) return;
+            const rows = _activeStepList.querySelectorAll('.step-row');
+            const n = rows.length;
+            const allDone = Array.from(rows).every(r => r.querySelector('.step-icon.done, .step-icon.failed'));
+            _activeThinkingWrap.querySelector('.tw-summary').innerText = allDone
+                ? `Completed ${n} step${n === 1 ? '' : 's'}` : `Working on it...`;
+            _activeThinkingWrap.classList.toggle('done', allDone);
         }
         function addStep(wrapper, icon, text, isHead) {
             const list = getStepList(wrapper);
@@ -1292,12 +1336,14 @@
             row.className = 'step-row' + (isHead ? ' head' : '');
             row.innerHTML = `<span class="step-icon running">${icon}</span><span class="step-text">${text}</span>`;
             list.appendChild(row);
+            _refreshThinkingSummary();
             return row;
         }
         function finishStep(row, ok) {
             if (!row) return;
             const iconEl = row.querySelector('.step-icon');
             iconEl.className = 'step-icon ' + (ok ? 'done' : 'failed');
+            _refreshThinkingSummary();
         }
 
         // Turns a unified diff (from difflib on the backend) into small
@@ -1929,6 +1975,7 @@
                                 appendAssistantCopyButton(modelWrapper, fullText);
                             }
                             _activeStepList = null;
+                            _activeThinkingWrap = null;
                             pushTerminalLog('Response complete.');
                         }
                     }
