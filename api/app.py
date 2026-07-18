@@ -1238,11 +1238,43 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
         _education_chapter_text_cache[cache_key] = {"sha": sha, "text": text}
     return text
 
-# ── "@web" best-effort live search (DuckDuckGo HTML, no API key) ──
+# ── "@web" live search: real Google Custom Search JSON API when configured
+# (set GOOGLE_CSE_KEY + GOOGLE_CSE_CX env vars — free tier gives 100
+# queries/day), falling back to the DuckDuckGo HTML scrape below so search
+# still works with zero setup. ──
 _EDU_TAG_RE = re.compile(r"\[\[EDU_BOOK:(.*?)\]\]\[\[EDU_CHAPTER:(.*?)\]\]")
 _NO_WEB_SEARCH_TAG_RE = re.compile(r"\[\[NO_WEB_SEARCH\]\]")
 
+GOOGLE_CSE_KEY = os.environ.get("GOOGLE_CSE_KEY", "").strip()
+GOOGLE_CSE_CX = os.environ.get("GOOGLE_CSE_CX", "").strip()
+GOOGLE_CSE_CONFIGURED = bool(GOOGLE_CSE_KEY and GOOGLE_CSE_CX)
+
+def _google_cse_snippets(query: str, max_results: int = 4):
+    try:
+        params = urllib.parse.urlencode({
+            "key": GOOGLE_CSE_KEY, "cx": GOOGLE_CSE_CX, "q": query, "num": max_results
+        })
+        req = urllib.request.Request(f"https://www.googleapis.com/customsearch/v1?{params}")
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        results = []
+        for item in data.get("items", [])[:max_results]:
+            title = item.get("title", "").strip()
+            snippet = item.get("snippet", "").strip()
+            link = item.get("link", "")
+            if title:
+                results.append(f"- {title}: {snippet} ({link})")
+        return results
+    except Exception as exc:
+        print(f"[WEB][GOOGLE CSE FAULT] {exc}")
+        return []
+
 def _web_search_snippets(query: str, max_results: int = 4):
+    if GOOGLE_CSE_CONFIGURED:
+        results = _google_cse_snippets(query, max_results)
+        if results:
+            return results
+        # fall through to DuckDuckGo if Google returned nothing (quota, etc.)
     try:
         encoded = urllib.parse.quote(query)
         req = urllib.request.Request(
@@ -1603,6 +1635,18 @@ SYSTEM_PROMPT = (
     "answer, no filler intros ('Great question!'), no restating the question, no long bulleted feature "
     "lists unless the person asked for a list. Expand length only when the task genuinely needs it "
     "(full code files, multi-step explanations the person asked to go deep on).\n\n"
+    "MATH FORMATTING: always wrap math in LaTeX delimiters — inline: \\( x^2 \\) or $x^2$; "
+    "display/standalone equations: \\[ \\frac{a}{b} \\] or $$ \\frac{a}{b} $$. Never write powers as "
+    "'x^2' or fractions as 'a/b' in plain text outside these delimiters — the frontend renders proper "
+    "typeset math ONLY inside \\(...\\), \\[...\\], $...$, or $$...$$, so plain-text math looks broken.\n\n"
+    "GRAPHS/CHARTS: when asked for a graph, chart, or plot, respond with a ```chart fenced block "
+    "(language tag is exactly the word 'chart', no colon) containing valid Chart.js config JSON "
+    "(type, data.labels, data.datasets, options), e.g.\n"
+    "```chart\n"
+    '{"type":"bar","data":{"labels":["Jan","Feb","Mar"],"datasets":[{"label":"Sales","data":[10,20,15]}]}}\n'
+    "```\n"
+    "This renders as a real live graph. Do not draw charts with ASCII art or describe them only in text "
+    "when the person wants to see one.\n\n"
     "You also have a REAL background terminal, not a simulated one, and YOU run it directly — there "
     "is no separate tool, no external terminal, no permission step. The moment you write a ```python, "
     "```py, ```bash, ```sh, or ```shell fenced block, the backend executes it for real on the server "
@@ -1740,17 +1784,37 @@ _IMAGE_INTENT_RE = re.compile(
     re.IGNORECASE
 )
 
-def _detect_image_prompt(message: str):
+# Follow-up modification phrases like "add a hat", "now make it night",
+# "change the background to blue" — these don't contain the word
+# image/picture/etc, so on their own _IMAGE_INTENT_RE misses them. They only
+# count as an image request when the PREVIOUS assistant turn actually
+# generated an image (see last_image_prompt threading in chat_stream).
+_IMAGE_FOLLOWUP_RE = re.compile(
+    r"^\s*(?:also\s+)?(?:add|change|make it|now|remove|replace|turn it|put|give it|make the|instead)\b.{0,120}$",
+    re.IGNORECASE
+)
+
+def _detect_image_prompt(message: str, last_image_prompt: str = None):
     """
     Returns a plain-language image description if `message` looks like an
     image-generation request, else None. Kept intentionally simple (regex
     heuristic) rather than a full intent classifier, to stay fast.
+
+    If the previous turn generated an image (last_image_prompt passed in)
+    and this message reads as a short edit/follow-up instruction without an
+    explicit image keyword, we treat it as "regenerate the same image with
+    this change" instead of falling through to a plain text reply — this is
+    the fix for "add this ... then it don't make img again".
     """
-    m = _IMAGE_INTENT_RE.search(message.strip())
-    if not m:
-        return None
-    prompt_text = (m.group(1) or m.group(2) or "").strip(" .!")
-    return prompt_text or None
+    stripped = message.strip()
+    m = _IMAGE_INTENT_RE.search(stripped)
+    if m:
+        prompt_text = (m.group(1) or m.group(2) or "").strip(" .!")
+        if prompt_text:
+            return prompt_text
+    if last_image_prompt and _IMAGE_FOLLOWUP_RE.match(stripped):
+        return f"{last_image_prompt}, {stripped.strip(' .!')}"
+    return None
 
 def _pollinations_image_url(prompt_text: str) -> str:
     encoded = urllib.parse.quote(prompt_text)
@@ -2558,7 +2622,15 @@ def chat_stream():
         return resp
 
     # ── Image generation short-circuit (Pollinations AI, no key needed) ──
-    image_prompt = _detect_image_prompt(message)
+    _last_img_match_iter = re.finditer(
+        r'Here\'s your generated image for: "(.*?)"', "\n".join(
+            m.get("content", "") for m in _get_messages(conv_id) if m.get("role") == "assistant"
+        )
+    )
+    _last_image_prompt = None
+    for _m in _last_img_match_iter:
+        _last_image_prompt = _m.group(1)  # keep the last (most recent) match
+    image_prompt = _detect_image_prompt(message, _last_image_prompt)
     if image_prompt:
         _append_message(conv_id, "user", message)
         image_url = _pollinations_image_url(image_prompt)
@@ -3278,6 +3350,7 @@ def config_public():
             "openrouter": bool(OPENROUTER_API_KEY),
             "cerebras": bool(CEREBRAS_API_KEY),
             "mistral": bool(MISTRAL_API_KEY),
+            "google_cse": GOOGLE_CSE_CONFIGURED,
         },
         "pdf_read_supported": _PDF_READ_SUPPORTED,
         "pdf_extractors_available": {
