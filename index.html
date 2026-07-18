@@ -215,6 +215,28 @@
         .activity-card .ac-body .diff-add { color: #4ade80; }
         .activity-card .ac-body .diff-remove { color: #f87171; }
 
+        /* ===== Compact step list (matches Claude's own "Fathoming / Survey.../
+           Find.../ View..." style: small icon, thin vertical connector,
+           muted single-line text, no card chrome) ===== */
+        .step-list { display: flex; flex-direction: column; margin: 6px 0; }
+        .step-list .step-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 3px 0; position: relative; font-size: 13px; color: var(--text-dim);
+        }
+        .step-list .step-row.head { color: var(--text); font-weight: 600; }
+        .step-list .step-icon {
+            width: 16px; height: 16px; flex-shrink: 0; display: flex;
+            align-items: center; justify-content: center; font-size: 12px; z-index: 1;
+        }
+        .step-list .step-row:not(.head)::before {
+            content: ''; position: absolute; left: 7px; top: -6px; width: 1px; height: 12px;
+            background: var(--border);
+        }
+        .step-list .step-row:first-of-type::before { display: none; }
+        .step-list .step-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .step-list .step-icon.done { color: #4ade80; }
+        .step-list .step-icon.running { color: var(--accent); }
+
         /* Workbench Preview/Files tab buttons */
         #workbench-tab-preview, #workbench-tab-files {
             cursor: pointer; color: var(--text-dim); background: transparent; border: none;
@@ -1249,6 +1271,32 @@
             if (detailHtml !== undefined) card.querySelector('.ac-body').innerHTML = detailHtml;
         }
 
+        // ── Compact step-list (Claude-style: icon + thin connector + one
+        // line of muted text, no card box) — used instead of the bulkier
+        // activity-card above for the inline "what's happening now" trail. ──
+        let _activeStepList = null;
+        function getStepList(wrapper) {
+            if (_activeStepList && wrapper.contains(_activeStepList)) return _activeStepList;
+            const list = document.createElement('div');
+            list.className = 'step-list';
+            wrapper.appendChild(list);
+            _activeStepList = list;
+            return list;
+        }
+        function addStep(wrapper, icon, text, isHead) {
+            const list = getStepList(wrapper);
+            const row = document.createElement('div');
+            row.className = 'step-row' + (isHead ? ' head' : '');
+            row.innerHTML = `<span class="step-icon running">${icon}</span><span class="step-text">${text}</span>`;
+            list.appendChild(row);
+            return row;
+        }
+        function finishStep(row, ok) {
+            if (!row) return;
+            const iconEl = row.querySelector('.step-icon');
+            iconEl.className = 'step-icon ' + (ok ? 'done' : 'failed');
+        }
+
         // Turns a unified diff (from difflib on the backend) into small
         // colored +/- spans for the expanded activity-card body.
         function renderUnifiedDiffHtml(unifiedDiff) {
@@ -1836,34 +1884,28 @@
                                 }
                             }
                         } else if (payload.type === 'activity_created') {
-                            // Real file-write event (server-side createfile channel)
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            const c = mountActivityCard(modelWrapper, 'created', `Created ${payload.filename}`,
-                                `${payload.line_count} lines, ${payload.size_bytes} bytes`);
-                            finishActivityCard(c, true);
+                            const row = addStep(modelWrapper, '📄', `Created ${payload.filename}`);
+                            finishStep(row, true);
                             pushTerminalLog(`Activity: created ${payload.filename} (${payload.line_count} lines)`);
                         } else if (payload.type === 'activity_edited') {
-                            // Real diff event (server-side difflib on editfile)
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            const label = `Edited ${payload.filename} `
-                                + `<span class="ac-diffstat"><span class="ac-added">+${payload.added}</span>`
-                                + `<span class="ac-removed">-${payload.removed}</span></span>`;
-                            const c = mountActivityCard(modelWrapper, 'edited', label, '');
-                            finishActivityCard(c, true);
+                            const row = addStep(modelWrapper, '✎',
+                                `Edited ${payload.filename} <span class="ac-added">+${payload.added}</span> <span class="ac-removed">-${payload.removed}</span>`);
+                            finishStep(row, true);
                             pushTerminalLog(`Activity: edited ${payload.filename} (+${payload.added} -${payload.removed})`);
                         } else if (payload.type === 'activity_terminal') {
-                            // Real subprocess-execution event
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             const ok = payload.returncode === 0;
-                            const c = mountActivityCard(modelWrapper, 'terminal', `Ran ${payload.lang} #${payload.ordinal}`,
-                                payload.had_output ? 'See terminal log below for stdout/stderr.' : 'No output.');
-                            finishActivityCard(c, ok);
+                            const row = addStep(modelWrapper, '›_', `Ran ${payload.lang} #${payload.ordinal}`);
+                            finishStep(row, ok);
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) {
                                 updateAssistantMessageDOM(modelWrapper, fullText);
                                 appendAssistantCopyButton(modelWrapper, fullText);
                             }
+                            _activeStepList = null;
                             pushTerminalLog('Response complete.');
                         }
                     }
