@@ -2080,6 +2080,14 @@ _EDIT_BLOCK_RE = re.compile(
     r"<{5,}\s*SEARCH\s*\n([\s\S]*?)\n={5,}\s*\n([\s\S]*?)\n>{5,}\s*REPLACE",
     re.IGNORECASE
 )
+# Detects stray SEARCH/REPLACE diff markers (<<<<<<< / ===== / >>>>>>>) that
+# sometimes end up INSIDE a ```createfile: block by mistake instead of a
+# proper ```editfile: block. Was referenced in the createfile handler below
+# but never actually defined — every createfile block was throwing
+# NameError: name '_CONFLICT_MARKER_RE' is not defined, caught by the bare
+# except, so the file silently never got written and no activity_created
+# event was ever sent. This is the real fix for that.
+_CONFLICT_MARKER_RE = re.compile(r"<{5,}\s*SEARCH|>{5,}\s*REPLACE", re.IGNORECASE)
 
 def _extract_editfile_blocks(text: str):
     """Returns [(filename, [(search_text, replace_text), ...]), ...] for
