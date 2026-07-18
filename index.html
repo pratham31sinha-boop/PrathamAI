@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- Chart.js: renders ```chart:{...json...}``` fenced blocks as real
+         graphs (bar/line/pie/etc) instead of dumping JSON/ASCII text. -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
@@ -1458,6 +1461,26 @@
                     } else {
                         node.style.display = 'none';
                     }
+                } else if (seg.lang === 'chart') {
+                    // ```chart:<Chart.js config JSON>``` — rendered as a real
+                    // live graph instead of dumped as text/ASCII art. Only
+                    // renders once the block is closed and its JSON is valid
+                    // (a partial stream mid-JSON would throw).
+                    if (!node || node.dataset.segType !== 'chart') {
+                        node = document.createElement('div');
+                        node.dataset.segType = 'chart';
+                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] rounded-2xl p-4 max-w-[92%] sm:max-w-[520px]';
+                        node.innerHTML = '<canvas></canvas>';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                    }
+                    if (seg.closed && !node._rendered && typeof Chart !== 'undefined') {
+                        try {
+                            const cfg = JSON.parse(seg.content);
+                            node._rendered = true;
+                            new Chart(node.querySelector('canvas').getContext('2d'), cfg);
+                        } catch (e) { /* invalid/partial JSON — leave canvas empty rather than crash */ }
+                    }
                 } else if (seg.lang === 'finaldoc') {
                     wrapper._fileOrdinal += 1;
                     if (!node || node.dataset.segType !== 'finaldoc') {
@@ -2299,12 +2322,33 @@
                 });
             }
 
-            document.querySelectorAll('[data-brand-logo]').forEach(img => {
-                img.src = LOGO_URL_512;
-                img.style.display = '';
-                img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
-                img.onerror = () => { img.style.display = 'none'; };
-            });
+            // Fix: previously this only ran once at page load, so any
+            // [data-brand-logo] element rendered later (e.g. re-rendering
+            // the sidebar/header when switching New chat -> a recent chat)
+            // never got its src set and fell back to showing the plain "P"
+            // badge or a stale/broken image — that's the "logo changes"
+            // bug. applyBrandLogo() is now reusable and a MutationObserver
+            // re-applies it to any newly inserted logo element automatically.
+            function applyBrandLogo(root) {
+                (root || document).querySelectorAll('[data-brand-logo]').forEach(img => {
+                    if (img.dataset.brandLogoApplied === '1') return;
+                    img.dataset.brandLogoApplied = '1';
+                    img.src = LOGO_URL_512;
+                    img.style.display = '';
+                    img.onload = () => { const fb = img.nextElementSibling; if (fb) fb.style.display = 'none'; };
+                    img.onerror = () => { img.style.display = 'none'; };
+                });
+            }
+            applyBrandLogo();
+            new MutationObserver((mutations) => {
+                for (const mut of mutations) {
+                    mut.addedNodes.forEach(node => {
+                        if (node.nodeType !== 1) return;
+                        if (node.matches && node.matches('[data-brand-logo]')) applyBrandLogo(node.parentElement || document);
+                        else if (node.querySelectorAll) applyBrandLogo(node);
+                    });
+                }
+            }).observe(document.body, { childList: true, subtree: true });
             const faviconLink = document.createElement('link');
             faviconLink.rel = 'icon';
             faviconLink.href = LOGO_URL_192;
