@@ -8,6 +8,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- KaTeX: renders LaTeX math (\( \), \[ \], $ $, $$ $$ delimiters the
+         model writes for equations) into proper math typesetting instead of
+         showing the raw backslash/bracket markup as literal text. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
@@ -172,6 +178,42 @@
             100% { left: 100%; }
         }
         .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+        /* ===== Inline collapsible activity card (▼ Ran terminal / ▼ Edited
+           file +N -N / ✓ Completed) — additive, sits alongside the
+           file-creation-card above, does not replace it ===== */
+        .activity-card {
+            display: flex; flex-direction: column; gap: 0;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 10px; max-width: 340px; margin: 4px 0;
+            overflow: hidden; font-size: 12.5px;
+        }
+        .activity-card .ac-header {
+            display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+            cursor: pointer; user-select: none; color: var(--text-dim);
+        }
+        .activity-card .ac-header:hover { background: var(--hover); }
+        .activity-card .ac-caret { font-size: 9px; transition: transform .15s ease; flex-shrink: 0; }
+        .activity-card.expanded .ac-caret { transform: rotate(90deg); }
+        .activity-card .ac-icon { flex-shrink: 0; font-size: 12px; }
+        .activity-card .ac-label { flex: 1; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .activity-card .ac-diffstat { font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .activity-card .ac-added { color: #4ade80; }
+        .activity-card .ac-removed { color: #f87171; margin-left: 4px; }
+        .activity-card .ac-status { font-size: 11px; flex-shrink: 0; }
+        .activity-card .ac-status.running { color: var(--accent); }
+        .activity-card .ac-status.done { color: #4ade80; }
+        .activity-card .ac-status.failed { color: #f87171; }
+        .activity-card .ac-body {
+            display: none; max-height: 220px; overflow-y: auto;
+            border-top: 1px solid var(--border); padding: 8px 10px;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;
+            white-space: pre-wrap; word-break: break-word; color: var(--text-dim);
+            background: color-mix(in srgb, var(--panel) 96%, black);
+        }
+        .activity-card.expanded .ac-body { display: block; }
+        .activity-card .ac-body .diff-add { color: #4ade80; }
+        .activity-card .ac-body .diff-remove { color: #f87171; }
 
         /* Workbench Preview/Files tab buttons */
         #workbench-tab-preview, #workbench-tab-files {
@@ -1174,6 +1216,51 @@
             return card;
         }
 
+        // ── Real inline collapsible "activity card" — driven by the
+        // activity_created / activity_edited / activity_terminal SSE events
+        // emitted straight from the backend's actual file-write / diff /
+        // subprocess-execution code (nothing simulated). Additive: sits
+        // alongside the existing file-creation-card, doesn't replace it. ──
+        function mountActivityCard(wrapper, kind, label, detailHtml) {
+            // kind: 'terminal' | 'created' | 'edited'
+            const icon = kind === 'terminal' ? '›_' : (kind === 'edited' ? '✎' : '+');
+            const card = document.createElement('div');
+            card.className = 'activity-card';
+            card.innerHTML = `
+                <div class="ac-header">
+                    <span class="ac-caret">▶</span>
+                    <span class="ac-icon">${icon}</span>
+                    <span class="ac-label">${label}</span>
+                    <span class="ac-status running">Running…</span>
+                </div>
+                <div class="ac-body"></div>
+            `;
+            card.querySelector('.ac-body').innerHTML = detailHtml || '';
+            card.querySelector('.ac-header').onclick = () => card.classList.toggle('expanded');
+            wrapper.appendChild(card);
+            return card;
+        }
+
+        function finishActivityCard(card, ok, detailHtml) {
+            if (!card) return;
+            const status = card.querySelector('.ac-status');
+            status.className = 'ac-status ' + (ok ? 'done' : 'failed');
+            status.innerText = ok ? '✓ Completed' : '✗ Failed';
+            if (detailHtml !== undefined) card.querySelector('.ac-body').innerHTML = detailHtml;
+        }
+
+        // Turns a unified diff (from difflib on the backend) into small
+        // colored +/- spans for the expanded activity-card body.
+        function renderUnifiedDiffHtml(unifiedDiff) {
+            if (!unifiedDiff) return '<span>No textual changes.</span>';
+            return unifiedDiff.split('\n').map(line => {
+                const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                if (line.startsWith('+') && !line.startsWith('+++')) return `<span class="diff-add">${escaped}</span>`;
+                if (line.startsWith('-') && !line.startsWith('---')) return `<span class="diff-remove">${escaped}</span>`;
+                return `<span>${escaped}</span>`;
+            }).join('\n');
+        }
+
         // Counts lines the same simple way a text editor's status bar would
         // (number of \n plus one for the trailing partial/last line), which
         // is far more meaningful than a raw character count for judging the
@@ -1277,6 +1364,27 @@
             pushTerminalLog(`Downloaded ${artifactModalState.filename}.`);
         }
 
+        // Runs KaTeX auto-render over a node's LaTeX delimiters (\( \), \[ \],
+        // $ $, $$ $$) once the library has loaded — guarded since the KaTeX
+        // scripts load with `defer` and may not be ready on the very first
+        // call during initial page load. Called after every
+        // updateAssistantMessageDOM pass (streaming tokens, finished
+        // response, and restored history) so math never shows as raw markup.
+        function renderMathIfAvailable(node) {
+            if (typeof renderMathInElement !== 'function') return;
+            try {
+                renderMathInElement(node, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '\\[', right: '\\]', display: true },
+                        { left: '\\(', right: '\\)', display: false },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+            } catch (e) { /* a partially-streamed equation can briefly fail to parse — safe to ignore */ }
+        }
+
         // Renders/updates an assistant message's segments (text bubbles +
         // file-creation cards) in place, reusing existing DOM nodes where
         // possible so in-progress cards keep their shimmer animation instead
@@ -1298,6 +1406,7 @@
                     if (seg.content.trim().length > 0) {
                         node.style.display = '';
                         node.innerHTML = renderLightMarkdown(seg.content);
+                        renderMathIfAvailable(node);
                     } else {
                         node.style.display = 'none';
                     }
@@ -1726,6 +1835,30 @@
                                     if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
                                 }
                             }
+                        } else if (payload.type === 'activity_created') {
+                            // Real file-write event (server-side createfile channel)
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            const c = mountActivityCard(modelWrapper, 'created', `Created ${payload.filename}`,
+                                `${payload.line_count} lines, ${payload.size_bytes} bytes`);
+                            finishActivityCard(c, true);
+                            pushTerminalLog(`Activity: created ${payload.filename} (${payload.line_count} lines)`);
+                        } else if (payload.type === 'activity_edited') {
+                            // Real diff event (server-side difflib on editfile)
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            const label = `Edited ${payload.filename} `
+                                + `<span class="ac-diffstat"><span class="ac-added">+${payload.added}</span>`
+                                + `<span class="ac-removed">-${payload.removed}</span></span>`;
+                            const c = mountActivityCard(modelWrapper, 'edited', label, '');
+                            finishActivityCard(c, true);
+                            pushTerminalLog(`Activity: edited ${payload.filename} (+${payload.added} -${payload.removed})`);
+                        } else if (payload.type === 'activity_terminal') {
+                            // Real subprocess-execution event
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            const ok = payload.returncode === 0;
+                            const c = mountActivityCard(modelWrapper, 'terminal', `Ran ${payload.lang} #${payload.ordinal}`,
+                                payload.had_output ? 'See terminal log below for stdout/stderr.' : 'No output.');
+                            finishActivityCard(c, ok);
+                            pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) {
                                 updateAssistantMessageDOM(modelWrapper, fullText);
