@@ -79,6 +79,7 @@ import shutil
 import textwrap
 import mimetypes
 import difflib
+import shlex
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -1673,6 +1674,22 @@ SYSTEM_PROMPT = (
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "NEVER wrap a one-off command in an unnecessary intermediate script file (e.g. writing "
+    "generated_2.sh, run.sh, script.py, temp.py just to hold a command you're about to run once). "
+    "If you need to run something, run it directly in a ```bash or ```python block — don't "
+    "createfile a throwaway wrapper around it first. Only use ```createfile: when the person "
+    "actually needs the file itself as a deliverable, not as internal scaffolding.\n\n"
+    "EDIT IN PLACE, NEVER DUPLICATE: if a file the person is working on already exists (you created "
+    "it earlier in this conversation, or they uploaded/referenced it), and they ask you to change, "
+    "fix, add to, or continue it, you MUST use ```editfile:<filename> to modify that exact file — "
+    "never create a second file with a similar name (app2.py, app_new.py, fixed.py, app_final.py, "
+    "counter_v2.py, etc.) as a workaround. There should only ever be ONE copy of a file the person "
+    "is iterating on.\n\n"
+    "ASK BEFORE ACTING ON AMBIGUOUS REQUESTS: if someone asks for something that could reasonably "
+    "mean several different things (e.g. \"zip it\" without saying what \"it\" is, or a vague build "
+    "request with no real spec), ask one short clarifying question BEFORE running any terminal "
+    "commands or creating any files, instead of guessing and generating the wrong thing. If the "
+    "request is already clear and specific, don't ask needlessly — just do it.\n\n"
     "For creating a file directly (when you just need to write out a file's full contents, not "
     "compute or process anything), use a ```createfile:<filename.ext> fenced block, e.g.\n"
     "```createfile:notes.md\n<full file content goes here>\n```\n"
@@ -2196,6 +2213,42 @@ def _compute_diff_stats(old_content: str, new_content: str) -> dict:
     return {"added": added, "removed": removed, "unified_diff": unified}
 
 
+# ── Optional remote executor (your own persistent Ubuntu box, e.g. Railway)
+# — set both env vars to route real command execution there instead of
+# Vercel's serverless subprocess. Vercel's local `_run_code_block` path
+# below still works as a fallback if these aren't set, or if the remote
+# call fails for any reason (network blip, box asleep, etc.). ──
+EXECUTOR_URL = os.environ.get("EXECUTOR_URL", "").strip().rstrip("/")
+EXECUTOR_SECRET = os.environ.get("EXECUTOR_SECRET", "").strip()
+EXECUTOR_CONFIGURED = bool(EXECUTOR_URL and EXECUTOR_SECRET)
+
+def _run_code_block_remote(lang: str, code: str, cwd: str = None):
+    """Sends the block to your Ubuntu box's /execute endpoint (see
+    executor_service.py) instead of running it in this serverless function.
+    Returns (stdout, stderr, returncode, ok) — ok=False means the remote
+    call itself failed (not the command), so the caller can fall back."""
+    try:
+        if lang in ("python", "py"):
+            command = f"{shlex.quote(sys.executable)} -u -c {shlex.quote(code)}"
+        else:
+            command = code
+        payload = json.dumps({"command": command, "cwd": cwd or "/tmp/workdir", "timeout": 60}).encode()
+        req = urllib.request.Request(
+            f"{EXECUTOR_URL}/execute", data=payload, method="POST",
+            headers={"Content-Type": "application/json", "X-Exec-Secret": EXECUTOR_SECRET}
+        )
+        with urllib.request.urlopen(req, timeout=65) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        return (
+            data.get("stdout", "")[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
+            data.get("stderr", "")[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
+            data.get("returncode", -1),
+            True,
+        )
+    except Exception as exc:
+        print(f"[EXECUTOR][REMOTE FAULT] falling back to local exec: {exc}")
+        return "", "", -1, False
+
 def _run_code_block(lang: str, code: str, cwd: str = None):
     """Actually executes one code block in the background terminal and
     returns (stdout, stderr, returncode). This is real execution, not a
@@ -2209,6 +2262,11 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
     "touch: cannot create file" or "Read-only file system" that the model
     would otherwise have no way to work around.
     """
+    if EXECUTOR_CONFIGURED:
+        stdout, stderr, rc, ok = _run_code_block_remote(lang, code, cwd)
+        if ok:
+            return stdout, stderr, rc
+        # remote failed — fall through to local execution below
     try:
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
