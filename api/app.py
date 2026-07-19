@@ -2581,8 +2581,15 @@ def chat_stream():
 
     if not conv_id:
         conv_id = str(uuid.uuid4())
+        # Strip the invisible [[EDU_BOOK:...]][[EDU_CHAPTER:...]] / [[NO_WEB_SEARCH]]
+        # tags before using the message as the chat's title — these are
+        # backend-only routing markers the user never typed and never sees
+        # in their own chat bubble, so they must not leak into the sidebar
+        # title either (was showing literal "[[EDU_BOOK:English]]..." etc).
+        title_source = _EDU_TAG_RE.sub("", message)
+        title_source = _NO_WEB_SEARCH_TAG_RE.sub("", title_source).strip()
         new_conv = {
-            "id": conv_id, "user_id": user_id, "title": message[:60], "pinned": False,
+            "id": conv_id, "user_id": user_id, "title": (title_source or message)[:60], "pinned": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(), "messages": []
         }
@@ -2900,6 +2907,15 @@ def chat_stream():
         # If the search fails or returns nothing, silently proceed with no
         # extra context rather than telling the user every single time —
         # that would get noisy since this now runs on almost every message.
+        else:
+            api_messages[0]["content"] += (
+                " (A live web search was attempted for this message but returned no results this time "
+                "— rate limit or transient failure, not a missing capability. NEVER tell the user you "
+                "don't have web/internet access — you do, it just didn't return anything useful for "
+                "this specific query. If the question needs current info you don't have, say the "
+                "search didn't turn up a clear answer this time and suggest they try rephrasing or "
+                "asking again, rather than claiming you lack web access at all.)"
+            )
 
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
