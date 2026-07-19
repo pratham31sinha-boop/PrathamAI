@@ -2,7 +2,8 @@
   "version": 2,
   "builds": [
     { "src": "api/app.py", "use": "@vercel/python" },
-    { "src": "index.html", "use": "@vercel/static" }
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "auth/mobile-callback.html", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "api/app.py" },
