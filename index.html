@@ -1537,6 +1537,19 @@
                         wrapper._segNodes[i] = node;
                     }
                     node.textContent = seg.content.trim();
+                } else if (['python', 'py', 'bash', 'sh', 'shell'].includes((seg.lang || '').toLowerCase())) {
+                    // Plain executable block, not createfile:/editfile: — its
+                    // execution is already represented by the "Ran python #N"
+                    // step-list row under the Thinking wrapper. Rendering a
+                    // SECOND boxy "generated.py" file card here duplicated
+                    // the same event, so intentionally render nothing here.
+                    if (!node) {
+                        node = document.createElement('div');
+                        node.style.display = 'none';
+                        node.dataset.segType = 'suppressed-exec';
+                        wrapper.appendChild(node);
+                        wrapper._segNodes[i] = node;
+                    }
                 } else {
                     if (!node || node.dataset.segType !== 'code') {
                         wrapper._fileOrdinal += 1;
