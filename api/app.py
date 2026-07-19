@@ -117,6 +117,44 @@ try:
 except ImportError:
     _PDFPLUMBER_SUPPORTED = False
 
+# ── OCR FALLBACK for PDFs with no real text layer (common for scanned or
+# oddly-encoded Devanagari PDFs where fitz/pdfplumber/pypdf all correctly
+# report "no extractable text" because there genuinely isn't any — the
+# glyphs are images, not text). Both OPTIONAL: if pytesseract isn't
+# installed, this fallback is simply skipped and the existing "could not
+# be loaded" message still applies (no regression). Add BOTH to
+# requirements.txt to enable OCR: pytesseract, and the tesseract-ocr binary
+# itself needs to be present on the host (apt install tesseract-ocr
+# tesseract-ocr-hin for Hindi/Devanagari) — pytesseract only wraps it.
+try:
+    import pytesseract as _pytesseract
+    _OCR_SUPPORTED = _FITZ_SUPPORTED  # OCR path renders pages via fitz, so needs it too
+except ImportError:
+    _OCR_SUPPORTED = False
+
+def _extract_pdf_text_with_ocr(pdf_bytes: bytes, lang: str = "hin+eng") -> str:
+    """Last-resort extractor: rasterizes each page (via PyMuPDF) and runs
+    Tesseract OCR on it. Only used when every direct text extractor above
+    returned empty/near-empty — this is what actually handles scanned or
+    image-only Devanagari PDFs that have no real text layer at all, which
+    is a different problem than pypdf's ligature-mangling and can't be
+    fixed by switching extractors, only by OCR."""
+    if not _OCR_SUPPORTED:
+        return ""
+    try:
+        doc = _fitz.open(stream=pdf_bytes, filetype="pdf")
+        parts = []
+        for page in doc:
+            pix = page.get_pixmap(dpi=200)
+            img_bytes = pix.tobytes("png")
+            from PIL import Image
+            img = Image.open(io.BytesIO(img_bytes))
+            parts.append(_pytesseract.image_to_string(img, lang=lang))
+        return "\n".join(parts).strip()
+    except Exception as exc:
+        print(f"[EDU][OCR FAULT] {exc}")
+        return ""
+
 try:
     from fpdf import FPDF as _FPDF
     _PDF_WRITE_SUPPORTED = True
@@ -1245,7 +1283,20 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
     if not text:
         print(f"[EDU][FETCH][FAULT] extractor chain ran but returned empty text for {cache_key} "
               f"(pypdf={_PDF_READ_SUPPORTED}, fitz={_FITZ_SUPPORTED}, pdfplumber={_PDFPLUMBER_SUPPORTED}) "
-              f"— likely a font/encoding issue in this specific PDF, not a missing package.")
+              f"— likely a font/encoding issue in this specific PDF, not a missing package. "
+              f"Trying OCR fallback (ocr_supported={_OCR_SUPPORTED})...")
+        if _OCR_SUPPORTED:
+            text = _extract_pdf_text_with_ocr(raw)
+            if text:
+                print(f"[EDU][FETCH] OCR fallback succeeded for {cache_key} ({len(text)} chars)")
+            else:
+                print(f"[EDU][FETCH][FAULT] OCR fallback also returned nothing for {cache_key} "
+                      f"— this PDF may genuinely be corrupted/blank, or is missing the 'hin' Tesseract "
+                      f"language pack (apt install tesseract-ocr-hin on the host).")
+        else:
+            print(f"[EDU][FETCH][FAULT] OCR not available (pytesseract not installed) — add "
+                  f"pytesseract to requirements.txt AND tesseract-ocr + tesseract-ocr-hin as a system "
+                  f"package on the host to enable OCR fallback for image-only Devanagari PDFs.")
     if text:
         _education_chapter_text_cache[cache_key] = {"sha": sha, "text": text}
     return text
@@ -2963,7 +3014,13 @@ def chat_stream():
                 "don't have web/internet access — you do, it just didn't return anything useful for "
                 "this specific query. If the question needs current info you don't have, say the "
                 "search didn't turn up a clear answer this time and suggest they try rephrasing or "
-                "asking again, rather than claiming you lack web access at all.)"
+                "asking again, rather than claiming you lack web access at all. CRITICAL: if asked for "
+                "'today's news', 'current affairs', or anything time-sensitive and you have NO live "
+                "search results, do NOT invent specific-sounding headlines, dates, names, or events from "
+                "your training data and present them as if they're current — that is fabricating fake "
+                "news and is actively harmful even when phrased confidently. Instead say plainly that "
+                "you don't have live results for this right now and suggest a real news source, or ask "
+                "them to retry.)"
             )
 
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
