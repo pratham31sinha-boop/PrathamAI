@@ -1523,6 +1523,12 @@
                     if (seg.closed && !node._rendered && typeof Chart !== 'undefined') {
                         try {
                             const cfg = JSON.parse(seg.content);
+                            // Force responsive sizing regardless of what the
+                            // model's JSON contains — this was the cause of
+                            // charts not showing/being cut off on mobile.
+                            cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false }, cfg.options || {});
+                            node.querySelector('canvas').parentElement.style.position = 'relative';
+                            node.querySelector('canvas').parentElement.style.height = '260px';
                             node._rendered = true;
                             new Chart(node.querySelector('canvas').getContext('2d'), cfg);
                         } catch (e) { /* invalid/partial JSON — leave canvas empty rather than crash */ }
@@ -1608,26 +1614,43 @@
             // actual image in the background and only reveal it (jumping the
             // bar to 100%) once it has genuinely finished loading.
             const preload = new Image();
-            preload.onload = () => {
-                clearInterval(labelTimer);
-                fill.style.width = '100%';
-                pctLabel.textContent = '100%';
-                setTimeout(() => {
-                    holder.innerHTML = `
-                        <div style="position:relative;">
-                            <img src="${url}" alt="${safeAlt}" style="width:100%;display:block;" loading="lazy">
-                            <a href="${url}" download="generated-image.png" title="Download image"
-                               style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.55); color:#fff; width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:14px; text-decoration:none;">⭳</a>
-                        </div>
-                    `;
-                    conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
-                }, 250);
+            preload.referrerPolicy = 'no-referrer';
+            let _imgRetryCount = 0;
+            const tryLoad = (loadUrl) => {
+                preload.onload = () => {
+                    clearInterval(labelTimer);
+                    fill.style.width = '100%';
+                    pctLabel.textContent = '100%';
+                    setTimeout(() => {
+                        holder.innerHTML = `
+                            <div style="position:relative;">
+                                <img src="${loadUrl}" alt="${safeAlt}" referrerpolicy="no-referrer" style="width:100%;display:block;" loading="lazy">
+                                <a href="${loadUrl}" download="generated-image.png" title="Download image"
+                                   style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.55); color:#fff; width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:14px; text-decoration:none;">⭳</a>
+                            </div>
+                        `;
+                        conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                    }, 250);
+                };
+                preload.onerror = () => {
+                    // Pollinations occasionally 403s/times out transiently —
+                    // retry once with a fresh cache-busting seed before
+                    // giving up, instead of dead-ending on the first miss.
+                    if (_imgRetryCount < 1) {
+                        _imgRetryCount += 1;
+                        const retryUrl = loadUrl + (loadUrl.includes('?') ? '&' : '?') + 'retry=' + Date.now();
+                        setTimeout(() => tryLoad(retryUrl), 800);
+                        return;
+                    }
+                    clearInterval(labelTimer);
+                    progressWrap.innerHTML = `<div style="font-size:12px;color:var(--text-dim);padding:20px;">
+                        Image failed to load (the image service may be temporarily down).
+                        <a href="${loadUrl}" target="_blank" rel="noopener" style="color:var(--accent);">Try opening it directly</a>.
+                    </div>`;
+                };
+                preload.src = loadUrl;
             };
-            preload.onerror = () => {
-                clearInterval(labelTimer);
-                progressWrap.innerHTML = `<div style="font-size:12px;color:var(--text-dim);padding:20px;">Image failed to load.</div>`;
-            };
-            preload.src = url;
+            tryLoad(url);
         }
 
         // Appends a real downloadable file card. Instead of guessing an
