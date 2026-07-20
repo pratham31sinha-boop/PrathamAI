@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#c2613f">
-    <title>Pratham AI</title>
-    <meta name="description" content="Pratham AI — a personal AI assistant with real code execution, file creation, image generation, and education support for Sanskrit, Mathematics, and more.">
+    <title>Astir AI</title>
+    <meta name="description" content="Astir AI — a personal AI assistant with real code execution, file creation, image generation, and education support for Sanskrit, Mathematics, and more.">
     <meta name="robots" content="index, follow">
     <!-- Replace REPLACE_WITH_YOUR_VERIFICATION_CODE below with the exact
          content value Google Search Console gives you when you add this
@@ -366,9 +366,9 @@
 
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
-            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Astir AI"><span data-brand-logo-fallback>P</span></div>
             <div>
-                <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
+                <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Astir AI</h1>
                 <p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p>
             </div>
             <hr class="border-[var(--border)]">
@@ -388,7 +388,7 @@
         <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between safe-top relative">
             <div class="p-3 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between px-1">
-                    <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
+                    <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Astir AI</span>
                     <button onclick="closeMobileSidebar()" class="mobile-hamburger p-1.5 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md cursor-pointer">✕</button>
                 </div>
 
@@ -449,7 +449,7 @@
 
                 <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
                     <div class="m-auto text-center py-12 space-y-2">
-                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Astir AI"><span data-brand-logo-fallback>P</span></div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                         <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
@@ -470,7 +470,7 @@
                         </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('add-to-chat-sheet')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
-                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Astir AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
                             <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
                         </form>
                     </div>
@@ -1123,7 +1123,7 @@
             clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
-                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Astir AI"><span data-brand-logo-fallback>P</span></div>
                     <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
