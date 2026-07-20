@@ -1,5 +1,5 @@
 """
-Pratham AI - Full Production Backend Architecture
+Astir AI - Full Production Backend Architecture
 =================================================
 Corrected + optimized version.
 
@@ -27,7 +27,7 @@ Fixes included in this pass:
 
 Second pass — new features (nothing above was removed):
   8. General-purpose assistant: the system prompt is no longer coding-only;
-     Pratham AI now answers any topic like a normal chatbot, while still
+     Astir AI now answers any topic like a normal chatbot, while still
      being great at code when asked.
   9. Image generation via Pollinations AI (no API key required): a message
      like "generate an image of a red fox in snow" or "/image a red fox in
@@ -133,6 +133,28 @@ except ImportError:
     _supabase_sdk = False
 
 app = Flask(__name__)
+
+# ── SEO: robots.txt + sitemap.xml as real routes (not static files, since
+# this is served by Flask, not a static host). Set SITE_DOMAIN env var to
+# your actual production URL once you have one (prathamai.vercel.app, or a
+# custom domain later) — Google needs the sitemap's URLs to be absolute. ──
+_SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "https://prathamai.vercel.app")
+
+@app.route("/robots.txt")
+def robots_txt():
+    body = f"User-agent: *\nAllow: /\n\nSitemap: {_SITE_DOMAIN}/sitemap.xml\n"
+    return Response(body, mimetype="text/plain")
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f'  <url><loc>{_SITE_DOMAIN}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n'
+        '</urlset>\n'
+    )
+    return Response(body, mimetype="application/xml")
+
 CORS(app, resources={
     r"/*": {
         "origins": [
@@ -284,7 +306,7 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
     encoded_binary_bytes = base64.b64encode(compiled_body_string.encode('utf-8')).decode('utf-8')
 
     mutation_packet = {
-        "message": f"Pratham AI sync: {target_file_path}",
+        "message": f"Astir AI sync: {target_file_path}",
         "content": encoded_binary_bytes
     }
     if sha_reference_token:
@@ -1649,11 +1671,11 @@ def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
 SYSTEM_PROMPT = (
-    "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
+    "You are Astir AI, a general-purpose assistant that can help with anything: everyday "
     "questions, writing, learning, advice, and analysis, not just coding. When a task does "
     "involve code or file output, format it cleanly in fenced code blocks with explicit "
     "language tags like ```html, ```javascript, or ```text so it can be rendered live.\n\n"
-    "Pratham AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
+    "Astir AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
     "Aditi Aishwarya. Only mention this if someone actually asks who made you / who you were "
     "built by — don't bring it up unprompted.\n\n"
     "Default to SHORT replies for non-coding questions: a few tight sentences, dense with the actual "
@@ -2100,7 +2122,7 @@ def _do_stream(messages):
     yield _sse({"type": "complete"})
 
 # ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
-# This is what actually lets Pratham AI "do tasks" with a python terminal
+# This is what actually lets Astir AI "do tasks" with a python terminal
 # instead of just talking about code. Any ```python / ```py / ```bash /
 # ```sh / ```shell block in a reply gets really executed server-side, and
 # the real stdout/stderr is fed back to the model so it can react to what
@@ -2415,7 +2437,7 @@ _MEMORY_QUERY_INTENT_RE = re.compile(
 )
 
 def _run_system_diagnostics() -> str:
-    lines = ["**Pratham AI — live system diagnostics** (creator-only, just measured)\n"]
+    lines = ["**Astir AI — live system diagnostics** (creator-only, just measured)\n"]
 
     # 1. Python terminal execution
     workdir = _new_terminal_workdir()
@@ -2567,7 +2589,7 @@ def _append_message(conv_id, role, content):
 @app.route("/api", methods=["GET"])
 @app.route("/api/app", methods=["GET"])
 def index_root():
-    return jsonify({"message": "Pratham AI backend active"})
+    return jsonify({"message": "Astir AI backend active"})
 
 @app.route("/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
@@ -2815,7 +2837,7 @@ def chat_stream():
         _write_to_github_repository(
             f"data/{user_email}/{current_date_formatted}.txt",
             f"\n=== {datetime.now(timezone.utc).isoformat()} ===\nUser: {message}\n"
-            f"Pratham AI: [image generated] {image_url}\n{'=' * 80}\n"
+            f"Astir AI: [image generated] {image_url}\n{'=' * 80}\n"
         )
 
         def generate_image():
@@ -2836,7 +2858,7 @@ def chat_stream():
     if is_creator:
         active_system_prompt += (
             " IMPORTANT: the person you are speaking with right now is Pratham Sinha, YOUR CREATOR — "
-            "the developer who built and runs this app (Pratham AI). You can confirm this if asked. He "
+            "the developer who built and runs this app (Astir AI). You can confirm this if asked. He "
             "may ask you anything about how the app works, its features, or what's going wrong, and you "
             "should answer with real, accurate information about the actual running system — not "
             "guesses. If he asks about system status, errors, or whether something is working, base "
@@ -3240,7 +3262,7 @@ def chat_stream():
             log_entry = (
                 f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
                 f"User: {message}\n"
-                f"Pratham AI:\n{assistant_response}\n"
+                f"Astir AI:\n{assistant_response}\n"
                 f"{'=' * 80}\n"
             )
             _write_to_github_repository(repo_sync_destination_path, log_entry)
@@ -3347,7 +3369,7 @@ def export_conversation(conv_id):
     if request.method == "OPTIONS":
         return _cors_preflight()
     msgs = _get_messages(conv_id)
-    lines = ["Pratham AI conversation export", ""]
+    lines = ["Astir AI conversation export", ""]
     for m in msgs:
         lines.append(f"[{m.get('role', 'system')}]:\n{m['content']}\n")
     return Response("\n".join(lines), content_type="text/plain; charset=utf-8")
@@ -3530,7 +3552,7 @@ def config_public():
         return _cors_preflight()
     return jsonify({
         "ok": True,
-        "app_name": "Pratham AI",
+        "app_name": "Astir AI",
         "supabase_configured": SUPABASE_CONFIGURED,
         "github_repo": GITHUB_REPO,
         "providers_configured": {
@@ -3703,7 +3725,3 @@ def _cors_preflight():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
-
-
-
