@@ -262,6 +262,12 @@
         .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
         .thinking-body { display: none; padding-left: 4px; }
         .thinking-wrap.expanded .thinking-body { display: block; }
+        .reasoning-text {
+            font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+            color: var(--text-muted, rgba(150,150,150,0.9)); opacity: 0.85;
+            max-height: 220px; overflow-y: auto; margin: 2px 0 8px; padding-right: 4px;
+        }
+        .reasoning-text:empty { display: none; }
 
         /* Workbench Preview/Files tab buttons */
         #workbench-tab-preview, #workbench-tab-files {
@@ -752,8 +758,13 @@
         // analysis and can respond about it" into the chat, instead of the
         // old behavior where upload just showed a one-off alert() and never
         // reached the model at all.
-        function setFileAttachment(filename, analysisText, isImage) {
-            pendingFileAttachment = { filename, analysisText, isImage: !!isImage };
+        function setFileAttachment(filename, analysisText, isImage, imageDataUrl) {
+            // imageDataUrl (optional): the REAL base64 "data:image/...;base64,..."
+            // bytes of an uploaded image, read client-side via FileReader. This is
+            // what lets the backend's vision model actually SEE the picture (sent
+            // as body.images[] on the next /chat-stream call) instead of it only
+            // ever getting the text metadata analysis extracted by /upload.
+            pendingFileAttachment = { filename, analysisText, isImage: !!isImage, imageDataUrl: imageDataUrl || null };
             document.getElementById('file-attachment-chip-icon').innerText = isImage ? '🖼️' : '📎';
             document.getElementById('file-attachment-chip-label').innerText = filename;
             document.getElementById('file-attachment-chip').classList.add('active');
@@ -761,6 +772,18 @@
         function clearFileAttachment() {
             pendingFileAttachment = null;
             document.getElementById('file-attachment-chip').classList.remove('active');
+        }
+
+        // Reads a File/Blob as a base64 data URL (data:image/png;base64,...).
+        // Used to give the backend the real image bytes for vision, entirely
+        // client-side — no extra round trip to /upload needed for this part.
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(file);
+            });
         }
 
         // Key used to persist the session in localStorage so a page refresh
@@ -1318,6 +1341,7 @@
             wrapper.appendChild(wrap);
             _activeThinkingWrap = wrap;
             _activeStepList = null; // force a fresh step-list inside the new wrap
+            _activeReasoningEl = null; // force a fresh reasoning-text container inside the new wrap
             return wrap;
         }
         function getStepList(wrapper) {
@@ -1328,6 +1352,33 @@
             wrap.querySelector('.thinking-body').appendChild(list);
             _activeStepList = list;
             return list;
+        }
+
+        // ── Live reasoning-text stream (real chain-of-thought from the
+        // backend's `thinking` SSE events — see _stream_openai_compatible's
+        // <think>...</think> splitting in app.py). Sits ABOVE the step-list
+        // inside the same collapsible Thinking wrapper, so real model
+        // reasoning and terminal/file activity share one panel. Additive:
+        // does not touch the existing step-list code above. ──
+        let _activeReasoningEl = null;
+        function getReasoningEl(wrapper) {
+            const wrap = getThinkingWrap(wrapper);
+            if (_activeReasoningEl && wrap.contains(_activeReasoningEl)) return _activeReasoningEl;
+            const el = document.createElement('div');
+            el.className = 'reasoning-text';
+            const body = wrap.querySelector('.thinking-body');
+            body.insertBefore(el, body.firstChild);
+            _activeReasoningEl = el;
+            return el;
+        }
+        function appendReasoningText(wrapper, text) {
+            const el = getReasoningEl(wrapper);
+            el.textContent += text;
+            el.scrollTop = el.scrollHeight;
+        }
+        function finishReasoning() {
+            if (_activeThinkingWrap) _activeThinkingWrap.classList.add('done');
+            _activeReasoningEl = null;
         }
         function _refreshThinkingSummary() {
             if (!_activeThinkingWrap || !_activeStepList) return;
@@ -1876,6 +1927,15 @@
             // PDFs/docs/etc — see _analyze_image_via_terminal /upload route)
             // rides along in a fenced block so the model actually sees and
             // can respond about the real file, not just a filename.
+            // The real image bytes (if any) to send to the vision-capable
+            // model — captured here, before clearFileAttachment() wipes
+            // pendingFileAttachment, so /chat-stream's body.images[] actually
+            // gets populated (see app.py's chat_stream, which already expects
+            // this field but had nothing feeding it until now).
+            const imagesToSend = (pendingFileAttachment && pendingFileAttachment.isImage && pendingFileAttachment.imageDataUrl)
+                ? [pendingFileAttachment.imageDataUrl]
+                : [];
+
             if (pendingFileAttachment) {
                 const kindLabel = pendingFileAttachment.isImage ? 'Image analysis' : 'File contents';
                 message = (message ? message + "\n\n" : "") +
@@ -1920,7 +1980,7 @@
                 const response = await smartFetchRequest('/chat-stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                    body: JSON.stringify({ message: message, conversation_id: currentConversationId })
+                    body: JSON.stringify({ message: message, conversation_id: currentConversationId, images: imagesToSend })
                 });
 
                 if (!response.ok) {
@@ -1962,12 +2022,27 @@
                         try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
                         if (payload.type === 'metadata') {
                             currentConversationId = payload.conversation_id;
+                        } else if (payload.type === 'thinking') {
+                            // Real chain-of-thought streamed live from the reasoning
+                            // model (see app.py's _stream_openai_compatible <think>
+                            // splitting) — shown token-by-token in the collapsible
+                            // Thinking panel, same place terminal/file activity lands.
+                            if (!modelWrapper) {
+                                removeTypingIndicator();
+                                modelWrapper = mountModelOutputTargetShell();
+                            }
+                            setAgentActivity('Thinking...');
+                            appendReasoningText(modelWrapper, payload.text);
                         } else if (payload.type === 'token') {
                             if (!modelWrapper) {
                                 removeTypingIndicator();
                                 modelWrapper = mountModelOutputTargetShell();
-                                setAgentActivity('Writing response...');
                             }
+                            // The model has moved from reasoning into its real
+                            // answer — collapse/finalize the Thinking panel so it
+                            // reads as "done" while the visible reply streams in.
+                            if (_activeReasoningEl) finishReasoning();
+                            setAgentActivity('Writing response...');
                             fullText += payload.text;
                             // Throttle DOM rebuilding to once per animation frame so
                             // fast token streams stay smooth instead of lagging.
@@ -2018,6 +2093,7 @@
                                 updateAssistantMessageDOM(modelWrapper, fullText);
                                 appendAssistantCopyButton(modelWrapper, fullText);
                             }
+                            finishReasoning();
                             _activeStepList = null;
                             _activeThinkingWrap = null;
                             pushTerminalLog('Response complete.');
@@ -2162,11 +2238,16 @@
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
                     const lowerName = (res.filename || '').toLowerCase();
                     const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
+                    const imageDataUrl = isImage ? await readFileAsDataURL(uploadedFile).catch(() => null) : null;
                     if (res.preview && res.preview.trim()) {
                         // Arm the attachment so its real content/analysis
                         // rides along with the person's NEXT message,
                         // instead of the upload being a dead-end alert.
-                        setFileAttachment(res.filename, res.preview, isImage);
+                        setFileAttachment(res.filename, res.preview, isImage, imageDataUrl);
+                    } else if (isImage && imageDataUrl) {
+                        // Images always get attached even without a text preview —
+                        // the vision model works straight off the real pixels.
+                        setFileAttachment(res.filename, res.status || 'Image attached.', true, imageDataUrl);
                     } else {
                         alert(`${res.filename} — ${res.status}`);
                     }
@@ -2195,8 +2276,11 @@
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
                     const lowerName = (res.filename || '').toLowerCase();
                     const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
+                    const imageDataUrl = isImage ? await readFileAsDataURL(uploadedFile).catch(() => null) : null;
                     if (res.preview && res.preview.trim()) {
-                        setFileAttachment(res.filename, res.preview, isImage);
+                        setFileAttachment(res.filename, res.preview, isImage, imageDataUrl);
+                    } else if (isImage && imageDataUrl) {
+                        setFileAttachment(res.filename, res.status || 'Image attached.', true, imageDataUrl);
                     } else {
                         alert(`${res.filename} — ${res.status}`);
                     }
