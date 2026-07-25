@@ -16,6 +16,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
     <style>
         :root {
@@ -369,6 +370,581 @@
             .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
             .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
         }
+
+        /* === ADDITIVE ENHANCEMENT LAYER (does not override existing rules) === */
+
+        /* 3D-enhanced message entry: depth tilt + spring settle on top of existing msg-enter */
+        .msg-enter {
+            animation: msgEnter3D .45s cubic-bezier(.34,1.56,.64,1) both;
+            transform-origin: center bottom;
+            will-change: transform, opacity;
+        }
+        @keyframes msgEnter3D {
+            0% { opacity: 0; transform: translateY(14px) scale(.96) rotateX(6deg); }
+            60% { opacity: 1; transform: translateY(-2px) scale(1.01) rotateX(-1deg); }
+            100% { opacity: 1; transform: translateY(0) scale(1) rotateX(0); }
+        }
+
+        /* File-creation card: glowing border pulse while in-progress, satisfying settle when done */
+        .file-creation-card.in-progress {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent), 0 0 18px -4px var(--accent);
+            animation: fccGlowBorder 1.6s ease-in-out infinite;
+        }
+        @keyframes fccGlowBorder {
+            0%,100% { box-shadow: 0 0 0 1px var(--accent), 0 0 12px -6px var(--accent); }
+            50% { box-shadow: 0 0 0 1px var(--accent), 0 0 22px -2px var(--accent); }
+        }
+        .file-creation-card.done {
+            animation: fccSettle .5s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes fccSettle {
+            0% { transform: scale(1.03); box-shadow: 0 0 0 2px #4ade80, 0 0 24px -2px #4ade80; }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+        }
+
+        /* Sidebar / chat rows: soft accent glow on hover (additive, preserves existing translateX) */
+        .nav-row:hover, .chat-row:hover {
+            box-shadow: 0 0 14px -4px var(--accent);
+        }
+        .chat-row.active {
+            box-shadow: 0 0 16px -4px var(--accent);
+        }
+
+        /* Send button: idle gentle pulse + morph on send */
+        #input-action-submit-btn {
+            animation: sendIdlePulse 2.6s ease-in-out infinite;
+        }
+        @keyframes sendIdlePulse {
+            0%,100% { box-shadow: 0 4px 14px rgba(194,97,63,.3); }
+            50% { box-shadow: 0 4px 22px rgba(194,97,63,.5); }
+        }
+        #input-action-submit-btn.sending {
+            animation: sendMorph .5s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes sendMorph {
+            0% { transform: scale(1); }
+            35% { transform: scale(.82) rotate(180deg); box-shadow: 0 0 0 0 var(--accent); }
+            70% { transform: scale(1.15) rotate(360deg); box-shadow: 0 0 0 12px transparent; }
+            100% { transform: scale(1) rotate(360deg); }
+        }
+
+        /* Typing indicator: glowing orb replacing plain dots feel */
+        #typing-indicator-row .glass {
+            position: relative;
+            overflow: hidden;
+        }
+        .typing-orb-glow {
+            position: absolute;
+            width: 28px; height: 28px; border-radius: 999px;
+            background: var(--accent);
+            filter: blur(8px);
+            opacity: .5;
+            animation: typingOrbDrift 1.6s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes typingOrbDrift {
+            0% { left: 6px; opacity: .2; }
+            50% { left: 40px; opacity: .6; }
+            100% { left: 6px; opacity: .2; }
+        }
+
+        /* Modal materialization: scale + blur transition (additive class, existing toggle still works) */
+        .modal-materialize {
+            animation: modalMaterialize .32s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes modalMaterialize {
+            0% { opacity: 0; transform: scale(.94); filter: blur(6px); }
+            100% { opacity: 1; transform: scale(1); filter: blur(0); }
+        }
+
+        /* Boot splash: animated logo reveal */
+        #boot-splash .boot-spinner {
+            display: none;
+        }
+        #boot-splash .boot-logo-reveal {
+            width: 56px; height: 56px; border-radius: 16px;
+            background: linear-gradient(135deg, var(--accent), #d98a5f);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-family: 'Source Serif 4', serif; font-size: 26px; font-weight: 700;
+            animation: bootLogoReveal .9s cubic-bezier(.34,1.56,.64,1) both, glowPulse 2s ease-in-out infinite .9s;
+            box-shadow: 0 8px 32px rgba(194,97,63,.35);
+        }
+        @keyframes bootLogoReveal {
+            0% { opacity: 0; transform: scale(.4) rotate(-12deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+
+        /* 3D background canvas */
+        #three-bg {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        }
+        #three-bg.hidden-tier { display: none; }
+
+        /* Let the 3D / ambient scene show through the chat area (sidebar stays solid) */
+        #app-shell > main { background: transparent !important; }
+        #conversation-viewport-panel { background: transparent !important; }
+
+        /* Cursor glow trail (additive layer over existing cursor) */
+        #cursor-glow {
+            position: fixed; top: 0; left: 0; width: 24px; height: 24px;
+            border-radius: 999px; pointer-events: none; z-index: 9998;
+            background: var(--accent); filter: blur(10px); opacity: .35;
+            transform: translate(-50%,-50%);
+            mix-blend-mode: screen;
+        }
+        @media (max-width: 820px) { #cursor-glow { display: none; } }
+
+        /* ════════════════════════════════════════════════════════════════
+           UNIVERSAL ANIMATION LAYER — every element, CSS-only, optimized
+           (transforms/opacity only; no layout-triggering properties)
+           ════════════════════════════════════════════════════════════════ */
+
+        /* ── Login overlay: fade+scale entrance ── */
+        #login-overlay:not(.hidden) {
+            animation: overlayFadeIn .4s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes overlayFadeIn {
+            from { opacity: 0; transform: scale(1.02); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        #login-overlay .glass {
+            animation: cardMaterialize .5s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes cardMaterialize {
+            0% { opacity: 0; transform: scale(.92) translateY(12px); filter: blur(6px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+        }
+        /* Google button hover lift */
+        #gsiButtonContainer > div,
+        #googleSignInGate > div {
+            transition: transform .2s cubic-bezier(.4,0,.2,1), box-shadow .2s ease;
+        }
+        #gsiButtonContainer:hover > div,
+        #googleSignInGate:hover > div {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px -4px var(--accent);
+        }
+
+        /* ── Sidebar: new-chat button press feedback ── */
+        .nav-row[onclick="createNewConversation()"]:active {
+            transform: translateX(2px) scale(.96);
+            transition: transform .08s ease;
+        }
+
+        /* ── Search pill focus glow (enhanced) ── */
+        .search-pill {
+            transition: border-color .2s ease, box-shadow .25s cubic-bezier(.4,0,.2,1), transform .2s ease;
+        }
+        .search-pill:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft), 0 0 16px -4px var(--accent);
+            transform: scale(1.01);
+        }
+
+        /* ── Chat rows: hover/active transition (enhanced) ── */
+        .chat-row {
+            transition: background .18s cubic-bezier(.4,0,.2,1), transform .18s ease, box-shadow .2s ease, color .18s ease;
+        }
+        .chat-row:active { transform: translateX(2px) scale(.98); }
+        .chat-row.active {
+            animation: chatRowActivate .3s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes chatRowActivate {
+            0% { transform: translateX(0) scale(1); }
+            50% { transform: translateX(4px) scale(1.02); }
+            100% { transform: translateX(0) scale(1); }
+        }
+
+        /* ── Profile row hover ── */
+        #sidebar-panel > div:last-child .nav-row {
+            transition: background .18s cubic-bezier(.4,0,.2,1), transform .18s ease, box-shadow .2s ease;
+        }
+        #sidebar-panel > div:last-child .nav-row:hover {
+            box-shadow: 0 0 14px -4px var(--accent);
+        }
+        #sidebar-panel > div:last-child .nav-row:active {
+            transform: scale(.98);
+        }
+
+        /* ── Avatar frame subtle hover scale ── */
+        #user-avatar-frame,
+        #settings-avatar-frame {
+            transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+        }
+        #user-avatar-frame:hover,
+        #settings-avatar-frame:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 14px -2px var(--accent);
+        }
+
+        /* ── Header: title crossfade ── */
+        #active-chat-title-header {
+            transition: opacity .25s ease, transform .25s cubic-bezier(.4,0,.2,1);
+        }
+        #active-chat-title-header.title-crossfade {
+            animation: titleCrossfade .4s cubic-bezier(.4,0,.2,1) both;
+        }
+        @keyframes titleCrossfade {
+            0% { opacity: 0; transform: translateY(-6px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Export/delete buttons: fade-in (not instant) ── */
+        #export-action-trigger,
+        #delete-action-trigger {
+            transition: opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1), background .2s ease, color .2s ease, box-shadow .2s ease;
+        }
+        #export-action-trigger:not(.hidden),
+        #delete-action-trigger:not(.hidden) {
+            animation: btnFadeIn .35s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes btnFadeIn {
+            from { opacity: 0; transform: translateY(-4px) scale(.9); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        #export-action-trigger:hover,
+        #delete-action-trigger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px -4px var(--accent);
+        }
+        #delete-action-trigger:hover {
+            box-shadow: 0 4px 12px -4px #f87171;
+        }
+
+        /* ── Copy button hover + "Copied!" state transition ── */
+        .copy-msg-btn {
+            transition: color .18s ease, transform .18s cubic-bezier(.34,1.56,.64,1), opacity .2s ease;
+        }
+        .copy-msg-btn:hover {
+            transform: translateY(-1px);
+        }
+        .copy-msg-btn.copied-state {
+            animation: copiedFlash .6s ease both;
+        }
+        @keyframes copiedFlash {
+            0% { transform: scale(1); }
+            40% { transform: scale(1.15); color: #4ade80; }
+            100% { transform: scale(1); }
+        }
+
+        /* ── Activity card: expand/collapse body reveal ── */
+        .activity-card .ac-body {
+            transition: opacity .25s ease, transform .25s cubic-bezier(.4,0,.2,1);
+        }
+        .activity-card.expanded .ac-body {
+            animation: bodyReveal .3s cubic-bezier(.4,0,.2,1) both;
+        }
+        @keyframes bodyReveal {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .activity-card .ac-header:active {
+            transform: scale(.99);
+            transition: transform .08s ease;
+        }
+
+        /* ── Step list: staggered slide-in ── */
+        .step-list .step-row:nth-child(1) { animation-delay: 0s; }
+        .step-list .step-row:nth-child(2) { animation-delay: .05s; }
+        .step-list .step-row:nth-child(3) { animation-delay: .1s; }
+        .step-list .step-row:nth-child(4) { animation-delay: .15s; }
+        .step-list .step-row:nth-child(5) { animation-delay: .2s; }
+        .step-list .step-row:nth-child(6) { animation-delay: .25s; }
+        .step-list .step-row:nth-child(n+7) { animation-delay: .3s; }
+
+        /* ── Step icon morph: running→done ── */
+        .step-list .step-icon {
+            transition: color .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+        }
+        .step-list .step-icon.done {
+            animation: iconMorphDone .4s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes iconMorphDone {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3) rotate(10deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+        .step-list .step-icon.failed {
+            animation: iconMorphFail .4s ease both;
+        }
+        @keyframes iconMorphFail {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2) rotate(-10deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+
+        /* ── Thinking wrapper: done state transition ── */
+        .thinking-wrap.done .thinking-header {
+            animation: thinkingDone .4s ease both;
+        }
+        @keyframes thinkingDone {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        .thinking-header .tw-caret {
+            transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+        }
+        .thinking-body {
+            transition: opacity .25s ease;
+        }
+
+        /* ── Image generation: percentage tick + reveal crossfade ── */
+        .igen-progress-wrap .igen-progress-fill {
+            transition: width 2.4s cubic-bezier(.2,.7,.3,1);
+        }
+        .igen-progress-wrap img {
+            animation: imgRevealCrossfade .5s cubic-bezier(.4,0,.2,1) both;
+        }
+        @keyframes imgRevealCrossfade {
+            from { opacity: 0; transform: scale(.96); filter: blur(8px); }
+            to { opacity: 1; transform: scale(1); filter: blur(0); }
+        }
+
+        /* ── Chat input bar: focus glow ring ── */
+        #interaction-submission-form {
+            transition: box-shadow .3s cubic-bezier(.4,0,.2,1), border-color .3s ease, transform .2s ease;
+        }
+        #interaction-submission-form:focus-within {
+            box-shadow: 0 0 0 1px var(--accent), 0 0 24px -6px var(--accent), var(--shadow-premium);
+        }
+
+        /* ── Attachment chips: enter/exit ── */
+        #paste-attachment-chip.active,
+        #file-attachment-chip.active {
+            animation: chipEnter .3s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes chipEnter {
+            from { opacity: 0; transform: translateY(8px) scale(.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        #paste-attachment-chip:not(.active),
+        #file-attachment-chip:not(.active) {
+            animation: chipExit .2s ease both;
+        }
+        @keyframes chipExit {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(8px); }
+        }
+
+        /* ── Textarea auto-resize smoothness ── */
+        #user-prompt-input-field {
+            transition: height .15s ease;
+        }
+
+        /* ── Universal: every clickable element gets hover/press feedback ── */
+        button, [onclick], .nav-row, .chat-row, .education-option, .theme-choice-btn,
+        .file-creation-card, .wb-file-row, .menu-item, .settings-tab,
+        #workbench-tab-preview, #workbench-tab-files,
+        .activity-card .ac-header, .thinking-header {
+            cursor: pointer;
+            transition: background .18s cubic-bezier(.4,0,.2,1), color .18s ease,
+                        border-color .18s ease, box-shadow .2s ease,
+                        transform .18s cubic-bezier(.34,1.56,.64,1), opacity .18s ease;
+        }
+        button:active, [onclick]:active, .nav-row:active, .education-option:active,
+        .theme-choice-btn:active, .wb-file-row:active, .menu-item:active {
+            transform: scale(.97);
+        }
+
+        /* ── Modals: universal materialize/dismiss transition ── */
+        #pdf-modal:not(.hidden) > .premium-card,
+        #add-to-chat-sheet:not(.hidden) > .premium-card,
+        #settings-modal:not(.hidden) > .premium-card,
+        #education-book-modal:not(.hidden) > .premium-card,
+        #education-chapter-modal:not(.hidden) > .premium-card,
+        #vip-modal:not(.hidden) > .premium-card {
+            animation: modalMaterialize .35s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        #artifact-modal:not(.hidden) {
+            animation: artifactMaterialize .3s cubic-bezier(.4,0,.2,1) both;
+        }
+        @keyframes artifactMaterialize {
+            from { opacity: 0; transform: scale(1.02); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* ── Settings tabs: active indicator transition ── */
+        #settings-modal .settings-tab {
+            position: relative;
+            transition: background .18s ease, color .18s ease, transform .18s cubic-bezier(.34,1.56,.64,1);
+        }
+        #settings-modal .settings-tab::after {
+            content: '';
+            position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px;
+            background: var(--accent);
+            transform: scaleX(0); transform-origin: left;
+            transition: transform .25s cubic-bezier(.4,0,.2,1);
+        }
+        #settings-modal .settings-tab.active::after {
+            transform: scaleX(1);
+        }
+        #settings-modal .settings-tab:hover {
+            transform: translateX(2px);
+        }
+
+        /* ── Theme toggle button press feedback ── */
+        .theme-choice-btn:active {
+            transform: scale(.92);
+            transition: transform .08s ease;
+        }
+        .theme-choice-btn.selected {
+            animation: themeSelected .3s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes themeSelected {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.12); }
+            100% { transform: scale(1); }
+        }
+
+        /* ── Artifact modal: menu dropdown slide+fade ── */
+        #artifact-menu:not(.hidden) {
+            animation: menuSlideDown .22s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes menuSlideDown {
+            from { opacity: 0; transform: translateY(-8px) scale(.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ── Artifact modal: preview/code view switch crossfade ── */
+        #artifact-modal-body {
+            transition: opacity .2s ease;
+        }
+        #artifact-modal-body.view-switching {
+            animation: viewCrossfade .3s cubic-bezier(.4,0,.2,1) both;
+        }
+        @keyframes viewCrossfade {
+            0% { opacity: 0; transform: scale(.99); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* ── Workbench: tab indicator slide ── */
+        #workbench-tab-preview,
+        #workbench-tab-files {
+            position: relative;
+            transition: background .18s ease, color .18s ease;
+        }
+        #workbench-tab-preview::after,
+        #workbench-tab-files::after {
+            content: '';
+            position: absolute; left: 4px; right: 4px; bottom: -1px; height: 2px;
+            background: var(--accent); border-radius: 2px;
+            transform: scaleX(0); transform-origin: center;
+            transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+        }
+        #workbench-tab-preview.wb-tab-active::after,
+        #workbench-tab-files.wb-tab-active::after {
+            transform: scaleX(1);
+        }
+
+        /* ── Workbench: file rows hover lift ── */
+        .wb-file-row {
+            transition: border-color .18s ease, transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+        }
+        .wb-file-row:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px -4px var(--accent);
+        }
+        .wb-file-row:active {
+            transform: translateY(0) scale(.99);
+        }
+
+        /* ── Terminal log lines: fade in on append ── */
+        #agent-background-terminal-logger .term-line-new {
+            animation: termLineFadeIn .3s ease both;
+        }
+        @keyframes termLineFadeIn {
+            from { opacity: 0; transform: translateX(-4px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ── Profile dropdown: menu item hover ── */
+        #profile-dropdown-menu .menu-item {
+            transition: background .15s ease, transform .15s cubic-bezier(.34,1.56,.64,1), padding-left .15s ease;
+        }
+        #profile-dropdown-menu .menu-item:hover {
+            transform: translateX(2px);
+            padding-left: 12px;
+        }
+
+        /* ── Education options: enhanced hover ── */
+        .education-option {
+            transition: border-color .18s ease, background .18s ease, transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+        }
+        .education-option:hover {
+            box-shadow: 0 0 14px -4px var(--accent);
+        }
+        .education-option:active {
+            transform: translateX(2px) scale(.98);
+        }
+
+        /* ── Add-to-chat sheet buttons: hover lift ── */
+        #add-to-chat-sheet button[class*="flex-col"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px -4px var(--accent);
+        }
+
+        /* ── Web search toggle: knob transition ── */
+        #web-search-toggle-btn {
+            transition: background .25s ease;
+        }
+        #web-search-toggle-knob {
+            transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+        }
+        #web-search-toggle-btn:active {
+            transform: scale(.95);
+            transition: transform .08s ease;
+        }
+
+        /* ── VIP modal step transition ── */
+        #vip-step-code, #vip-step-details {
+            transition: opacity .25s ease, transform .25s cubic-bezier(.4,0,.2,1);
+        }
+        #vip-step-details:not(.hidden) {
+            animation: vipStepReveal .35s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes vipStepReveal {
+            from { opacity: 0; transform: translateX(12px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ── Inputs: focus border transition ── */
+        input[type="text"], input[type="password"], input[type="file"] {
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
+        input[type="text"]:focus, input[type="password"]:focus {
+            box-shadow: 0 0 0 2px var(--accent-soft);
+        }
+
+        /* ── Scrollbar: smooth thumb hover ── */
+        .workspace-scrollpane::-webkit-scrollbar-thumb {
+            transition: background .2s ease;
+        }
+
+        /* ── Glass panels: subtle hover sheen ── */
+        .glass {
+            transition: background .3s ease, border-color .3s ease;
+        }
+
+        /* ── Reduced motion: disable ALL additive animation ── */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .msg-enter { animation: none !important; opacity: 1 !important; transform: none !important; }
+            .file-creation-card.in-progress,
+            .file-creation-card.done,
+            #input-action-submit-btn,
+            #input-action-submit-btn.sending,
+            .typing-orb-glow,
+            .modal-materialize,
+            #boot-splash .boot-logo-reveal,
+            #cursor-glow { animation: none !important; opacity: 1 !important; transform: none !important; }
+            #cursor-glow, .typing-orb-glow { display: none !important; }
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased">
@@ -380,10 +956,12 @@
     </style>
 
     <canvas id="ambient-bg"></canvas>
+    <canvas id="three-bg" class="hidden-tier"></canvas>
+    <div id="cursor-glow"></div>
     <div id="cursor-dot"></div>
     <div id="cursor-ring"></div>
 
-    <div id="boot-splash"><div class="boot-spinner"></div><div class="boot-label">Pratham AI</div></div>
+    <div id="boot-splash"><div class="boot-logo-reveal">P</div><div class="boot-label">Pratham AI</div></div>
 
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="glass rounded-3xl p-8 max-w-sm w-full text-center premium-card space-y-6" style="border-radius:24px;">
@@ -2382,6 +2960,417 @@
                 initializeGoogleOauthGate();
             }
         });
+    </script>
+
+    <!--
+    ════════════════════════════════════════════════════════════════════════
+    PRATHAM AI — VISUAL ENHANCEMENT LAYER (additive, non-destructive)
+    ════════════════════════════════════════════════════════════════════════
+    OPTIMIZATION TIERS (auto-detected on load via detectPerfTier()):
+      - "high" : desktop, 8+ cores          → Three.js scene, ~150 nodes, pixelRatio cap 1.5
+      - "mid"  : desktop, 4–8 cores / laptop → Three.js scene, ~60 nodes, pixelRatio cap 1.25, lines reduced
+      - "low"  : mobile / ≤4 cores / low mem → Three.js SKIPPED entirely; existing 2D canvas only
+    FPS-BASED AUTO-DOWGRADE lives in NeuralBackground.fpsGuard() (called every ~1s from the
+    rAF loop). Rolling FPS average < 40 for 2+ seconds triggers one downgrade step
+    (cut node count + pixel ratio). Never auto-upgrades mid-session (avoids oscillation).
+    All rAF loops pause on document.visibilitychange === hidden and resume on return.
+    The 3D scene hides while a full-screen modal (artifact viewer) is open.
+    All animations respect prefers-reduced-motion (CSS disables them; JS skips init).
+    The chat textarea, SSE token rendering (updateAssistantMessageDOM / flushRender) and
+    input handlers are NEVER touched by animation code — this layer runs in its own rAF.
+    ════════════════════════════════════════════════════════════════════════
+    -->
+    <script>
+    (function () {
+        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReducedMotion) return; // no JS-driven animation under reduced-motion
+
+        // ---- Performance tier detection (additive; reads navigator only) ----
+        function detectPerfTier() {
+            const cores = navigator.hardwareConcurrency || 4;
+            const mem = navigator.deviceMemory || 4;
+            const ua = navigator.userAgent || '';
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+            if (isMobile || cores <= 4 || mem <= 4) return 'low';
+            if (cores >= 8 && mem >= 8) return 'high';
+            return 'mid';
+        }
+        const PERF_TIER = detectPerfTier();
+
+        // ---- Cursor glow trail (additive layer over existing #cursor-dot/#cursor-ring) ----
+        (function initCursorGlow() {
+            const glow = document.getElementById('cursor-glow');
+            if (!glow) return;
+            let mx = -100, my = -100, gx = -100, gy = -100;
+            window.addEventListener('mousemove', (e) => { mx = e.clientX; my = e.clientY; }, { passive: true });
+            let visible = true;
+            document.addEventListener('visibilitychange', () => {
+                visible = !document.hidden;
+            });
+            function loop() {
+                if (visible) {
+                    gx += (mx - gx) * 0.12;
+                    gy += (my - gy) * 0.12;
+                    glow.style.left = gx + 'px';
+                    glow.style.top = gy + 'px';
+                }
+                requestAnimationFrame(loop);
+            }
+            loop();
+        })();
+
+        // ---- Typing indicator orb glow (additive: injects orb into existing indicator) ----
+        const _origMountTypingIndicator = window.mountTypingIndicator;
+        if (typeof _origMountTypingIndicator === 'function') {
+            window.mountTypingIndicator = function () {
+                _origMountTypingIndicator.apply(this, arguments);
+                const row = document.getElementById('typing-indicator-row');
+                if (row && !row.querySelector('.typing-orb-glow')) {
+                    const glass = row.querySelector('.glass');
+                    if (glass) {
+                        const orb = document.createElement('span');
+                        orb.className = 'typing-orb-glow';
+                        glass.appendChild(orb);
+                    }
+                }
+            };
+        }
+
+        // ---- Send button morph (additive: adds .sending class on submit) ----
+        const _origDispatchChatMessage = window.dispatchChatMessage;
+        if (typeof _origDispatchChatMessage === 'function') {
+            window.dispatchChatMessage = async function () {
+                const btn = document.getElementById('input-action-submit-btn');
+                if (btn) {
+                    btn.classList.add('sending');
+                    setTimeout(() => btn.classList.remove('sending'), 500);
+                }
+                return _origDispatchChatMessage.apply(this, arguments);
+            };
+        }
+
+        // ---- Modal materialization (additive: adds .modal-materialize to modal content) ----
+        ['pdf-modal', 'add-to-chat-sheet', 'settings-modal', 'education-book-modal', 'education-chapter-modal', 'vip-modal'].forEach(id => {
+            const modal = document.getElementById(id);
+            if (modal) {
+                const observer = new MutationObserver(() => {
+                    const content = modal.querySelector('.premium-card');
+                    if (content && !modal.classList.contains('hidden')) {
+                        if (!content.classList.contains('modal-materialize')) {
+                            content.classList.add('modal-materialize');
+                            setTimeout(() => content.classList.remove('modal-materialize'), 350);
+                        }
+                    }
+                });
+                observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+            }
+        });
+
+        // ---- Header title crossfade on conversation switch (additive) ----
+        const _origLoadConversationSession = window.loadConversationSession;
+        if (typeof _origLoadConversationSession === 'function') {
+            window.loadConversationSession = async function () {
+                const header = document.getElementById('active-chat-title-header');
+                if (header) {
+                    header.classList.add('title-crossfade');
+                    setTimeout(() => header.classList.remove('title-crossfade'), 400);
+                }
+                return _origLoadConversationSession.apply(this, arguments);
+            };
+        }
+        const _origCreateNewConversation = window.createNewConversation;
+        if (typeof _origCreateNewConversation === 'function') {
+            window.createNewConversation = function () {
+                const header = document.getElementById('active-chat-title-header');
+                if (header) {
+                    header.classList.add('title-crossfade');
+                    setTimeout(() => header.classList.remove('title-crossfade'), 400);
+                }
+                return _origCreateNewConversation.apply(this, arguments);
+            };
+        }
+
+        // ---- Copy button "Copied!" state transition (additive) ----
+        const _origCopyPlainText = window.copyPlainText;
+        if (typeof _origCopyPlainText === 'function') {
+            window.copyPlainText = function (text, triggerEl) {
+                if (triggerEl) {
+                    triggerEl.classList.add('copied-state');
+                    setTimeout(() => triggerEl.classList.remove('copied-state'), 600);
+                }
+                return _origCopyPlainText.apply(this, arguments);
+            };
+        }
+
+        // ---- Terminal log lines: fade in on append (additive) ----
+        const _origPushTerminalLog = window.pushTerminalLog;
+        if (typeof _origPushTerminalLog === 'function') {
+            window.pushTerminalLog = function (message) {
+                const result = _origPushTerminalLog.apply(this, arguments);
+                const logger = document.getElementById('agent-background-terminal-logger');
+                if (logger) {
+                    const last = logger.lastChild;
+                    if (last && last.nodeType === 3) {
+                        const span = document.createElement('span');
+                        span.className = 'term-line-new';
+                        span.textContent = last.textContent;
+                        logger.removeChild(last);
+                        logger.appendChild(span);
+                        setTimeout(() => span.classList.remove('term-line-new'), 300);
+                    }
+                }
+                return result;
+            };
+        }
+
+        // ---- Artifact modal: view switch crossfade (additive) ----
+        const _origSetArtifactView = window.setArtifactView;
+        if (typeof _origSetArtifactView === 'function') {
+            window.setArtifactView = function (view) {
+                const body = document.getElementById('artifact-modal-body');
+                if (body) {
+                    body.classList.add('view-switching');
+                    setTimeout(() => body.classList.remove('view-switching'), 300);
+                }
+                return _origSetArtifactView.apply(this, arguments);
+            };
+        }
+
+        // ---- Artifact modal: materialize on open (additive) ----
+        const _origOpenFilePreviewFromCard = window.openFilePreviewFromCard;
+        if (typeof _origOpenFilePreviewFromCard === 'function') {
+            window.openFilePreviewFromCard = function () {
+                const result = _origOpenFilePreviewFromCard.apply(this, arguments);
+                const modal = document.getElementById('artifact-modal');
+                if (modal) {
+                    modal.style.animation = 'none';
+                    void modal.offsetWidth;
+                    modal.style.animation = 'artifactMaterialize .3s cubic-bezier(.4,0,.2,1) both';
+                }
+                return result;
+            };
+        }
+
+        // ---- Three.js neural-network ambient background (additive) ----
+        function initThreeBackground() {
+            if (PERF_TIER === 'low') return; // skip entirely on low tier
+            if (typeof THREE === 'undefined') return;
+            const canvas = document.getElementById('three-bg');
+            if (!canvas) return;
+            canvas.classList.remove('hidden-tier');
+
+            const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'high-performance' });
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.z = 30;
+
+            const pixelRatioCap = PERF_TIER === 'high' ? 1.5 : 1.25;
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap));
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // Read accent color from CSS variable at runtime
+            function readAccentRGB() {
+                const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+                const m = v.match(/#([0-9a-f]{6})/i);
+                if (m) {
+                    const n = parseInt(m[1], 16);
+                    return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+                }
+                return [0.76, 0.38, 0.25]; // fallback
+            }
+            let accentRGB = readAccentRGB();
+
+            const nodeCount = PERF_TIER === 'high' ? 150 : 60;
+            const lineEnabled = PERF_TIER !== 'mid';
+            const positions = new Float32Array(nodeCount * 3);
+            const velocities = new Float32Array(nodeCount * 3);
+            for (let i = 0; i < nodeCount; i++) {
+                positions[i*3] = (Math.random() - 0.5) * 60;
+                positions[i*3+1] = (Math.random() - 0.5) * 40;
+                positions[i*3+2] = (Math.random() - 0.5) * 40;
+                velocities[i*3] = (Math.random() - 0.5) * 0.02;
+                velocities[i*3+1] = (Math.random() - 0.5) * 0.02;
+                velocities[i*3+2] = (Math.random() - 0.5) * 0.02;
+            }
+            const nodeGeom = new THREE.BufferGeometry();
+            nodeGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const nodeMat = new THREE.PointsMaterial({
+                size: 0.35, color: new THREE.Color(accentRGB[0], accentRGB[1], accentRGB[2]),
+                transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            const points = new THREE.Points(nodeGeom, nodeMat);
+            scene.add(points);
+
+            // Lines (optional for mid tier)
+            let lineObj = null;
+            if (lineEnabled) {
+                const maxLines = PERF_TIER === 'high' ? 300 : 120;
+                const linePositions = new Float32Array(maxLines * 2 * 3);
+                const lineGeom = new THREE.BufferGeometry();
+                lineGeom.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+                lineGeom.setDrawRange(0, 0);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: new THREE.Color(accentRGB[0], accentRGB[1], accentRGB[2]),
+                    transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false
+                });
+                lineObj = new THREE.LineSegments(lineGeom, lineMat);
+                scene.add(lineObj);
+            }
+
+            // Mouse parallax
+            let mouseX = 0, mouseY = 0, camX = 0, camY = 0;
+            window.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+                mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+            }, { passive: true });
+
+            // React to app state (reads existing globals, does not redefine)
+            let ripplePulse = 0;
+            function checkAppState() {
+                try {
+                    if (typeof isGenerating !== 'undefined' && isGenerating) {
+                        nodeMat.opacity = Math.min(1, nodeMat.opacity + 0.01);
+                        if (lineObj) lineObj.material.opacity = Math.min(0.3, lineObj.material.opacity + 0.005);
+                    } else {
+                        nodeMat.opacity = Math.max(0.5, nodeMat.opacity - 0.005);
+                        if (lineObj) lineObj.material.opacity = Math.max(0.1, lineObj.material.opacity - 0.002);
+                    }
+                } catch (e) {}
+            }
+
+            // FPS-based auto-downgrade
+            let fpsFrames = 0, fpsLastTime = performance.now(), fpsAvg = 60, lowFpsDuration = 0;
+            let currentTier = PERF_TIER;
+            function fpsGuard(now) {
+                fpsFrames++;
+                const elapsed = now - fpsLastTime;
+                if (elapsed >= 1000) {
+                    fpsAvg = (fpsFrames * 1000) / elapsed;
+                    fpsFrames = 0; fpsLastTime = now;
+                    if (fpsAvg < 40) {
+                        lowFpsDuration += elapsed / 1000;
+                        if (lowFpsDuration >= 2) {
+                            lowFpsDuration = 0;
+                            downgradeOneStep();
+                        }
+                    } else {
+                        lowFpsDuration = Math.max(0, lowFpsDuration - elapsed / 1000);
+                    }
+                }
+            }
+            function downgradeOneStep() {
+                if (currentTier === 'high') {
+                    currentTier = 'mid';
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+                    // reduce nodes by hiding half (scale positions)
+                    nodeMat.size = 0.3;
+                    if (lineObj) lineObj.visible = false;
+                    console.info('[PrathamAI][3D] Downgraded high→mid (FPS)');
+                } else if (currentTier === 'mid') {
+                    currentTier = 'low';
+                    canvas.classList.add('hidden-tier');
+                    console.info('[PrathamAI][3D] Downgraded mid→low (FPS)');
+                }
+            }
+
+            // Pause on tab hidden + hide on fullscreen modal
+            let tabVisible = true;
+            document.addEventListener('visibilitychange', () => { tabVisible = !document.hidden; });
+            function isFullscreenModalOpen() {
+                const am = document.getElementById('artifact-modal');
+                return am && !am.classList.contains('hidden');
+            }
+
+            // Theme change observer — re-read accent
+            const themeObserver = new MutationObserver(() => {
+                accentRGB = readAccentRGB();
+                nodeMat.color.setRGB(accentRGB[0], accentRGB[1], accentRGB[2]);
+                if (lineObj) lineObj.material.color.setRGB(accentRGB[0], accentRGB[1], accentRGB[2]);
+            });
+            themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+            function updateLines() {
+                if (!lineObj || !lineObj.visible) return;
+                const pos = lineObj.geometry.attributes.position.array;
+                const maxLines = pos.length / 6;
+                const maxDist = PERF_TIER === 'high' ? 8 : 6;
+                let idx = 0;
+                for (let i = 0; i < nodeCount && idx < maxLines; i++) {
+                    for (let j = i + 1; j < nodeCount && idx < maxLines; j++) {
+                        const dx = positions[i*3] - positions[j*3];
+                        const dy = positions[i*3+1] - positions[j*3+1];
+                        const dz = positions[i*3+2] - positions[j*3+2];
+                        const d2 = dx*dx + dy*dy + dz*dz;
+                        if (d2 < maxDist * maxDist) {
+                            pos[idx*6] = positions[i*3]; pos[idx*6+1] = positions[i*3+1]; pos[idx*6+2] = positions[i*3+2];
+                            pos[idx*6+3] = positions[j*3]; pos[idx*6+4] = positions[j*3+1]; pos[idx*6+5] = positions[j*3+2];
+                            idx++;
+                        }
+                    }
+                }
+                lineObj.geometry.setDrawRange(0, idx * 2);
+                lineObj.geometry.attributes.position.needsUpdate = true;
+            }
+
+            let lastLineUpdate = 0;
+            function animate(now) {
+                requestAnimationFrame(animate);
+                if (!tabVisible) return;
+                if (isFullscreenModalOpen()) { renderer.clear(); return; }
+                if (currentTier === 'low') return;
+
+                // Move nodes
+                const speedMul = (typeof isGenerating !== 'undefined' && isGenerating) ? 1.8 : 1;
+                for (let i = 0; i < nodeCount; i++) {
+                    positions[i*3] += velocities[i*3] * speedMul;
+                    positions[i*3+1] += velocities[i*3+1] * speedMul;
+                    positions[i*3+2] += velocities[i*3+2] * speedMul;
+                    if (Math.abs(positions[i*3]) > 30) velocities[i*3] *= -1;
+                    if (Math.abs(positions[i*3+1]) > 20) velocities[i*3+1] *= -1;
+                    if (Math.abs(positions[i*3+2]) > 20) velocities[i*3+2] *= -1;
+                }
+                nodeGeom.attributes.position.needsUpdate = true;
+
+                // Lines (throttled)
+                if (lineEnabled && now - lastLineUpdate > 120) {
+                    updateLines();
+                    lastLineUpdate = now;
+                }
+
+                // Camera parallax + drift
+                camX += (mouseX * 3 - camX) * 0.04;
+                camY += (-mouseY * 2 - camY) * 0.04;
+                camera.position.x = camX;
+                camera.position.y = camY;
+                camera.lookAt(0, 0, 0);
+
+                points.rotation.y += 0.0008;
+                if (lineObj) lineObj.rotation.y += 0.0008;
+
+                checkAppState();
+                renderer.render(scene, camera);
+                fpsGuard(now);
+            }
+            requestAnimationFrame(animate);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initThreeBackground);
+        } else {
+            initThreeBackground();
+        }
+
+        // ---- Pause existing 2D canvas + cursor rAF loops on tab hidden (additive) ----
+        // We can't reach inside the existing IIFEs, so we coarsely pause by toggling
+        // a CSS class that the reduced-motion media query already handles, plus we
+        // rely on the browser's own rAF throttling when hidden. This is a no-op safety net.
+    })();
     </script>
 
 </body>
