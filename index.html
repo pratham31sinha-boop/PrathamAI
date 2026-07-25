@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#c2613f">
-    <title>Astir AI</title>
-    <meta name="description" content="Astir AI — a personal AI assistant with real code execution, file creation, image generation, and education support for Sanskrit, Mathematics, and more.">
+    <title>Pratham AI</title>
+    <meta name="description" content="Pratham AI — a personal AI assistant with real code execution, file creation, image generation, and education support for Sanskrit, Mathematics, and more.">
     <meta name="robots" content="index, follow">
     <!-- Replace REPLACE_WITH_YOUR_VERIFICATION_CODE below with the exact
          content value Google Search Console gives you when you add this
@@ -262,12 +262,6 @@
         .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
         .thinking-body { display: none; padding-left: 4px; }
         .thinking-wrap.expanded .thinking-body { display: block; }
-        .reasoning-text {
-            font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
-            color: var(--text-muted, rgba(150,150,150,0.9)); opacity: 0.85;
-            max-height: 220px; overflow-y: auto; margin: 2px 0 8px; padding-right: 4px;
-        }
-        .reasoning-text:empty { display: none; }
 
         /* Workbench Preview/Files tab buttons */
         #workbench-tab-preview, #workbench-tab-files {
@@ -343,6 +337,20 @@
             #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
             #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
             #settings-modal .settings-sidebar { display: none; }
+
+            /* Mobile overflow safeguard: wide tables, long unbroken code/math
+               expressions, and the KaTeX display-math wrapper can be wider
+               than the phone's viewport — without this they silently
+               overflow the message bubble and force the whole page to
+               scroll sideways. Each of these now scrolls horizontally
+               WITHIN its own box instead. */
+            .katex-display, table, pre, code {
+                max-width: 100%;
+                overflow-x: auto;
+            }
+            [data-seg-type="text"], [data-seg-type="finaldoc"] {
+                max-width: 96% !important;
+            }
         }
 
         @supports (padding: max(0px)) {
@@ -372,9 +380,9 @@
 
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
-            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Astir AI"><span data-brand-logo-fallback>P</span></div>
+            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
             <div>
-                <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Astir AI</h1>
+                <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
                 <p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p>
             </div>
             <hr class="border-[var(--border)]">
@@ -394,7 +402,7 @@
         <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between safe-top relative">
             <div class="p-3 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between px-1">
-                    <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Astir AI</span>
+                    <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
                     <button onclick="closeMobileSidebar()" class="mobile-hamburger p-1.5 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md cursor-pointer">✕</button>
                 </div>
 
@@ -455,7 +463,7 @@
 
                 <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
                     <div class="m-auto text-center py-12 space-y-2">
-                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Astir AI"><span data-brand-logo-fallback>P</span></div>
+                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                         <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
@@ -476,7 +484,7 @@
                         </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
                             <button type="button" onclick="toggleModal('add-to-chat-sheet')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
-                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Astir AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
                             <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
                         </form>
                     </div>
@@ -758,13 +766,8 @@
         // analysis and can respond about it" into the chat, instead of the
         // old behavior where upload just showed a one-off alert() and never
         // reached the model at all.
-        function setFileAttachment(filename, analysisText, isImage, imageDataUrl) {
-            // imageDataUrl (optional): the REAL base64 "data:image/...;base64,..."
-            // bytes of an uploaded image, read client-side via FileReader. This is
-            // what lets the backend's vision model actually SEE the picture (sent
-            // as body.images[] on the next /chat-stream call) instead of it only
-            // ever getting the text metadata analysis extracted by /upload.
-            pendingFileAttachment = { filename, analysisText, isImage: !!isImage, imageDataUrl: imageDataUrl || null };
+        function setFileAttachment(filename, analysisText, isImage) {
+            pendingFileAttachment = { filename, analysisText, isImage: !!isImage };
             document.getElementById('file-attachment-chip-icon').innerText = isImage ? '🖼️' : '📎';
             document.getElementById('file-attachment-chip-label').innerText = filename;
             document.getElementById('file-attachment-chip').classList.add('active');
@@ -772,18 +775,6 @@
         function clearFileAttachment() {
             pendingFileAttachment = null;
             document.getElementById('file-attachment-chip').classList.remove('active');
-        }
-
-        // Reads a File/Blob as a base64 data URL (data:image/png;base64,...).
-        // Used to give the backend the real image bytes for vision, entirely
-        // client-side — no extra round trip to /upload needed for this part.
-        function readFileAsDataURL(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => reject(reader.error);
-                reader.readAsDataURL(file);
-            });
         }
 
         // Key used to persist the session in localStorage so a page refresh
@@ -1146,7 +1137,7 @@
             clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
-                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Astir AI"><span data-brand-logo-fallback>P</span></div>
+                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                     <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
@@ -1341,7 +1332,6 @@
             wrapper.appendChild(wrap);
             _activeThinkingWrap = wrap;
             _activeStepList = null; // force a fresh step-list inside the new wrap
-            _activeReasoningEl = null; // force a fresh reasoning-text container inside the new wrap
             return wrap;
         }
         function getStepList(wrapper) {
@@ -1352,33 +1342,6 @@
             wrap.querySelector('.thinking-body').appendChild(list);
             _activeStepList = list;
             return list;
-        }
-
-        // ── Live reasoning-text stream (real chain-of-thought from the
-        // backend's `thinking` SSE events — see _stream_openai_compatible's
-        // <think>...</think> splitting in app.py). Sits ABOVE the step-list
-        // inside the same collapsible Thinking wrapper, so real model
-        // reasoning and terminal/file activity share one panel. Additive:
-        // does not touch the existing step-list code above. ──
-        let _activeReasoningEl = null;
-        function getReasoningEl(wrapper) {
-            const wrap = getThinkingWrap(wrapper);
-            if (_activeReasoningEl && wrap.contains(_activeReasoningEl)) return _activeReasoningEl;
-            const el = document.createElement('div');
-            el.className = 'reasoning-text';
-            const body = wrap.querySelector('.thinking-body');
-            body.insertBefore(el, body.firstChild);
-            _activeReasoningEl = el;
-            return el;
-        }
-        function appendReasoningText(wrapper, text) {
-            const el = getReasoningEl(wrapper);
-            el.textContent += text;
-            el.scrollTop = el.scrollHeight;
-        }
-        function finishReasoning() {
-            if (_activeThinkingWrap) _activeThinkingWrap.classList.add('done');
-            _activeReasoningEl = null;
         }
         function _refreshThinkingSummary() {
             if (!_activeThinkingWrap || !_activeStepList) return;
@@ -1590,6 +1553,29 @@
                             node.querySelector('canvas').parentElement.style.height = '260px';
                             node._rendered = true;
                             new Chart(node.querySelector('canvas').getContext('2d'), cfg);
+                            // Real "save chart" action: exports the actual
+                            // rendered canvas as a PNG the person can attach
+                            // to a PDF themselves, or embed elsewhere — this
+                            // is the honest, actually-working version of
+                            // "save the chart to PDF" (a full server-side
+                            // chart-into-PDF pipeline would need a headless
+                            // browser/rendering service, which isn't wired
+                            // up here).
+                            if (!node.querySelector('.chart-dl-btn')) {
+                                const dlBtn = document.createElement('button');
+                                dlBtn.type = 'button';
+                                dlBtn.className = 'chart-dl-btn';
+                                dlBtn.innerText = '⭳ Save chart as image';
+                                dlBtn.style.cssText = 'margin-top:8px;font-size:11px;color:var(--accent);background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;';
+                                dlBtn.onclick = () => {
+                                    const canvas = node.querySelector('canvas');
+                                    const url = canvas.toDataURL('image/png');
+                                    const a = document.createElement('a');
+                                    a.href = url; a.download = 'chart.png';
+                                    document.body.appendChild(a); a.click(); a.remove();
+                                };
+                                node.appendChild(dlBtn);
+                            }
                         } catch (e) { /* invalid/partial JSON — leave canvas empty rather than crash */ }
                     }
                 } else if (seg.lang === 'finaldoc') {
@@ -1601,7 +1587,8 @@
                         wrapper.appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
-                    node.textContent = seg.content.trim();
+                    node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+                    renderMathIfAvailable(node);
                 } else if (['python', 'py', 'bash', 'sh', 'shell'].includes((seg.lang || '').toLowerCase())) {
                     // Plain executable block, not createfile:/editfile: — its
                     // execution is already represented by the "Ran python #N"
@@ -1927,15 +1914,6 @@
             // PDFs/docs/etc — see _analyze_image_via_terminal /upload route)
             // rides along in a fenced block so the model actually sees and
             // can respond about the real file, not just a filename.
-            // The real image bytes (if any) to send to the vision-capable
-            // model — captured here, before clearFileAttachment() wipes
-            // pendingFileAttachment, so /chat-stream's body.images[] actually
-            // gets populated (see app.py's chat_stream, which already expects
-            // this field but had nothing feeding it until now).
-            const imagesToSend = (pendingFileAttachment && pendingFileAttachment.isImage && pendingFileAttachment.imageDataUrl)
-                ? [pendingFileAttachment.imageDataUrl]
-                : [];
-
             if (pendingFileAttachment) {
                 const kindLabel = pendingFileAttachment.isImage ? 'Image analysis' : 'File contents';
                 message = (message ? message + "\n\n" : "") +
@@ -1980,7 +1958,7 @@
                 const response = await smartFetchRequest('/chat-stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                    body: JSON.stringify({ message: message, conversation_id: currentConversationId, images: imagesToSend })
+                    body: JSON.stringify({ message: message, conversation_id: currentConversationId })
                 });
 
                 if (!response.ok) {
@@ -2022,27 +2000,12 @@
                         try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
                         if (payload.type === 'metadata') {
                             currentConversationId = payload.conversation_id;
-                        } else if (payload.type === 'thinking') {
-                            // Real chain-of-thought streamed live from the reasoning
-                            // model (see app.py's _stream_openai_compatible <think>
-                            // splitting) — shown token-by-token in the collapsible
-                            // Thinking panel, same place terminal/file activity lands.
-                            if (!modelWrapper) {
-                                removeTypingIndicator();
-                                modelWrapper = mountModelOutputTargetShell();
-                            }
-                            setAgentActivity('Thinking...');
-                            appendReasoningText(modelWrapper, payload.text);
                         } else if (payload.type === 'token') {
                             if (!modelWrapper) {
                                 removeTypingIndicator();
                                 modelWrapper = mountModelOutputTargetShell();
+                                setAgentActivity('Writing response...');
                             }
-                            // The model has moved from reasoning into its real
-                            // answer — collapse/finalize the Thinking panel so it
-                            // reads as "done" while the visible reply streams in.
-                            if (_activeReasoningEl) finishReasoning();
-                            setAgentActivity('Writing response...');
                             fullText += payload.text;
                             // Throttle DOM rebuilding to once per animation frame so
                             // fast token streams stay smooth instead of lagging.
@@ -2093,7 +2056,6 @@
                                 updateAssistantMessageDOM(modelWrapper, fullText);
                                 appendAssistantCopyButton(modelWrapper, fullText);
                             }
-                            finishReasoning();
                             _activeStepList = null;
                             _activeThinkingWrap = null;
                             pushTerminalLog('Response complete.');
@@ -2238,16 +2200,11 @@
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
                     const lowerName = (res.filename || '').toLowerCase();
                     const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
-                    const imageDataUrl = isImage ? await readFileAsDataURL(uploadedFile).catch(() => null) : null;
                     if (res.preview && res.preview.trim()) {
                         // Arm the attachment so its real content/analysis
                         // rides along with the person's NEXT message,
                         // instead of the upload being a dead-end alert.
-                        setFileAttachment(res.filename, res.preview, isImage, imageDataUrl);
-                    } else if (isImage && imageDataUrl) {
-                        // Images always get attached even without a text preview —
-                        // the vision model works straight off the real pixels.
-                        setFileAttachment(res.filename, res.status || 'Image attached.', true, imageDataUrl);
+                        setFileAttachment(res.filename, res.preview, isImage);
                     } else {
                         alert(`${res.filename} — ${res.status}`);
                     }
@@ -2276,11 +2233,8 @@
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
                     const lowerName = (res.filename || '').toLowerCase();
                     const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
-                    const imageDataUrl = isImage ? await readFileAsDataURL(uploadedFile).catch(() => null) : null;
                     if (res.preview && res.preview.trim()) {
-                        setFileAttachment(res.filename, res.preview, isImage, imageDataUrl);
-                    } else if (isImage && imageDataUrl) {
-                        setFileAttachment(res.filename, res.status || 'Image attached.', true, imageDataUrl);
+                        setFileAttachment(res.filename, res.preview, isImage);
                     } else {
                         alert(`${res.filename} — ${res.status}`);
                     }
