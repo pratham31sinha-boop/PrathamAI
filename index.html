@@ -927,6 +927,267 @@
             transition: background .3s ease, border-color .3s ease;
         }
 
+        /* ════════════════════════════════════════════════════════════════
+           3D DEPTH & PREMIUM LAYER — perspective tilts, physical press,
+           floating drift, layered shadows, glass refraction.
+           Gated: only on perf-high / perf-med (NOT perf-low).
+           ════════════════════════════════════════════════════════════════ */
+
+        /* Refined layered shadow tokens (multiple stacked, softer) */
+        :root {
+            --shadow-layered-sm: 0 1px 2px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06), 0 4px 8px rgba(0,0,0,.04);
+            --shadow-layered-md: 0 2px 4px rgba(0,0,0,.10), 0 4px 8px rgba(0,0,0,.08), 0 8px 16px rgba(0,0,0,.06), 0 16px 32px rgba(0,0,0,.04);
+            --shadow-layered-lg: 0 4px 8px rgba(0,0,0,.12), 0 8px 16px rgba(0,0,0,.10), 0 16px 32px rgba(0,0,0,.08), 0 32px 64px rgba(0,0,0,.06);
+            --shadow-layered-accent: 0 2px 6px rgba(0,0,0,.10), 0 6px 16px var(--accent-soft, rgba(99,102,241,.12)), 0 16px 40px var(--accent-soft, rgba(99,102,241,.08));
+        }
+
+        /* ── 3D perspective context for children that tilt ── */
+        .perf-high #message-list,
+        .perf-med  #message-list,
+        .perf-high #file-creation-container,
+        .perf-med  #file-creation-container,
+        .perf-high #artifact-modal,
+        .perf-med  #artifact-modal {
+            perspective: 1400px;
+            perspective-origin: center top;
+        }
+
+        /* ── Message bubbles: 3D tilt entrance + hover ── */
+        .perf-high .msg-enter,
+        .perf-med  .msg-enter {
+            animation: msgEnter3D .5s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes msgEnter3D {
+            0%   { opacity: 0; transform: translateY(10px) rotateX(8deg) rotateY(-3deg) scale(.97); }
+            60%  { opacity: 1; transform: translateY(0) rotateX(-1deg) rotateY(1deg) scale(1.01); }
+            100% { opacity: 1; transform: translateY(0) rotateX(0) rotateY(0) scale(1); }
+        }
+        .perf-high .msg-bubble,
+        .perf-med  .msg-bubble {
+            transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease;
+            transform-style: preserve-3d;
+            box-shadow: var(--shadow-layered-sm);
+        }
+        .perf-high .msg-bubble:hover,
+        .perf-med  .msg-bubble:hover {
+            transform: rotateX(2deg) rotateY(-1.5deg) translateY(-1px);
+            box-shadow: var(--shadow-layered-md);
+        }
+
+        /* ── File-creation cards: 3D tilt entrance + hover lift ── */
+        .perf-high .file-creation-card,
+        .perf-med  .file-creation-card {
+            animation: cardEnter3D .45s cubic-bezier(.34,1.56,.64,1) both;
+            transform-style: preserve-3d;
+            box-shadow: var(--shadow-layered-md);
+            transition: transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .3s ease;
+        }
+        @keyframes cardEnter3D {
+            0%   { opacity: 0; transform: translateY(14px) rotateX(10deg) rotateY(-4deg) scale(.96); }
+            100% { opacity: 1; transform: translateY(0) rotateX(0) rotateY(0) scale(1); }
+        }
+        .perf-high .file-creation-card:hover,
+        .perf-med  .file-creation-card:hover {
+            transform: rotateX(3deg) rotateY(-2deg) translateY(-3px);
+            box-shadow: var(--shadow-layered-lg);
+        }
+        .perf-high .file-creation-card.done:hover,
+        .perf-med  .file-creation-card.done:hover {
+            transform: rotateX(2deg) rotateY(-1.5deg) translateY(-2px) scale(1.01);
+        }
+
+        /* ── Modals: 3D materialize with depth ── */
+        .perf-high #artifact-modal:not(.hidden),
+        .perf-med  #artifact-modal:not(.hidden) {
+            animation: modalMaterialize3D .4s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes modalMaterialize3D {
+            0%   { opacity: 0; transform: scale(.94) rotateX(6deg) translateY(16px); filter: blur(6px); }
+            100% { opacity: 1; transform: scale(1) rotateX(0) translateY(0); filter: blur(0); }
+        }
+        .perf-high #pdf-modal:not(.hidden) > .premium-card,
+        .perf-med  #pdf-modal:not(.hidden) > .premium-card,
+        .perf-high #add-to-chat-sheet:not(.hidden) > .premium-card,
+        .perf-med  #add-to-chat-sheet:not(.hidden) > .premium-card,
+        .perf-high #settings-modal:not(.hidden) > .premium-card,
+        .perf-med  #settings-modal:not(.hidden) > .premium-card,
+        .perf-high #education-book-modal:not(.hidden) > .premium-card,
+        .perf-med  #education-book-modal:not(.hidden) > .premium-card,
+        .perf-high #education-chapter-modal:not(.hidden) > .premium-card,
+        .perf-med  #education-chapter-modal:not(.hidden) > .premium-card,
+        .perf-high #vip-modal:not(.hidden) > .premium-card,
+        .perf-med  #vip-modal:not(.hidden) > .premium-card {
+            animation: cardMaterialize3D .45s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes cardMaterialize3D {
+            0%   { opacity: 0; transform: scale(.92) rotateX(8deg) translateY(14px); filter: blur(6px); }
+            100% { opacity: 1; transform: scale(1) rotateX(0) translateY(0); filter: blur(0); }
+        }
+
+        /* ── 3D physical press effect for send button + primary actions ── */
+        .perf-high #input-action-submit-btn,
+        .perf-med  #input-action-submit-btn,
+        .perf-high .primary-3d-btn,
+        .perf-med  .primary-3d-btn {
+            transform: translateZ(0);
+            box-shadow: 0 4px 10px rgba(0,0,0,.18), 0 2px 4px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.15);
+            transition: transform .12s cubic-bezier(.4,0,.2,1), box-shadow .12s ease;
+        }
+        .perf-high #input-action-submit-btn:active,
+        .perf-med  #input-action-submit-btn:active,
+        .perf-high .primary-3d-btn:active,
+        .perf-med  .primary-3d-btn:active {
+            transform: scale(.94) translateY(2px);
+            box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 rgba(0,0,0,0), inset 0 2px 4px rgba(0,0,0,.18);
+        }
+        /* Universal 3D press for all clickable elements */
+        .perf-high button:active,
+        .perf-med  button:active,
+        .perf-high [onclick]:active,
+        .perf-med  [onclick]:active,
+        .perf-high .nav-row:active,
+        .perf-med  .nav-row:active,
+        .perf-high .chat-row:active,
+        .perf-med  .chat-row:active,
+        .perf-high .education-option:active,
+        .perf-med  .education-option:active,
+        .perf-high .wb-file-row:active,
+        .perf-med  .wb-file-row:active,
+        .perf-high .menu-item:active,
+        .perf-med  .menu-item:active,
+        .perf-high .settings-tab:active,
+        .perf-med  .settings-tab:active,
+        .perf-high .theme-choice-btn:active,
+        .perf-med  .theme-choice-btn:active {
+            transform: scale(.96) translateY(1px);
+        }
+
+        /* ── Avatar frames: 3D rotation reveal on load ── */
+        .perf-high #user-avatar-frame,
+        .perf-med  #user-avatar-frame,
+        .perf-high #settings-avatar-frame,
+        .perf-med  #settings-avatar-frame {
+            animation: avatar3DReveal .6s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes avatar3DReveal {
+            0%   { opacity: 0; transform: rotateY(180deg) scale(.8); }
+            100% { opacity: 1; transform: rotateY(0) scale(1); }
+        }
+
+        /* ── File-type icons: 3D pop on render ── */
+        .perf-high .file-creation-card .file-type-icon,
+        .perf-med  .file-creation-card .file-type-icon {
+            animation: icon3DPop .5s cubic-bezier(.34,1.56,.64,1) both;
+            animation-delay: .1s;
+        }
+        @keyframes icon3DPop {
+            0%   { opacity: 0; transform: rotateX(-40deg) scale(.6); }
+            60%  { opacity: 1; transform: rotateX(10deg) scale(1.1); }
+            100% { opacity: 1; transform: rotateX(0) scale(1); }
+        }
+
+        /* ── Boot splash logo: 3D reveal ── */
+        .perf-high #boot-splash .boot-logo-reveal,
+        .perf-med  #boot-splash .boot-logo-reveal {
+            animation: bootLogo3D 1s cubic-bezier(.34,1.56,.64,1) both;
+        }
+        @keyframes bootLogo3D {
+            0%   { opacity: 0; transform: rotateY(90deg) rotateX(20deg) scale(.6); filter: blur(8px); }
+            60%  { opacity: 1; transform: rotateY(-8deg) rotateX(-4deg) scale(1.05); filter: blur(0); }
+            100% { opacity: 1; transform: rotateY(0) rotateX(0) scale(1); filter: blur(0); }
+        }
+
+        /* ── Ambient floating drift for key resting elements ── */
+        .perf-high #boot-splash .boot-logo-reveal,
+        .perf-med  #boot-splash .boot-logo-reveal {
+            animation: bootLogo3D 1s cubic-bezier(.34,1.56,.64,1) both, floatDrift 6s ease-in-out 1s infinite;
+        }
+        @keyframes floatDrift {
+            0%, 100% { transform: translateY(0) rotateX(0) rotateY(0); }
+            50%      { transform: translateY(-6px) rotateX(2deg) rotateY(-1deg); }
+        }
+        /* Empty-state hero icon floating */
+        .perf-high #message-list .empty-state-icon,
+        .perf-med  #message-list .empty-state-icon,
+        .perf-high .empty-state-hero,
+        .perf-med  .empty-state-hero {
+            animation: floatDrift 5s ease-in-out infinite;
+        }
+        /* Generated images: float once loaded */
+        .perf-high .igen-progress-wrap img,
+        .perf-med  .igen-progress-wrap img {
+            animation: imgRevealCrossfade .5s cubic-bezier(.4,0,.2,1) both, floatDrift 7s ease-in-out .5s infinite;
+        }
+
+        /* ── Refined layered shadows on glass panels ── */
+        .perf-high .glass,
+        .perf-med  .glass {
+            box-shadow: var(--shadow-layered-md);
+        }
+        .perf-high .premium-card,
+        .perf-med  .premium-card {
+            box-shadow: var(--shadow-layered-lg);
+        }
+
+        /* ── Glass refraction / depth: layered inset highlights ── */
+        .perf-high .glass,
+        .perf-med  .glass {
+            background-image:
+                linear-gradient(135deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 40%, rgba(255,255,255,0) 70%),
+                linear-gradient(315deg, rgba(255,255,255,.03) 0%, rgba(255,255,255,0) 50%);
+            background-color: var(--glass-bg, rgba(255,255,255,.04));
+        }
+        .perf-high .premium-card,
+        .perf-med  .premium-card {
+            background-image:
+                linear-gradient(135deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.03) 40%, rgba(255,255,255,0) 70%),
+                linear-gradient(315deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 50%);
+        }
+
+        /* ── Smooth color/accent transitions on theme toggle ── */
+        .perf-high, .perf-med {
+            transition: background .4s ease, color .4s ease;
+        }
+        .perf-high .glass,
+        .perf-med  .glass,
+        .perf-high .premium-card,
+        .perf-med  .premium-card {
+            transition: background .4s ease, border-color .4s ease, box-shadow .3s ease, transform .25s cubic-bezier(.34,1.56,.64,1);
+        }
+        .perf-high button,
+        .perf-med  button,
+        .perf-high [onclick],
+        .perf-med  [onclick],
+        .perf-high .nav-row,
+        .perf-med  .nav-row,
+        .perf-high .chat-row,
+        .perf-med  .chat-row {
+            transition: background .3s ease, color .3s ease, border-color .3s ease, box-shadow .25s ease, transform .2s cubic-bezier(.34,1.56,.64,1);
+        }
+        /* Accent glow ease */
+        .perf-high :focus-visible,
+        .perf-med  :focus-visible {
+            transition: box-shadow .3s ease, border-color .3s ease;
+        }
+
+        /* ── Low tier: flat fades only, no 3D / no floating ── */
+        .perf-low .msg-enter { animation: msgEnterFlat .3s ease both !important; }
+        @keyframes msgEnterFlat {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .perf-low .file-creation-card { animation: msgEnterFlat .3s ease both !important; }
+        .perf-low #artifact-modal:not(.hidden),
+        .perf-low #pdf-modal:not(.hidden) > .premium-card,
+        .perf-low #settings-modal:not(.hidden) > .premium-card,
+        .perf-low #vip-modal:not(.hidden) > .premium-card {
+            animation: cardMaterialize3D .3s ease both !important;
+            filter: none !important;
+        }
+        .perf-low #boot-splash .boot-logo-reveal { animation: msgEnterFlat .5s ease both !important; }
+        .perf-low #user-avatar-frame,
+        .perf-low #settings-avatar-frame { animation: msgEnterFlat .4s ease both !important; }
+
         /* ── Reduced motion: disable ALL additive animation ── */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
@@ -2996,6 +3257,8 @@
             return 'mid';
         }
         const PERF_TIER = detectPerfTier();
+        // Tag <html> with perf tier so CSS can gate 3D effects (low tier → flat fades)
+        document.documentElement.classList.add('perf-' + PERF_TIER);
 
         // ---- Cursor glow trail (additive layer over existing #cursor-dot/#cursor-ring) ----
         (function initCursorGlow() {
