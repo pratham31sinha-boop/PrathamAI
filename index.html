@@ -1374,18 +1374,12 @@
             try {
                 renderMathInElement(node, {
                     delimiters: [
-                        { left: '$', right: '$', display: true },
+                        { left: '$$', right: '$$', display: true },
                         { left: '\\[', right: '\\]', display: true },
                         { left: '\\(', right: '\\)', display: false },
-                        { left: '
-</body>
-</html>
-, right: '
-</body>
-</html>
-, display: false }
-                    ],
-                    throwOnError: false
+                        { left: '$', right: '$', display: false }
+                     ],
+                     throwOnError: false
                 });
             } catch (e) {}
         }
