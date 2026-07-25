@@ -1,5 +1,5 @@
 """
-Astir AI - Full Production Backend Architecture
+Pratham AI - Full Production Backend Architecture
 =================================================
 Corrected + optimized version.
 
@@ -27,7 +27,7 @@ Fixes included in this pass:
 
 Second pass — new features (nothing above was removed):
   8. General-purpose assistant: the system prompt is no longer coding-only;
-     Astir AI now answers any topic like a normal chatbot, while still
+     Pratham AI now answers any topic like a normal chatbot, while still
      being great at code when asked.
   9. Image generation via Pollinations AI (no API key required): a message
      like "generate an image of a red fox in snow" or "/image a red fox in
@@ -80,6 +80,7 @@ import textwrap
 import mimetypes
 import difflib
 import shlex
+import zlib
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -306,7 +307,7 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
     encoded_binary_bytes = base64.b64encode(compiled_body_string.encode('utf-8')).decode('utf-8')
 
     mutation_packet = {
-        "message": f"Astir AI sync: {target_file_path}",
+        "message": f"Pratham AI sync: {target_file_path}",
         "content": encoded_binary_bytes
     }
     if sha_reference_token:
@@ -543,6 +544,230 @@ def _markdownish_lines_for_pdf(text: str, max_width_chars: int):
             rendered.append(("F1", 0, w))
     return rendered or [("F1", 0, "")]
 
+_DIAGRAM_MARKER_RE = re.compile(r"\[DIAGRAM:\s*([^\]\n]+?)\s*\]")
+
+def _extract_diagram_files(assistant_text: str) -> dict:
+    """Finds every ```createfile:<name>.html block in the response whose
+    content actually contains an <svg> element, and returns {filename: svg_markup}.
+    These are the diagrams the model draws for geometry/construction questions
+    (see the GEOMETRY/DIAGRAMS system prompt rule) — this lets the PDF
+    exporter pull the real diagram back out and embed it as an image,
+    instead of the PDF only ever containing text."""
+    diagrams = {}
+    for filename, content in _extract_createfile_blocks(assistant_text):
+        if "<svg" in content.lower():
+            diagrams[filename] = content
+    return diagrams
+
+def _rasterize_svg_to_rgb(svg_text: str, target_width_px: int = 900):
+    """Renders an SVG string to a flat RGB pixel buffer using PyMuPDF (the
+    same optional dependency already used for PDF text extraction — see
+    _FITZ_SUPPORTED). Returns (width, height, raw_rgb_bytes) or None if
+    PyMuPDF isn't installed or the SVG fails to parse. No PIL/Pillow needed:
+    fitz.Pixmap already exposes raw, uncompressed RGB samples directly."""
+    if not _FITZ_SUPPORTED:
+        return None
+    try:
+        # If the SVG doesn't declare its own viewBox/size, MuPDF may need a
+        # hint — most model-generated diagrams already include width/height,
+        # so this is just a safety net wrapper, not a viewBox rewrite.
+        doc = _fitz.open(stream=svg_text.encode("utf-8"), filetype="svg")
+        page = doc[0]
+        zoom = target_width_px / max(page.rect.width, 1)
+        matrix = _fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=matrix, alpha=False)
+        return pix.width, pix.height, bytes(pix.samples)
+    except Exception as exc:
+        print(f"[PDF][DIAGRAM RASTERIZE FAULT] {exc}")
+        return None
+
+def _build_pdf_content_items(text: str, diagram_files: dict, max_width_chars: int):
+    """Splits `text` on [DIAGRAM: filename] markers (the convention the
+    system prompt tells the model to use for construction/geometry
+    questions) into an ordered list of items:
+      {"type": "line", "font": "F1"/"F2", "size_delta": int, "text": str}
+      {"type": "image", "width": int, "height": int, "rgb": bytes}
+    laid out in the same order they appear in the model's answer — so a
+    circumcircle diagram for question 38 lands right after question 38's
+    text, not dumped at the end of the document. A marker whose filename
+    doesn't match any real diagram the model created (typo, or the diagram
+    generation failed) is simply skipped — the surrounding text still gets
+    exported, just without that one image, rather than crashing the whole
+    export."""
+    items = []
+    last_end = 0
+    for m in _DIAGRAM_MARKER_RE.finditer(text):
+        chunk = text[last_end:m.start()]
+        if chunk.strip():
+            items.extend(_markdownish_lines_for_pdf(chunk, max_width_chars))
+        filename = m.group(1).strip()
+        svg_markup = diagram_files.get(filename)
+        if svg_markup:
+            rasterized = _rasterize_svg_to_rgb(svg_markup)
+            if rasterized:
+                width, height, rgb = rasterized
+                items.append({"type": "image", "width": width, "height": height, "rgb": rgb})
+            else:
+                items.append(("F1", 0, f"[Diagram '{filename}' could not be rendered for this PDF export.]"))
+        else:
+            print(f"[PDF][DIAGRAM] marker referenced '{filename}' but no matching createfile diagram was found in this response.")
+        last_end = m.end()
+    tail = text[last_end:]
+    if tail.strip():
+        items.extend(_markdownish_lines_for_pdf(tail, max_width_chars))
+    return items or [("F1", 0, "")]
+
+def _write_pdf_with_diagrams(text: str, diagram_files: dict) -> bytes:
+    """Same PDF writer as _write_minimal_pdf (stdlib-only, hand-written PDF
+    object table), extended to also embed real raster images at
+    [DIAGRAM: filename] marker points — this is what actually gets a
+    circumcircle/construction diagram INTO the downloaded PDF, not just
+    shown in the chat interface. Falls back to plain _write_minimal_pdf
+    automatically (via the caller) when there's nothing to embed."""
+    base_font_size = 11
+    leading = 15
+    margin_left = 50
+    margin_right = 50
+    page_width, page_height = 612, 792   # US Letter, points
+    margin_top_y = page_height - 50
+    margin_bottom_y = 50
+    max_width_chars = 92
+    content_width_pts = page_width - margin_left - margin_right
+    max_image_height_pts = 380   # cap so one huge diagram can't eat >1 page
+
+    content_items = _build_pdf_content_items(text, diagram_files, max_width_chars)
+
+    objects = {}
+    next_obj_num = [1]
+    def alloc():
+        n = next_obj_num[0]; next_obj_num[0] += 1; return n
+
+    catalog_num = alloc()
+    pages_num = alloc()
+    font_regular_num = alloc()
+    font_bold_num = alloc()
+
+    # Lay out items into pages up front (need to know per-page image usage
+    # before writing Resources), tracking a running y cursor per page.
+    pages = []  # each: {"lines": [...], "images": [(name, obj_num, x, y, w, h)]}
+    cur_page = {"lines": [], "images": []}
+    cur_y = margin_top_y
+    image_counter = 0
+
+    def start_new_page():
+        nonlocal cur_page, cur_y
+        pages.append(cur_page)
+        cur_page = {"lines": [], "images": []}
+        cur_y = margin_top_y
+
+    for item in content_items:
+        if isinstance(item, dict) and item.get("type") == "image":
+            nat_w, nat_h = item["width"], item["height"]
+            disp_w = content_width_pts
+            disp_h = disp_w * (nat_h / max(nat_w, 1))
+            if disp_h > max_image_height_pts:
+                disp_h = max_image_height_pts
+                disp_w = disp_h * (nat_w / max(nat_h, 1))
+            if (cur_y - disp_h) < margin_bottom_y:
+                start_new_page()
+            image_counter += 1
+            img_name = f"Im{image_counter}"
+            img_obj_num = alloc()
+            objects[img_obj_num] = {"__image__": True, "width": nat_w, "height": nat_h, "rgb": item["rgb"]}
+            place_y = cur_y - disp_h
+            cur_page["images"].append((img_name, img_obj_num, margin_left, place_y, disp_w, disp_h))
+            cur_y -= (disp_h + 10)  # small gap after the diagram
+        else:
+            font_key, size_delta, line_text = item
+            if (cur_y - leading) < margin_bottom_y:
+                start_new_page()
+            cur_page["lines"].append((font_key, size_delta, line_text))
+            cur_y -= leading
+    pages.append(cur_page)
+    pages = [p for p in pages if p["lines"] or p["images"]] or [{"lines": [("F1", 0, "")], "images": []}]
+
+    page_nums, content_nums = [], []
+    for _ in pages:
+        page_nums.append(alloc())
+        content_nums.append(alloc())
+
+    content_bodies = []
+    for page in pages:
+        stream_parts = []
+        if page["lines"]:
+            stream_parts.append("BT")
+            stream_parts.append(f"{leading} TL")
+            stream_parts.append(f"{margin_left} {margin_top_y} Td")
+            first = True
+            for font_key, size_delta, line in page["lines"]:
+                size = base_font_size + size_delta
+                font_ref = "/F2" if font_key == "F2" else "/F1"
+                stream_parts.append(f"{font_ref} {size} Tf")
+                if not first:
+                    stream_parts.append("T*")
+                escaped = _escape_pdf_literal_text(line)
+                stream_parts.append(f"({escaped}) Tj")
+                first = False
+            stream_parts.append("ET")
+        for img_name, _obj_num, x, y, w, h in page["images"]:
+            stream_parts.append(f"q {w:.2f} 0 0 {h:.2f} {x:.2f} {y:.2f} cm /{img_name} Do Q")
+        content_bodies.append("\n".join(stream_parts))
+
+    objects[catalog_num] = f"<< /Type /Catalog /Pages {pages_num} 0 R >>"
+    kids_refs = " ".join(f"{n} 0 R" for n in page_nums)
+    objects[pages_num] = f"<< /Type /Pages /Kids [{kids_refs}] /Count {len(page_nums)} >>"
+    objects[font_regular_num] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    objects[font_bold_num] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
+
+    for i, page_num in enumerate(page_nums):
+        content_num = content_nums[i]
+        page = pages[i]
+        xobject_entries = " ".join(f"/{name} {obj_num} 0 R" for name, obj_num, *_ in page["images"])
+        resources = f"/Font << /F1 {font_regular_num} 0 R /F2 {font_bold_num} 0 R >>"
+        if xobject_entries:
+            resources += f" /XObject << {xobject_entries} >>"
+        objects[page_num] = (
+            f"<< /Type /Page /Parent {pages_num} 0 R /Resources << {resources} >> "
+            f"/MediaBox [0 0 {page_width} {page_height}] /Contents {content_num} 0 R >>"
+        )
+        body = content_bodies[i]
+        objects[content_num] = f"<< /Length {len(body.encode('latin-1', 'replace'))} >>\nstream\n{body}\nendstream"
+
+    buf = io.BytesIO()
+    buf.write(b"%PDF-1.4\n")
+    offsets = {}
+    for num in sorted(objects.keys()):
+        offsets[num] = buf.tell()
+        obj = objects[num]
+        if isinstance(obj, dict) and obj.get("__image__"):
+            raw_rgb = obj["rgb"]
+            compressed = zlib.compress(raw_rgb, level=6)
+            buf.write(f"{num} 0 obj\n".encode('latin-1'))
+            buf.write((
+                f"<< /Type /XObject /Subtype /Image /Width {obj['width']} /Height {obj['height']} "
+                f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {len(compressed)} >>\n"
+            ).encode('latin-1'))
+            buf.write(b"stream\n")
+            buf.write(compressed)
+            buf.write(b"\nendstream\nendobj\n")
+        else:
+            buf.write(f"{num} 0 obj\n".encode('latin-1'))
+            buf.write(obj.encode('latin-1', 'replace'))
+            buf.write(b"\nendobj\n")
+
+    xref_offset = buf.tell()
+    total_objs = next_obj_num[0]
+    buf.write(f"xref\n0 {total_objs}\n".encode('latin-1'))
+    buf.write(b"0000000000 65535 f \n")
+    for num in range(1, total_objs):
+        buf.write(f"{offsets.get(num, 0):010d} 00000 n \n".encode('latin-1'))
+    buf.write(b"trailer\n")
+    buf.write(f"<< /Size {total_objs} /Root {catalog_num} 0 R >>\n".encode('latin-1'))
+    buf.write(b"startxref\n")
+    buf.write(f"{xref_offset}\n".encode('latin-1'))
+    buf.write(b"%%EOF")
+    return buf.getvalue()
+
 def _write_minimal_pdf(text: str) -> bytes:
     """
     Builds a real, valid multi-page PDF directly from scratch using nothing
@@ -640,10 +865,25 @@ def _write_minimal_pdf(text: str) -> bytes:
 def _build_pdf_from_response(assistant_text: str):
     """Returns (bytes, filename, mimetype). Always produces a real .pdf via
     the dependency-free writer above, using the clean extracted deliverable
-    content (not the full chat reply with "I'd be happy to..." framing)."""
+    content (not the full chat reply with "I'd be happy to..." framing).
+
+    If the response contains [DIAGRAM: filename] markers AND a matching
+    ```createfile:filename.html SVG diagram (see the system prompt's
+    GEOMETRY/DIAGRAMS rule — this is how construction/circumcircle-style
+    questions get their figure drawn), the diagram-aware writer embeds the
+    real rasterized diagram into the PDF at that exact point. Falls back to
+    the plain text-only writer when there's nothing to embed, or if
+    PyMuPDF (needed to rasterize the SVG) isn't installed."""
     try:
         clean_content = _extract_export_content(assistant_text)
-        pdf_bytes = _write_minimal_pdf(clean_content)
+        diagram_files = _extract_diagram_files(assistant_text) if _DIAGRAM_MARKER_RE.search(clean_content) else {}
+        if diagram_files and _FITZ_SUPPORTED:
+            pdf_bytes = _write_pdf_with_diagrams(clean_content, diagram_files)
+        else:
+            if _DIAGRAM_MARKER_RE.search(clean_content) and not _FITZ_SUPPORTED:
+                print("[PDF][DIAGRAM] response references diagram markers but PyMuPDF isn't installed "
+                      "on the server — add 'PyMuPDF' to requirements.txt to enable diagram embedding in PDFs.")
+            pdf_bytes = _write_minimal_pdf(clean_content)
         return pdf_bytes, "generated.pdf", "application/pdf"
     except Exception as exc:
         print(f"[PDF][BUILD FAULT] {exc}")
@@ -1671,11 +1911,11 @@ def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
 SYSTEM_PROMPT = (
-    "You are Astir AI, a general-purpose assistant that can help with anything: everyday "
+    "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
     "questions, writing, learning, advice, and analysis, not just coding. When a task does "
     "involve code or file output, format it cleanly in fenced code blocks with explicit "
     "language tags like ```html, ```javascript, or ```text so it can be rendered live.\n\n"
-    "Astir AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
+    "Pratham AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
     "Aditi Aishwarya. Only mention this if someone actually asks who made you / who you were "
     "built by — don't bring it up unprompted.\n\n"
     "Default to SHORT replies for non-coding questions: a few tight sentences, dense with the actual "
@@ -1703,6 +1943,23 @@ SYSTEM_PROMPT = (
     "successfully done before for circumcircle constructions) — draw the actual shapes, lines, and "
     "labels directly as SVG elements (<circle>, <line>, <polygon>, <text>) with real computed "
     "coordinates, not a Chart.js scatter plot trying to fake a picture.\n\n"
+    "This applies to TEXTBOOK-STYLE geometry questions too, not just explicit 'draw me a diagram' "
+    "requests: if a question/answer references a figure the student needs to see to follow the proof "
+    "(e.g. 'use the following figure to justify that opposite angles of a cyclic quadrilateral sum to "
+    "180°', or any question mentioning a circumcircle/incircle/cyclic quadrilateral/inscribed angle "
+    "theorem), generate the actual labeled SVG diagram alongside the written proof via "
+    "```createfile:<name>.html — don't just describe the figure in prose and assume the student can "
+    "picture it themselves.\n\n"
+    "DIAGRAMS INSIDE PDF/FILE EXPORTS: if the person asks for a PDF (or any file export) of an answer "
+    "that includes one or more geometry/construction diagrams — e.g. 'give the solutions to all 40 "
+    "questions as a PDF' where question 38 needs a circumcircle construction — you MUST place a plain "
+    "marker line exactly where that diagram belongs INSIDE the ```finaldoc block: "
+    "[DIAGRAM: filename.html] (matching the exact filename you used in a separate ```createfile: block "
+    "for that diagram's SVG). The backend replaces this marker with the real rendered diagram image at "
+    "that exact position in the exported PDF — so the PDF and the chat view both show the same diagram "
+    "in the same place, not just the chat. Do not skip the diagram in the PDF just because it's already "
+    "visible in the chat interface; both must have it. Only use this marker for a diagram you actually "
+    "created via ```createfile: in the same reply — never write the marker without the matching file.\n\n"
     "You also have a REAL background terminal, not a simulated one, and YOU run it directly — there "
     "is no separate tool, no external terminal, no permission step. The moment you write a ```python, "
     "```py, ```bash, ```sh, or ```shell fenced block, the backend executes it for real on the server "
@@ -1724,13 +1981,11 @@ SYSTEM_PROMPT = (
     "createfile a throwaway wrapper around it first. Only use ```createfile: when the person "
     "actually needs the file itself as a deliverable, not as internal scaffolding.\n\n"
     "EDIT IN PLACE, NEVER DUPLICATE: if a file the person is working on already exists (you created "
-    "it earlier in this conversation, OR they uploaded/pasted it — the backend keeps that uploaded "
-    "file's real content and applies your edits to it), and they ask you to change, fix, add to, or "
-    "continue it, you MUST use ```editfile:<filename> to modify that exact file by its exact name — "
+    "it earlier in this conversation, or they uploaded/referenced it), and they ask you to change, "
+    "fix, add to, or continue it, you MUST use ```editfile:<filename> to modify that exact file — "
     "never create a second file with a similar name (app2.py, app_new.py, fixed.py, app_final.py, "
-    "counter_v2.py, etc.) as a workaround, and never re-emit the whole file with ```createfile: just "
-    "to change a few lines. Use the uploaded file's EXACT filename in the editfile header so the "
-    "backend matches it. There should only ever be ONE copy of a file the person is iterating on.\n\n"
+    "counter_v2.py, etc.) as a workaround. There should only ever be ONE copy of a file the person "
+    "is iterating on.\n\n"
     "ASK BEFORE ACTING ON AMBIGUOUS REQUESTS: if someone asks for something that could reasonably "
     "mean several different things (e.g. \"zip it\" without saying what \"it\" is, or a vague build "
     "request with no real spec), ask one short clarifying question BEFORE running any terminal "
@@ -1804,13 +2059,10 @@ SYSTEM_PROMPT = (
     "describe what you'll generate in one short sentence — the backend detects the request and "
     "actually renders and returns a real image automatically; you never need to say you can't make "
     "images.\n\n"
-    "When someone uploads an image, you can now ACTUALLY SEE it — the image is sent to your vision "
-    "model, so you genuinely perceive its visual content (objects, people, text/handwriting in the "
-    "image, charts, screenshots of code or errors, scenes, colors, layout). Describe and analyze what "
-    "is really in the picture; answer questions about it directly, read any text/code shown in it, and "
-    "help with whatever it depicts. You may ALSO receive real technical metadata about the file (PNG "
-    "chunks, EXIF, dimensions, etc.) alongside it — use that too when relevant. Never say you can't "
-    "see images or only have metadata; you can see them.\n\n"
+    "When someone uploads an image, you'll receive real, full technical information about it — "
+    "actually extracted by running a script against the file in your background terminal (every PNG "
+    "chunk, EXIF data, color info, dimensions, etc., not just a basic size/dimension guess). Use that "
+    "real data confidently when reasoning about the file.\n\n"
     "TONE CONSISTENCY: keep the same voice across an entire conversation and across turns — clear, "
     "direct, and helpful, without switching registers (don't go from casual to overly formal or back) "
     "and without restating who built you or what tools you have unless it's actually relevant to what "
@@ -1902,138 +2154,21 @@ def _pollinations_image_url(prompt_text: str) -> str:
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
-# ── MODEL SELECTION: reasoning (real chain-of-thought), vision, and the
-# original fast text model ─────────────────────────────────────────────────
-# Two upgrades hang off this: (1) the app now streams the model's *actual*
-# reasoning into a live "Thinking" panel (see the `thinking` SSE events
-# emitted in _stream_openai_compatible), and (2) it can genuinely SEE an
-# uploaded image by routing that turn to a vision-capable model instead of
-# only reading byte-level metadata. Every model id is overridable via an env
-# var so they can be upgraded without a code change; the defaults are
-# current, widely-available choices on each provider. Set ASTIR_REASONING=0
-# to fall back to the original fast, non-thinking behaviour globally.
-_REASONING_ENABLED = os.environ.get("ASTIR_REASONING", "1").strip().lower() not in ("0", "false", "off", "no")
-
-_GROQ_TEXT_MODEL       = os.environ.get("GROQ_MODEL",            "llama-3.3-70b-versatile")
-_GROQ_REASONING_MODEL  = os.environ.get("GROQ_REASONING_MODEL",  "deepseek-r1-distill-llama-70b")
-_GROQ_VISION_MODEL     = os.environ.get("GROQ_VISION_MODEL",     "meta-llama/llama-4-scout-17b-16e-instruct")
-
-_OPENROUTER_TEXT_MODEL      = os.environ.get("OPENROUTER_MODEL",           "meta-llama/llama-3.3-70b-instruct")
-_OPENROUTER_REASONING_MODEL = os.environ.get("OPENROUTER_REASONING_MODEL", "deepseek/deepseek-r1-distill-llama-70b")
-_OPENROUTER_VISION_MODEL    = os.environ.get("OPENROUTER_VISION_MODEL",    "meta-llama/llama-4-scout")
-
-_CEREBRAS_TEXT_MODEL      = os.environ.get("CEREBRAS_MODEL",           "llama3.3-70b")
-_CEREBRAS_REASONING_MODEL = os.environ.get("CEREBRAS_REASONING_MODEL", "deepseek-r1-distill-llama-70b")
-
-_MISTRAL_TEXT_MODEL   = os.environ.get("MISTRAL_MODEL",        "mistral-large-latest")
-_MISTRAL_VISION_MODEL = os.environ.get("MISTRAL_VISION_MODEL", "pixtral-large-latest")
-
-_PROVIDER_MODEL_TABLE = {
-    "groq":       {"text": _GROQ_TEXT_MODEL,       "reasoning": _GROQ_REASONING_MODEL,       "vision": _GROQ_VISION_MODEL},
-    "openrouter": {"text": _OPENROUTER_TEXT_MODEL, "reasoning": _OPENROUTER_REASONING_MODEL, "vision": _OPENROUTER_VISION_MODEL},
-    "cerebras":   {"text": _CEREBRAS_TEXT_MODEL,   "reasoning": _CEREBRAS_REASONING_MODEL,   "vision": _CEREBRAS_TEXT_MODEL},
-    "mistral":    {"text": _MISTRAL_TEXT_MODEL,    "reasoning": _MISTRAL_TEXT_MODEL,         "vision": _MISTRAL_VISION_MODEL},
-}
-
-def _pick_model(provider: str, mode: str):
-    """Returns (model_id, extra_body) for a provider given the desired mode
-    ('reasoning' | 'vision' | 'text'). extra_body carries provider-specific
-    request tweaks. Any unknown combination falls back to that provider's
-    plain text model, so a retired/unavailable specialty model never hard-
-    breaks the chain — it just streams a normal reply instead."""
-    table = _PROVIDER_MODEL_TABLE.get(provider, {})
-    model = table.get(mode) or table.get("text")
-    extra_body = {}
-    # Groq surfaces a reasoning model's chain-of-thought as its own `reasoning`
-    # delta field when asked with reasoning_format="parsed" — cleaner than
-    # scraping <think> tags out of the content stream (which we still handle as
-    # a fallback for providers that inline them).
-    if mode == "reasoning" and provider == "groq":
-        extra_body["reasoning_format"] = "parsed"
-    return model, extra_body
-
-
-def _partial_tag_suffix_len(data: str, tag: str) -> int:
-    """Length of the suffix of `data` that is a proper (non-full) prefix of
-    `tag` — the piece we must hold back because a tag split across streamed
-    chunks (e.g. '<thi') might complete as '<think>' in the next chunk."""
-    for size in range(min(len(tag) - 1, len(data)), 0, -1):
-        if data[-size:] == tag[:size]:
-            return size
-    return 0
-
-
-def _make_think_splitter():
-    """Returns feed(text) -> [('thinking'|'answer', chunk), ...], statefully
-    separating inline <think>...</think> reasoning from the real answer across
-    streamed chunks (correctly handling tags that arrive split across chunk
-    boundaries). Used so a model that inlines its chain-of-thought still gets
-    routed to the live Thinking panel instead of leaking into the answer."""
-    state = {"in_think": False, "carry": ""}
-    OPEN, CLOSE = "<think>", "</think>"
-
-    def feed(text):
-        out = []
-        data = state["carry"] + text
-        state["carry"] = ""
-        while data:
-            if state["in_think"]:
-                idx = data.find(CLOSE)
-                if idx == -1:
-                    hold = _partial_tag_suffix_len(data, CLOSE)
-                    emit = data[:len(data) - hold]
-                    if emit:
-                        out.append(("thinking", emit))
-                    state["carry"] = data[len(data) - hold:]
-                    break
-                if idx:
-                    out.append(("thinking", data[:idx]))
-                data = data[idx + len(CLOSE):]
-                state["in_think"] = False
-            else:
-                idx = data.find(OPEN)
-                if idx == -1:
-                    hold = _partial_tag_suffix_len(data, OPEN)
-                    emit = data[:len(data) - hold]
-                    if emit:
-                        out.append(("answer", emit))
-                    state["carry"] = data[len(data) - hold:]
-                    break
-                if idx:
-                    out.append(("answer", data[:idx]))
-                data = data[idx + len(OPEN):]
-                state["in_think"] = True
-        return out
-
-    return feed
-
-
-def _stream_openai_compatible(url, api_key, model, messages, state=None, extra_body=None):
+def _stream_openai_compatible(url, api_key, model, messages, state=None):
     """`state`, if provided, is a plain dict this function writes
     state['finish_reason'] into once the stream's final chunk reports one
     (e.g. 'length' when the provider cut the response short because it hit
     the token limit, vs 'stop' for a normal completion). Callers use this to
     detect truncation and automatically continue generation — see
     _do_stream's continuation loop below, which is what fixes "it stops
-    HTML/file generation in the middle."
-
-    Reasoning is surfaced separately: any `reasoning` / `reasoning_content`
-    delta field (reasoning models via reasoning_format=parsed) and any inline
-    <think>...</think> spans are streamed as their own `thinking` SSE events,
-    so the frontend can render a live Thinking panel WITHOUT that text
-    polluting the actual answer, generated files, or terminal input.
-    `extra_body`, if given, is merged into the request JSON (e.g. Groq's
-    reasoning_format)."""
-    request_body = {
+    HTML/file generation in the middle."""
+    body = json.dumps({
         "model": model,
         "messages": messages,
         "stream": True,
         "max_tokens": 32768,
         "temperature": 0.5,
-    }
-    if extra_body:
-        request_body.update(extra_body)
-    body = json.dumps(request_body).encode()
+    }).encode()
 
     req = urllib.request.Request(
         url,
@@ -2044,11 +2179,9 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None, extra_b
         },
         method="POST"
     )
-    # Slightly longer than the old 25s so a reasoning model's first-token
-    # latency (it may think before answering) doesn't look like a dead
-    # provider, while still failing over reasonably fast on a real outage.
-    split_think = _make_think_splitter()
-    with urllib.request.urlopen(req, timeout=40) as resp:
+    # Shorter connect/read timeout so a dead provider fails over faster
+    # instead of making the user wait the full minute before a fallback.
+    with urllib.request.urlopen(req, timeout=25) as resp:
         for raw_line in resp:
             line = raw_line.decode("utf-8", errors="replace").strip()
             if not line.startswith("data: "):
@@ -2059,49 +2192,14 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None, extra_b
             try:
                 payload = json.loads(payload_str)
                 choice = payload["choices"][0]
-                delta = choice.get("delta", {})
-                # 1) Native reasoning field (reasoning models / reasoning_format=parsed).
-                reasoning_piece = delta.get("reasoning") or delta.get("reasoning_content")
-                if reasoning_piece:
-                    yield _sse({"type": "thinking", "text": reasoning_piece})
-                # 2) Visible content — which may itself contain inline <think>…</think>.
-                token = delta.get("content", "")
+                token = choice.get("delta", {}).get("content", "")
                 if token:
-                    for kind, text_piece in split_think(token):
-                        if not text_piece:
-                            continue
-                        yield _sse({"type": "thinking" if kind == "thinking" else "token", "text": text_piece})
+                    yield _sse({"type": "token", "text": token})
                 finish_reason = choice.get("finish_reason")
                 if finish_reason and state is not None:
                     state["finish_reason"] = finish_reason
             except Exception:
                 continue
-
-
-def _stream_single_provider(url, api_key, primary_model, extra_body, fallback_model, messages, state):
-    """Streams from one OpenAI-compatible endpoint, transparently retrying
-    with `fallback_model` (plain text) if the primary specialty model
-    (reasoning/vision) is rejected BEFORE any token is produced — e.g. the
-    model id was retired or this key lacks access to it. Once tokens have
-    already streamed we never retry (that would duplicate the reply); we
-    re-raise so the caller's own failover can decide what to do."""
-    attempts = [(primary_model, extra_body)]
-    if fallback_model and fallback_model != primary_model:
-        attempts.append((fallback_model, {}))
-    for attempt_model, attempt_extra in attempts:
-        produced = False
-        try:
-            for chunk in _stream_openai_compatible(
-                url, api_key, attempt_model, messages, state=state, extra_body=attempt_extra
-            ):
-                produced = True
-                yield chunk
-            return
-        except Exception:
-            # Only try the plain-text fallback if nothing streamed yet AND this
-            # wasn't already the last attempt; otherwise propagate.
-            if produced or (attempt_model, attempt_extra) == attempts[-1]:
-                raise
 
 def _generate_ai_chat_title(message: str) -> str:
     """Uses the model itself to write a short, clean chat title (like
@@ -2142,7 +2240,7 @@ def _generate_ai_chat_title(message: str) -> str:
             continue
     return message[:60]
 
-def _stream_groq(messages, state=None, mode="text"):
+def _stream_groq(messages, state=None):
     # Multi-key rotation: try every configured Groq key in turn (each has
     # its own independent cooldown name "groq_0", "groq_1", ...), so hitting
     # one key's rate limit doesn't fail the whole Groq provider over to
@@ -2153,7 +2251,6 @@ def _stream_groq(messages, state=None, mode="text"):
     if not keys:
         raise RuntimeError("Groq unavailable (no API keys configured).")
 
-    model, extra_body = _pick_model("groq", mode)
     last_error = None
     any_key_tried = False
     for idx, key in enumerate(keys):
@@ -2162,13 +2259,9 @@ def _stream_groq(messages, state=None, mode="text"):
             continue
         any_key_tried = True
         try:
-            # Reasoning/vision model first, transparently falling back to the
-            # plain text model on the SAME key if that specialty model isn't
-            # available — so "show thinking" / "read images" degrade to a
-            # normal reply instead of failing the whole provider.
-            yield from _stream_single_provider(
+            yield from _stream_openai_compatible(
                 "https://api.groq.com/openai/v1/chat/completions",
-                key, model, extra_body, _GROQ_TEXT_MODEL, messages, state
+                key, "llama-3.3-70b-versatile", messages, state=state
             )
             return
         except Exception as exc:
@@ -2180,31 +2273,28 @@ def _stream_groq(messages, state=None, mode="text"):
         raise RuntimeError("All Groq keys are currently cooling down.")
     raise RuntimeError(f"All Groq keys failed. Last error: {last_error}")
 
-def _stream_openrouter(messages, state=None, mode="text"):
+def _stream_openrouter(messages, state=None):
     if not OPENROUTER_API_KEY or _is_cooling("openrouter"):
         raise RuntimeError("OpenRouter unavailable or cooling.")
-    model, extra_body = _pick_model("openrouter", mode)
-    yield from _stream_single_provider(
+    yield from _stream_openai_compatible(
         "https://openrouter.ai/api/v1/chat/completions",
-        OPENROUTER_API_KEY, model, extra_body, _OPENROUTER_TEXT_MODEL, messages, state
+        OPENROUTER_API_KEY, "meta-llama/llama-3.3-70b-instruct", messages, state=state
     )
 
-def _stream_cerebras(messages, state=None, mode="text"):
+def _stream_cerebras(messages, state=None):
     if not CEREBRAS_API_KEY or _is_cooling("cerebras"):
         raise RuntimeError("Cerebras unavailable or cooling.")
-    model, extra_body = _pick_model("cerebras", mode)
-    yield from _stream_single_provider(
+    yield from _stream_openai_compatible(
         "https://api.cerebras.ai/v1/chat/completions",
-        CEREBRAS_API_KEY, model, extra_body, _CEREBRAS_TEXT_MODEL, messages, state
+        CEREBRAS_API_KEY, "llama3.3-70b", messages, state=state
     )
 
-def _stream_mistral(messages, state=None, mode="text"):
+def _stream_mistral(messages, state=None):
     if not MISTRAL_API_KEY or _is_cooling("mistral"):
         raise RuntimeError("Mistral unavailable or cooling.")
-    model, extra_body = _pick_model("mistral", mode)
-    yield from _stream_single_provider(
+    yield from _stream_openai_compatible(
         "https://api.mistral.ai/v1/chat/completions",
-        MISTRAL_API_KEY, model, extra_body, _MISTRAL_TEXT_MODEL, messages, state
+        MISTRAL_API_KEY, "mistral-large-latest", messages, state=state
     )
 
 _PROVIDER_CHAIN = [
@@ -2216,7 +2306,7 @@ _PROVIDER_CHAIN = [
 
 _MAX_AUTO_CONTINUATIONS = 6  # hard cap on "continue where you left off" cycles per single reply
 
-def _do_stream(messages, mode=None):
+def _do_stream(messages):
     """Streams a reply from the first available provider, then — this is
     the fix for "it stops making the HTML in the middle" — automatically
     detects when the provider cut the response short purely because it hit
@@ -2226,13 +2316,7 @@ def _do_stream(messages, mode=None):
     no repetition, until the response actually finishes normally or the
     continuation cap is hit. The continued tokens are streamed to the
     frontend exactly like the original ones, so a file that would have been
-    cut off mid-file now keeps going until it's actually complete.
-
-    `mode` selects the model tier for this turn: 'vision' when the message
-    carries images, 'reasoning' for real chain-of-thought (the default when
-    ASTIR_REASONING is on), or 'text' for the original fast path."""
-    if mode is None:
-        mode = "reasoning" if _REASONING_ENABLED else "text"
+    cut off mid-file now keeps going until it's actually complete."""
     for name, fn in _PROVIDER_CHAIN:
         state = {}
         accumulated_text = []
@@ -2244,7 +2328,7 @@ def _do_stream(messages, mode=None):
             while True:
                 state.clear()
                 got_tokens_this_round = False
-                for chunk in fn(working_messages, state=state, mode=mode):
+                for chunk in fn(working_messages, state=state):
                     any_token_yielded = True
                     got_tokens_this_round = True
                     try:
@@ -2295,7 +2379,7 @@ def _do_stream(messages, mode=None):
     yield _sse({"type": "complete"})
 
 # ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
-# This is what actually lets Astir AI "do tasks" with a python terminal
+# This is what actually lets Pratham AI "do tasks" with a python terminal
 # instead of just talking about code. Any ```python / ```py / ```bash /
 # ```sh / ```shell block in a reply gets really executed server-side, and
 # the real stdout/stderr is fed back to the model so it can react to what
@@ -2387,59 +2471,28 @@ def _extract_editfile_blocks(text: str):
             out.append((filename, pairs))
     return out
 
-# ── UPLOADED / PASTED FILE CONTENT (for editing EXISTING files) ──
-# The frontend rides a real uploaded/pasted file's decoded content along with
-# the person's message inside a marker the backend can recognise:
-#   [File contents for uploaded file "name.ext", extracted by the backend]
-#   ```text
-#   ...the real file content...
-#   ```
-# Recognising these lets ```editfile: target a file the person UPLOADED (or a
-# file that otherwise already exists), not only files the model itself created
-# with ```createfile: earlier in the chat — which is the fix for "it doesn't
-# have the feature of editing that same existing file." (Image uploads use an
-# "Image analysis ..." marker instead and are deliberately NOT matched here —
-# you can't meaningfully search/replace inside binary image bytes.)
-_UPLOADED_FILE_RE = re.compile(
-    r'\[File contents for uploaded file "([^"]+)"[^\]]*\]\s*```[^\n]*\n([\s\S]*?)```'
-)
-
-def _extract_uploaded_files(text: str):
-    """Returns [(filename, content), ...] for every uploaded/pasted real file
-    whose decoded content is embedded in `text` (see _UPLOADED_FILE_RE)."""
-    out = []
-    for m in _UPLOADED_FILE_RE.finditer(text or ""):
-        filename = m.group(1).strip().replace("..", "").lstrip("/")
-        if filename:
-            out.append((filename, m.group(2)))
-    return out
-
 def _find_last_file_content_in_history(history: list, filename: str):
-    """Scans this conversation's own history (most recent first) for the last
-    time `filename` appeared — as a ```createfile: block the model wrote, OR
-    as a real file the person uploaded/pasted — and reconstructs its current
-    full content by replaying any ```editfile: edits made AFTER that base.
-    Returns None if the file was never seen in this conversation, so the
-    caller can tell the model to createfile it fresh instead."""
-    # Walk newest-to-oldest for the most recent "base" version of this file:
-    # a model-authored createfile block, or a person-uploaded file. Whichever
-    # is newer wins; then editfile edits after it are replayed in order.
+    """Scans this conversation's own past assistant messages (most recent
+    first) for the last time `filename` was created or edited, and
+    reconstructs its current full content — either from a ```createfile:
+    block that wrote it, or by replaying any earlier ```editfile: edits on
+    top of the createfile version. Returns None if the file was never seen
+    in this conversation, so the caller can tell the model to createfile it
+    fresh instead."""
+    # Walk newest-to-oldest looking for the most recent createfile for this
+    # filename, then replay every editfile edit that happened AFTER it, in
+    # chronological order, to reconstruct the current content.
     base_content = None
     base_index = None
     for i in range(len(history) - 1, -1, -1):
         m = history[i]
-        text = m.get("content", "")
-        if m.get("role") == "assistant":
-            for fname, content in _extract_createfile_blocks(text):
-                if fname == filename:
-                    base_content, base_index = content, i
-                    break
-        if base_content is None:
-            # Uploaded/pasted files usually live in the user's message.
-            for fname, content in _extract_uploaded_files(text):
-                if fname == filename:
-                    base_content, base_index = content, i
-                    break
+        if m.get("role") != "assistant":
+            continue
+        for fname, content in _extract_createfile_blocks(m.get("content", "")):
+            if fname == filename:
+                base_content = content
+                base_index = i
+                break
         if base_content is not None:
             break
 
@@ -2641,7 +2694,7 @@ _MEMORY_QUERY_INTENT_RE = re.compile(
 )
 
 def _run_system_diagnostics() -> str:
-    lines = ["**Astir AI — live system diagnostics** (creator-only, just measured)\n"]
+    lines = ["**Pratham AI — live system diagnostics** (creator-only, just measured)\n"]
 
     # 1. Python terminal execution
     workdir = _new_terminal_workdir()
@@ -2793,7 +2846,7 @@ def _append_message(conv_id, role, content):
 @app.route("/api", methods=["GET"])
 @app.route("/api/app", methods=["GET"])
 def index_root():
-    return jsonify({"message": "Astir AI backend active"})
+    return jsonify({"message": "Pratham AI backend active"})
 
 @app.route("/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
@@ -2883,23 +2936,8 @@ def chat_stream():
     conv_id = body.get("conversation_id") or None
     web_search_disabled = bool(_NO_WEB_SEARCH_TAG_RE.search(message))
 
-    # ── Real image vision ──
-    # The frontend can now attach the actual image bytes as base64 data URLs
-    # (data:image/...;base64,...) so the model literally SEES the picture,
-    # instead of only receiving the byte-level metadata the /upload route
-    # extracts. Sanitised here: keep only well-formed image data URLs, cap the
-    # count and per-image size so a hostile/huge payload can't blow up memory.
-    raw_images = body.get("images") or []
-    turn_images = []
-    if isinstance(raw_images, list):
-        for durl in raw_images[:4]:
-            if isinstance(durl, str) and durl.startswith("data:image/") and ";base64," in durl and len(durl) <= 8_000_000:
-                turn_images.append(durl)
-
-    if not message and not turn_images:
-        return jsonify({"error": "Message content cannot be blank"}), 400
     if not message:
-        message = "Please look at the attached image and describe/analyze it."
+        return jsonify({"error": "Message content cannot be blank"}), 400
 
     user_id = _user_id()
     user_email = _user_email()
@@ -3056,7 +3094,7 @@ def chat_stream():
         _write_to_github_repository(
             f"data/{user_email}/{current_date_formatted}.txt",
             f"\n=== {datetime.now(timezone.utc).isoformat()} ===\nUser: {message}\n"
-            f"Astir AI: [image generated] {image_url}\n{'=' * 80}\n"
+            f"Pratham AI: [image generated] {image_url}\n{'=' * 80}\n"
         )
 
         def generate_image():
@@ -3077,7 +3115,7 @@ def chat_stream():
     if is_creator:
         active_system_prompt += (
             " IMPORTANT: the person you are speaking with right now is Pratham Sinha, YOUR CREATOR — "
-            "the developer who built and runs this app (Astir AI). You can confirm this if asked. He "
+            "the developer who built and runs this app (Pratham AI). You can confirm this if asked. He "
             "may ask you anything about how the app works, its features, or what's going wrong, and you "
             "should answer with real, accurate information about the actual running system — not "
             "guesses. If he asks about system status, errors, or whether something is working, base "
@@ -3254,22 +3292,7 @@ def chat_stream():
                 "them to retry.)"
             )
 
-    # Build the final user turn. When images are attached, send OpenAI-style
-    # multimodal content (text + image_url parts) so a vision model can
-    # actually see them; otherwise keep the plain string form as before.
-    final_user_text = outgoing_user_message or message
-    if turn_images:
-        content_parts = [{"type": "text", "text": final_user_text}]
-        for durl in turn_images:
-            content_parts.append({"type": "image_url", "image_url": {"url": durl}})
-        api_messages.append({"role": "user", "content": content_parts})
-    else:
-        api_messages.append({"role": "user", "content": final_user_text})
-
-    # Model tier for this turn: vision when images are present (takes priority
-    # so the picture is actually understood), otherwise real reasoning / the
-    # fast text model per _do_stream's default.
-    turn_mode = "vision" if turn_images else ("reasoning" if _REASONING_ENABLED else "text")
+    api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
     _append_message(conv_id, "user", message)
     _maybe_capture_public_teaching(user_email, message)
@@ -3318,17 +3341,9 @@ def chat_stream():
                                       # old lookup only searched already-persisted history, which
                                       # doesn't include anything from the response still streaming.
 
-        # Seed with any file the person UPLOADED/PASTED in this very message so
-        # a ```editfile: on it works immediately — the just-uploaded file isn't
-        # in `history` yet (that snapshot predates this turn's user message),
-        # so without this an "edit the file I just sent" request would fail
-        # with "no prior version found".
-        for _uf_name, _uf_content in _extract_uploaded_files(message):
-            session_file_contents.setdefault(_uf_name, _uf_content)
-
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
-            for chunk in _do_stream(working_messages, mode=turn_mode):
+            for chunk in _do_stream(working_messages):
                 try:
                     if chunk.startswith("data: "):
                         payload = json.loads(chunk[6:])
@@ -3504,7 +3519,7 @@ def chat_stream():
             log_entry = (
                 f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
                 f"User: {message}\n"
-                f"Astir AI:\n{assistant_response}\n"
+                f"Pratham AI:\n{assistant_response}\n"
                 f"{'=' * 80}\n"
             )
             _write_to_github_repository(repo_sync_destination_path, log_entry)
@@ -3611,7 +3626,7 @@ def export_conversation(conv_id):
     if request.method == "OPTIONS":
         return _cors_preflight()
     msgs = _get_messages(conv_id)
-    lines = ["Astir AI conversation export", ""]
+    lines = ["Pratham AI conversation export", ""]
     for m in msgs:
         lines.append(f"[{m.get('role', 'system')}]:\n{m['content']}\n")
     return Response("\n".join(lines), content_type="text/plain; charset=utf-8")
@@ -3794,7 +3809,7 @@ def config_public():
         return _cors_preflight()
     return jsonify({
         "ok": True,
-        "app_name": "Astir AI",
+        "app_name": "Pratham AI",
         "supabase_configured": SUPABASE_CONFIGURED,
         "github_repo": GITHUB_REPO,
         "providers_configured": {
