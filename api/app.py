@@ -503,23 +503,67 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverab
     buf.seek(0)
     return buf.read()
 
+# Base-14 PDF fonts (Helvetica/Helvetica-Bold) only support Latin-1 — any
+# character outside that range gets mangled into a literal "?" when encoded.
+# Math/geometry answers are full of Unicode symbols the model writes
+# naturally (∠, °, √, ×, ≠, ≅, ⊥, →, ±, ∘), so every one of those needs an
+# ASCII-safe substitute BEFORE layout, or the PDF fills up with "?" marks.
+# (A real fix would embed a Unicode TTF font with a CID mapping, which is a
+# much bigger addition to a from-scratch PDF writer — this substitution
+# table is the practical fix that keeps the text readable without that.)
+_PDF_UNICODE_SUBSTITUTIONS = {
+    "∠": "angle ", "°": " deg", "∘": " deg", "√": "sqrt", "×": "x", "÷": "/",
+    "≠": "!=", "≅": "~=", "≈": "~=", "≤": "<=", "≥": ">=", "⊥": "perp",
+    "∥": "parallel", "→": "->", "⟹": "=>", "∴": "therefore", "∵": "because",
+    "±": "+/-", "∆": "delta", "π": "pi", "θ": "theta", "α": "alpha", "β": "beta",
+    "△": "triangle ", "∈": "in", "∞": "infinity", "‘": "'", "’": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", "•": "-", "​": "",
+}
+_PDF_UNICODE_RE = re.compile("|".join(re.escape(k) for k in _PDF_UNICODE_SUBSTITUTIONS))
+
+def _sanitize_unicode_for_pdf(text: str) -> str:
+    return _PDF_UNICODE_RE.sub(lambda m: _PDF_UNICODE_SUBSTITUTIONS[m.group(0)], text)
+
 def _escape_pdf_literal_text(s: str) -> str:
+    s = _sanitize_unicode_for_pdf(s)
+    # Anything still outside Latin-1 after the substitution table above
+    # (rare symbols we didn't map) becomes a literal "?" rather than
+    # crashing the encode — same fallback as before, just for a much
+    # smaller remaining set of characters.
+    s = s.encode('latin-1', 'replace').decode('latin-1')
     return s.replace('\\', r'\\').replace('(', r'\(').replace(')', r'\)')
 
 def _markdownish_lines_for_pdf(text: str, max_width_chars: int):
     """
-    Converts lightly-markdown-formatted text (headings wrapped in **like
-    this**, and `* `/`- ` bullets — the style the model actually writes) into
-    a flat list of (font_key, size_delta, rendered_line) tuples ready to lay
-    out on a page. This covers the common case seen in practice (standalone
-    bold heading lines, bullet lists, plain paragraphs) without needing a
-    full markdown/HTML parser.
+    Converts lightly-markdown-formatted text (# / ## / ### / #### headings,
+    **bold** lines and inline bold, `* `/`- ` bullets, and `---` horizontal
+    rules — the style the model actually writes) into a flat list of
+    (font_key, size_delta, rendered_line) tuples ready to lay out on a page.
+    This covers the common case seen in practice without needing a full
+    markdown/HTML parser.
     """
     rendered = []
     for raw_line in text.split("\n"):
         stripped = raw_line.strip()
         if not stripped:
             rendered.append(("F1", 0, ""))
+            continue
+
+        # Horizontal rule ("---", "***", "___" alone on a line) — skip
+        # entirely rather than printing the literal dashes as text.
+        if re.match(r'^[-*_]{3,}$', stripped):
+            continue
+
+        # "#### 1. Question text" / "### Heading" etc — markdown heading
+        # levels, previously fell through to the plain-text branch below and
+        # printed the literal "####" characters instead of being treated as
+        # a heading at all.
+        md_heading_match = re.match(r'^(#{1,4})\s+(.*)$', stripped)
+        if md_heading_match:
+            level = len(md_heading_match.group(1))
+            size_delta = max(4 - level, 1)  # more #'s = smaller bump, but always a heading
+            heading_text = re.sub(r'\*\*(.+?)\*\*', r'\1', md_heading_match.group(2))
+            rendered.append(("F2", size_delta, heading_text))
             continue
 
         heading_match = re.match(r'^\*\*(.+?)\*\*:?$', stripped)
@@ -1974,6 +2018,15 @@ SYSTEM_PROMPT = (
     "[DIAGRAM: <unique-name>.html] marker at that question's position — even if that means creating "
     "10+ separate small diagram files in one reply. A bulk solution set with construction questions and "
     "zero diagrams is an incomplete answer, not an efficient one.\n\n"
+    "MARKER AND DIAGRAM FILE ARE ONE ATOMIC UNIT — NEVER WRITE ONE WITHOUT THE OTHER: a "
+    "[DIAGRAM: filename.html] marker with no matching ```createfile:filename.html block anywhere in the "
+    "same reply is a broken answer — the backend has nothing to embed and the diagram simply won't "
+    "appear anywhere, not in the PDF and not in the chat. To make sure this never happens even in a long "
+    "multi-question reply: emit the ```createfile:filename.html SVG block for a question's diagram "
+    "IMMEDIATELY, right next to that question's [DIAGRAM: filename.html] marker (e.g. write the marker, "
+    "then the createfile block, then continue to the next question) rather than promising to add all "
+    "diagrams at the end of a long response — if the reply runs long, work done at the very end is what "
+    "gets cut off first, so front-load each diagram right where it's needed instead of deferring it.\n\n"
     "You also have a REAL background terminal, not a simulated one, and YOU run it directly — there "
     "is no separate tool, no external terminal, no permission step. The moment you write a ```python, "
     "```py, ```bash, ```sh, or ```shell fenced block, the backend executes it for real on the server "
