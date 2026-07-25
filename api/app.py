@@ -3382,9 +3382,39 @@ def chat_stream():
                 "questions like math or general advice, and cite that info came from a web search "
                 "when you do use it):\n" + "\n".join(results)
             )
-        # If the search fails or returns nothing, silently proceed with no
-        # extra context rather than telling the user every single time —
-        # that would get noisy since this now runs on almost every message.
+        elif _CURRENT_EVENTS_INTENT_RE.search(outgoing_user_message or message):
+            # DETERMINISTIC GUARD, not a prompt instruction: a prior version
+            # of this code just told the model via the system prompt not to
+            # fabricate fake news when search comes back empty — and it did
+            # it anyway (invented specific fake July 2024 headlines with
+            # real-sounding details). Prompt instructions are not reliable
+            # enough for this specific failure mode, so for a message that
+            # clearly asks about current events/news/today with genuinely
+            # zero search results, the LLM is bypassed entirely and a fixed,
+            # honest, hardcoded response is sent instead — this cannot be
+            # talked around by the model no matter how it's phrased.
+            _append_message(conv_id, "user", message)
+            no_results_text = (
+                "A live web search didn't return results for this just now (rate limit or temporary "
+                "search issue). I don't want to guess at current news from memory, since that risks "
+                "giving you outdated or made-up information. Try asking again in a moment, or check "
+                "a live source directly: [BBC News](https://www.bbc.com/news), "
+                "[Reuters](https://www.reuters.com), or [Google News](https://news.google.com)."
+            )
+            _append_message(conv_id, "assistant", no_results_text)
+            def generate_no_results():
+                yield _sse({"type": "metadata", "conversation_id": conv_id})
+                yield _sse({"type": "token", "text": no_results_text})
+                yield _sse({"type": "complete"})
+            resp = Response(stream_with_context(generate_no_results()), content_type="text/event-stream")
+            resp.headers["Cache-Control"] = "no-cache"
+            resp.headers["X-Accel-Buffering"] = "no"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            return resp
+        # If the search fails or returns nothing (and it's not a current-
+        # events question), silently proceed with no extra context rather
+        # than telling the user every single time — that would get noisy
+        # since this now runs on almost every message.
         else:
             api_messages[0]["content"] += (
                 " (A live web search was attempted for this message but returned no results this time "
