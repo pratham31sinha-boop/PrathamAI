@@ -7,28 +7,17 @@
     <title>Pratham AI</title>
     <meta name="description" content="Pratham AI — a personal AI assistant with real code execution, file creation, image generation, and education support for Sanskrit, Mathematics, and more.">
     <meta name="robots" content="index, follow">
-    <!-- Replace REPLACE_WITH_YOUR_VERIFICATION_CODE below with the exact
-         content value Google Search Console gives you when you add this
-         site as a property (Settings > Ownership verification > HTML tag
-         method). Do not add a second copy of this tag — Search Console
-         only reads one. -->
     <meta name="google-site-verification" content="kjUejh3zN__gaBunTpzfuUgYDOaxb98zILx4LS39kU4" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- KaTeX: renders LaTeX math (\( \), \[ \], $ $, $$ $$ delimiters the
-         model writes for equations) into proper math typesetting instead of
-         showing the raw backslash/bracket markup as literal text. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <!-- Chart.js: renders ```chart:{...json...}``` fenced blocks as real
-         graphs (bar/line/pie/etc) instead of dumping JSON/ASCII text. -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
-        /* ===== Claude-style palette ===== */
         :root {
             --bg: #faf9f5;
             --sidebar: #f4f3ee;
@@ -45,12 +34,15 @@
             --terminal-text: #f4f0e6;
             --shadow-premium: 0 1px 3px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.04);
             --hover: #ececE4;
+            --glass-bg: rgba(255,255,255,0.55);
+            --glass-border: rgba(255,255,255,0.6);
+            --glass-blur: 16px;
         }
 
         .dark-mode {
-            --bg: #262624;
-            --sidebar: #1f1e1c;
-            --panel: #30302e;
+            --bg: #1a1a18;
+            --sidebar: #161614;
+            --panel: #262624;
             --panel-2: #2b2a28;
             --border: #3d3c39;
             --text: #f5f4ef;
@@ -58,11 +50,14 @@
             --accent: #d97757;
             --accent-soft: #4a3a30;
             --bubble-user: #35342f;
-            --bubble-model: #30302e;
+            --bubble-model: #2a2a28;
             --terminal-bg: #131211;
             --terminal-text: #4ade80;
             --shadow-premium: 0 1px 3px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25);
             --hover: #3a3936;
+            --glass-bg: rgba(38,38,36,0.5);
+            --glass-border: rgba(255,255,255,0.08);
+            --glass-blur: 16px;
         }
 
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -71,13 +66,24 @@
             font-family: 'Inter', sans-serif;
             background: var(--bg);
             color: var(--text);
-            transition: background 0.2s ease, color 0.2s ease;
+            transition: background 0.4s cubic-bezier(.4,0,.2,1), color 0.4s ease;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         .brand-serif { font-family: 'Source Serif 4', serif; }
-        .workspace-scrollpane::-webkit-scrollbar { width: 5px; height: 5px; }
+        .workspace-scrollpane::-webkit-scrollbar { width: 6px; height: 6px; }
+        .workspace-scrollpane::-webkit-scrollbar-track { background: transparent; }
         .workspace-scrollpane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9px; }
+        .workspace-scrollpane::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
         .premium-card { box-shadow: var(--shadow-premium); }
         .accent-gradient { background: linear-gradient(135deg, var(--accent), #d98a5f); }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+            border: 1px solid var(--glass-border);
+        }
 
         .glow-pulse { animation: glowPulse 2.2s ease-in-out infinite; }
         @keyframes glowPulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.5;transform:scale(.85);} }
@@ -87,47 +93,51 @@
         .typing-dot:nth-child(3){animation-delay:.3s;}
         @keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-4px);opacity:1;} }
 
-        /* Claude-style sidebar nav rows */
         .nav-row {
             display: flex; align-items: center; gap: 10px;
-            padding: 7px 10px; border-radius: 8px;
+            padding: 7px 10px; border-radius: 10px;
             font-size: 13.5px; font-weight: 500; color: var(--text);
-            cursor: pointer; transition: background .12s ease;
+            cursor: pointer; transition: background .18s cubic-bezier(.4,0,.2,1), transform .18s ease;
         }
-        .nav-row:hover { background: var(--hover); }
+        .nav-row:hover { background: var(--hover); transform: translateX(2px); }
+        .nav-row:active { transform: translateX(2px) scale(.98); }
         .nav-row .nav-icon { width: 18px; text-align: center; opacity: .85; font-size: 14px; }
 
         .chat-row {
-            padding: 7px 10px; border-radius: 8px; font-size: 13px;
-            color: var(--text); cursor: pointer; transition: background .12s ease;
+            padding: 7px 10px; border-radius: 10px; font-size: 13px;
+            color: var(--text); cursor: pointer; transition: background .18s cubic-bezier(.4,0,.2,1), transform .18s ease;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .chat-row:hover { background: var(--hover); }
+        .chat-row:hover { background: var(--hover); transform: translateX(2px); }
         .chat-row.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
         .search-pill {
             display: flex; align-items: center; gap: 8px;
             background: var(--panel); border: 1px solid var(--border);
-            border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--text-dim);
+            border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--text-dim);
+            transition: border-color .2s ease, box-shadow .2s ease;
         }
+        .search-pill:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
         .education-option {
-            padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
-            font-size: 13px; color: var(--text); cursor: pointer; transition: border-color .12s ease, background .12s ease;
+            padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+            font-size: 13px; color: var(--text); cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease;
             background: var(--panel-2);
         }
-        .education-option:hover { border-color: var(--accent); background: var(--hover); }
+        .education-option:hover { border-color: var(--accent); background: var(--hover); transform: translateX(2px); }
 
-        /* Profile dropdown, mimics Claude's account menu */
         #profile-dropdown-menu {
             position: absolute; bottom: 56px; left: 8px; width: 240px;
-            background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
             box-shadow: var(--shadow-premium); padding: 6px; z-index: 60;
             font-size: 13px;
+            animation: dropIn .22s cubic-bezier(.4,0,.2,1);
         }
+        @keyframes dropIn { from{opacity:0;transform:translateY(8px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
         #profile-dropdown-menu .menu-item {
             display: flex; align-items: center; justify-content: space-between;
             padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--text);
+            transition: background .12s ease;
         }
         #profile-dropdown-menu .menu-item:hover { background: var(--hover); }
         #profile-dropdown-menu .menu-divider { height: 1px; background: var(--border); margin: 5px 2px; }
@@ -135,11 +145,10 @@
             padding: 6px 10px 2px; font-size: 11px; color: var(--text-dim); word-break: break-all;
         }
 
-        /* Settings modal, mimics Claude's settings layout */
         #settings-modal .settings-tab {
             display: flex; align-items: center; gap: 10px;
-            padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
-            color: var(--text-dim); cursor: pointer;
+            padding: 8px 10px; border-radius: 10px; font-size: 13px; font-weight: 500;
+            color: var(--text-dim); cursor: pointer; transition: background .15s ease, color .15s ease;
         }
         #settings-modal .settings-tab.active { background: var(--hover); color: var(--text); }
         #settings-modal .settings-tab:hover { background: var(--hover); }
@@ -149,22 +158,24 @@
         }
         #settings-modal .settings-row:last-child { border-bottom: none; }
         .theme-choice-btn {
-            width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--border);
+            width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--border);
             display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px;
+            transition: border-color .18s ease, background .18s ease, transform .18s ease;
         }
+        .theme-choice-btn:hover { transform: translateY(-1px); }
         .theme-choice-btn.selected { border-color: var(--accent); background: var(--accent-soft); }
 
-        /* ===== File-creation progress card (Claude-artifact style) ===== */
         .file-creation-card {
             display: flex; align-items: center; gap: 10px;
             background: var(--panel); border: 1px solid var(--border);
-            border-radius: 12px; padding: 10px 12px; max-width: 320px;
-            cursor: pointer; transition: border-color .15s ease, background .15s ease;
+            border-radius: 14px; padding: 10px 12px; max-width: 320px;
+            cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
             position: relative; overflow: hidden;
         }
-        .file-creation-card:hover { border-color: var(--accent); background: var(--hover); }
+        .file-creation-card:hover { border-color: var(--accent); background: var(--hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+        .file-creation-card:active { transform: translateY(0) scale(.99); }
         .file-creation-card .fcc-icon {
-            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+            width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center;
             background: var(--accent-soft); color: var(--accent); font-size: 15px; font-weight: 700;
         }
@@ -184,27 +195,22 @@
         }
         .file-creation-card.in-progress .fcc-progress-fill { animation: fccShimmer 1.1s ease-in-out infinite; }
         .file-creation-card.done .fcc-progress-track { display: none; }
-        @keyframes fccShimmer {
-            0% { left: -40%; }
-            100% { left: 100%; }
-        }
+        @keyframes fccShimmer { 0% { left: -40%; } 100% { left: 100%; } }
         .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
 
-        /* ===== Inline collapsible activity card (▼ Ran terminal / ▼ Edited
-           file +N -N / ✓ Completed) — additive, sits alongside the
-           file-creation-card above, does not replace it ===== */
         .activity-card {
             display: flex; flex-direction: column; gap: 0;
             background: var(--panel); border: 1px solid var(--border);
-            border-radius: 10px; max-width: 340px; margin: 4px 0;
+            border-radius: 12px; max-width: 340px; margin: 4px 0;
             overflow: hidden; font-size: 12.5px;
         }
         .activity-card .ac-header {
             display: flex; align-items: center; gap: 8px; padding: 8px 10px;
             cursor: pointer; user-select: none; color: var(--text-dim);
+            transition: background .12s ease;
         }
         .activity-card .ac-header:hover { background: var(--hover); }
-        .activity-card .ac-caret { font-size: 9px; transition: transform .15s ease; flex-shrink: 0; }
+        .activity-card .ac-caret { font-size: 9px; transition: transform .18s ease; flex-shrink: 0; }
         .activity-card.expanded .ac-caret { transform: rotate(90deg); }
         .activity-card .ac-icon { flex-shrink: 0; font-size: 12px; }
         .activity-card .ac-label { flex: 1; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -226,14 +232,13 @@
         .activity-card .ac-body .diff-add { color: #4ade80; }
         .activity-card .ac-body .diff-remove { color: #f87171; }
 
-        /* ===== Compact step list (matches Claude's own "Fathoming / Survey.../
-           Find.../ View..." style: small icon, thin vertical connector,
-           muted single-line text, no card chrome) ===== */
         .step-list { display: flex; flex-direction: column; margin: 6px 0; }
         .step-list .step-row {
             display: flex; align-items: center; gap: 10px;
             padding: 3px 0; position: relative; font-size: 13px; color: var(--text-dim);
+            animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
+        @keyframes stepSlideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
         .step-list .step-row.head { color: var(--text); font-weight: 600; }
         .step-list .step-icon {
             width: 16px; height: 16px; flex-shrink: 0; display: flex;
@@ -248,48 +253,47 @@
         .step-list .step-icon.done { color: #4ade80; }
         .step-list .step-icon.running { color: var(--accent); }
 
-        /* ===== "Thinking..." collapsible wrapper — click to expand and see
-           the full activity feed (matches Codex/Cursor-style: header row
-           shows a one-line summary, body reveals every step). ===== */
         .thinking-wrap { margin: 6px 0; max-width: 400px; }
         .thinking-header {
             display: flex; align-items: center; gap: 8px; cursor: pointer;
             font-size: 13px; color: var(--text-dim); padding: 4px 0; user-select: none;
+            transition: color .15s ease;
         }
-        .thinking-header .tw-caret { font-size: 9px; transition: transform .15s ease; }
+        .thinking-header:hover { color: var(--text); }
+        .thinking-header .tw-caret { font-size: 9px; transition: transform .18s ease; }
         .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); }
         .thinking-header .tw-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: glowPulse 1s ease-in-out infinite; }
         .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
         .thinking-body { display: none; padding-left: 4px; }
-        .thinking-wrap.expanded .thinking-body { display: block; }
+        .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .25s ease; }
+        @keyframes fadeSlide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
 
-        /* Workbench Preview/Files tab buttons */
         #workbench-tab-preview, #workbench-tab-files {
             cursor: pointer; color: var(--text-dim); background: transparent; border: none;
-            transition: background .12s ease, color .12s ease;
+            transition: background .15s ease, color .15s ease;
         }
         #workbench-tab-preview.wb-tab-active, #workbench-tab-files.wb-tab-active {
             background: var(--accent-soft); color: var(--accent);
         }
         .wb-file-row {
             display: flex; align-items: center; gap: 8px; padding: 7px 9px;
-            border: 1px solid var(--border); border-radius: 9px; background: var(--panel);
+            border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
             font-size: 11.5px; color: var(--text);
+            transition: border-color .15s ease, transform .15s ease;
         }
+        .wb-file-row:hover { border-color: var(--accent); transform: translateX(2px); }
         .wb-file-row .wb-file-ext {
-            width: 26px; height: 26px; border-radius: 7px; background: var(--accent-soft);
+            width: 26px; height: 26px; border-radius: 8px; background: var(--accent-soft);
             color: var(--accent); font-size: 9px; font-weight: 700; display: flex;
             align-items: center; justify-content: center; flex-shrink: 0;
         }
         .wb-file-row .wb-file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .wb-file-row .wb-file-meta { font-size: 9.5px; color: var(--text-dim); }
 
-        /* Background agent-activity strip shown above the composer while a
-           response is streaming, so the person can see what the assistant is
-           doing (planning, writing a file, reading terminal output, etc.) */
         #agent-activity-strip {
             display: none; align-items: center; gap: 7px;
             font-size: 11px; color: var(--text-dim); padding: 0 4px 6px;
+            animation: fadeSlide .3s ease;
         }
         #agent-activity-strip.active { display: flex; }
         #agent-activity-strip .aas-spinner {
@@ -300,21 +304,40 @@
         #paste-attachment-chip.active { display: flex; }
         #file-attachment-chip.active { display: flex; }
 
-        /* Boot / session-restoring splash (avoids a flash of the login screen
-           while we silently check localStorage for a still-valid session) */
         #boot-splash {
             position: fixed; inset: 0; z-index: 70; display: flex; align-items: center;
             justify-content: center; background: var(--bg);
+            flex-direction: column; gap: 16px;
         }
         #boot-splash .boot-spinner {
             width: 34px; height: 34px; border-radius: 999px;
             border: 3px solid var(--accent-soft); border-top-color: var(--accent);
             animation: bootSpin .8s linear infinite;
         }
+        #boot-splash .boot-label { font-size: 11px; letter-spacing: .3em; color: var(--text-dim); text-transform: uppercase; animation: glowPulse 2s ease-in-out infinite; }
         @keyframes bootSpin { to { transform: rotate(360deg); } }
 
-        /* ===== Mobile ===== */
-        #sidebar-panel { transition: transform .28s ease, width .28s ease; }
+        #ambient-bg {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+        }
+        .dark-mode #ambient-bg { opacity: .35; }
+
+        #cursor-dot, #cursor-ring {
+            position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999;
+            border-radius: 50%; mix-blend-mode: difference;
+        }
+        #cursor-dot { width: 6px; height: 6px; background: #fff; transform: translate(-50%,-50%); transition: transform .08s ease; }
+        #cursor-ring { width: 32px; height: 32px; border: 1.5px solid rgba(255,255,255,.5); transform: translate(-50%,-50%); transition: transform .14s ease, width .2s ease, height .2s ease; }
+        @media (max-width: 820px) { #cursor-dot, #cursor-ring { display: none; } }
+
+        .msg-enter { animation: msgEnter .35s cubic-bezier(.4,0,.2,1) both; }
+        @keyframes msgEnter { from{opacity:0;transform:translateY(10px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+
+        .magnetic-btn { transition: transform .2s cubic-bezier(.4,0,.2,1); }
+        .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,.35); transform: scale(0); animation: rippleAnim .6s ease-out; pointer-events: none; }
+        @keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
+
+        #sidebar-panel { transition: transform .32s cubic-bezier(.4,0,.2,1), width .32s ease; }
         .mobile-hamburger { display: none; }
 
         @media (max-width: 820px) {
@@ -326,31 +349,20 @@
             #sidebar-panel.sidebar-open { transform: translateX(0); }
             #sidebar-scrim {
                 display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
+                backdrop-filter: blur(4px);
             }
             #sidebar-scrim.scrim-visible { display: block; }
             .mobile-hamburger { display: flex; }
             #workbench-split-panel {
                 position: fixed; inset: 0; width: 100%; z-index: 45;
-                transform: translateX(100%); transition: transform .28s ease;
+                transform: translateX(100%); transition: transform .32s cubic-bezier(.4,0,.2,1);
             }
             #workbench-split-panel.workbench-open { transform: translateX(0); }
             #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
             #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
             #settings-modal .settings-sidebar { display: none; }
-
-            /* Mobile overflow safeguard: wide tables, long unbroken code/math
-               expressions, and the KaTeX display-math wrapper can be wider
-               than the phone's viewport — without this they silently
-               overflow the message bubble and force the whole page to
-               scroll sideways. Each of these now scrolls horizontally
-               WITHIN its own box instead. */
-            .katex-display, table, pre, code {
-                max-width: 100%;
-                overflow-x: auto;
-            }
-            [data-seg-type="text"], [data-seg-type="finaldoc"] {
-                max-width: 96% !important;
-            }
+            .katex-display, table, pre, code { max-width: 100%; overflow-x: auto; }
+            [data-seg-type="text"], [data-seg-type="finaldoc"] { max-width: 96% !important; }
         }
 
         @supports (padding: max(0px)) {
@@ -361,26 +373,21 @@
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased">
     <style>
-        /* Text selection is allowed everywhere by default now (the old
-           select-none on <body> blocked drag-to-select copying of message
-           text, which is why the only way to copy was the Copy button).
-           UI chrome (buttons, nav rows, sidebar) still shouldn't become
-           selectable text just because you click-drag across the screen,
-           so selection is disabled specifically for those, not globally. */
         button, .nav-row, .chat-row, .sidebar-panel > div:first-child,
         header, .file-creation-card, .theme-choice-btn, #settings-modal .settings-tab {
             user-select: none;
         }
     </style>
 
-    <!-- Boot splash: shown for a brief moment on first paint / refresh while
-         we silently check for a still-valid stored session, so refreshing the
-         page never forces an unnecessary re-login flash. -->
-    <div id="boot-splash"><div class="boot-spinner"></div></div>
+    <canvas id="ambient-bg"></canvas>
+    <div id="cursor-dot"></div>
+    <div id="cursor-ring"></div>
+
+    <div id="boot-splash"><div class="boot-spinner"></div><div class="boot-label">Pratham AI</div></div>
 
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
-        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-8 max-w-sm w-full text-center premium-card space-y-6">
-            <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+        <div class="glass rounded-3xl p-8 max-w-sm w-full text-center premium-card space-y-6" style="border-radius:24px;">
+            <div class="w-16 h-16 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden" style="box-shadow:0 8px 32px rgba(194,97,63,.3);"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
             <div>
                 <h1 class="brand-serif text-3xl font-bold text-[var(--text)]">Pratham AI</h1>
                 <p class="text-sm text-[var(--text-dim)] mt-1">Sign in to continue</p>
@@ -397,9 +404,9 @@
 
     <div id="sidebar-scrim" onclick="closeMobileSidebar()"></div>
 
-    <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden">
+    <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden relative" style="z-index:1;">
 
-        <aside id="sidebar-panel" class="w-72 h-full bg-[var(--sidebar)] border-r border-[var(--border)] flex flex-col justify-between safe-top relative">
+        <aside id="sidebar-panel" class="w-72 h-full border-r border-[var(--border)] flex flex-col justify-between safe-top relative" style="background:var(--sidebar);">
             <div class="p-3 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between px-1">
                     <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
@@ -434,7 +441,6 @@
                 </div>
             </div>
 
-            <!-- Profile dropdown, mimics Claude account menu -->
             <div id="profile-dropdown-menu" class="hidden">
                 <div class="menu-email" id="profile-dropdown-email">user@example.com</div>
                 <div class="menu-divider"></div>
@@ -446,30 +452,30 @@
             </div>
         </aside>
 
-        <main class="flex-1 h-full flex flex-row min-w-0 bg-[var(--bg)]">
+        <main class="flex-1 h-full flex flex-row min-w-0" style="background:var(--bg);">
 
             <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
-                <header class="h-14 border-b border-[var(--border)] px-3 sm:px-4 flex items-center justify-between bg-[var(--bg)] z-20 safe-top">
+                <header class="h-14 border-b border-[var(--border)] px-3 sm:px-4 flex items-center justify-between z-20 safe-top" style="background:var(--bg);">
                     <div class="flex items-center gap-2 min-w-0">
                         <button onclick="openMobileSidebar()" class="mobile-hamburger p-1.5 border border-[var(--border)] bg-[var(--panel)] rounded-md text-sm cursor-pointer">☰</button>
                         <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">New conversation</h2>
                     </div>
                     <div class="flex items-center gap-2">
                         <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">⚡</button>
-                        <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Export</button>
-                        <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">Delete</button>
+                        <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Export</button>
+                        <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Delete</button>
                     </div>
                 </header>
 
-                <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col">
+                <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col relative" style="z-index:1;">
                     <div class="m-auto text-center py-12 space-y-2">
-                        <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+                        <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden" style="box-shadow:0 8px 32px rgba(194,97,63,.25);"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                         <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                         <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
                 </div>
 
-                <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[var(--bg)] via-[var(--bg)] to-transparent pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom">
+                <div class="absolute bottom-0 left-0 w-full pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom" style="background:linear-gradient(to top, var(--bg) 30%, transparent);">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
                         <div id="agent-activity-strip"><span class="aas-spinner"></span><span id="agent-activity-strip-text">Thinking...</span></div>
                         <div id="paste-attachment-chip" class="hidden items-center gap-2 bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs text-[var(--text)] w-fit">
@@ -482,21 +488,21 @@
                             <span id="file-attachment-chip-label">file</span>
                             <span onclick="clearFileAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
                         </div>
-                        <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl bg-[var(--panel)] border border-[var(--border)] p-2 shadow-sm focus-within:border-[var(--accent)] transition-all premium-card">
+                        <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl glass p-2 transition-all premium-card" style="border-radius:18px;">
                             <button type="button" onclick="toggleModal('add-to-chat-sheet')" class="p-2 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-lg">📎</button>
                             <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
-                            <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-opacity shadow-sm cursor-pointer text-sm font-bold shrink-0">↑</button>
+                            <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-all shadow-sm cursor-pointer text-sm font-bold shrink-0 magnetic-btn" style="box-shadow:0 4px 14px rgba(194,97,63,.3);">↑</button>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] bg-[var(--panel)] flex flex-col h-full hidden">
+            <div id="workbench-split-panel" class="w-96 border-l border-[var(--border)] flex flex-col h-full hidden" style="background:var(--panel);">
                 <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 mobile-hamburger">
                     <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)]">Workbench</span>
                     <button onclick="toggleWorkbenchMobile()" class="text-sm cursor-pointer">✕</button>
                 </div>
-                <div class="h-1/3 border-b border-[var(--border)] bg-[var(--terminal-bg)] text-[var(--terminal-text)] p-3 flex flex-col font-mono text-[11px]">
+                <div class="h-1/3 border-b border-[var(--border)] p-3 flex flex-col font-mono text-[11px]" style="background:var(--terminal-bg);color:var(--terminal-text);">
                     <div class="flex items-center justify-between border-b border-neutral-700 pb-1.5 mb-2 text-neutral-400 font-sans font-bold uppercase tracking-wider">
                         <span>&gt;_ Live Agent Terminal Output Logs</span>
                         <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
@@ -504,22 +510,17 @@
                     <pre id="agent-background-terminal-logger" class="flex-1 overflow-y-auto workspace-scrollpane whitespace-pre-wrap leading-relaxed text-left selection:bg-neutral-700">System waiting for generation directives...</pre>
                 </div>
                 <div class="flex-1 flex flex-col overflow-hidden">
-                    <div class="h-10 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]">
+                    <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-3 text-xs font-semibold tracking-wide uppercase text-[var(--text-dim)]" style="background:var(--sidebar);">
                         <div class="flex items-center gap-1">
                             <button id="workbench-tab-preview" onclick="setWorkbenchTab('preview')" class="px-2 py-1 rounded text-[10px] tracking-wide">⚡ Preview</button>
                             <button id="workbench-tab-files" onclick="setWorkbenchTab('files')" class="px-2 py-1 rounded text-[10px] tracking-wide">📁 Files</button>
                         </div>
                         <button onclick="expandActivePreviewContainer()" class="text-[10px] lowercase border border-[var(--border)] bg-[var(--panel)] px-1.5 py-0.5 rounded text-[var(--text)]">Popout</button>
                     </div>
-                    <div id="interactive-render-canvas-mount" class="flex-1 bg-[var(--bg)] overflow-auto p-3 relative flex items-center justify-center">
+                    <div id="interactive-render-canvas-mount" class="flex-1 overflow-auto p-3 relative flex items-center justify-center" style="background:var(--bg);">
                         <div class="text-center text-xs text-[var(--text-dim)] font-mono italic">No payload compilation mounted.</div>
                     </div>
-                    <!-- Real Files tab: lists every file actually generated in this
-                         conversation, fed by GET /conversations/<id>/files (server
-                         reconstructs the list from real createfile/code blocks and
-                         registered terminal output in the saved conversation — not
-                         simulated repo activity). -->
-                    <div id="workbench-files-panel" class="hidden flex-1 bg-[var(--bg)] overflow-y-auto workspace-scrollpane p-2">
+                    <div id="workbench-files-panel" class="hidden flex-1 overflow-y-auto workspace-scrollpane p-2" style="background:var(--bg);">
                         <div id="workbench-files-list" class="flex flex-col gap-1.5">
                             <p class="text-xs text-[var(--text-dim)] text-center py-6">No files yet in this conversation.</p>
                         </div>
@@ -543,13 +544,6 @@
         </div>
     </div>
 
-    <!-- "Add to chat" bottom sheet — the paperclip button now opens this
-         (matches the requested Camera / Photos / Files / Web-search-toggle
-         layout) instead of jumping straight to the old Ingest File modal.
-         Camera/Photos/Files all funnel into the SAME real upload+analysis
-         pipeline as the Ingest File modal (dispatchPdfUpload), just via
-         different hidden file-input `accept`/`capture` attributes — nothing
-         about the underlying upload logic was removed or duplicated. -->
     <input type="file" id="camera-capture-input" accept="image/*" capture="environment" class="hidden" onchange="dispatchQuickUpload(this)">
     <input type="file" id="photos-picker-input" accept="image/*" class="hidden" onchange="dispatchQuickUpload(this)">
     <input type="file" id="files-picker-input" class="hidden" onchange="dispatchQuickUpload(this)">
@@ -582,7 +576,6 @@
         </div>
     </div>
 
-    <!-- Settings modal, mimics Claude's settings page layout -->
     <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-2xl h-[75vh] max-h-[560px] overflow-hidden premium-card flex">
             <div class="settings-sidebar w-44 border-r border-[var(--border)] p-3 flex flex-col gap-1 bg-[var(--panel-2)]">
@@ -627,12 +620,6 @@
         </div>
     </div>
 
-    <!-- VIP registration modal: replaces native prompt() dialogs, which are
-         unreliable/blocked on many mobile browsers. -->
-    <!-- @education picker: book selection, then chapter selection. Lists are
-         populated live from /education/books and /education/chapters, which
-         read the data/education/<Book>/<Chapter>.pdf folder structure in the
-         GitHub data repo. -->
     <div id="education-book-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
         <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-sm overflow-hidden premium-card">
             <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
@@ -677,10 +664,7 @@
         </div>
     </div>
 
-    <!-- Full-screen artifact/file preview modal, mirrors the Claude-style
-         "opens as its own page" experience: header with filename + kebab
-         menu (Preview / Code toggle, Publish, Copy, Download), full body. -->
-    <div id="artifact-modal" class="fixed inset-0 bg-[var(--bg)] z-50 hidden flex-col">
+    <div id="artifact-modal" class="fixed inset-0 z-50 hidden flex-col" style="background:var(--bg);">
         <div class="h-14 border-b border-[var(--border)] flex items-center justify-between px-4 safe-top shrink-0">
             <button onclick="closeArtifactModal()" class="text-[var(--text)] text-lg cursor-pointer">✕</button>
             <h4 id="artifact-modal-title" class="text-sm font-bold text-[var(--text)] truncate max-w-[55%]">file.txt</h4>
@@ -706,7 +690,7 @@
         <div id="artifact-modal-body" class="flex-1 overflow-auto bg-[var(--panel)]"></div>
     </div>
 
-    <script>
+        <script>
         const bootSplash = document.getElementById('boot-splash');
         const loginOverlay = document.getElementById('login-overlay');
         const appShell = document.getElementById('app-shell');
@@ -730,13 +714,9 @@
         const agentActivityStrip = document.getElementById('agent-activity-strip');
         const agentActivityStripText = document.getElementById('agent-activity-strip-text');
 
-        // Brand logo: the two real files at the root of the GitHub data repo —
-        // a 512x512 for crisp in-app badges (login screen, empty-state, etc.)
-        // and a 192x192 for the browser tab favicon. Every "P" badge falls
-        // back to the plain "P" mark automatically if either URL 404s.
         const LOGO_URL_512 = "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-512.png";
         const LOGO_URL_192 = "https://raw.githubusercontent.com/pratham31sinha-boop/Partham-AI-/main/icon-192.png";
-        const LOGO_URL = LOGO_URL_512; // kept for any code that still references the single-logo name
+        const LOGO_URL = LOGO_URL_512;
 
         let currentConversationId = null;
         let globalAuthorizationToken = "";
@@ -745,9 +725,9 @@
         let currentExtractedPreviewArtifactPayload = "";
         let isGenerating = false;
         let allHistoryItemsCache = [];
-        let pendingPasteAttachment = null; // { content, lines } — see setPasteAttachment()
-        let pendingFileAttachment = null;  // { filename, analysisText, isImage } — see setFileAttachment()
-        let pendingEducationContext = null; // { book, chapter } once both are picked via the @education flow
+        let pendingPasteAttachment = null;
+        let pendingFileAttachment = null;
+        let pendingEducationContext = null;
 
         function setPasteAttachment(content, lineCount) {
             pendingPasteAttachment = { content, lines: lineCount };
@@ -759,13 +739,6 @@
             document.getElementById('paste-attachment-chip').classList.remove('active');
         }
 
-        // Arms a pending file/image attachment (from the paperclip Ingest
-        // File upload) so its real, backend-analyzed content gets prepended
-        // to the NEXT message the person sends — this is what actually
-        // wires "upload an image -> python analyzes it -> AI sees the real
-        // analysis and can respond about it" into the chat, instead of the
-        // old behavior where upload just showed a one-off alert() and never
-        // reached the model at all.
         function setFileAttachment(filename, analysisText, isImage) {
             pendingFileAttachment = { filename, analysisText, isImage: !!isImage };
             document.getElementById('file-attachment-chip-icon').innerText = isImage ? '🖼️' : '📎';
@@ -777,10 +750,6 @@
             document.getElementById('file-attachment-chip').classList.remove('active');
         }
 
-        // Key used to persist the session in localStorage so a page refresh
-        // (or fully closing and reopening the browser) does not force the
-        // user through the Google sign-in popup again while their token is
-        // still valid.
         const SESSION_STORAGE_KEY = "prathamai_session_v1";
 
         function openMobileSidebar() { sidebarPanel.classList.add('sidebar-open'); sidebarScrim.classList.add('scrim-visible'); }
@@ -808,10 +777,6 @@
             document.getElementById('theme-btn-light').classList.toggle('selected', mode === 'light');
             document.getElementById('theme-btn-dark').classList.toggle('selected', mode === 'dark');
         }
-        // Manual variant: used by the actual UI buttons (Settings theme
-        // picker, sidebar Appearance toggle) — saves the choice so it's
-        // remembered and takes priority over the device's OS theme setting
-        // on future visits, per the person's explicit preference.
         function setThemeManual(mode) {
             setTheme(mode);
             try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch (e) {}
@@ -823,9 +788,6 @@
             try { localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'dark' : 'light'); } catch (e) {}
         }
 
-        // Renders the signed-in shell UI (avatar, name, role badge, settings
-        // fields) from a decoded claims object. Shared by both the fresh
-        // Google popup flow and the silent localStorage restore flow.
         function paintIdentityIntoShell(claims) {
             profileNameDisplay.innerText = claims.name || claims.email;
             document.getElementById('profile-dropdown-email').innerText = activeUserIdentityEmail;
@@ -859,7 +821,7 @@
         function persistSessionLocally(credential, claims) {
             try {
                 localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ credential, claims }));
-            } catch (e) { /* localStorage may be unavailable in some contexts; fail silently */ }
+            } catch (e) {}
         }
 
         function clearPersistedSession() {
@@ -877,11 +839,6 @@
                 activeUserIdentityEmail = claims.email.toLowerCase();
                 paintIdentityIntoShell(claims);
 
-                // Exchange the short-lived (~1hr) Google ID token for a
-                // long-lived backend session token so the person doesn't get
-                // signed out again just from closing the browser for a
-                // while. Falls back to the raw Google token if the exchange
-                // fails for any reason, so sign-in still works either way.
                 let tokenToPersist = response.credential;
                 try {
                     const exchangeRes = await smartFetchRequest('/auth/exchange', {
@@ -894,7 +851,7 @@
                             globalAuthorizationToken = `Bearer ${exchangeData.session_token}`;
                         }
                     }
-                } catch (e) { /* fall back to raw google credential below */ }
+                } catch (e) {}
 
                 persistSessionLocally(tokenToPersist, claims);
                 enterAppShell();
@@ -920,12 +877,6 @@
             }
         }
 
-        // Attempts to silently restore a previous session from localStorage
-        // on page load / refresh. If the stored Google credential's `exp`
-        // claim has not passed, and the backend confirms it via
-        // /auth/refresh-check, the user is dropped straight back into the
-        // app shell without ever seeing the sign-in screen. This is the fix
-        // for "have to sign in again after closing/refreshing the browser".
         async function attemptSilentSessionRestore() {
             let stored = null;
             try {
@@ -935,12 +886,6 @@
 
             if (!stored || !stored.credential || !stored.claims) return false;
 
-            // Note: `stored.claims.exp` reflects the ORIGINAL Google ID
-            // token's ~1-hour expiry, not the actual long-lived session
-            // token we now store as `stored.credential` (see /auth/exchange).
-            // So we deliberately do NOT reject the session here just because
-            // that Google claim looks expired — the backend's
-            // /auth/refresh-check call below is the real source of truth.
             globalAuthorizationToken = `Bearer ${stored.credential}`;
             activeUserIdentityEmail = (stored.claims.email || "").toLowerCase();
 
@@ -955,12 +900,7 @@
                     activeUserIdentityEmail = "";
                     return false;
                 }
-            } catch (e) {
-                // Network hiccup: still allow the cached session through so a
-                // brief connectivity blip doesn't force a re-login; the next
-                // authenticated request will fail gracefully and prompt sign-in
-                // if the token really is invalid.
-            }
+            } catch (e) {}
 
             paintIdentityIntoShell(stored.claims);
             enterAppShell();
@@ -1029,9 +969,6 @@
             }).catch(() => alert("Storage operation tracking fault."));
         }
 
-        // Checks whether the currently signed-in email is already registered
-        // as a VIP contact (survives refresh/reload, unlike the old approach
-        // which only set the badge in-memory right after registering).
         async function refreshVipBadgeFromBackend() {
             try {
                 const response = await smartFetchRequest('/auth/vip-status', { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
@@ -1051,8 +988,6 @@
             document.getElementById('settings-modal').classList.add('hidden');
             document.getElementById('settings-modal').classList.remove('flex');
             profileDropdownMenu.classList.add('hidden');
-            // Fully reset Google's own auto-select state too, otherwise it can
-            // silently re-assert the previous identity on the next popup.
             if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                 google.accounts.id.disableAutoSelect();
             }
@@ -1077,14 +1012,6 @@
             return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
         }
 
-        // ── Conversation history persistence mirror ──────────────────────
-        // The backend keeps conversations in Supabase when configured, but
-        // falls back to an in-memory dict otherwise, which is wiped on every
-        // backend redeploy/restart. To make "history saved for full time
-        // until the person deletes it" actually true from the user's point
-        // of view, we mirror the conversation list + messages into
-        // localStorage (keyed per signed-in email) and merge it back in
-        // whenever the backend's own copy is missing or incomplete.
         function convCacheKey() {
             return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`;
         }
@@ -1137,7 +1064,7 @@
             clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
-                    <div class="w-12 h-12 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
+                    <div class="w-14 h-14 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3 overflow-hidden" style="box-shadow:0 8px 32px rgba(194,97,63,.25);"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
                     <h3 class="brand-serif text-2xl font-bold text-[var(--text)]">What can I build for you today?</h3>
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
@@ -1146,8 +1073,6 @@
             closeMobileSidebar();
         }
 
-        // Small reusable clipboard helper used by both the user-bubble and
-        // assistant-response copy buttons below.
         function copyPlainText(text, triggerEl) {
             navigator.clipboard?.writeText(text).then(() => {
                 if (triggerEl) {
@@ -1160,18 +1085,16 @@
 
         function renderUserPromptBubble(promptText) {
             const row = document.createElement('div');
-            row.className = 'w-full flex flex-col items-end gap-1';
+            row.className = 'w-full flex flex-col items-end gap-1 msg-enter';
             row.innerHTML = `
-                <div class="bg-[var(--bubble-user)] text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs">${sanitizeOutputText(promptText)}</div>
-                <button type="button" class="copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none">⧉ Copy</button>
+                <div class="text-[var(--text)] px-4 py-2.5 rounded-2xl rounded-br-xs max-w-[85%] sm:max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap shadow-xs glass" style="border-radius:16px 4px 16px 16px;">${sanitizeOutputText(promptText)}</div>
+                <button type="button" class="copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none transition-colors">⧉ Copy</button>
             `;
             row.querySelector('.copy-msg-btn').onclick = (e) => copyPlainText(promptText, e.currentTarget);
             conversationViewportPanel.appendChild(row);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
         }
 
-        // Maps a fenced-code-block language tag to a plausible file extension
-        // and a short badge label used on the file-creation card's icon.
         const LANG_EXT_MAP = {
             html: 'html', htm: 'html', javascript: 'js', js: 'js', jsx: 'jsx',
             typescript: 'ts', ts: 'ts', python: 'py', py: 'py', css: 'css',
@@ -1180,11 +1103,6 @@
             yml: 'yml', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rust: 'rs'
         };
 
-        // ```createfile:<filename> and ```editfile:<filename> blocks carry
-        // their real filename directly in the fence tag (e.g.
-        // "createfile:notes.md" or "editfile:chess.html") — guessFileName
-        // just needs to peel that prefix off instead of guessing from a
-        // language.
         function guessFileName(lang, ordinal) {
             if (lang && (lang.toLowerCase().startsWith('createfile:') || lang.toLowerCase().startsWith('editfile:'))) {
                 const explicitName = lang.slice(lang.indexOf(':') + 1).trim();
@@ -1194,10 +1112,6 @@
             return ordinal === 1 ? `generated.${ext}` : `generated_${ordinal}.${ext}`;
         }
 
-        // Appends a timestamped line to the background terminal logger panel
-        // so the person can see, in real time, what the assistant is doing
-        // (planning, writing a file, finishing up) even for tasks that don't
-        // otherwise show visible progress.
         function pushTerminalLog(message) {
             const stamp = new Date().toLocaleTimeString([], { hour12: false });
             const line = `[${stamp}] ${message}\n`;
@@ -1216,15 +1130,6 @@
             agentActivityStrip.classList.remove('active');
         }
 
-        // Splits streamed assistant text into an ordered list of plain-text
-        // and fenced-code segments. The final code segment may still be
-        // "open" (no closing fence yet) while tokens are still arriving —
-        // that partial segment is what drives the in-progress file card.
-        // The fence-open pattern also matches ```createfile:<name> and
-        // ```editfile:<name> tags (not just bare \w+ language tags), so
-        // both direct file-creation and file-editing blocks are parsed into
-        // their own segment exactly like a language-tagged code block, and
-        // get the same in-progress -> done file-card treatment.
         function parseAssistantSegments(text) {
             const segments = [];
             const fenceOpenRe = /```((?:createfile|editfile):[^\n`]+|\w+)?\n/g;
@@ -1250,7 +1155,7 @@
 
         function buildFileCreationCard(lang, content, closed, ordinal) {
             const card = document.createElement('div');
-            card.className = `file-creation-card ${closed ? 'done' : 'in-progress'}`;
+            card.className = `file-creation-card ${closed ? 'done' : 'in-progress'} msg-enter`;
             const filename = guessFileName(lang, ordinal);
             card.dataset.filename = filename;
             card.dataset.lang = lang;
@@ -1278,13 +1183,7 @@
             return card;
         }
 
-        // ── Real inline collapsible "activity card" — driven by the
-        // activity_created / activity_edited / activity_terminal SSE events
-        // emitted straight from the backend's actual file-write / diff /
-        // subprocess-execution code (nothing simulated). Additive: sits
-        // alongside the existing file-creation-card, doesn't replace it. ──
         function mountActivityCard(wrapper, kind, label, detailHtml) {
-            // kind: 'terminal' | 'created' | 'edited'
             const icon = kind === 'terminal' ? '›_' : (kind === 'edited' ? '✎' : '+');
             const card = document.createElement('div');
             card.className = 'activity-card';
@@ -1311,9 +1210,6 @@
             if (detailHtml !== undefined) card.querySelector('.ac-body').innerHTML = detailHtml;
         }
 
-        // ── Compact step-list, now nested inside a collapsible "Thinking..."
-        // wrapper (click header to expand/collapse and see every step) —
-        // matches the requested Codex/Cursor-style activity feed. ──
         let _activeStepList = null;
         let _activeThinkingWrap = null;
         function getThinkingWrap(wrapper) {
@@ -1331,7 +1227,7 @@
             wrap.querySelector('.thinking-header').onclick = () => wrap.classList.toggle('expanded');
             wrapper.appendChild(wrap);
             _activeThinkingWrap = wrap;
-            _activeStepList = null; // force a fresh step-list inside the new wrap
+            _activeStepList = null;
             return wrap;
         }
         function getStepList(wrapper) {
@@ -1368,8 +1264,6 @@
             _refreshThinkingSummary();
         }
 
-        // Turns a unified diff (from difflib on the backend) into small
-        // colored +/- spans for the expanded activity-card body.
         function renderUnifiedDiffHtml(unifiedDiff) {
             if (!unifiedDiff) return '<span>No textual changes.</span>';
             return unifiedDiff.split('\n').map(line => {
@@ -1380,10 +1274,6 @@
             }).join('\n');
         }
 
-        // Counts lines the same simple way a text editor's status bar would
-        // (number of \n plus one for the trailing partial/last line), which
-        // is far more meaningful than a raw character count for judging the
-        // size of a generated file (e.g. a ~5000-line file vs. a short one).
         function countLines(text) {
             if (!text) return 0;
             return text.split('\n').length;
@@ -1453,12 +1343,8 @@
                 ((langLower.startsWith('createfile:') || langLower.startsWith('editfile:')) && /\.(html?|htm)$/i.test(artifactModalState.filename));
             if (artifactModalState.view === 'preview' && isRenderable) {
                 body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
-            } else if (artifactModalState.view === 'preview' && !isRenderable) {
-                // Non-HTML files don't have a live preview; fall back to a
-                // clean read-only code view instead of a blank screen.
-                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
             } else {
-                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]">${sanitizeOutputText(artifactModalState.code)}</pre>`;
+                body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]" style="font-family:ui-monospace,'SF Mono',Menlo,monospace;">${sanitizeOutputText(artifactModalState.code)}</pre>`;
             }
         }
 
@@ -1483,31 +1369,27 @@
             pushTerminalLog(`Downloaded ${artifactModalState.filename}.`);
         }
 
-        // Runs KaTeX auto-render over a node's LaTeX delimiters (\( \), \[ \],
-        // $ $, $$ $$) once the library has loaded — guarded since the KaTeX
-        // scripts load with `defer` and may not be ready on the very first
-        // call during initial page load. Called after every
-        // updateAssistantMessageDOM pass (streaming tokens, finished
-        // response, and restored history) so math never shows as raw markup.
         function renderMathIfAvailable(node) {
             if (typeof renderMathInElement !== 'function') return;
             try {
                 renderMathInElement(node, {
                     delimiters: [
-                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: true },
                         { left: '\\[', right: '\\]', display: true },
                         { left: '\\(', right: '\\)', display: false },
-                        { left: '$', right: '$', display: false }
+                        { left: '
+</body>
+</html>
+, right: '
+</body>
+</html>
+, display: false }
                     ],
                     throwOnError: false
                 });
-            } catch (e) { /* a partially-streamed equation can briefly fail to parse — safe to ignore */ }
+            } catch (e) {}
         }
 
-        // Renders/updates an assistant message's segments (text bubbles +
-        // file-creation cards) in place, reusing existing DOM nodes where
-        // possible so in-progress cards keep their shimmer animation instead
-        // of flashing on every token.
         function updateAssistantMessageDOM(wrapper, fullText) {
             const segments = parseAssistantSegments(fullText);
             if (!wrapper._segNodes) wrapper._segNodes = [];
@@ -1518,7 +1400,8 @@
                     if (!node || node.dataset.segType !== 'text') {
                         node = document.createElement('div');
                         node.dataset.segType = 'text';
-                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        node.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs msg-enter';
+                        node.style.borderRadius = '4px 16px 16px 16px';
                         wrapper.appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
@@ -1530,14 +1413,11 @@
                         node.style.display = 'none';
                     }
                 } else if (seg.lang === 'chart') {
-                    // ```chart:<Chart.js config JSON>``` — rendered as a real
-                    // live graph instead of dumped as text/ASCII art. Only
-                    // renders once the block is closed and its JSON is valid
-                    // (a partial stream mid-JSON would throw).
                     if (!node || node.dataset.segType !== 'chart') {
                         node = document.createElement('div');
                         node.dataset.segType = 'chart';
-                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] rounded-2xl p-4 max-w-[92%] sm:max-w-[520px]';
+                        node.className = 'glass rounded-2xl p-4 max-w-[92%] sm:max-w-[520px] msg-enter';
+                        node.style.borderRadius = '16px';
                         node.innerHTML = '<canvas></canvas>';
                         wrapper.appendChild(node);
                         wrapper._segNodes[i] = node;
@@ -1545,22 +1425,11 @@
                     if (seg.closed && !node._rendered && typeof Chart !== 'undefined') {
                         try {
                             const cfg = JSON.parse(seg.content);
-                            // Force responsive sizing regardless of what the
-                            // model's JSON contains — this was the cause of
-                            // charts not showing/being cut off on mobile.
                             cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false }, cfg.options || {});
                             node.querySelector('canvas').parentElement.style.position = 'relative';
                             node.querySelector('canvas').parentElement.style.height = '260px';
                             node._rendered = true;
                             new Chart(node.querySelector('canvas').getContext('2d'), cfg);
-                            // Real "save chart" action: exports the actual
-                            // rendered canvas as a PNG the person can attach
-                            // to a PDF themselves, or embed elsewhere — this
-                            // is the honest, actually-working version of
-                            // "save the chart to PDF" (a full server-side
-                            // chart-into-PDF pipeline would need a headless
-                            // browser/rendering service, which isn't wired
-                            // up here).
                             if (!node.querySelector('.chart-dl-btn')) {
                                 const dlBtn = document.createElement('button');
                                 dlBtn.type = 'button';
@@ -1576,25 +1445,21 @@
                                 };
                                 node.appendChild(dlBtn);
                             }
-                        } catch (e) { /* invalid/partial JSON — leave canvas empty rather than crash */ }
+                        } catch (e) {}
                     }
                 } else if (seg.lang === 'finaldoc') {
                     wrapper._fileOrdinal += 1;
                     if (!node || node.dataset.segType !== 'finaldoc') {
                         node = document.createElement('div');
                         node.dataset.segType = 'finaldoc';
-                        node.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs whitespace-pre-wrap';
+                        node.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs whitespace-pre-wrap msg-enter';
+                        node.style.borderRadius = '4px 16px 16px 16px';
                         wrapper.appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
                     node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
                     renderMathIfAvailable(node);
                 } else if (['python', 'py', 'bash', 'sh', 'shell'].includes((seg.lang || '').toLowerCase())) {
-                    // Plain executable block, not createfile:/editfile: — its
-                    // execution is already represented by the "Ran python #N"
-                    // step-list row under the Thinking wrapper. Rendering a
-                    // SECOND boxy "generated.py" file card here duplicated
-                    // the same event, so intentionally render nothing here.
                     if (!node) {
                         node = document.createElement('div');
                         node.style.display = 'none';
@@ -1622,14 +1487,10 @@
 
         function appendGeneratedImage(wrapper, url, promptText) {
             const holder = document.createElement('div');
-            holder.className = 'rounded-2xl overflow-hidden border border-[var(--border)] max-w-[85%] shadow-xs';
+            holder.className = 'rounded-2xl overflow-hidden border border-[var(--border)] max-w-[85%] shadow-xs msg-enter';
+            holder.style.borderRadius = '16px';
             const safeAlt = sanitizeOutputText(promptText || 'Generated image');
 
-            // Animated "generating..." card: the CSS transition drives the
-            // bar itself (GPU-composited, no per-frame JS), and a cheap
-            // low-frequency interval (every ~220ms) only ever touches a text
-            // node for the percentage — optimized so it stays smooth without
-            // hammering layout, even though it's fully animated end to end.
             holder.innerHTML = `
                 <div class="igen-progress-wrap" style="position:relative; background:var(--panel-2); min-height:180px; display:flex; align-items:center; justify-content:center;">
                     <div style="font-size:11.5px; color:var(--text-dim); font-weight:600; display:flex; align-items:center; gap:6px;">
@@ -1656,9 +1517,6 @@
                 if (simulatedPct >= 92) clearInterval(labelTimer);
             }, 220);
 
-            // Pollinations doesn't report real progress, so we preload the
-            // actual image in the background and only reveal it (jumping the
-            // bar to 100%) once it has genuinely finished loading.
             const preload = new Image();
             preload.referrerPolicy = 'no-referrer';
             let _imgRetryCount = 0;
@@ -1679,9 +1537,6 @@
                     }, 250);
                 };
                 preload.onerror = () => {
-                    // Pollinations occasionally 403s/times out transiently —
-                    // retry once with a fresh cache-busting seed before
-                    // giving up, instead of dead-ending on the first miss.
                     if (_imgRetryCount < 1) {
                         _imgRetryCount += 1;
                         const retryUrl = loadUrl + (loadUrl.includes('?') ? '&' : '?') + 'retry=' + Date.now();
@@ -1699,16 +1554,9 @@
             tryLoad(url);
         }
 
-        // Appends a real downloadable file card. Instead of guessing an
-        // absolute URL from the CURRENT PAGE's origin (which breaks when the
-        // frontend is on Vercel and the backend lives elsewhere — Vercel only
-        // forwards /api/* by default, so a bare /download/<token> 404s on
-        // Vercel's own edge), this routes the fetch through the same
-        // multi-path smartFetchRequest helper every other call already uses,
-        // then triggers a real file download from the resulting blob.
         function appendDownloadCard(wrapper, relativeUrl, filename) {
             const card = document.createElement('div');
-            card.className = 'file-creation-card done';
+            card.className = 'file-creation-card done msg-enter';
             card.innerHTML = `
                 <div class="fcc-icon">⭳</div>
                 <div class="fcc-meta">
@@ -1721,10 +1569,6 @@
                 const statusText = card.querySelector('.fcc-status-text');
                 try {
                     statusText.innerText = 'Fetching file...';
-                    // relativeUrl looks like "/download/<token>" — strip any
-                    // "/api/" or "/api/app/" prefix if present so
-                    // smartFetchRequest can try its own full set of
-                    // permutations against whichever host actually serves it.
                     const cleanPath = relativeUrl.replace(/^\/(api\/app\/|api\/)?/, '/');
                     const response = await smartFetchRequest(cleanPath, { method: 'GET' });
                     if (!response.ok) throw new Error(`Download fetch failed (${response.status})`);
@@ -1749,26 +1593,19 @@
         }
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
-            containerNode.className = 'w-full flex flex-col items-start gap-1.5';
+            containerNode.className = 'w-full flex flex-col items-start gap-1.5 msg-enter';
             containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
             conversationViewportPanel.appendChild(containerNode);
             conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
             return containerNode;
         }
 
-        // Adds a small "Copy" action under a finished assistant response,
-        // copying the full raw reply text (markdown/code included) to the
-        // clipboard. Safe to call more than once on the same wrapper (e.g.
-        // once live after streaming completes, and skipped when restoring
-        // history since that path calls it exactly once already) — it
-        // removes any existing copy button first so there's never a
-        // duplicate.
         function appendAssistantCopyButton(wrapper, fullText) {
             const existing = wrapper.querySelector('.copy-msg-btn');
             if (existing) existing.remove();
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none self-start';
+            btn.className = 'copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none self-start transition-colors';
             btn.innerText = '⧉ Copy';
             btn.onclick = (e) => copyPlainText(fullText, e.currentTarget);
             wrapper.appendChild(btn);
@@ -1776,11 +1613,11 @@
 
         function mountTypingIndicator() {
             const row = document.createElement('div');
-            row.className = 'w-full flex flex-col items-start gap-1';
+            row.className = 'w-full flex flex-col items-start gap-1 msg-enter';
             row.id = 'typing-indicator-row';
             row.innerHTML = `
                 <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
-                <div class="bg-[var(--bubble-model)] border border-[var(--border)] px-4 py-3 rounded-2xl rounded-bl-xs flex items-center gap-1 shadow-xs">
+                <div class="glass px-4 py-3 flex items-center gap-1 shadow-xs" style="border-radius:4px 16px 16px 16px;">
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
@@ -1794,11 +1631,6 @@
             if (row) row.remove();
         }
 
-        // Lightweight markdown renderer for assistant text bubbles: headings,
-        // bold, bullet/numbered lists, and REAL <table> rendering for pipe
-        // tables — so structured answers (comparisons, specs, step lists)
-        // render as actual formatted content instead of a flat wall of text
-        // with literal ** and | characters.
         function renderLightMarkdown(raw) {
             const escaped = sanitizeOutputText(raw);
             const lines = escaped.split('\n');
@@ -1819,7 +1651,6 @@
                 const line = lines[i];
                 const trimmed = line.trim();
 
-                // Table block: a header row followed by a |---|---| separator row
                 if (trimmed.startsWith('|') && lines[i + 1] && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
                     closeList();
                     const headerCells = trimmed.split('|').map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''));
@@ -1842,7 +1673,7 @@
                 const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
                 if (headingMatch) {
                     closeList();
-                    const level = Math.min(headingMatch[1].length + 1, 5); // ## -> h3, ### -> h4, etc.
+                    const level = Math.min(headingMatch[1].length + 1, 5);
                     const sizes = { 2: '1.3em', 3: '1.15em', 4: '1.05em', 5: '1em' };
                     html += `<div style="font-weight:700;font-size:${sizes[level] || '1em'};margin:${i === 0 ? '0' : '14px'} 0 6px;color:var(--text);">${inlineFormat(headingMatch[2])}</div>`;
                     i++; continue;
@@ -1874,11 +1705,6 @@
             const typedMessage = userPromptInputField.value.trim();
             if ((!typedMessage && !pendingPasteAttachment && !pendingFileAttachment) || isGenerating) return;
 
-            // If the person types the VIP secret code straight into the chat
-            // box (instead of using the 🔒 Secure Lock button), intercept it
-            // here and open the proper VIP modal instead of sending it to the
-            // model — this is what was happening before: "31082011" was being
-            // treated as ordinary chat text and answered as if it were a date.
             if (typedMessage === "31082011") {
                 userPromptInputField.value = '';
                 userPromptInputField.style.height = 'auto';
@@ -1886,9 +1712,6 @@
                 return;
             }
 
-            // Typing "@education" alone opens the book picker instead of
-            // sending anything to the model — the actual question comes in
-            // a follow-up message once a book + chapter have been picked.
             if (typedMessage.toLowerCase() === "@education") {
                 userPromptInputField.value = '';
                 userPromptInputField.style.height = 'auto';
@@ -1896,11 +1719,6 @@
                 return;
             }
 
-            // Build what's actually sent to the model (typed text + the
-            // pasted content as a fenced block), and what's shown in the
-            // user's own chat bubble (typed text + a small attachment note,
-            // not the raw dump — mirrors how a 50+ line paste becomes a
-            // proper "paste.txt" attachment instead of cluttering the box).
             let message = typedMessage;
             let displayMessage = typedMessage;
             if (pendingPasteAttachment) {
@@ -1909,11 +1727,6 @@
             }
             clearPasteAttachment();
 
-            // Same idea for an uploaded file/image: its REAL backend-analyzed
-            // content (full PNG/EXIF breakdown for images, decoded text for
-            // PDFs/docs/etc — see _analyze_image_via_terminal /upload route)
-            // rides along in a fenced block so the model actually sees and
-            // can respond about the real file, not just a filename.
             if (pendingFileAttachment) {
                 const kindLabel = pendingFileAttachment.isImage ? 'Image analysis' : 'File contents';
                 message = (message ? message + "\n\n" : "") +
@@ -1924,17 +1737,10 @@
             }
             clearFileAttachment();
 
-            // If a book+chapter are currently selected from the @education
-            // flow, invisibly tag the outgoing message so the backend scopes
-            // its answer to that exact chapter — the tag never shows in the
-            // user's own chat bubble (displayMessage stays clean).
             if (pendingEducationContext) {
                 message = `[[EDU_BOOK:${pendingEducationContext.book}]][[EDU_CHAPTER:${pendingEducationContext.chapter}]]${message}`;
             }
 
-            // Web search toggle from the "Add to chat" sheet — off means an
-            // invisible marker tells the backend to skip its automatic web
-            // search for this turn (never shown in the user's own bubble).
             if (!webSearchEnabled) {
                 message = `[[NO_WEB_SEARCH]]${message}`;
             }
@@ -1970,7 +1776,8 @@
                     } else {
                         const wrapper = mountModelOutputTargetShell();
                         const cell = document.createElement('div');
-                        cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                        cell.style.borderRadius = '4px 16px 16px 16px';
                         cell.innerText = "Something went wrong reaching the server. Please try again.";
                         wrapper.appendChild(cell);
                     }
@@ -2007,8 +1814,6 @@
                                 setAgentActivity('Writing response...');
                             }
                             fullText += payload.text;
-                            // Throttle DOM rebuilding to once per animation frame so
-                            // fast token streams stay smooth instead of lagging.
                             if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
                         } else if (payload.type === 'image') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
@@ -2020,9 +1825,6 @@
                             pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
                         } else if (payload.type === 'terminal_output') {
-                            // Real output from a python code block that was
-                            // actually executed server-side in the background
-                            // terminal — not a simulation.
                             const ok = payload.returncode === 0;
                             pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
                             if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
@@ -2082,7 +1884,8 @@
                 clearAgentActivity();
                 const wrapper = mountModelOutputTargetShell();
                 const cell = document.createElement('div');
-                cell.className = 'bg-[var(--bubble-model)] border border-[var(--border)] text-[var(--text)] text-sm px-4 py-3 rounded-2xl rounded-bl-xs max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                cell.style.borderRadius = '4px 16px 16px 16px';
                 cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
                 wrapper.appendChild(cell);
                 console.error("[CHAT][STREAM ERROR]", err);
@@ -2117,17 +1920,11 @@
         async function synchronizeConversationsHistoryIndex() {
             const cache = loadConvCache();
             let items = cache.list || [];
-            // Paint the cached list immediately so history appears instantly
-            // (fixes any perceived lag while the network call is in flight),
-            // then reconcile with the backend's copy once it responds.
             if (items.length) { allHistoryItemsCache = items; renderHistoryRows(items); }
             try {
                 const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
                 if (!response.ok) return;
                 const backendItems = await response.json();
-                // Merge: anything the backend knows about wins for that id;
-                // anything only present locally (backend memory was reset)
-                // stays visible too.
                 const mergedById = {};
                 (backendItems || []).forEach(it => { mergedById[it.id] = it; });
                 items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
@@ -2146,8 +1943,6 @@
                 if (!response.ok) throw new Error("Load structural exception context.");
                 let logs = await response.json();
                 if ((!logs || logs.length === 0)) {
-                    // Backend has nothing for this id (likely an in-memory
-                    // reset) — fall back to what we mirrored locally.
                     const cache = loadConvCache();
                     logs = cache.messages[conversationId] || [];
                 } else {
@@ -2201,9 +1996,6 @@
                     const lowerName = (res.filename || '').toLowerCase();
                     const isImage = /\.(png|jpe?g|gif|webp)$/.test(lowerName);
                     if (res.preview && res.preview.trim()) {
-                        // Arm the attachment so its real content/analysis
-                        // rides along with the person's NEXT message,
-                        // instead of the upload being a dead-end alert.
                         setFileAttachment(res.filename, res.preview, isImage);
                     } else {
                         alert(`${res.filename} — ${res.status}`);
@@ -2215,11 +2007,6 @@
             } catch (err) { alert("Upload failed. Check your connection and try again."); }
         }
 
-        // Camera / Photos / Files buttons in the "Add to chat" sheet all
-        // call this — same real /upload + analysis pipeline as
-        // dispatchPdfUpload above (nothing duplicated in behavior, just a
-        // separate quick-attach entry point since these fire from a plain
-        // <input type=file onchange=...> rather than a modal's own button).
         async function dispatchQuickUpload(inputEl) {
             if (!inputEl.files || inputEl.files.length === 0) return;
             const uploadedFile = inputEl.files[0];
@@ -2244,14 +2031,10 @@
             } catch (err) {
                 alert("Upload failed. Check your connection and try again.");
             } finally {
-                inputEl.value = ''; // allow re-selecting the same file next time
+                inputEl.value = '';
             }
         }
 
-        // Web search toggle in the "Add to chat" sheet. Persisted so the
-        // choice sticks across messages/reloads. When turned OFF, outgoing
-        // messages get an invisible [[NO_WEB_SEARCH]] marker the backend
-        // recognizes to skip its automatic web-search step for that turn.
         const WEB_SEARCH_PREF_KEY = "prathamai_web_search_pref";
         let webSearchEnabled = true;
         function toggleWebSearchPreference() {
@@ -2272,18 +2055,6 @@
             }
         }
 
-
-        // ── @education book/chapter picker ──────────────────────────────
-        // Typing "@education" (alone) opens a book picker fed by
-        // /education/books (reading the data/education/<Book>/ folders in
-        // the GitHub data repo). Picking a book auto-sends a small visible
-        // "selected book" message and opens a chapter picker fed by
-        // /education/chapters?book=X. Picking a chapter auto-sends a
-        // "selected chapter" message and arms pendingEducationContext, so
-        // every subsequent question gets invisibly tagged with
-        // [[EDU_BOOK:...]][[EDU_CHAPTER:...]] (stripped from what the user
-        // sees, parsed by the backend) until the person types "@education"
-        // again to pick a different book/chapter.
         function closeEducationModals() {
             document.getElementById('education-book-modal').classList.add('hidden');
             document.getElementById('education-book-modal').classList.remove('flex');
@@ -2361,17 +2132,8 @@
             userPromptInputField.focus();
         }
 
-        // Legacy note: file preview + progress used to be driven by a single
-        // end-of-stream regex pass (evaluateAndParsePreviewSandboxPayload).
-        // That has been replaced by the live, per-file "file-creation-card"
-        // system above (buildFileCreationCard / updateFileCreationCard /
-        // openFilePreviewFromCard), which tracks each fenced code block
-        // (including direct ```createfile: blocks) as it streams in and lets
-        // the person open any of them, not just the last.
-
         function expandActivePreviewContainer() { toggleWorkbenchMobile(); }
 
-        // ── Real Files tab (Preview / Files toggle within the Workbench) ──
         let activeWorkbenchTab = 'preview';
 
         function setWorkbenchTab(tab) {
@@ -2426,18 +2188,135 @@
             }
         }
 
+        // Ambient particle background
+        (function initAmbientBg() {
+            const canvas = document.getElementById('ambient-bg');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            let w, h, dpr;
+            function resize() {
+                dpr = Math.min(window.devicePixelRatio || 1, 2);
+                w = canvas.width = window.innerWidth * dpr;
+                h = canvas.height = window.innerHeight * dpr;
+                canvas.style.width = window.innerWidth + 'px';
+                canvas.style.height = window.innerHeight + 'px';
+            }
+            function createParticles() {
+                const count = Math.min(60, Math.floor((window.innerWidth * window.innerHeight) / 25000));
+                particles = [];
+                for (let i = 0; i < count; i++) {
+                    particles.push({
+                        x: Math.random() * w, y: Math.random() * h,
+                        vx: (Math.random() - 0.5) * 0.15 * dpr,
+                        vy: (Math.random() - 0.5) * 0.15 * dpr,
+                        r: (Math.random() * 1.5 + 0.5) * dpr,
+                        a: Math.random() * 0.4 + 0.1
+                    });
+                }
+            }
+            let mouseX = -9999, mouseY = -9999;
+            window.addEventListener('mousemove', (e) => { mouseX = e.clientX * dpr; mouseY = e.clientY * dpr; });
+            function draw() {
+                ctx.clearRect(0, 0, w, h);
+                const isDark = document.documentElement.classList.contains('dark-mode');
+                const accent = isDark ? '217,119,87' : '194,97,63';
+                particles.forEach(p => {
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
+                    if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
+                    const dx = p.x - mouseX, dy = p.y - mouseY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 120 * dpr) {
+                        const f = (120 * dpr - dist) / (120 * dpr) * 0.5;
+                        p.x += dx / dist * f; p.y += dy / dist * f;
+                    }
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${accent},${p.a})`;
+                    ctx.fill();
+                });
+                for (let i = 0; i < particles.length; i++) {
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const d = Math.sqrt(dx*dx + dy*dy);
+                        if (d < 90 * dpr) {
+                            ctx.beginPath();
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.strokeStyle = `rgba(${accent},${0.08 * (1 - d/(90*dpr))})`;
+                            ctx.lineWidth = dpr * 0.5;
+                            ctx.stroke();
+                        }
+                    }
+                }
+                requestAnimationFrame(draw);
+            }
+            resize(); createParticles(); draw();
+            window.addEventListener('resize', () => { resize(); createParticles(); });
+        })();
+
+        // Custom cursor with magnetic + trailing
+        (function initCursor() {
+            const dot = document.getElementById('cursor-dot');
+            const ring = document.getElementById('cursor-ring');
+            if (!dot || !ring) return;
+            let mx = -100, my = -100, rx = -100, ry = -100;
+            window.addEventListener('mousemove', (e) => { mx = e.clientX; my = e.clientY; });
+            function loop() {
+                rx += (mx - rx) * 0.18; ry += (my - ry) * 0.18;
+                dot.style.left = mx + 'px'; dot.style.top = my + 'px';
+                ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+                requestAnimationFrame(loop);
+            }
+            loop();
+            document.addEventListener('mouseover', (e) => {
+                if (e.target.closest('button, .nav-row, .chat-row, .education-option, input, textarea, [onclick]')) {
+                    ring.style.width = '44px'; ring.style.height = '44px';
+                }
+            });
+            document.addEventListener('mouseout', (e) => {
+                if (e.target.closest('button, .nav-row, .chat-row, .education-option, input, textarea, [onclick]')) {
+                    ring.style.width = '32px'; ring.style.height = '32px';
+                }
+            });
+        })();
+
+        // Magnetic buttons + ripple
+        (function initMagnetic() {
+            document.addEventListener('mousemove', (e) => {
+                document.querySelectorAll('.magnetic-btn').forEach(btn => {
+                    const r = btn.getBoundingClientRect();
+                    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+                    const dx = e.clientX - cx, dy = e.clientY - cy;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 60) {
+                        btn.style.transform = `translate(${dx*0.25}px, ${dy*0.25}px)`;
+                    } else {
+                        btn.style.transform = 'translate(0,0)';
+                    }
+                });
+            });
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.magnetic-btn, button');
+                if (!btn) return;
+                const r = btn.getBoundingClientRect();
+                const ripple = document.createElement('span');
+                ripple.className = 'ripple';
+                ripple.style.left = (e.clientX - r.left) + 'px';
+                ripple.style.top = (e.clientY - r.top) + 'px';
+                ripple.style.width = ripple.style.height = '20px';
+                btn.style.position = btn.style.position || 'relative';
+                btn.style.overflow = 'hidden';
+                btn.appendChild(ripple);
+                setTimeout(() => ripple.remove(), 600);
+            });
+        })();
+
         window.addEventListener('DOMContentLoaded', async () => {
             const currentOrigin = window.location.origin;
             SERVER_CONTEXT_HOST = (currentOrigin.startsWith('file://') || currentOrigin.includes('null')) ? "http://127.0.0.1:5000" : currentOrigin;
 
-            // Respect the device's own dark/light setting (phone or PC) on
-            // first load, instead of always forcing light mode. If the
-            // person has explicitly picked a theme before (via the
-            // Appearance toggle), that saved manual choice wins over the OS
-            // setting; only a first-ever visit falls back to the OS
-            // preference. The page also stays in sync if the OS theme
-            // changes while the app is open (e.g. phone auto dark-mode at
-            // sunset).
             const THEME_STORAGE_KEY = "prathamai_theme_pref";
             let savedTheme = null;
             try { savedTheme = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
@@ -2451,13 +2330,6 @@
                 });
             }
 
-            // Fix: previously this only ran once at page load, so any
-            // [data-brand-logo] element rendered later (e.g. re-rendering
-            // the sidebar/header when switching New chat -> a recent chat)
-            // never got its src set and fell back to showing the plain "P"
-            // badge or a stale/broken image — that's the "logo changes"
-            // bug. applyBrandLogo() is now reusable and a MutationObserver
-            // re-applies it to any newly inserted logo element automatically.
             function applyBrandLogo(root) {
                 (root || document).querySelectorAll('[data-brand-logo]').forEach(img => {
                     if (img.dataset.brandLogoApplied === '1') return;
@@ -2507,10 +2379,6 @@
                 dispatchChatMessage();
             });
 
-            // Try to silently restore an existing session first (fixes the
-            // "must sign in again on refresh / browser close" complaint).
-            // Only if that fails do we fall back to showing the Google
-            // sign-in button.
             setWorkbenchTab('preview');
             initWebSearchPreferenceFromStorage();
             const restored = await attemptSilentSessionRestore();
@@ -2521,5 +2389,6 @@
             }
         });
     </script>
+
 </body>
 </html>
