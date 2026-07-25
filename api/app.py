@@ -707,7 +707,9 @@ def _write_pdf_with_diagrams(text: str, diagram_files: dict) -> bytes:
     for item in content_items:
         if isinstance(item, dict) and item.get("type") == "image":
             nat_w, nat_h = item["width"], item["height"]
-            disp_w = content_width_pts
+            max_disp_w = min(content_width_pts, 320)  # cap so a simple diagram
+                                                          # doesn't dominate the page
+            disp_w = max_disp_w
             disp_h = disp_w * (nat_h / max(nat_w, 1))
             if disp_h > max_image_height_pts:
                 disp_h = max_image_height_pts
@@ -719,16 +721,25 @@ def _write_pdf_with_diagrams(text: str, diagram_files: dict) -> bytes:
             img_obj_num = alloc()
             objects[img_obj_num] = {"__image__": True, "width": nat_w, "height": nat_h, "rgb": item["rgb"]}
             place_y = cur_y - disp_h
-            cur_page["images"].append((img_name, img_obj_num, margin_left, place_y, disp_w, disp_h))
-            cur_y -= (disp_h + 10)  # small gap after the diagram
+            place_x = margin_left + (content_width_pts - disp_w) / 2  # centered horizontally
+            cur_page["images"].append((img_name, img_obj_num, place_x, place_y, disp_w, disp_h))
+            cur_y -= (disp_h + 12)  # small gap after the diagram
         else:
             font_key, size_delta, line_text = item
             if (cur_y - leading) < margin_bottom_y:
                 start_new_page()
-            cur_page["lines"].append((font_key, size_delta, line_text))
+            # FIX for the real bug (text overlapping/bleeding into diagram
+            # images): each line now carries its OWN y-position, computed
+            # right here during layout — the same cur_y used to decide page
+            # breaks and image placement. Previously only lines carried no
+            # position at all and were drawn back-to-back with a fixed T*
+            # advance starting from the page top, completely ignoring any
+            # vertical space an image in between had actually consumed —
+            # that's what caused text to visually overlap the diagrams.
+            cur_page["lines"].append((cur_y, font_key, size_delta, line_text))
             cur_y -= leading
     pages.append(cur_page)
-    pages = [p for p in pages if p["lines"] or p["images"]] or [{"lines": [("F1", 0, "")], "images": []}]
+    pages = [p for p in pages if p["lines"] or p["images"]] or [{"lines": [(margin_top_y, "F1", 0, "")], "images": []}]
 
     page_nums, content_nums = [], []
     for _ in pages:
@@ -738,18 +749,37 @@ def _write_pdf_with_diagrams(text: str, diagram_files: dict) -> bytes:
     content_bodies = []
     for page in pages:
         stream_parts = []
-        if page["lines"]:
+        # Group lines into contiguous "runs" — a run is a sequence of lines
+        # whose y-positions differ by exactly `leading` from one to the
+        # next. Whenever an image was placed between two lines, the gap is
+        # bigger than `leading`, which starts a new run positioned at its
+        # own correct y via an explicit Td — this is what actually fixes
+        # text no longer overlapping images, instead of assuming one
+        # unbroken text flow down the whole page.
+        runs = []
+        current_run = []
+        prev_y = None
+        for y, font_key, size_delta, line_text in page["lines"]:
+            if prev_y is not None and abs(prev_y - y - leading) > 0.01:
+                runs.append(current_run)
+                current_run = []
+            current_run.append((y, font_key, size_delta, line_text))
+            prev_y = y
+        if current_run:
+            runs.append(current_run)
+
+        for run in runs:
             stream_parts.append("BT")
             stream_parts.append(f"{leading} TL")
-            stream_parts.append(f"{margin_left} {margin_top_y} Td")
+            stream_parts.append(f"{margin_left} {run[0][0]} Td")
             first = True
-            for font_key, size_delta, line in page["lines"]:
+            for _y, font_key, size_delta, line_text in run:
                 size = base_font_size + size_delta
                 font_ref = "/F2" if font_key == "F2" else "/F1"
                 stream_parts.append(f"{font_ref} {size} Tf")
                 if not first:
                     stream_parts.append("T*")
-                escaped = _escape_pdf_literal_text(line)
+                escaped = _escape_pdf_literal_text(line_text)
                 stream_parts.append(f"({escaped}) Tj")
                 first = False
             stream_parts.append("ET")
@@ -2027,6 +2057,18 @@ SYSTEM_PROMPT = (
     "then the createfile block, then continue to the next question) rather than promising to add all "
     "diagrams at the end of a long response — if the reply runs long, work done at the very end is what "
     "gets cut off first, so front-load each diagram right where it's needed instead of deferring it.\n\n"
+    "GEOMETRY DIAGRAMS MUST BE NUMERICALLY ACCURATE, NOT GENERIC SHAPES: when a construction question "
+    "gives specific measurements (side lengths, angles), the SVG diagram MUST reflect those exact "
+    "numbers — a triangle with angle A=70°, angle B=60° looks visibly different from one with an "
+    "obtuse 100° angle, and the circumcircle's centre position (inside vs outside the triangle) "
+    "depends entirely on those real values. Do NOT draw a generic, similar-looking triangle-with-circle "
+    "for every question regardless of its actual given measurements — that is inaccurate and defeats "
+    "the point of the diagram. Before writing the SVG, actually COMPUTE the real vertex coordinates: "
+    "run a ```python block that places one side on known coordinates, uses the law of cosines/sines to "
+    "find the third vertex from the given angle(s) and side length(s), then computes the circumcenter "
+    "as the intersection of two perpendicular bisectors (or via the standard circumcenter formula) and "
+    "the circumradius. Print those exact computed (x, y) coordinates and radius, then use those real "
+    "numbers directly in the SVG's <polygon>/<circle> coordinates — don't eyeball or approximate them.\n\n"
     "You also have a REAL background terminal, not a simulated one, and YOU run it directly — there "
     "is no separate tool, no external terminal, no permission step. The moment you write a ```python, "
     "```py, ```bash, ```sh, or ```shell fenced block, the backend executes it for real on the server "
@@ -3350,7 +3392,12 @@ def chat_stream():
                 "don't have web/internet access — you do, it just didn't return anything useful for "
                 "this specific query. If the question needs current info you don't have, say the "
                 "search didn't turn up a clear answer this time and suggest they try rephrasing or "
-                "asking again, rather than claiming you lack web access at all. CRITICAL: if asked for "
+                "asking again, rather than claiming you lack web access at all. NEVER mention a "
+                "specific training cutoff date (e.g. 'my data is from mid-2024') as the reason you "
+                "can't answer a current-events question — that framing implies you didn't even try a "
+                "live search, when one was actually attempted for this message. If it came back empty, "
+                "just say a live search didn't return a clear answer this time, without citing any "
+                "cutoff date at all. CRITICAL: if asked for "
                 "'today's news', 'current affairs', or anything time-sensitive and you have NO live "
                 "search results, do NOT invent specific-sounding headlines, dates, names, or events from "
                 "your training data and present them as if they're current — that is fabricating fake "
