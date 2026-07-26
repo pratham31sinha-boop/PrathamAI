@@ -254,6 +254,25 @@
         .step-list .step-icon.done { color: #4ade80; }
         .step-list .step-icon.running { color: var(--accent); }
 
+        /* ===== Real inline expandable output per step — click a step row
+           to reveal its ACTUAL stdout/stderr or diff (not a simulation),
+           plus a live elapsed-time badge while it's still running. ===== */
+        .step-list .step-row { cursor: pointer; }
+        .step-list .step-row .step-elapsed {
+            font-size: 10px; color: var(--text-dim); opacity: .7; margin-left: 4px; flex-shrink: 0;
+        }
+        .step-list .step-detail {
+            display: none; margin: 2px 0 4px 26px; padding: 6px 9px;
+            background: color-mix(in srgb, var(--panel) 94%, black);
+            border: 1px solid var(--border); border-radius: 8px;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;
+            white-space: pre-wrap; word-break: break-word; color: var(--text-dim);
+            max-height: 180px; overflow-y: auto;
+        }
+        .step-list .step-row.expanded + .step-detail { display: block; }
+        .step-list .step-row.has-detail .step-text::after { content: ' ▾'; opacity: .5; font-size: 10px; }
+        .step-list .step-row.expanded .step-text::after { content: ' ▴'; }
+
         .thinking-wrap { margin: 6px 0; max-width: 400px; }
         .thinking-header {
             display: flex; align-items: center; gap: 8px; cursor: pointer;
@@ -1567,6 +1586,10 @@
         let pendingPasteAttachment = null;
         let pendingFileAttachment = null;
         let pendingEducationContext = null;
+        // Correlates a real terminal_output event (which carries actual
+        // stdout/stderr) with its matching activity_terminal step by
+        // ordinal, so the step's expandable detail can show genuine output.
+        let _pendingTerminalOutputs = {};
 
         function setPasteAttachment(content, lineCount) {
             pendingPasteAttachment = { content, lines: lineCount };
@@ -2091,13 +2114,44 @@
             const list = getStepList(wrapper);
             const row = document.createElement('div');
             row.className = 'step-row' + (isHead ? ' head' : '');
-            row.innerHTML = `<span class="step-icon running">${icon}</span><span class="step-text">${text}</span>`;
+            row.innerHTML = `<span class="step-icon running">${icon}</span><span class="step-text">${text}</span><span class="step-elapsed"></span>`;
+            const detail = document.createElement('div');
+            detail.className = 'step-detail';
             list.appendChild(row);
+            list.appendChild(detail);
+            row._detailEl = detail;
+            row._startedAt = performance.now();
+            // Live elapsed-time badge — real wall-clock time this specific
+            // step has actually been running, updated every 200ms until the
+            // step finishes (see finishStep, which clears this interval).
+            const elapsedEl = row.querySelector('.step-elapsed');
+            row._elapsedTimer = setInterval(() => {
+                const secs = (performance.now() - row._startedAt) / 1000;
+                elapsedEl.textContent = secs < 1 ? '' : `${secs.toFixed(1)}s`;
+            }, 200);
+            row.onclick = () => {
+                if (!row.classList.contains('has-detail')) return;
+                row.classList.toggle('expanded');
+            };
             _refreshThinkingSummary();
             return row;
         }
+        // Attaches real backend output (actual stdout/stderr from terminal
+        // execution, or a real unified diff for an edit) to a step row so
+        // clicking it reveals genuine data instead of nothing.
+        function setStepDetail(row, html) {
+            if (!row || !row._detailEl || !html) return;
+            row._detailEl.innerHTML = html;
+            row.classList.add('has-detail');
+        }
         function finishStep(row, ok) {
             if (!row) return;
+            if (row._elapsedTimer) {
+                clearInterval(row._elapsedTimer);
+                const totalSecs = (performance.now() - row._startedAt) / 1000;
+                const elapsedEl = row.querySelector('.step-elapsed');
+                if (elapsedEl) elapsedEl.textContent = totalSecs < 0.3 ? '' : `${totalSecs.toFixed(1)}s`;
+            }
             const iconEl = row.querySelector('.step-icon');
             iconEl.className = 'step-icon ' + (ok ? 'done' : 'failed');
             _refreshThinkingSummary();
@@ -2512,6 +2566,21 @@
                     i++; continue;
                 }
 
+                // Real todo-list checkboxes ("- [ ] Task" / "- [x] Done task")
+                // — checked before the generic bullet handler below, since
+                // this is a specific pattern the model now uses for the
+                // visible multi-part task plan (see WORKFLOW FOR LARGE/
+                // MULTI-PART TASKS in the system prompt).
+                const checkboxMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.*)$/);
+                if (checkboxMatch) {
+                    const isChecked = checkboxMatch[1].toLowerCase() === 'x';
+                    if (!inList || listType !== 'ul') { closeList(); html += '<ul style="margin:4px 0 8px 0;list-style:none;padding-left:2px;">'; inList = true; listType = 'ul'; }
+                    const boxChar = isChecked ? '☑' : '☐';
+                    const textStyle = isChecked ? 'color:var(--text-dim);text-decoration:line-through;opacity:.75;' : '';
+                    html += `<li style="margin:3px 0;display:flex;align-items:flex-start;gap:6px;"><span style="flex-shrink:0;color:${isChecked ? '#4ade80' : 'var(--accent)'};">${boxChar}</span><span style="${textStyle}">${inlineFormat(checkboxMatch[2])}</span></li>`;
+                    i++; continue;
+                }
+
                 const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
                 const numberedMatch = trimmed.match(/^\d+[.)]\s+(.*)$/);
                 if (bulletMatch || numberedMatch) {
@@ -2662,6 +2731,12 @@
                             pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
                             if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
                             if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
+                            // Cache the REAL output by ordinal so the matching
+                            // activity_terminal step (which fires right after
+                            // this event, same ordinal) can show it inline —
+                            // this is genuine stdout/stderr from the actual
+                            // subprocess execution, not simulated text.
+                            _pendingTerminalOutputs[payload.ordinal] = payload;
                             if (modelWrapper) {
                                 const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-ordinal="${payload.ordinal}"]`);
                                 if (matchingCard) {
@@ -2673,18 +2748,47 @@
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             const row = addStep(modelWrapper, '📄', `Created ${payload.filename}`);
                             finishStep(row, true);
+                            setStepDetail(row, `<span>${payload.line_count} lines, ${payload.size_bytes} bytes — click the file card below to preview.</span>`);
+                            // Clicking this step also opens the real file
+                            // preview (same modal the createfile card uses)
+                            // instead of only showing the byte count.
+                            row.addEventListener('click', () => {
+                                const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-filename="${CSS.escape(payload.filename)}"]`);
+                                if (matchingCard && matchingCard._code) openFilePreviewFromCard(matchingCard);
+                            });
                             pushTerminalLog(`Activity: created ${payload.filename} (${payload.line_count} lines)`);
                         } else if (payload.type === 'activity_edited') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             const row = addStep(modelWrapper, '✎',
                                 `Edited ${payload.filename} <span class="ac-added">+${payload.added}</span> <span class="ac-removed">-${payload.removed}</span>`);
                             finishStep(row, true);
+                            if (payload.unified_diff) setStepDetail(row, renderUnifiedDiffHtml(payload.unified_diff));
+                            else setStepDetail(row, `<span>+${payload.added} lines added, -${payload.removed} lines removed</span>`);
+                            row.addEventListener('click', () => {
+                                const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-filename="${CSS.escape(payload.filename)}"]`);
+                                if (matchingCard && matchingCard._code) openFilePreviewFromCard(matchingCard);
+                            });
                             pushTerminalLog(`Activity: edited ${payload.filename} (+${payload.added} -${payload.removed})`);
                         } else if (payload.type === 'activity_terminal') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             const ok = payload.returncode === 0;
                             const row = addStep(modelWrapper, '›_', `Ran ${payload.lang} #${payload.ordinal}`);
                             finishStep(row, ok);
+                            // Pull the REAL output cached from the terminal_output
+                            // event with the same ordinal (fires just before this
+                            // one) — genuine code + stdout/stderr from the actual
+                            // subprocess run, shown when the step is clicked.
+                            const realOutput = _pendingTerminalOutputs[payload.ordinal];
+                            if (realOutput) {
+                                const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                                let detailHtml = '';
+                                if (realOutput.code) detailHtml += `<div><strong>ran:</strong>\n${esc(realOutput.code).slice(0, 2000)}</div>`;
+                                if (realOutput.stdout) detailHtml += `<div style="margin-top:6px;"><strong>stdout:</strong>\n${esc(realOutput.stdout).slice(0, 2000)}</div>`;
+                                if (realOutput.stderr) detailHtml += `<div style="margin-top:6px;color:#f87171;"><strong>stderr:</strong>\n${esc(realOutput.stderr).slice(0, 2000)}</div>`;
+                                if (!detailHtml) detailHtml = '<span>(no output)</span>';
+                                setStepDetail(row, detailHtml);
+                                delete _pendingTerminalOutputs[payload.ordinal];
+                            }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
                             if (modelWrapper) {
