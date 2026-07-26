@@ -1605,6 +1605,11 @@ def _fetch_chapter_text(book: str, chapter: str) -> str:
 # still works with zero setup. ──
 _EDU_TAG_RE = re.compile(r"\[\[EDU_BOOK:(.*?)\]\]\[\[EDU_CHAPTER:(.*?)\]\]")
 _NO_WEB_SEARCH_TAG_RE = re.compile(r"\[\[NO_WEB_SEARCH\]\]")
+_CURRENT_EVENTS_INTENT_RE = re.compile(
+    r"\b(today'?s?\s+news|current\s+(news|affairs|events)|latest\s+news|breaking\s+news|"
+    r"what'?s\s+(happening|going\s+on)|news\s+today|headlines)\b",
+    re.IGNORECASE
+)
 
 GOOGLE_CSE_KEY = os.environ.get("GOOGLE_CSE_KEY", "").strip()
 GOOGLE_CSE_CX = os.environ.get("GOOGLE_CSE_CX", "").strip()
@@ -2198,12 +2203,28 @@ SYSTEM_PROMPT = (
     "keep it short.\n\n"
     "WORKFLOW FOR LARGE/MULTI-PART TASKS: when a request has many distinct requirements (e.g. 'build a "
     "full app with X, Y, Z, and W'), don't try to write everything in one unstructured pass. Instead: "
-    "(1) briefly list out the distinct requirements as a short checklist so both you and the person can "
-    "see the plan, (2) implement each item one at a time, in order, (3) once everything is implemented, "
-    "actually re-read back through the file(s) you produced looking for mistakes (syntax errors, missing "
-    "pieces, requirements you skipped), and (4) if you find an error, fix it by editing that SAME file "
-    "with ```editfile: (never by creating a duplicate/new file for the fix) before giving your final "
-    "answer.\n\n"
+    "(1) FIRST write out a visible todo list using real markdown checkbox syntax, one item per "
+    "requirement, e.g.:\n"
+    "- [ ] Set up the HTML structure and layout\n"
+    "- [ ] Style the header and navigation\n"
+    "- [ ] Build the interactive form logic\n"
+    "- [ ] Add responsive mobile styles\n"
+    "so the person can see the actual plan as a checklist, not just a prose summary. "
+    "(2) implement each item one at a time, in order, and after finishing each one, restate that same "
+    "list with the completed item's box changed to - [x] so progress is visible as you go. "
+    "(3) once everything is implemented, actually re-read back through the file(s) you produced looking "
+    "for mistakes (syntax errors, missing pieces, requirements you skipped), and (4) if you find an "
+    "error, fix it by editing that SAME file with ```editfile: (never by creating a duplicate/new file "
+    "for the fix) before giving your final answer.\n\n"
+    "ENRICH THE PROMPT BEFORE BUILDING (images and sites): for an image-generation request, before the "
+    "backend renders anything, spend one short internal step turning a vague ask ('a dog') into a "
+    "specific, vivid, detailed prompt (lighting, style, composition, mood, colors) — that enriched "
+    "version is what actually gets sent to the image generator, so briefly state the enriched prompt "
+    "you're using in one line before it renders. For a website/HTML build request, do the same before "
+    "writing any code: briefly note the concrete design direction you're going with (layout approach, "
+    "color palette, typography feel, key sections) in 1-2 sentences, THEN produce the todo-list from the "
+    "rule above, THEN implement each item — don't skip straight to code without deciding the direction "
+    "first, and don't over-explain it either; a couple of sentences is enough.\n\n"
     "FILE EXPORTS ONLY ON EXPLICIT REQUEST: only produce a zip/pdf/other export of your answer when the "
     "person actually asks for the response in that format (e.g. 'zip it', 'as a pdf', 'download this'). "
     "Do not proactively package a normal conversational answer as a downloadable file just because the "
@@ -3385,6 +3406,36 @@ def chat_stream():
         # If the search fails or returns nothing, silently proceed with no
         # extra context rather than telling the user every single time —
         # that would get noisy since this now runs on almost every message.
+        elif _CURRENT_EVENTS_INTENT_RE.search(outgoing_user_message or message):
+            # DETERMINISTIC GUARD, not a prompt instruction: a prior version
+            # relied only on a system-prompt instruction telling the model
+            # not to fabricate fake news when search comes back empty — and
+            # it did it anyway (invented specific fake headlines with
+            # real-sounding details and wrong dates). Prompt instructions
+            # are not reliable enough for this exact failure mode, so for a
+            # message that clearly asks about current events/news/today
+            # with genuinely zero search results, the LLM is bypassed
+            # entirely and a fixed, honest response is sent instead — this
+            # cannot be talked around by the model no matter how it phrases
+            # things.
+            _append_message(conv_id, "user", message)
+            no_results_text = (
+                "A live web search didn't return results for this just now (rate limit or temporary "
+                "search issue). I don't want to guess at current news from memory, since that risks "
+                "giving you outdated or made-up information. Try asking again in a moment, or check "
+                "a live source directly: [BBC News](https://www.bbc.com/news), "
+                "[Reuters](https://www.reuters.com), or [Google News](https://news.google.com)."
+            )
+            _append_message(conv_id, "assistant", no_results_text)
+            def generate_no_results():
+                yield _sse({"type": "metadata", "conversation_id": conv_id})
+                yield _sse({"type": "token", "text": no_results_text})
+                yield _sse({"type": "complete"})
+            resp = Response(stream_with_context(generate_no_results()), content_type="text/event-stream")
+            resp.headers["Cache-Control"] = "no-cache"
+            resp.headers["X-Accel-Buffering"] = "no"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            return resp
         else:
             api_messages[0]["content"] += (
                 " (A live web search was attempted for this message but returned no results this time "
@@ -3565,6 +3616,7 @@ def chat_stream():
                         "filename": filename,
                         "added": diff_stats["added"],
                         "removed": diff_stats["removed"],
+                        "unified_diff": diff_stats["unified_diff"],
                     })
                     if warnings:
                         yield _sse({
@@ -3596,6 +3648,7 @@ def chat_stream():
                 yield _sse({
                     "type": "terminal_output",
                     "ordinal": total_blocks_seen,
+                    "code": code,
                     "stdout": stdout,
                     "stderr": stderr,
                     "returncode": rc
