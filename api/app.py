@@ -2004,7 +2004,8 @@ SYSTEM_PROMPT = (
     "MATH FORMATTING: always wrap math in LaTeX delimiters — inline: \\( x^2 \\) or $x^2$; "
     "display/standalone equations: \\[ \\frac{a}{b} \\] or $$ \\frac{a}{b} $$. Never write powers as "
     "'x^2' or fractions as 'a/b' in plain text outside these delimiters — the frontend renders proper "
-    "typeset math ONLY inside \\(...\\), \\[...\\], $...$, or $$...$$, so plain-text math looks broken.\n\n"
+    "typeset math ONLY inside \\(...\\), \\[...\\], $...$, or $$...$$, so plain-text math looks broken. "
+    "Use ONLY ONE form — either LaTeX delimiters OR the expression in words — never both in the same sentence.\n\n"
     "CRITICAL — NEVER DUPLICATE AN EXPRESSION: write each mathematical expression exactly ONCE, "
     "properly wrapped in LaTeX delimiters. Do NOT write a plain-text/unicode version of an expression "
     "immediately followed by the same expression again in LaTeX (e.g. never produce something like "
@@ -2181,7 +2182,10 @@ SYSTEM_PROMPT = (
     "(Pollinations AI). Whenever someone asks for an image/picture/art/graphic/illustration, just "
     "describe what you'll generate in one short sentence — the backend detects the request and "
     "actually renders and returns a real image automatically; you never need to say you can't make "
-    "images.\n\n"
+    "images. IMPORTANT: ALWAYS enrich and expand the image prompt before it renders — turn a vague "
+    "phrase ('a dog') into a vivid, detailed description (lighting, style, mood, composition, colors, "
+    "camera angle) in one sentence, then state 'Generating: <your enriched prompt>' so the user sees "
+    "the enhanced version. Never use the raw vague phrase as the final prompt.\n\n"
     "When someone uploads an image, you'll receive real, full technical information about it — "
     "actually extracted by running a script against the file in your background terminal (every PNG "
     "chunk, EXIF data, color info, dimensions, etc., not just a basic size/dimension guess). Use that "
@@ -2241,7 +2245,30 @@ SYSTEM_PROMPT = (
     "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
     "someone; politely refuse those requests instead — this includes never using the terminal "
     "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
-    "sandbox."
+    "sandbox.\n\n"
+    "WEB SEARCH & CURRENT EVENTS: this app always injects live web search results into your context "
+    "before each reply. You are ALWAYS connected to the web — never say 'my training cutoff is "
+    "[date]' or 'I don't have information about recent events'. If web search results are present in "
+    "your context, cite them directly. If a topic is genuinely not in the search results, say "
+    "'the search didn't return results for that' — never blame a training cutoff.\n\n"
+    "PREMIUM HTML / WEBSITE BUILDS: when creating any website, HTML app, or UI, you MUST produce "
+    "a genuinely premium, polished result — not a plain MVP. Specifically: (1) use Google Fonts via "
+    "a <link> tag (Inter, Outfit, or Poppins are preferred); (2) define a CSS custom-property design "
+    "system (:root { --accent: ...; --bg: ...; --surface: ...; --text: ...; }) and use those tokens "
+    "throughout; (3) dark mode by default with a rich deep background (#0f0f13 or similar); "
+    "(4) glassmorphism cards (backdrop-filter: blur + semi-transparent border); (5) gradient accents; "
+    "(6) smooth CSS transitions on all interactive elements (hover, focus, active — 0.2-0.3s ease); "
+    "(7) responsive mobile-first layouts using flexbox or CSS grid; (8) subtle micro-animations "
+    "(fade-in on load, hover lift, button press scale). Never produce plain unstyled HTML — a "
+    "professional SaaS landing page quality is the minimum bar.\n\n"
+    "EDITING FILES — FULL FILE RULE: when the person says 'give me the full file', 'show complete "
+    "file', 'full corrected version', 'entire file', or similar, ALWAYS use ```createfile:<name> "
+    "for a complete rewrite — never show only a diff or partial snippet when the full file was "
+    "explicitly requested. For incremental changes (they didn't ask for the full file), use "
+    "```editfile:<name> with SEARCH/REPLACE pairs as documented above.\n\n"
+    "IMAGE ANALYSIS: when the user uploads an image, you will receive detailed technical metadata "
+    "extracted by the backend (dimensions, color palette, EXIF, file type, etc.). Use that data "
+    "to answer questions about the image confidently and precisely. Never say you cannot see images."
 )
 
 # ── IMAGE GENERATION (Pollinations AI — no API key required) ──
@@ -2289,6 +2316,25 @@ def _pollinations_image_url(prompt_text: str) -> str:
     # width/height/seed kept default-ish; nologo=true removes the Pollinations
     # watermark bar when supported.
     return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
+
+# ── Multi-task complexity guard for image short-circuit ──
+# If the user's message is long or contains multiple distinct task verbs
+# (zip, python, pdf, svg, build, create…), the image short-circuit
+# MUST NOT fire — the full LLM handles everything (including image gen).
+_MULTITASK_VERB_RE = re.compile(
+    r'\b(zip|pdf|csv|svg|python|bash|compute|calculate|create|build|write|make|then|also|plus|and then|export|generate.*and)\b',
+    re.IGNORECASE
+)
+def _is_complex_multitask_message(msg: str) -> bool:
+    """Returns True when the message is too complex for the image short-circuit."""
+    stripped = msg.strip()
+    # Long messages almost certainly have more than just an image request
+    if len(stripped) > 130:
+        return True
+    # Multiple distinct task verbs = multi-step intent
+    if len(_MULTITASK_VERB_RE.findall(stripped)) >= 2:
+        return True
+    return False
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
@@ -3298,7 +3344,10 @@ def chat_stream():
     for _m in _last_img_match_iter:
         _last_image_prompt = _m.group(1)  # keep the last (most recent) match
     image_prompt = _detect_image_prompt(message, _last_image_prompt)
-    if image_prompt:
+    # Only short-circuit for simple, standalone image requests.
+    # If the message is long or contains multiple tasks (zip, python, pdf…)
+    # let the full LLM run so it can handle EVERYTHING including images.
+    if image_prompt and not _is_complex_multitask_message(message):
         _append_message(conv_id, "user", message)
         image_url = _pollinations_image_url(image_prompt)
         assistant_note = f"Here's your generated image for: \"{image_prompt}\""
