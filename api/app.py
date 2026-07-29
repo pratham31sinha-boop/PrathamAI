@@ -4117,16 +4117,15 @@ def upload_pdf():
             except zipfile.BadZipFile:
                 decode_status = "stored (not a valid zip)"
         elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
-            # Sent to the real background terminal for a genuine, in-depth
-            # analysis (full PNG chunk walk / EXIF / Pillow info, not just
-            # width+height) — see _analyze_image_via_terminal. Falls back to
-            # the lightweight header sniff automatically if that fails.
-            img_meta = _analyze_image_via_terminal(raw_bytes, ext, filename_hint=filename.rsplit(".", 1)[0])
+            # Use the fast pure-Python metadata sniff (instant, no subprocess).
+            # It reads dimensions, color mode, file size, and basic EXIF from
+            # the raw bytes using only stdlib struct unpacking — zero latency.
+            img_meta = _extract_image_metadata(raw_bytes, ext)
             if img_meta:
                 extracted_preview = img_meta
-                decode_status = "decoded (deep analysis via background terminal — full file info, not just dimensions; no pixel-level AI vision)"
+                decode_status = "decoded (image metadata: dimensions, color mode, file info)"
             else:
-                decode_status = f"stored ({len(raw_bytes)} bytes, image — couldn't parse this format)"
+                decode_status = f"stored ({len(raw_bytes)} bytes, image)"
         else:
             # Best-effort generic sniff: try UTF-8 text, else report as binary.
             try:
