@@ -2482,6 +2482,12 @@
 
         function renderMathIfAvailable(node) {
             if (typeof renderMathInElement !== 'function') return;
+            // Guard: don't re-render a node that already has KaTeX output
+            // (re-entrant calls happen during streaming and cause doubled math)
+            if (node._katexDone) return;
+            // Check if there's actually any math to render
+            const text = node.textContent || '';
+            if (!text.includes('$') && !text.includes('\\(') && !text.includes('\\[')) return;
             try {
                 renderMathInElement(node, {
                     delimiters: [
@@ -2490,8 +2496,10 @@
                         { left: '\\(', right: '\\)', display: false },
                         { left: '$', right: '$', display: false }
                      ],
-                     throwOnError: false
+                     throwOnError: false,
+                     ignoredTags: ['script', 'noscript', 'style', 'pre', 'code']
                 });
+                node._katexDone = true;
             } catch (e) {}
         }
 
@@ -3007,7 +3015,6 @@
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             setAgentActivity('Planning tasks...');
                             pushTerminalLog('Planning started...');
-                            // Create the task plan card container and attach it to this response
                             if (!modelWrapper._taskPlanCard) {
                                 const tpc = document.createElement('div');
                                 tpc.className = 'task-plan-card msg-enter';
@@ -3015,9 +3022,14 @@
                                     <div class="task-plan-header" onclick="this.parentElement.querySelector('.task-plan-body').classList.toggle('hidden')">
                                         <span class="tph-icon">📋</span>
                                         <span class="tph-title">${sanitizeOutputText(payload.label || 'Task Plan')}</span>
-                                        <span class="tph-count" id="tpc-count-${Date.now()}">0 tasks</span>
+                                        <span class="tph-count" style="display:none">0 tasks</span>
                                     </div>
-                                    <div class="task-plan-body"></div>
+                                    <div class="task-plan-body">
+                                        <div class="task-item pending" data-placeholder>
+                                            <span class="ti-icon" style="animation:stepIconSpin .9s linear infinite;color:var(--accent);border-color:var(--accent);"></span>
+                                            <span class="ti-label" style="color:var(--text-dim);font-style:italic;">Analyzing request…</span>
+                                        </div>
+                                    </div>
                                 `;
                                 modelWrapper.appendChild(tpc);
                                 modelWrapper._taskPlanCard = tpc;
@@ -3026,14 +3038,16 @@
                         } else if (payload.type === 'task_created') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             if (!modelWrapper._taskPlanCard) {
-                                // Planning card wasn't created yet — create it now
                                 const tpc = document.createElement('div');
                                 tpc.className = 'task-plan-card msg-enter';
-                                tpc.innerHTML = `<div class="task-plan-header"><span class="tph-icon">📋</span><span class="tph-title">Task Plan</span><span class="tph-count">0 tasks</span></div><div class="task-plan-body"></div>`;
+                                tpc.innerHTML = `<div class="task-plan-header"><span class="tph-icon">📋</span><span class="tph-title">Task Plan</span><span class="tph-count" style="display:none">0 tasks</span></div><div class="task-plan-body"></div>`;
                                 modelWrapper.appendChild(tpc);
                                 modelWrapper._taskPlanCard = tpc;
                                 modelWrapper._taskItems = {};
                             }
+                            // Remove placeholder row on first real task
+                            const placeholder = modelWrapper._taskPlanCard.querySelector('[data-placeholder]');
+                            if (placeholder) placeholder.remove();
                             const taskId = payload.task_id || ('task_' + Date.now());
                             const tBody = modelWrapper._taskPlanCard.querySelector('.task-plan-body');
                             const tCount = modelWrapper._taskPlanCard.querySelector('.tph-count');
@@ -3044,7 +3058,10 @@
                             tBody.appendChild(ti);
                             modelWrapper._taskItems[taskId] = ti;
                             const itemCount = Object.keys(modelWrapper._taskItems).length;
-                            if (tCount) tCount.textContent = `${itemCount} task${itemCount !== 1 ? 's' : ''}`;
+                            if (tCount) {
+                                tCount.style.display = '';
+                                tCount.textContent = `${itemCount} task${itemCount !== 1 ? 's' : ''}`;
+                            }
                             pushTerminalLog(`Task created: ${payload.label || taskId}`);
                         } else if (payload.type === 'task_started') {
                             if (modelWrapper && modelWrapper._taskItems) {
@@ -3693,11 +3710,34 @@
 
             setWorkbenchTab('preview');
             initWebSearchPreferenceFromStorage();
+
+            // ── Boot splash: cap at 1.5 s so logo is never slow to appear.
+            // The actual auth flow hides it normally; this is just a safety net
+            // so users never stare at a spinner if auth is slow.
+            const _bootHideMax = setTimeout(() => { bootSplash.style.display = 'none'; }, 1500);
+
             const restored = await attemptSilentSessionRestore();
+            clearTimeout(_bootHideMax);
             bootSplash.style.display = 'none';
             if (!restored) {
                 loginOverlay.style.display = 'flex';
                 initializeGoogleOauthGate();
+            }
+
+            // ── Mobile sidebar: wire hamburger buttons with addEventListener
+            // so they work reliably regardless of when HTML was parsed.
+            document.querySelectorAll('[data-open-sidebar]').forEach(btn => {
+                btn.addEventListener('click', openMobileSidebar);
+            });
+            document.querySelectorAll('[data-close-sidebar]').forEach(btn => {
+                btn.addEventListener('click', closeMobileSidebar);
+            });
+            // Also fall back to the existing onclick attributes as a belt-and-suspenders
+            // in case the data-* approach isn't present on old HTML.
+            const _ham = document.querySelector('.mobile-hamburger[onclick*="openMobileSidebar"]');
+            if (_ham && !_ham._sidebarWired) {
+                _ham._sidebarWired = true;
+                _ham.addEventListener('click', openMobileSidebar);
             }
         });
     </script>
