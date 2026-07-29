@@ -2071,6 +2071,9 @@
             workbenchSplitPanel.classList.add('hidden');
             workbenchSplitPanel.classList.remove('workbench-open');
             document.getElementById('workbench-toggle-mobile').classList.add('hidden');
+            // Reset thinking-wrap state so stale spinners don't persist
+            _activeThinkingWrap = null;
+            _activeStepList = null;
             clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
@@ -2309,6 +2312,25 @@
             }
             _refreshThinkingSummary();
         }
+        // Called once response is fully streamed: finishes any still-spinning step
+        // rows, updates the summary text, and collapses the thinking-wrap.
+        function finalizeThinkingWrap() {
+            if (!_activeThinkingWrap) return;
+            // Finish any step rows that never received an explicit finishStep call
+            if (_activeStepList) {
+                _activeStepList.querySelectorAll('.step-row').forEach(row => {
+                    if (row.querySelector('.step-icon.running')) finishStep(row, true);
+                });
+            }
+            // Collapse (don't remove) so the user can still expand it to inspect steps
+            _activeThinkingWrap.classList.remove('expanded');
+            _activeThinkingWrap.classList.add('done');
+            const summary = _activeThinkingWrap.querySelector('.tw-summary');
+            if (summary) {
+                const n = _activeStepList ? _activeStepList.querySelectorAll('.step-row').length : 0;
+                summary.innerText = n > 0 ? `Done — ${n} step${n === 1 ? '' : 's'}` : 'Done';
+            }
+        }
 
         function renderUnifiedDiffHtml(unifiedDiff) {
             if (!unifiedDiff) return '<span>No textual changes.</span>';
@@ -2482,12 +2504,11 @@
 
         function renderMathIfAvailable(node) {
             if (typeof renderMathInElement !== 'function') return;
-            // Guard: don't re-render a node that already has KaTeX output
-            // (re-entrant calls happen during streaming and cause doubled math)
-            if (node._katexDone) return;
-            // Check if there's actually any math to render
+            // Check if there's actually any math to render before bothering
             const text = node.textContent || '';
             if (!text.includes('$') && !text.includes('\\(') && !text.includes('\\[')) return;
+            // Reset done flag so final render (after streaming completes) always runs
+            node._katexDone = false;
             try {
                 renderMathInElement(node, {
                     delimiters: [
@@ -2960,9 +2981,12 @@
                             };
                             setAgentActivity(stepLabels[payload.step_type] || payload.label || 'Working...');
                             pushTerminalLog(`Step: ${payload.step_type} — ${payload.label}`);
-                            // Add a visible step so the user can see something is happening
+                            // For the 'thinking' step: just update the header text, don't
+                            // add a spinning row. The header dot alone conveys "working".
                             if (payload.step_type === 'thinking') {
-                                addStep(modelWrapper, '\u25CB', 'Planning response...', false);
+                                const tw = getThinkingWrap(modelWrapper);
+                                const summary = tw.querySelector('.tw-summary');
+                                if (summary) summary.innerText = payload.label || 'Thinking...';
                             } else if (payload.step_type === 'executing') {
                                 // Show a "Executing..." step row while the code block runs
                                 // This row stays as "running" (spinning circle) until the
@@ -3183,10 +3207,16 @@
                             }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
+                            // Final render of text so math, tables, etc are
+                            // all cleanly applied to the fully-streamed content.
                             if (modelWrapper) {
+                                // Reset KaTeX flags so final render always runs on all nodes
+                                modelWrapper.querySelectorAll('[data-seg-type="text"]').forEach(n => { n._katexDone = false; });
                                 updateAssistantMessageDOM(modelWrapper, fullText);
                                 appendAssistantCopyButton(modelWrapper, fullText);
                             }
+                            // Collapse thinking-wrap and finish any spinning steps
+                            finalizeThinkingWrap();
                             _activeStepList = null;
                             _activeThinkingWrap = null;
                             pushTerminalLog('Response complete.');
@@ -3267,23 +3297,23 @@
         }
 
         async function loadConversationSession(conversationId) {
-            try {
-                const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (!response.ok) throw new Error("Load structural exception context.");
-                let logs = await response.json();
-                if ((!logs || logs.length === 0)) {
-                    const cache = loadConvCache();
-                    logs = cache.messages[conversationId] || [];
-                } else {
-                    cacheConversationMessages(conversationId, logs);
-                }
-                currentConversationId = conversationId;
-                exportActionTrigger.classList.remove('hidden');
-                deleteActionTrigger.classList.remove('hidden');
+            // Immediately set the conversation ID so any message typed during load
+            // goes to the CORRECT conversation, not a new one.
+            currentConversationId = conversationId;
+            // Reset stale thinking-wrap from any previous conversation
+            _activeThinkingWrap = null;
+            _activeStepList = null;
+            clearAgentActivity();
+            exportActionTrigger.classList.remove('hidden');
+            deleteActionTrigger.classList.remove('hidden');
+            workbenchSplitPanel.classList.add('hidden');
+            document.getElementById('workbench-toggle-mobile').classList.add('hidden');
+            // Render from cache immediately so the user sees content instantly
+            const cache = loadConvCache();
+            const cachedLogs = cache.messages[conversationId] || [];
+            if (cachedLogs.length > 0) {
                 conversationViewportPanel.innerHTML = '';
-                workbenchSplitPanel.classList.add('hidden');
-                document.getElementById('workbench-toggle-mobile').classList.add('hidden');
-                logs.forEach(log => {
+                cachedLogs.forEach(log => {
                     if (log.role === 'user') renderUserPromptBubble(log.content);
                     else if (log.role === 'assistant') {
                         const wrapper = mountModelOutputTargetShell();
@@ -3291,9 +3321,31 @@
                         appendAssistantCopyButton(wrapper, log.content);
                     }
                 });
-                synchronizeConversationsHistoryIndex();
-                closeMobileSidebar();
+                conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            }
+            closeMobileSidebar();
+            // Then refresh from server in the background
+            try {
+                const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                if (!response.ok) return;
+                const logs = await response.json();
+                if (!logs || logs.length === 0) return;
+                cacheConversationMessages(conversationId, logs);
+                // Only re-render if we got MORE messages than the cache had
+                if (logs.length > cachedLogs.length) {
+                    conversationViewportPanel.innerHTML = '';
+                    logs.forEach(log => {
+                        if (log.role === 'user') renderUserPromptBubble(log.content);
+                        else if (log.role === 'assistant') {
+                            const wrapper = mountModelOutputTargetShell();
+                            updateAssistantMessageDOM(wrapper, log.content);
+                            appendAssistantCopyButton(wrapper, log.content);
+                        }
+                    });
+                    conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                }
             } catch (err) {}
+            synchronizeConversationsHistoryIndex();
         }
 
         async function triggerSessionDelete() {
