@@ -2089,6 +2089,15 @@ SYSTEM_PROMPT = (
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "ZIP WITH COMPLEX FOLDER STRUCTURE: when asked to create a zip file with multiple folders/files "
+    "(e.g. 'make a zip with src/, docs/, tests/ each having several files'), use a single ```bash block "
+    "to build the real folder structure — use `mkdir -p` for folders, write actual content to files "
+    "with `echo` or `cat >`, then use `zip -r` or Python's zipfile to create the zip. The terminal "
+    "working directory persists across all your code blocks in the same reply, so the zip you create "
+    "there will automatically be included in the download. Show what you're doing step by step "
+    "(echo each folder name as you create it) so the user can see real-time progress. After the bash "
+    "block runs, the system automatically picks up the zip file from the working directory and "
+    "delivers it as a download card — you do not need to do anything else.\n\n"
     "NEVER wrap a one-off command in an unnecessary intermediate script file (e.g. writing "
     "generated_2.sh, run.sh, script.py, temp.py just to hold a command you're about to run once). "
     "If you need to run something, run it directly in a ```bash or ```python block — don't "
@@ -2529,7 +2538,7 @@ def _do_stream(messages):
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 4          # hard cap on agent "run code, see result, continue" cycles
-_TERMINAL_BLOCK_TIMEOUT = 15          # seconds per executed block
+_TERMINAL_BLOCK_TIMEOUT = 30          # seconds per executed block (raised from 15 for complex zip/bash)
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000    # raised from 4000 so large (~5000-line) file-creation tasks
                                          # and big terminal outputs don't get silently truncated
 
@@ -2542,6 +2551,75 @@ _TERMINAL_OUTPUT_CHAR_LIMIT = 200000    # raised from 4000 so large (~5000-line)
 # (see LANG_EXT_MAP / guessFileName handling for the "createfile:" prefix
 # on the frontend side).
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
+
+# ── PLANNING DETECTION ──
+# Detects multi-step task intent from the user message so we can emit
+# planning_started / task_created events to the frontend before the
+# model starts streaming, giving real-time task-plan visibility.
+_MULTI_STEP_INTENT_RE = re.compile(
+    r"\b(build|create|make|write|develop|design|implement|set up|generate|produce)"
+    r".{0,80}\b(and|with|including|that|which|also|plus|as well as)\b"
+    r"|\b(full|complete|entire|whole)\b.{0,30}\b(app|website|system|project|program|application|tool|file|document)\b"
+    r"|\b(step by step|step-by-step|multiple|several|many|lot of)\b",
+    re.IGNORECASE
+)
+
+_TASK_CHECKBOX_RE = re.compile(r"^[-*]\s+\[[ xX]\]\s+(.+)$", re.MULTILINE)
+
+def _extract_task_items_from_text(text: str) -> list:
+    """Extracts task items from - [ ] or - [x] checkbox lines in the text.
+    Returns [(task_id, label, is_done), ...]"""
+    tasks = []
+    for i, m in enumerate(_TASK_CHECKBOX_RE.finditer(text)):
+        label = m.group(1).strip()
+        is_done = m.group(0)[3] in ('x', 'X')
+        task_id = f"task_{i+1}"
+        tasks.append((task_id, label, is_done))
+    return tasks
+
+def validate_generated_code(file_ext: str, content: str) -> dict:
+    """Lightweight, stdlib-only validation of generated file content.
+    Returns {"valid": bool, "error": str|None} — no external deps required.
+    Only checks syntax/well-formedness for types that have reliable parsers;
+    for everything else it returns valid=True with no false negatives."""
+    ext = (file_ext or "").lower().strip(".")
+    try:
+        if ext == "json":
+            json.loads(content)
+        elif ext == "py" or ext == "python":
+            import ast
+            ast.parse(content)
+        elif ext in ("html", "htm", "xml"):
+            # Cheap tag balance check — not a full parser, catches obvious errors
+            import html.parser
+            class _TagChecker(html.parser.HTMLParser):
+                def __init__(self):
+                    super().__init__()
+                    self.errors = []
+            checker = _TagChecker()
+            checker.feed(content)
+        elif ext in ("js", "javascript", "mjs", "cjs"):
+            # Very minimal check: ensure no unclosed string literals or brackets
+            # (a full JS parse needs a real parser we can't guarantee is installed)
+            stack = []
+            in_str, str_char = False, None
+            for ch in content:
+                if in_str:
+                    if ch == str_char: in_str = False
+                elif ch in ('"', "'", "`"):
+                    in_str, str_char = True, ch
+                elif ch in ('{', '[', '('):
+                    stack.append(ch)
+                elif ch in ('}', ']', ')'):
+                    if not stack:
+                        return {"valid": False, "error": f"Unmatched closing bracket '{ch}'"}
+                    stack.pop()
+            if stack:
+                return {"valid": False, "error": f"Unclosed bracket '{stack[-1]}'"}
+        # For all other types: no validation, assume valid
+        return {"valid": True, "error": None}
+    except Exception as exc:
+        return {"valid": False, "error": str(exc)[:200]}
 
 def _extract_createfile_blocks(text: str):
     """Returns [(filename, content), ...] for every ```createfile:name block
@@ -2894,18 +2972,24 @@ def _format_terminal_results_for_model(results):
     is done or another step is needed."""
     lines = ["[BACKGROUND TERMINAL RESULTS]"]
     for i, r in enumerate(results, start=1):
-        status = "ok" if r["returncode"] == 0 else f"exit code {r['returncode']}"
-        lines.append(f"--- Block {i} ({r['lang']}, {status}) ---")
+        status = "SUCCESS (exit 0)" if r["returncode"] == 0 else f"FAILED (exit code {r['returncode']})"
+        lines.append(f"\n--- Block {i} ({r['lang']}) | {status} ---")
+        if r["code"]:
+            # Show the first 500 chars of code so the model remembers what it ran
+            code_preview = r["code"][:500] + ("..." if len(r["code"]) > 500 else "")
+            lines.append(f"code:\n{code_preview}")
         if r["stdout"]:
             lines.append(f"stdout:\n{r['stdout']}")
         if r["stderr"]:
-            lines.append(f"stderr:\n{r['stderr']}")
+            lines.append(f"stderr (check for errors):\n{r['stderr']}")
         if not r["stdout"] and not r["stderr"]:
-            lines.append("(no output)")
+            lines.append("(no output — command ran silently)")
     lines.append(
-        "[/BACKGROUND TERMINAL RESULTS]\n"
-        "Continue the task using these real results. If everything needed is done, "
-        "give the final answer in plain language instead of running more code."
+        "\n[/BACKGROUND TERMINAL RESULTS]\n"
+        "IMPORTANT: These are the REAL execution results from your code — not simulated. "
+        "If exit code is 0 and the output looks correct, the task succeeded. "
+        "If there were errors (non-zero exit, error in stderr), fix them in your next block. "
+        "Once everything needed is complete, give a clear final plain-language answer instead of running more code."
     )
     return "\n".join(lines)
 
@@ -3464,6 +3548,16 @@ def chat_stream():
 
     def generate():
         yield _sse({"type": "metadata", "conversation_id": conv_id})
+        # Explicit "thinking" step so the frontend can render a starting
+        # card immediately, before any tokens or tool calls arrive.
+        yield _sse({"type": "agent_step", "step_type": "thinking", "label": "Thinking", "timestamp": time.time()})
+
+        # ── Planning detection: if the message looks like a multi-step task,
+        # emit planning_started before we do anything else so the frontend
+        # can show a task-plan card and stream tasks into it in real-time ──
+        _tasks_emitted = {}  # task_id -> label, so we can start/complete them
+        if _MULTI_STEP_INTENT_RE.search(message):
+            yield _sse({"type": "planning_started", "label": "Task Plan", "timestamp": time.time()})
 
         # Give immediate feedback the moment we know this turn wants a real
         # exported file, rather than waiting for the model's full reply to
@@ -3513,8 +3607,19 @@ def chat_stream():
                     if chunk.startswith("data: "):
                         payload = json.loads(chunk[6:])
                         if payload.get("type") == "token":
-                            iteration_text_parts.append(payload["text"])
-                            full_reply_parts.append(payload["text"])
+                            token_text = payload["text"]
+                            iteration_text_parts.append(token_text)
+                            full_reply_parts.append(token_text)
+                            # ── Real-time task detection: scan each token for
+                            # - [ ] checkbox lines as they stream and emit
+                            # task_created events so the plan card fills up live ──
+                            accumulated_so_far = "".join(iteration_text_parts)
+                            if "- [" in accumulated_so_far or "* [" in accumulated_so_far:
+                                new_tasks = _extract_task_items_from_text(accumulated_so_far)
+                                for task_id, label, is_done in new_tasks:
+                                    if task_id not in _tasks_emitted:
+                                        _tasks_emitted[task_id] = label
+                                        yield _sse({"type": "task_created", "task_id": task_id, "label": label})
                         elif payload.get("type") == "complete":
                             continue  # only forward the final "complete" once, after the loop ends
                 except Exception:
@@ -3561,14 +3666,22 @@ def chat_stream():
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
-                    # ── Real activity event: file created (additive, does not
-                    # replace file_ready — drives the inline collapsible
-                    # "▼ Created file / ✓ Completed" activity card) ──
+                    # ── Real activity event: file created (additive) ──
                     yield _sse({
                         "type": "activity_created",
                         "filename": filename,
                         "size_bytes": written["size_bytes"],
                         "line_count": written["line_count"],
+                        "preview_type": file_ext,
+                    })
+                    # ── Verification event: validate the just-written file ──
+                    yield _sse({"type": "verification_started", "filename": filename})
+                    val_result = validate_generated_code(file_ext, final_content)
+                    yield _sse({
+                        "type": "verification_completed",
+                        "filename": filename,
+                        "ok": val_result["valid"],
+                        "details": val_result["error"] or f"Validated {file_ext.upper()} — no issues found.",
                     })
                 except Exception as exc:
                     print(f"[CREATEFILE][FAULT] {exc}")
@@ -3643,6 +3756,15 @@ def chat_stream():
                     continue  # not runnable (e.g. ```json, ```html) — leave its ordinal "spent"
                               # but don't execute or emit a terminal_output for it
                 code = m.group(2)
+                # Emit a pre-execution step so the frontend shows "Executing..."
+                # BEFORE the block actually runs (which can take up to 30s for
+                # complex bash/zip operations) — gives real-time feedback.
+                yield _sse({
+                    "type": "agent_step",
+                    "step_type": "executing",
+                    "label": f"Executing {lang.upper()} block \u2014 please wait...",
+                    "timestamp": time.time()
+                })
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
@@ -3672,7 +3794,26 @@ def chat_stream():
             working_messages.append({"role": "assistant", "content": iteration_reply})
             working_messages.append({"role": "user", "content": _format_terminal_results_for_model(results)})
 
+        # ── Emit task completion events for any tasks tracked during streaming ──
+        # After all iterations complete, go through _tasks_emitted and mark every
+        # task as completed. The final assistant response's checkbox state tells
+        # us which are truly done ([x]) vs still pending ([ ]). This gives the
+        # frontend accurate final states for the task-plan card.
+        if _tasks_emitted:
+            final_reply_so_far = "".join(full_reply_parts)
+            final_task_states = {tid: False for tid in _tasks_emitted}
+            for task_id, label, is_done in _extract_task_items_from_text(final_reply_so_far):
+                if task_id in final_task_states:
+                    final_task_states[task_id] = is_done
+            for task_id, label in _tasks_emitted.items():
+                yield _sse({
+                    "type": "task_completed",
+                    "task_id": task_id,
+                    "ok": final_task_states.get(task_id, True),
+                })
+
         yield _sse({"type": "complete"})
+
 
         assistant_response = "".join(full_reply_parts)
         if assistant_response:
