@@ -199,94 +199,231 @@
         @keyframes fccShimmer { 0% { left: -40%; } 100% { left: 100%; } }
         .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
 
+        /* ── Activity cards (file created, edited, terminal ran) ── */
         .activity-card {
             display: flex; flex-direction: column; gap: 0;
             background: var(--panel); border: 1px solid var(--border);
-            border-radius: 12px; max-width: 340px; margin: 4px 0;
+            border-radius: 12px; max-width: 360px; margin: 4px 0;
             overflow: hidden; font-size: 12.5px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.06);
+            animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
         .activity-card .ac-header {
-            display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+            display: flex; align-items: center; gap: 8px; padding: 9px 12px;
             cursor: pointer; user-select: none; color: var(--text-dim);
             transition: background .12s ease;
         }
         .activity-card .ac-header:hover { background: var(--hover); }
-        .activity-card .ac-caret { font-size: 9px; transition: transform .18s ease; flex-shrink: 0; }
+        .activity-card .ac-caret { font-size: 9px; transition: transform .2s ease; flex-shrink: 0; opacity: .6; }
         .activity-card.expanded .ac-caret { transform: rotate(90deg); }
-        .activity-card .ac-icon { flex-shrink: 0; font-size: 12px; }
+        .activity-card .ac-icon {
+            flex-shrink: 0; font-size: 14px; width: 20px; height: 20px;
+            display: flex; align-items: center; justify-content: center;
+        }
         .activity-card .ac-label { flex: 1; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .activity-card .ac-diffstat { font-size: 11px; font-weight: 600; white-space: nowrap; }
         .activity-card .ac-added { color: #4ade80; }
         .activity-card .ac-removed { color: #f87171; margin-left: 4px; }
-        .activity-card .ac-status { font-size: 11px; flex-shrink: 0; }
+        .activity-card .ac-status { font-size: 11px; flex-shrink: 0; white-space: nowrap; }
         .activity-card .ac-status.running { color: var(--accent); }
         .activity-card .ac-status.done { color: #4ade80; }
         .activity-card .ac-status.failed { color: #f87171; }
         .activity-card .ac-body {
-            display: none; max-height: 220px; overflow-y: auto;
-            border-top: 1px solid var(--border); padding: 8px 10px;
+            display: none; max-height: 240px; overflow-y: auto;
+            border-top: 1px solid var(--border); padding: 10px 12px;
             font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;
-            white-space: pre-wrap; word-break: break-word; color: var(--text-dim);
-            background: color-mix(in srgb, var(--panel) 96%, black);
+            white-space: pre-wrap; word-break: break-word; color: var(--terminal-text);
+            background: var(--terminal-bg);
         }
-        .activity-card.expanded .ac-body { display: block; }
+        .activity-card.expanded .ac-body { display: block; animation: fadeSlide .2s ease; }
         .activity-card .ac-body .diff-add { color: #4ade80; }
         .activity-card .ac-body .diff-remove { color: #f87171; }
 
-        .step-list { display: flex; flex-direction: column; margin: 6px 0; }
+        /* ── Step list inside the thinking wrap ── */
+        .step-list { display: flex; flex-direction: column; margin: 2px 0 4px; gap: 1px; }
         .step-list .step-row {
             display: flex; align-items: center; gap: 10px;
-            padding: 3px 0; position: relative; font-size: 13px; color: var(--text-dim);
-            animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
+            padding: 5px 8px; border-radius: 8px; position: relative;
+            font-size: 12.5px; color: var(--text-dim);
+            animation: stepSlideIn .28s cubic-bezier(.4,0,.2,1) both;
+            transition: background .12s ease;
+            cursor: pointer;
         }
-        @keyframes stepSlideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+        .step-list .step-row:hover { background: var(--hover); }
+        @keyframes stepSlideIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
         .step-list .step-row.head { color: var(--text); font-weight: 600; }
         .step-list .step-icon {
-            width: 16px; height: 16px; flex-shrink: 0; display: flex;
-            align-items: center; justify-content: center; font-size: 12px; z-index: 1;
+            width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; display: flex;
+            align-items: center; justify-content: center; font-size: 11px; z-index: 1;
+            border: 1.5px solid currentColor;
         }
-        .step-list .step-row:not(.head)::before {
-            content: ''; position: absolute; left: 7px; top: -6px; width: 1px; height: 12px;
-            background: var(--border);
+        .step-list .step-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .step-list .step-icon.done { color: #4ade80; background: rgba(74,222,128,.1); border-color: #4ade80; }
+        .step-list .step-icon.running {
+            color: var(--accent); border-color: var(--accent);
+            animation: stepIconSpin .9s linear infinite;
         }
-        .step-list .step-row:first-of-type::before { display: none; }
-        .step-list .step-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .step-list .step-icon.done { color: #4ade80; }
-        .step-list .step-icon.running { color: var(--accent); }
-
-        /* ===== Real inline expandable output per step — click a step row
-           to reveal its ACTUAL stdout/stderr or diff (not a simulation),
-           plus a live elapsed-time badge while it's still running. ===== */
-        .step-list .step-row { cursor: pointer; }
+        .step-list .step-icon.failed { color: #f87171; background: rgba(248,113,113,.1); border-color: #f87171; }
+        @keyframes stepIconSpin { to { transform: rotate(360deg); } }
         .step-list .step-row .step-elapsed {
-            font-size: 10px; color: var(--text-dim); opacity: .7; margin-left: 4px; flex-shrink: 0;
+            font-size: 10px; color: var(--text-dim); opacity: .6; margin-left: 2px; flex-shrink: 0;
         }
         .step-list .step-detail {
-            display: none; margin: 2px 0 4px 26px; padding: 6px 9px;
-            background: color-mix(in srgb, var(--panel) 94%, black);
+            display: none; margin: 0 0 4px 36px; padding: 8px 10px;
+            background: var(--terminal-bg);
             border: 1px solid var(--border); border-radius: 8px;
             font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;
-            white-space: pre-wrap; word-break: break-word; color: var(--text-dim);
-            max-height: 180px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-word; color: var(--terminal-text);
+            max-height: 200px; overflow-y: auto;
+            animation: fadeSlide .2s ease;
         }
         .step-list .step-row.expanded + .step-detail { display: block; }
-        .step-list .step-row.has-detail .step-text::after { content: ' ▾'; opacity: .5; font-size: 10px; }
+        .step-list .step-row.has-detail .step-text::after { content: ' ▾'; opacity: .45; font-size: 9px; }
         .step-list .step-row.expanded .step-text::after { content: ' ▴'; }
 
-        .thinking-wrap { margin: 6px 0; max-width: 400px; }
-        .thinking-header {
-            display: flex; align-items: center; gap: 8px; cursor: pointer;
-            font-size: 13px; color: var(--text-dim); padding: 4px 0; user-select: none;
-            transition: color .15s ease;
+        /* ── Thinking wrap: collapsible header + step list ── */
+        .thinking-wrap {
+            margin: 4px 0 8px; max-width: 420px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 14px; overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,.05);
+            animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
-        .thinking-header:hover { color: var(--text); }
-        .thinking-header .tw-caret { font-size: 9px; transition: transform .18s ease; }
+        .thinking-header {
+            display: flex; align-items: center; gap: 9px; cursor: pointer;
+            font-size: 12.5px; color: var(--text-dim); padding: 10px 14px; user-select: none;
+            transition: color .15s ease, background .15s ease;
+        }
+        .thinking-header:hover { color: var(--text); background: var(--hover); }
+        .thinking-header .tw-caret { font-size: 8px; transition: transform .2s ease; flex-shrink: 0; opacity: .6; }
         .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); }
-        .thinking-header .tw-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: glowPulse 1s ease-in-out infinite; }
+        .thinking-header .tw-dot {
+            width: 7px; height: 7px; border-radius: 999px; background: var(--accent);
+            animation: glowPulse 1s ease-in-out infinite; flex-shrink: 0;
+        }
         .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
-        .thinking-body { display: none; padding-left: 4px; }
-        .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .25s ease; }
+        .thinking-header .tw-summary { flex: 1; font-weight: 500; }
+        .thinking-body { display: none; padding: 4px 6px 8px; border-top: 1px solid var(--border); }
+        .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .2s ease; }
         @keyframes fadeSlide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+        /* ── Task plan card (rendered when planning_started / task_created events arrive) ── */
+        .task-plan-card {
+            margin: 4px 0 8px; max-width: 440px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 14px; overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,.05);
+            animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
+        }
+        .task-plan-header {
+            display: flex; align-items: center; gap: 9px;
+            font-size: 12px; font-weight: 600; color: var(--text); padding: 10px 14px;
+            background: linear-gradient(90deg, var(--accent-soft) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer; user-select: none;
+        }
+        .task-plan-header .tph-icon { font-size: 13px; flex-shrink: 0; }
+        .task-plan-header .tph-title { flex: 1; }
+        .task-plan-header .tph-count {
+            font-size: 10px; color: var(--text-dim); background: var(--panel-2);
+            border-radius: 999px; padding: 1px 7px; font-weight: 500;
+        }
+        .task-plan-body { padding: 6px 8px 8px; }
+        .task-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 8px; border-radius: 8px; font-size: 12px; color: var(--text-dim);
+            transition: background .12s ease;
+            animation: stepSlideIn .28s cubic-bezier(.4,0,.2,1) both;
+        }
+        .task-item:hover { background: var(--hover); }
+        .task-item.running { color: var(--text); }
+        .task-item.done { color: var(--text-dim); }
+        .task-item .ti-icon {
+            width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 9px;
+            border: 1.5px solid currentColor;
+        }
+        .task-item.pending .ti-icon { color: var(--text-dim); }
+        .task-item.running .ti-icon { color: var(--accent); border-color: var(--accent); animation: stepIconSpin .9s linear infinite; }
+        .task-item.done .ti-icon { color: #4ade80; border-color: #4ade80; background: rgba(74,222,128,.1); }
+        .task-item.failed .ti-icon { color: #f87171; border-color: #f87171; background: rgba(248,113,113,.1); }
+        .task-item .ti-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .task-item.done .ti-label { text-decoration: line-through; opacity: .6; }
+        .task-item .ti-elapsed { font-size: 10px; color: var(--text-dim); opacity: .6; flex-shrink: 0; }
+
+        /* ── Prompt enhancement card (shown before image generation) ── */
+        .prompt-enhance-card {
+            display: flex; align-items: flex-start; gap: 10px;
+            background: var(--panel); border: 1px solid var(--accent-soft);
+            border-radius: 12px; padding: 10px 12px; max-width: 380px;
+            font-size: 12px; color: var(--text-dim);
+            animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
+        }
+        .prompt-enhance-card .pec-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .prompt-enhance-card .pec-body { flex: 1; }
+        .prompt-enhance-card .pec-label { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+        .prompt-enhance-card .pec-text { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+        .prompt-enhance-card.enhancing .pec-text { color: var(--text-dim); font-style: italic; }
+
+        /* ── Inline code block with language badge + copy btn ── */
+        .md-code-block {
+            position: relative; margin: 8px 0;
+            border-radius: 10px; overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--terminal-bg);
+        }
+        .md-code-block-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 5px 10px;
+            background: rgba(255,255,255,.04);
+            border-bottom: 1px solid var(--border);
+        }
+        .md-code-block-lang {
+            font-size: 10px; font-weight: 700; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--accent); font-family: ui-monospace, monospace;
+        }
+        .md-code-block-copy {
+            font-size: 10px; color: var(--text-dim); background: none; border: none;
+            cursor: pointer; padding: 2px 6px; border-radius: 5px;
+            transition: color .12s ease, background .12s ease;
+        }
+        .md-code-block-copy:hover { color: var(--text); background: var(--hover); }
+        .md-code-block pre {
+            margin: 0; padding: 10px 12px; overflow-x: auto;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 12px; line-height: 1.6; color: var(--terminal-text);
+            white-space: pre; word-break: normal;
+        }
+
+        /* ── Improved markdown table ── */
+        .md-table-wrap { overflow-x: auto; margin: 8px 0; border-radius: 8px; border: 1px solid var(--border); }
+        .md-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        .md-table th {
+            text-align: left; padding: 8px 12px; font-weight: 700;
+            color: var(--accent); border-bottom: 2px solid var(--border);
+            background: var(--panel-2);
+        }
+        .md-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
+        .md-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+        .md-table tbody tr:hover td { background: var(--hover); }
+        .md-table tbody tr:last-child td { border-bottom: none; }
+
+        /* ── JSON Tree Viewer ── */
+        .json-tree { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; line-height: 1.7; }
+        .json-tree .jt-key { color: #93c5fd; }
+        .json-tree .jt-str { color: #86efac; }
+        .json-tree .jt-num { color: #fbbf24; }
+        .json-tree .jt-bool { color: #f87171; }
+        .json-tree .jt-null { color: #a1a1aa; }
+        .json-tree .jt-toggle {
+            cursor: pointer; user-select: none;
+            padding: 0 3px; border-radius: 3px;
+            color: var(--text-dim); font-size: 10px;
+            transition: background .1s ease;
+        }
+        .json-tree .jt-toggle:hover { background: var(--hover); }
+        .json-tree .jt-children { margin-left: 18px; border-left: 1px solid var(--border); padding-left: 8px; }
+        .json-tree .jt-children.collapsed { display: none; }
 
         #workbench-tab-preview, #workbench-tab-files {
             cursor: pointer; color: var(--text-dim); background: transparent; border: none;
@@ -365,24 +502,35 @@
                 position: fixed; inset: 0 auto 0 0; z-index: 40;
                 width: 84vw; max-width: 300px; transform: translateX(-100%);
                 box-shadow: 0 0 40px rgba(0,0,0,.25);
+                will-change: transform;
             }
             #sidebar-panel.sidebar-open { transform: translateX(0); }
             #sidebar-scrim {
-                display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
-                backdrop-filter: blur(4px);
+                /* NO backdrop-filter here — it blurs the entire main area on mobile.
+                   Plain dark overlay only, same as desktop. */
+                display: none; position: fixed; inset: 0;
+                background: rgba(0,0,0,.4); z-index: 35;
             }
             #sidebar-scrim.scrim-visible { display: block; }
             .mobile-hamburger { display: flex; }
             #workbench-split-panel {
                 position: fixed; inset: 0; width: 100%; z-index: 45;
                 transform: translateX(100%); transition: transform .32s cubic-bezier(.4,0,.2,1);
+                will-change: transform;
             }
             #workbench-split-panel.workbench-open { transform: translateX(0); }
-            #conversation-viewport-panel { padding-left: 14px; padding-right: 14px; }
+            #conversation-viewport-panel {
+                padding-left: 14px; padding-right: 14px;
+                -webkit-overflow-scrolling: touch;
+                contain: layout style;
+            }
             #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
             #settings-modal .settings-sidebar { display: none; }
             .katex-display, table, pre, code { max-width: 100%; overflow-x: auto; }
             [data-seg-type="text"], [data-seg-type="finaldoc"] { max-width: 96% !important; }
+            /* Disable heavy animations on phones for performance */
+            .file-creation-card { animation: msgEnterFlat .25s ease both !important; }
+            .msg-enter { animation: msgEnterFlat .25s ease both !important; }
         }
 
         @supports (padding: max(0px)) {
@@ -2080,7 +2228,7 @@
             wrap.className = 'thinking-wrap expanded';
             wrap.innerHTML = `
                 <div class="thinking-header">
-                    <span class="tw-caret">▶</span>
+                    <span class="tw-caret">&#9654;</span>
                     <span class="tw-dot"></span>
                     <span class="tw-summary">Thinking...</span>
                 </div>
@@ -2114,16 +2262,15 @@
             const list = getStepList(wrapper);
             const row = document.createElement('div');
             row.className = 'step-row' + (isHead ? ' head' : '');
-            row.innerHTML = `<span class="step-icon running">${icon}</span><span class="step-text">${text}</span><span class="step-elapsed"></span>`;
+            // Use a spinning circle as running indicator, then replace with
+            // real icon (checkmark / X / user-supplied) on finish.
+            row.innerHTML = `<span class="step-icon running">&#x25CB;</span><span class="step-text">${text}</span><span class="step-elapsed"></span>`;
             const detail = document.createElement('div');
             detail.className = 'step-detail';
             list.appendChild(row);
             list.appendChild(detail);
             row._detailEl = detail;
             row._startedAt = performance.now();
-            // Live elapsed-time badge — real wall-clock time this specific
-            // step has actually been running, updated every 200ms until the
-            // step finishes (see finishStep, which clears this interval).
             const elapsedEl = row.querySelector('.step-elapsed');
             row._elapsedTimer = setInterval(() => {
                 const secs = (performance.now() - row._startedAt) / 1000;
@@ -2153,7 +2300,13 @@
                 if (elapsedEl) elapsedEl.textContent = totalSecs < 0.3 ? '' : `${totalSecs.toFixed(1)}s`;
             }
             const iconEl = row.querySelector('.step-icon');
-            iconEl.className = 'step-icon ' + (ok ? 'done' : 'failed');
+            if (ok) {
+                iconEl.className = 'step-icon done';
+                iconEl.textContent = '\u2713'; // ✓
+            } else {
+                iconEl.className = 'step-icon failed';
+                iconEl.textContent = '\u2715'; // ✕
+            }
             _refreshThinkingSummary();
         }
 
@@ -2232,13 +2385,78 @@
             codeCheck.innerText = artifactModalState.view === 'code' ? '✓ Code' : 'Code';
 
             const langLower = (artifactModalState.lang || '').toLowerCase();
-            const isRenderable = langLower === 'html' || langLower === 'htm' ||
-                ((langLower.startsWith('createfile:') || langLower.startsWith('editfile:')) && /\.(html?|htm)$/i.test(artifactModalState.filename));
-            if (artifactModalState.view === 'preview' && isRenderable) {
+            const fname = (artifactModalState.filename || '').toLowerCase();
+            const isHtml = langLower === 'html' || langLower === 'htm' ||
+                ((langLower.startsWith('createfile:') || langLower.startsWith('editfile:')) && /\.(html?|htm)$/i.test(fname));
+            const isJson = langLower === 'json' || fname.endsWith('.json');
+            const isMarkdown = langLower === 'markdown' || langLower === 'md' || fname.endsWith('.md');
+
+            if (artifactModalState.view === 'preview' && isHtml) {
                 body.innerHTML = `<iframe style="width:100%;height:100%;border:none;background:#fff;" srcdoc="${sanitizeOutputText(artifactModalState.code)}"></iframe>`;
+            } else if (artifactModalState.view === 'preview' && isJson) {
+                try {
+                    const parsed = JSON.parse(artifactModalState.code);
+                    body.innerHTML = `<div class="json-tree" style="padding:16px;overflow:auto;height:100%;"></div>`;
+                    renderJsonTree(body.querySelector('.json-tree'), parsed);
+                } catch(e) {
+                    body.innerHTML = `<pre class="text-xs p-4 text-red-400">Invalid JSON: ${sanitizeOutputText(String(e))}</pre>`;
+                }
+            } else if (artifactModalState.view === 'preview' && isMarkdown) {
+                const mdHtml = renderLightMarkdown(artifactModalState.code);
+                body.innerHTML = `<div style="padding:20px;max-width:700px;margin:0 auto;color:var(--text);font-size:14px;line-height:1.7;">${mdHtml}</div>`;
             } else {
                 body.innerHTML = `<pre class="text-xs sm:text-sm whitespace-pre-wrap p-4 leading-relaxed text-[var(--text)]" style="font-family:ui-monospace,'SF Mono',Menlo,monospace;">${sanitizeOutputText(artifactModalState.code)}</pre>`;
             }
+        }
+
+        // JSON tree viewer — renders a collapsible tree for any JSON value
+        function renderJsonTree(container, value, depth) {
+            depth = depth || 0;
+            container.innerHTML = '';
+            _renderJsonNode(container, value, depth, null);
+        }
+        function _renderJsonNode(parent, value, depth, keyName) {
+            const type = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+            const isComplex = type === 'object' || type === 'array';
+            const wrap = document.createElement('div');
+            wrap.style.marginLeft = depth > 0 ? '0' : '0';
+
+            if (isComplex) {
+                const children = Object.entries(value);
+                const bracket = type === 'array' ? ['[', ']'] : ['{', '}'];
+                const summary = `${bracket[0]}${children.length} ${children.length === 1 ? 'item' : 'items'}${bracket[1]}`;
+                const toggle = document.createElement('span');
+                toggle.className = 'jt-toggle';
+                toggle.textContent = depth < 2 ? '▾' : '▸';
+                const label = document.createElement('span');
+                if (keyName !== null) { label.innerHTML = `<span class="jt-key">${sanitizeOutputText(String(keyName))}</span>: `; }
+                const cnt = document.createElement('span');
+                cnt.style.color = 'var(--text-dim)';
+                cnt.style.fontSize = '11px';
+                cnt.textContent = summary;
+                const childWrap = document.createElement('div');
+                childWrap.className = 'jt-children' + (depth >= 2 ? ' collapsed' : '');
+                children.forEach(([k, v]) => _renderJsonNode(childWrap, v, depth + 1, type === 'array' ? null : k));
+                toggle.onclick = () => {
+                    const collapsed = childWrap.classList.toggle('collapsed');
+                    toggle.textContent = collapsed ? '▸' : '▾';
+                };
+                if (keyName !== null) wrap.appendChild(label);
+                wrap.appendChild(toggle);
+                wrap.appendChild(cnt);
+                wrap.appendChild(childWrap);
+            } else {
+                const span = document.createElement('span');
+                if (keyName !== null) span.innerHTML = `<span class="jt-key">${sanitizeOutputText(String(keyName))}</span>: `;
+                const valSpan = document.createElement('span');
+                if (type === 'string') { valSpan.className = 'jt-str'; valSpan.textContent = `"${value}"`; }
+                else if (type === 'number') { valSpan.className = 'jt-num'; valSpan.textContent = value; }
+                else if (type === 'boolean') { valSpan.className = 'jt-bool'; valSpan.textContent = value; }
+                else { valSpan.className = 'jt-null'; valSpan.textContent = 'null'; }
+                span.appendChild(valSpan);
+                wrap.appendChild(span);
+            }
+            parent.appendChild(wrap);
         }
 
         function copyArtifactCode() {
@@ -2541,18 +2759,19 @@
                 if (trimmed.startsWith('|') && lines[i + 1] && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
                     closeList();
                     const headerCells = trimmed.split('|').map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''));
-                    let tableHtml = '<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:0.9em;"><thead><tr>';
-                    headerCells.forEach(c => tableHtml += `<th style="text-align:left;padding:6px 10px;border-bottom:2px solid var(--border);color:var(--accent);">${inlineFormat(c)}</th>`);
+                    let tableHtml = '<div class="md-table-wrap"><table class="md-table"><thead><tr>';
+                    headerCells.forEach(c => tableHtml += `<th>${inlineFormat(c)}</th>`);
                     tableHtml += '</tr></thead><tbody>';
                     i += 2;
+                    let rowIdx = 0;
                     while (i < lines.length && lines[i].trim().startsWith('|')) {
                         const rowCells = lines[i].trim().split('|').map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''));
-                        tableHtml += '<tr>';
-                        rowCells.forEach(c => tableHtml += `<td style="padding:6px 10px;border-bottom:1px solid var(--border);">${inlineFormat(c)}</td>`);
+                        tableHtml += `<tr>`;
+                        rowCells.forEach(c => tableHtml += `<td>${inlineFormat(c)}</td>`);
                         tableHtml += '</tr>';
-                        i++;
+                        i++; rowIdx++;
                     }
-                    tableHtml += '</tbody></table>';
+                    tableHtml += '</tbody></table></div>';
                     html += tableHtml;
                     continue;
                 }
@@ -2575,9 +2794,12 @@
                 if (checkboxMatch) {
                     const isChecked = checkboxMatch[1].toLowerCase() === 'x';
                     if (!inList || listType !== 'ul') { closeList(); html += '<ul style="margin:4px 0 8px 0;list-style:none;padding-left:2px;">'; inList = true; listType = 'ul'; }
-                    const boxChar = isChecked ? '☑' : '☐';
-                    const textStyle = isChecked ? 'color:var(--text-dim);text-decoration:line-through;opacity:.75;' : '';
-                    html += `<li style="margin:3px 0;display:flex;align-items:flex-start;gap:6px;"><span style="flex-shrink:0;color:${isChecked ? '#4ade80' : 'var(--accent)'};">${boxChar}</span><span style="${textStyle}">${inlineFormat(checkboxMatch[2])}</span></li>`;
+                    const dotColor = isChecked ? '#4ade80' : 'var(--accent)';
+                    const labelStyle = isChecked ? 'text-decoration:line-through;opacity:.6;color:var(--text-dim);' : 'color:var(--text);';
+                    const iconHtml = isChecked
+                        ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1.5px solid #4ade80;background:rgba(74,222,128,.15);color:#4ade80;font-size:9px;flex-shrink:0;">✓</span>`
+                        : `<span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1.5px solid var(--accent);flex-shrink:0;"></span>`;
+                    html += `<li style="margin:4px 0;display:flex;align-items:flex-start;gap:7px;padding:3px 6px;border-radius:6px;">${iconHtml}<span style="${labelStyle}">${inlineFormat(checkboxMatch[2])}</span></li>`;
                     i++; continue;
                 }
 
@@ -2690,6 +2912,10 @@
                 const decoder = new TextDecoder();
                 let buffer = '', modelWrapper = null, fullText = '';
                 let renderQueued = false;
+                // Reset per-response state to prevent leakage from previous messages
+                _pendingTerminalOutputs = {};
+                if (!window._pendingExecRows) window._pendingExecRows = [];
+                window._pendingExecRows = [];
 
                 const flushRender = () => {
                     renderQueued = false;
@@ -2709,6 +2935,39 @@
                         try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
                         if (payload.type === 'metadata') {
                             currentConversationId = payload.conversation_id;
+                            // Show AI-generated chat title immediately in header
+                            if (payload.title) {
+                                activeChatTitleHeader.classList.add('title-crossfade');
+                                activeChatTitleHeader.innerText = payload.title;
+                                setTimeout(() => activeChatTitleHeader.classList.remove('title-crossfade'), 500);
+                            }
+                        } else if (payload.type === 'agent_step') {
+                            // Emit the step as a thinking-wrap card immediately
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            // Map step types to descriptive, context-aware activity labels
+                            const stepLabels = {
+                                thinking: 'Thinking...', executing: 'Running code...', planning: 'Planning tasks...',
+                                searching: 'Searching the web...', writing: 'Writing response...',
+                                generating: 'Generating...', verifying: 'Verifying output...'
+                            };
+                            setAgentActivity(stepLabels[payload.step_type] || payload.label || 'Working...');
+                            pushTerminalLog(`Step: ${payload.step_type} — ${payload.label}`);
+                            // Add a visible step so the user can see something is happening
+                            if (payload.step_type === 'thinking') {
+                                addStep(modelWrapper, '\u25CB', 'Planning response...', false);
+                            } else if (payload.step_type === 'executing') {
+                                // Show a "Executing..." step row while the code block runs
+                                // This row stays as "running" (spinning circle) until the
+                                // matching activity_terminal event arrives and finishStep is called
+                                const execRow = addStep(modelWrapper, '\u25CB', payload.label || 'Executing code block...');
+                                // Store it so activity_terminal can finish it
+                                if (!window._pendingExecRows) window._pendingExecRows = [];
+                                window._pendingExecRows.push(execRow);
+                            } else if (payload.step_type === 'searching') {
+                                addStep(modelWrapper, '\u25CB', payload.label || 'Searching web...');
+                            } else if (payload.step_type === 'planning') {
+                                addStep(modelWrapper, '\u25CB', payload.label || 'Building task plan...');
+                            }
                         } else if (payload.type === 'token') {
                             if (!modelWrapper) {
                                 removeTypingIndicator();
@@ -2744,14 +3003,118 @@
                                     if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
                                 }
                             }
+                        } else if (payload.type === 'planning_started') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            setAgentActivity('Planning tasks...');
+                            pushTerminalLog('Planning started...');
+                            // Create the task plan card container and attach it to this response
+                            if (!modelWrapper._taskPlanCard) {
+                                const tpc = document.createElement('div');
+                                tpc.className = 'task-plan-card msg-enter';
+                                tpc.innerHTML = `
+                                    <div class="task-plan-header" onclick="this.parentElement.querySelector('.task-plan-body').classList.toggle('hidden')">
+                                        <span class="tph-icon">📋</span>
+                                        <span class="tph-title">${sanitizeOutputText(payload.label || 'Task Plan')}</span>
+                                        <span class="tph-count" id="tpc-count-${Date.now()}">0 tasks</span>
+                                    </div>
+                                    <div class="task-plan-body"></div>
+                                `;
+                                modelWrapper.appendChild(tpc);
+                                modelWrapper._taskPlanCard = tpc;
+                                modelWrapper._taskItems = {};
+                            }
+                        } else if (payload.type === 'task_created') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            if (!modelWrapper._taskPlanCard) {
+                                // Planning card wasn't created yet — create it now
+                                const tpc = document.createElement('div');
+                                tpc.className = 'task-plan-card msg-enter';
+                                tpc.innerHTML = `<div class="task-plan-header"><span class="tph-icon">📋</span><span class="tph-title">Task Plan</span><span class="tph-count">0 tasks</span></div><div class="task-plan-body"></div>`;
+                                modelWrapper.appendChild(tpc);
+                                modelWrapper._taskPlanCard = tpc;
+                                modelWrapper._taskItems = {};
+                            }
+                            const taskId = payload.task_id || ('task_' + Date.now());
+                            const tBody = modelWrapper._taskPlanCard.querySelector('.task-plan-body');
+                            const tCount = modelWrapper._taskPlanCard.querySelector('.tph-count');
+                            const ti = document.createElement('div');
+                            ti.className = 'task-item pending';
+                            ti.dataset.taskId = taskId;
+                            ti.innerHTML = `<span class="ti-icon"></span><span class="ti-label">${sanitizeOutputText(payload.label || taskId)}</span><span class="ti-elapsed"></span>`;
+                            tBody.appendChild(ti);
+                            modelWrapper._taskItems[taskId] = ti;
+                            const itemCount = Object.keys(modelWrapper._taskItems).length;
+                            if (tCount) tCount.textContent = `${itemCount} task${itemCount !== 1 ? 's' : ''}`;
+                            pushTerminalLog(`Task created: ${payload.label || taskId}`);
+                        } else if (payload.type === 'task_started') {
+                            if (modelWrapper && modelWrapper._taskItems) {
+                                const ti = modelWrapper._taskItems[payload.task_id];
+                                if (ti) {
+                                    ti.className = 'task-item running';
+                                    ti._startedAt = performance.now();
+                                    setAgentActivity(`${payload.label || 'Working'}...`);
+                                    // Start elapsed timer
+                                    const elapsedEl = ti.querySelector('.ti-elapsed');
+                                    ti._timer = setInterval(() => {
+                                        if (!ti._startedAt) return;
+                                        const s = (performance.now() - ti._startedAt) / 1000;
+                                        if (elapsedEl) elapsedEl.textContent = s < 1 ? '' : `${s.toFixed(1)}s`;
+                                    }, 200);
+                                }
+                            }
+                            pushTerminalLog(`Task started: ${payload.task_id}`);
+                        } else if (payload.type === 'task_completed') {
+                            if (modelWrapper && modelWrapper._taskItems) {
+                                const ti = modelWrapper._taskItems[payload.task_id];
+                                if (ti) {
+                                    if (ti._timer) clearInterval(ti._timer);
+                                    ti.className = 'task-item ' + (payload.ok !== false ? 'done' : 'failed');
+                                    const icon = ti.querySelector('.ti-icon');
+                                    if (icon) icon.textContent = payload.ok !== false ? '✓' : '✕';
+                                    const elapsed = ti._startedAt ? ((performance.now() - ti._startedAt) / 1000) : 0;
+                                    const elapsedEl = ti.querySelector('.ti-elapsed');
+                                    if (elapsedEl && elapsed > 0.3) elapsedEl.textContent = `${elapsed.toFixed(1)}s`;
+                                }
+                            }
+                            pushTerminalLog(`Task completed: ${payload.task_id} — ${payload.ok !== false ? 'ok' : 'failed'}`);
+                        } else if (payload.type === 'prompt_enhancing') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            setAgentActivity('Enhancing prompt...');
+                            // Show a prompt enhancement card
+                            const pec = document.createElement('div');
+                            pec.className = 'prompt-enhance-card enhancing msg-enter';
+                            pec.id = 'prompt-enhance-card-active';
+                            pec.innerHTML = `<span class="pec-icon">✨</span><div class="pec-body"><div class="pec-label">Enhancing prompt</div><div class="pec-text">Crafting a richer image description...</div></div>`;
+                            modelWrapper.appendChild(pec);
+                            modelWrapper._promptEnhanceCard = pec;
+                            pushTerminalLog('Enhancing image prompt...');
+                        } else if (payload.type === 'prompt_enhanced') {
+                            if (modelWrapper && modelWrapper._promptEnhanceCard) {
+                                modelWrapper._promptEnhanceCard.classList.remove('enhancing');
+                                const pecText = modelWrapper._promptEnhanceCard.querySelector('.pec-text');
+                                if (pecText) pecText.textContent = payload.enhanced_prompt || payload.prompt || '';
+                            }
+                            setAgentActivity('Generating image...');
+                            pushTerminalLog(`Enhanced prompt: ${payload.enhanced_prompt || payload.prompt || ''}`);
+                        } else if (payload.type === 'verification_started') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            setAgentActivity('Verifying output...');
+                            const vRow = addStep(modelWrapper, '\u25CB', `Verifying ${payload.filename || 'output'}...`);
+                            modelWrapper._verifyRow = vRow;
+                            pushTerminalLog(`Verification started: ${payload.filename || ''}`);
+                        } else if (payload.type === 'verification_completed') {
+                            if (modelWrapper && modelWrapper._verifyRow) {
+                                finishStep(modelWrapper._verifyRow, payload.ok !== false);
+                                if (payload.details) setStepDetail(modelWrapper._verifyRow, `<span>${sanitizeOutputText(payload.details)}</span>`);
+                                modelWrapper._verifyRow = null;
+                            }
+                            pushTerminalLog(`Verification done: ${payload.ok !== false ? 'passed' : 'issues found'}`);
                         } else if (payload.type === 'activity_created') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            const row = addStep(modelWrapper, '📄', `Created ${payload.filename}`);
+                            setAgentActivity(`Writing ${payload.filename}...`);
+                            const row = addStep(modelWrapper, '\u25CB', `Creating ${payload.filename}`);
                             finishStep(row, true);
-                            setStepDetail(row, `<span>${payload.line_count} lines, ${payload.size_bytes} bytes — click the file card below to preview.</span>`);
-                            // Clicking this step also opens the real file
-                            // preview (same modal the createfile card uses)
-                            // instead of only showing the byte count.
+                            setStepDetail(row, `<span>${payload.line_count} lines, ${(payload.size_bytes/1024).toFixed(1)} KB — click the file card below to preview.</span>`);
                             row.addEventListener('click', () => {
                                 const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-filename="${CSS.escape(payload.filename)}"]`);
                                 if (matchingCard && matchingCard._code) openFilePreviewFromCard(matchingCard);
@@ -2759,8 +3122,9 @@
                             pushTerminalLog(`Activity: created ${payload.filename} (${payload.line_count} lines)`);
                         } else if (payload.type === 'activity_edited') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            const row = addStep(modelWrapper, '✎',
-                                `Edited ${payload.filename} <span class="ac-added">+${payload.added}</span> <span class="ac-removed">-${payload.removed}</span>`);
+                            setAgentActivity(`Editing ${payload.filename}...`);
+                            const row = addStep(modelWrapper, '\u25CB',
+                                `Editing ${payload.filename} <span class="ac-added">+${payload.added}</span> <span class="ac-removed">-${payload.removed}</span>`);
                             finishStep(row, true);
                             if (payload.unified_diff) setStepDetail(row, renderUnifiedDiffHtml(payload.unified_diff));
                             else setStepDetail(row, `<span>+${payload.added} lines added, -${payload.removed} lines removed</span>`);
@@ -2772,12 +3136,23 @@
                         } else if (payload.type === 'activity_terminal') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             const ok = payload.returncode === 0;
-                            const row = addStep(modelWrapper, '›_', `Ran ${payload.lang} #${payload.ordinal}`);
+                            const langLabel = (payload.lang || 'code').toUpperCase();
+                            setAgentActivity(ok ? `Ran ${langLabel} block` : `Error in ${langLabel} block`);
+                            // Reuse the "Executing..." row that was created by the pre-execution
+                            // agent_step event, so it transitions from spinning to done/failed
+                            // in-place rather than creating a duplicate step row.
+                            let row;
+                            if (window._pendingExecRows && window._pendingExecRows.length > 0) {
+                                row = window._pendingExecRows.shift();
+                                // Update the label to the final status
+                                const textEl = row.querySelector('.step-text');
+                                if (textEl) textEl.textContent = `${ok ? 'Ran' : 'Error in'} ${langLabel} block #${payload.ordinal}`;
+                            } else {
+                                row = addStep(modelWrapper, '\u25CB', `${ok ? 'Ran' : 'Error in'} ${langLabel} block #${payload.ordinal}`);
+                            }
                             finishStep(row, ok);
                             // Pull the REAL output cached from the terminal_output
-                            // event with the same ordinal (fires just before this
-                            // one) — genuine code + stdout/stderr from the actual
-                            // subprocess run, shown when the step is clicked.
+                            // event with the same ordinal (fires just before this one)
                             const realOutput = _pendingTerminalOutputs[payload.ordinal];
                             if (realOutput) {
                                 const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
