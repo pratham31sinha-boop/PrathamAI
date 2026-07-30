@@ -401,7 +401,7 @@ def _lookup_vip(email: str):
 # actually builds that file in Python (zipfile from stdlib; PDF via the
 # optional fpdf2 package) and hands back a one-time download link.
 _generated_files_store: dict = {}
-_GENERATED_FILE_TTL = 86400 * 7  # 7 days
+_GENERATED_FILE_TTL = 3600  # 1 hour
 
 _ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
 _PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
@@ -429,10 +429,6 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     _prune_generated_files()
     token = uuid.uuid4().hex
     _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
-    try:
-        _save_local_state_to_disk()
-    except Exception:
-        pass
     return token
 
 _FINALDOC_RE = re.compile(r"```finaldoc\s*\n([\s\S]*?)```", re.IGNORECASE)
@@ -479,27 +475,21 @@ def _extract_export_content(assistant_text: str) -> str:
 
 def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverable_name: str = "content.txt") -> bytes:
     """
-    Fix for the "zip contains the wrong content" bug: checks for any existing
-    valid zip file in workdir first, returning it directly if found. Otherwise,
-    builds a clean zip file with the deliverable text and any generated files.
+    Fix for the "zip contains the wrong content" bug: the clean deliverable
+    (the ```finaldoc block, or the filler-stripped full reply — see
+    `_extract_export_content`) is ALWAYS written into the zip under
+    `deliverable_name` first, since that's the thing the person actually
+    asked for. Any REAL files the background terminal created in `workdir`
+    during this same request (via python/bash execution or a ```createfile:
+    block) are added alongside as extras, not as a silent replacement — so a
+    request like "write an essay, zip it" reliably gets the essay in the
+    zip, even if unrelated scratch files exist in the terminal's workdir
+    from something else the model did in the same turn.
     """
-    if workdir and os.path.isdir(workdir):
-        for root, _dirs, files in os.walk(workdir):
-            for fname in files:
-                if fname.lower().endswith(".zip"):
-                    full_path = os.path.join(root, fname)
-                    if zipfile.is_zipfile(full_path):
-                        try:
-                            with open(full_path, "rb") as fh:
-                                return fh.read()
-                        except Exception:
-                            pass
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         deliverable_text = _extract_export_content(assistant_text)
-        if not deliverable_text or not deliverable_text.strip():
-            deliverable_text = assistant_text or "Exported Content"
-        zf.writestr(deliverable_name or "content.txt", deliverable_text)
+        zf.writestr(deliverable_name, deliverable_text)
 
         if workdir and os.path.isdir(workdir):
             for root, _dirs, files in os.walk(workdir):
@@ -510,7 +500,8 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverab
                         zf.write(full_path, arcname)
                     except Exception:
                         continue
-    return buf.getvalue()
+    buf.seek(0)
+    return buf.read()
 
 # Base-14 PDF fonts (Helvetica/Helvetica-Bold) only support Latin-1 — any
 # character outside that range gets mangled into a literal "?" when encoded.
@@ -1107,9 +1098,6 @@ def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: st
 @app.route("/api/app/download/<token>", methods=["GET"])
 def download_generated_file(token):
     entry = _generated_files_store.get(token)
-    if not entry:
-        _load_local_state_from_disk()
-        entry = _generated_files_store.get(token)
     if not entry:
         return jsonify({"error": "This download has expired or does not exist."}), 404
     resp = Response(entry["bytes"], mimetype=entry["mimetype"])
@@ -3068,16 +3056,13 @@ def _get_convo(conv_id):
     return _mem_convos.get(conv_id)
 
 def _save_convo(conv):
-    _mem_convos[conv["id"]] = conv
-    try:
-        _save_local_state_to_disk()
-    except Exception:
-        pass
     if SUPABASE_CONFIGURED and _supabase:
         try:
             _supabase.table("conversations").upsert(conv).execute()
+            return
         except Exception:
             pass
+    _mem_convos[conv["id"]] = conv
 
 def _list_convos(user_id):
     if SUPABASE_CONFIGURED and _supabase:
@@ -3088,7 +3073,6 @@ def _list_convos(user_id):
             pass
     return [
         {"id": v["id"], "title": v.get("title", "Untitled"), "pinned": v.get("pinned", False),
-         "favorite": v.get("favorite", False), "folder": v.get("folder", ""),
          "created_at": v.get("created_at"), "updated_at": v.get("updated_at")}
         for v in _mem_convos.values() if v.get("user_id") == user_id
     ]
@@ -3103,14 +3087,6 @@ def _get_messages(conv_id):
     return _mem_convos.get(conv_id, {}).get("messages", [])
 
 def _append_message(conv_id, role, content):
-    conv = _mem_convos.get(conv_id)
-    if conv:
-        conv.setdefault("messages", []).append({"role": role, "content": content})
-        conv["updated_at"] = datetime.now(timezone.utc).isoformat()
-        try:
-            _save_local_state_to_disk()
-        except Exception:
-            pass
     if SUPABASE_CONFIGURED and _supabase:
         try:
             _supabase.table("messages").insert({
@@ -3120,18 +3096,16 @@ def _append_message(conv_id, role, content):
         except Exception:
             pass
 
+    conv = _mem_convos.get(conv_id)
+    if conv:
+        conv.setdefault("messages", []).append({"role": role, "content": content})
+        conv["updated_at"] = datetime.now(timezone.utc).isoformat()
+
 # ── ROUTES ──
 @app.route("/", methods=["GET"])
-def index_root():
-    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            return Response(f.read(), content_type="text/html; charset=utf-8")
-    return jsonify({"message": "Pratham AI backend active"})
-
 @app.route("/api", methods=["GET"])
 @app.route("/api/app", methods=["GET"])
-def api_root():
+def index_root():
     return jsonify({"message": "Pratham AI backend active"})
 
 @app.route("/auth/exchange", methods=["POST", "OPTIONS"])
@@ -3840,14 +3814,6 @@ def chat_stream():
                     "label": f"Executing {lang.upper()} block \u2014 please wait...",
                     "timestamp": time.time()
                 })
-                before_mtimes = {}
-                try:
-                    for root, _dirs, fnames in os.walk(terminal_workdir):
-                        for fn in fnames:
-                            fp = os.path.join(root, fn)
-                            before_mtimes[fp] = os.path.getmtime(fp)
-                except Exception:
-                    pass
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
@@ -3858,36 +3824,6 @@ def chat_stream():
                     "stderr": stderr,
                     "returncode": rc
                 })
-                try:
-                    for root, _dirs, fnames in os.walk(terminal_workdir):
-                        for fn in fnames:
-                            if fn.startswith(".") or fn in ("README.md", "__init__.py"):
-                                continue
-                            fp = os.path.join(root, fn)
-                            mt = os.path.getmtime(fp)
-                            if fp not in before_mtimes or mt > before_mtimes.get(fp, 0):
-                                with open(fp, "rb") as fh:
-                                    fbytes = fh.read()
-                                if not fbytes:
-                                    continue
-                                mimetype = mimetypes.guess_type(fn)[0] or "application/octet-stream"
-                                token = _store_generated_file(fbytes, fn, mimetype)
-                                file_ext = fn.rsplit(".", 1)[-1] if "." in fn else "txt"
-                                _register_session_file(conv_id, fn, file_ext, len(fbytes), f"/download/{token}", line_count=fbytes.count(b"\n")+1)
-                                yield _sse({
-                                    "type": "file_created",
-                                    "url": f"/download/{token}",
-                                    "filename": fn,
-                                    "size_bytes": len(fbytes),
-                                    "mimetype": mimetype
-                                })
-                                yield _sse({
-                                    "type": "activity_file",
-                                    "filename": fn,
-                                    "size_bytes": len(fbytes)
-                                })
-                except Exception as exc:
-                    print(f"[EXEC-FILES][FAULT] {exc}")
                 # ── Real activity event: terminal command executed (additive
                 # — drives the "▼ Ran terminal / ✓ Completed" activity card) ──
                 yield _sse({
@@ -3958,13 +3894,11 @@ def chat_stream():
                     inner_name = _derive_export_filename(export_intent_check_message, "txt", assistant_response)
                     zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name)
                     token = _store_generated_file(zip_bytes, zip_name, "application/zip")
-                    _register_session_file(conversation_id, zip_name, "zip", len(zip_bytes), download_url=f"/download/{token}")
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
                 elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
                     pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
                     pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
                     token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
-                    _register_session_file(conversation_id, pdf_name, "pdf", len(pdf_bytes), download_url=f"/download/{token}")
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
                 else:
                     generic_ext = _detect_generic_extension_intent(export_intent_check_message)
@@ -3974,7 +3908,6 @@ def chat_stream():
                         )
                         file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
                         token = _store_generated_file(file_bytes, file_name, file_mime)
-                        _register_session_file(conversation_id, file_name, generic_ext, len(file_bytes), download_url=f"/download/{token}")
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
             except Exception as exc:
                 print(f"[FILEGEN][FAULT] {exc}")
@@ -4026,78 +3959,6 @@ def get_messages_route(conv_id):
         return _cors_preflight()
     return jsonify(_get_messages(conv_id))
 
-@app.route("/conversations/<conv_id>/full-state", methods=["GET", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/full-state", methods=["GET", "OPTIONS"])
-@app.route("/api/app/conversations/<conv_id>/full-state", methods=["GET", "OPTIONS"])
-@require_auth
-def get_full_state_route(conv_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    conv = _mem_convos.get(conv_id, {})
-    return jsonify({
-        "id": conv_id,
-        "title": conv.get("title", "Untitled"),
-        "messages": _get_messages(conv_id),
-        "files": _session_files_registry.get(conv_id, []),
-        "tasks": conv.get("tasks", []),
-        "terminal_logs": conv.get("terminal_logs", []),
-        "pinned": conv.get("pinned", False),
-        "favorite": conv.get("favorite", False),
-        "folder": conv.get("folder", ""),
-        "created_at": conv.get("created_at"),
-        "updated_at": conv.get("updated_at")
-    })
-
-@app.route("/conversations/<conv_id>/meta", methods=["POST", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/meta", methods=["POST", "OPTIONS"])
-@app.route("/api/app/conversations/<conv_id>/meta", methods=["POST", "OPTIONS"])
-@require_auth
-def update_conv_meta_route(conv_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    body = request.get_json(silent=True) or {}
-    conv = _mem_convos.get(conv_id)
-    if not conv:
-        conv = {"id": conv_id, "title": "Untitled", "created_at": datetime.now(timezone.utc).isoformat(), "messages": [], "user_id": _user_id()}
-        _mem_convos[conv_id] = conv
-    for k in ("pinned", "favorite", "folder", "title", "tasks", "terminal_logs"):
-        if k in body:
-            conv[k] = body[k]
-    conv["updated_at"] = datetime.now(timezone.utc).isoformat()
-    _save_convo(conv)
-    return jsonify({"ok": True, "conversation": conv})
-
-@app.route("/conversations/<conv_id>/duplicate", methods=["POST", "OPTIONS"])
-@app.route("/api/conversations/<conv_id>/duplicate", methods=["POST", "OPTIONS"])
-@app.route("/api/app/conversations/<conv_id>/duplicate", methods=["POST", "OPTIONS"])
-@require_auth
-def duplicate_conv_route(conv_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    orig = _mem_convos.get(conv_id)
-    if not orig:
-        return jsonify({"error": "Conversation not found"}), 404
-    new_id = uuid.uuid4().hex
-    new_title = orig.get("title", "Untitled") + " (Copy)"
-    new_conv = {
-        "id": new_id,
-        "user_id": orig.get("user_id", _user_id()),
-        "title": new_title,
-        "pinned": orig.get("pinned", False),
-        "favorite": orig.get("favorite", False),
-        "folder": orig.get("folder", ""),
-        "messages": list(orig.get("messages", [])),
-        "tasks": list(orig.get("tasks", [])),
-        "terminal_logs": list(orig.get("terminal_logs", [])),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    _mem_convos[new_id] = new_conv
-    if conv_id in _session_files_registry:
-        _session_files_registry[new_id] = list(_session_files_registry[conv_id])
-    _save_convo(new_conv)
-    return jsonify({"ok": True, "id": new_id, "title": new_title})
-
 @app.route("/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
 @app.route("/api/app/conversations/<conv_id>", methods=["DELETE", "OPTIONS"])
@@ -4106,11 +3967,6 @@ def delete_conversation(conv_id):
     if request.method == "OPTIONS":
         return _cors_preflight()
     _mem_convos.pop(conv_id, None)
-    _session_files_registry.pop(conv_id, None)
-    try:
-        _save_local_state_to_disk()
-    except Exception:
-        pass
     if SUPABASE_CONFIGURED and _supabase:
         try:
             _supabase.table("messages").delete().eq("conversation_id", conv_id).execute()
@@ -4141,31 +3997,13 @@ def execute_python():
         return _cors_preflight()
     body = request.get_json(silent=True) or {}
     code = body.get("code", "").strip()
-    conv_id = body.get("conversation_id") or body.get("conv_id")
     if not code:
         return jsonify({"error": "Empty code payload"}), 400
-    workdir = _new_terminal_workdir()
     try:
-        stdout, stderr, rc = _run_code_block("python", code, cwd=workdir)
-        created_files = []
-        for root, _dirs, files in os.walk(workdir):
-            for fname in files:
-                if fname.startswith("."): continue
-                full_path = os.path.join(root, fname)
-                try:
-                    with open(full_path, "rb") as fh:
-                        data = fh.read()
-                    mimetype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
-                    token = _store_generated_file(data, fname, mimetype)
-                    created_files.append({"filename": fname, "size_bytes": len(data), "url": f"/download/{token}", "mimetype": mimetype})
-                    if conv_id:
-                        file_ext = fname.rsplit(".", 1)[-1] if "." in fname else "txt"
-                        _register_session_file(conv_id, fname, file_ext, len(data), f"/download/{token}", line_count=data.count(b"\n")+1)
-                except Exception:
-                    pass
-        return jsonify({"stdout": stdout, "stderr": stderr, "returncode": rc, "files": created_files})
-    finally:
-        _cleanup_terminal_workdir(workdir)
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=10)
+        return jsonify({"stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode})
+    except Exception as exc:
+        return jsonify({"stdout": "", "stderr": f"Sandbox Exception: {exc}", "returncode": -1})
 
 # ── DIRECT TERMINAL ENDPOINT (creator/dev use — not tied to a chat turn) ──
 # Lets the frontend (or you, via curl/Postman) run arbitrary python/bash
@@ -4298,19 +4136,12 @@ def upload_pdf():
     except Exception as exc:
         decode_status = f"stored (decode attempt failed: {exc})"
 
-    token = _store_generated_file(raw_bytes, filename, getattr(f, "mimetype", "application/octet-stream"))
-    conv_id = (request.headers.get("X-Conversation-Id") or request.args.get("conversation_id") or request.form.get("conversation_id") or request.values.get("conversation_id") or "").strip()
-    if conv_id:
-        _register_session_file(conv_id, filename, ext or "bin", len(raw_bytes), download_url=f"/download/{token}")
-
     return jsonify({
         "ok": True,
         "filename": filename,
         "size_bytes": len(raw_bytes),
         "status": decode_status,
-        "preview": extracted_preview,
-        "token": token,
-        "download_url": f"/download/{token}"
+        "preview": extracted_preview
     })
 
 # ── ADD-ON PASS: /config/public, rate limiting, and real code validation ──
@@ -4449,70 +4280,11 @@ def validate_code_route():
 
 _session_files_registry: dict = {}  # conv_id -> [{filename, lang, size_bytes, line_count, created_at, download_url}]
 
-_LOCAL_STORE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "pratham_local_store.json")
-
-def _save_local_state_to_disk():
-    try:
-        os.makedirs(os.path.dirname(_LOCAL_STORE_PATH), exist_ok=True)
-        files_store_serializable = {}
-        for k, v in _generated_files_store.items():
-            b = v.get("bytes", b"")
-            b64 = base64.b64encode(b).decode("ascii") if isinstance(b, bytes) else base64.b64encode(str(b).encode("utf-8")).decode("ascii")
-            files_store_serializable[k] = {
-                "bytes_b64": b64,
-                "filename": v.get("filename", ""),
-                "mimetype": v.get("mimetype", ""),
-                "t": v.get("t", 0)
-            }
-        data = {
-            "convos": _mem_convos,
-            "session_files": _session_files_registry,
-            "generated_files": files_store_serializable
-        }
-        with open(_LOCAL_STORE_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except Exception as exc:
-        print(f"[PERSIST][FAULT] Could not save local state: {exc}")
-
-def _load_local_state_from_disk():
-    if not os.path.exists(_LOCAL_STORE_PATH):
-        return
-    try:
-        with open(_LOCAL_STORE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        _mem_convos.update(data.get("convos", {}))
-        _session_files_registry.update(data.get("session_files", {}))
-        for k, v in data.get("generated_files", {}).items():
-            b_b64 = v.get("bytes_b64", "")
-            try:
-                b = base64.b64decode(b_b64.encode("ascii"))
-            except Exception:
-                b = b""
-            _generated_files_store[k] = {
-                "bytes": b,
-                "filename": v.get("filename", ""),
-                "mimetype": v.get("mimetype", ""),
-                "t": v.get("t", 0)
-            }
-        print(f"[PERSIST] Restored {len(_mem_convos)} convos, {len(_session_files_registry)} session file registries, {len(_generated_files_store)} generated files from disk.")
-    except Exception as exc:
-        print(f"[PERSIST][FAULT] Could not load local state: {exc}")
-
-_load_local_state_from_disk()
-
 def _register_session_file(conv_id: str, filename: str, lang: str, size: int, download_url: str = None, line_count: int = None):
-    reg = _session_files_registry.setdefault(conv_id, [])
-    for entry in list(reg):
-        if entry.get("filename") == filename:
-            reg.remove(entry)
-    reg.append({
+    _session_files_registry.setdefault(conv_id, []).append({
         "filename": filename, "lang": lang, "size_bytes": size, "line_count": line_count,
         "created_at": datetime.now(timezone.utc).isoformat(), "download_url": download_url
     })
-    try:
-        _save_local_state_to_disk()
-    except Exception:
-        pass
 
 @app.route("/conversations/<conv_id>/files", methods=["GET", "OPTIONS"])
 @app.route("/api/conversations/<conv_id>/files", methods=["GET", "OPTIONS"])
@@ -4524,8 +4296,6 @@ def list_session_files(conv_id):
     or exports), not simulated GitHub activity."""
     if request.method == "OPTIONS":
         return _cors_preflight()
-    if not _session_files_registry.get(conv_id):
-        _load_local_state_from_disk()
     files = list(_session_files_registry.get(conv_id, []))
     if not files:
         ordinal = 0
