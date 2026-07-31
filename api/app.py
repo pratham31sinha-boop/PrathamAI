@@ -625,6 +625,33 @@ def _rasterize_svg_to_rgb(svg_text: str, target_width_px: int = 900):
         print(f"[PDF][DIAGRAM RASTERIZE FAULT] {exc}")
         return None
 
+_MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^\s\)]+)\)")
+
+def _fetch_and_rasterize_remote_image(url: str, target_width_px: int = 900, timeout: int = 20):
+    """Downloads a remote raster image (used for Pollinations-generated
+    images referenced as ![...](url) in the assistant's reply) and returns
+    (width, height, raw_rgb_bytes) for PDF embedding — same shape as
+    _rasterize_svg_to_rgb. Requires Pillow; returns None (and the PDF export
+    simply skips that image, same as an unresolved diagram marker) if
+    Pillow isn't installed or the fetch/decode fails for any reason."""
+    try:
+        from PIL import Image as _PILImage
+    except ImportError:
+        print("[PDF][REMOTE IMAGE] Pillow not installed — cannot embed remote images in PDF export.")
+        return None
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (PrathamAI PDF export)"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw_bytes = resp.read()
+        img = _PILImage.open(io.BytesIO(raw_bytes)).convert("RGB")
+        if img.width > target_width_px:
+            ratio = target_width_px / img.width
+            img = img.resize((target_width_px, max(1, int(img.height * ratio))))
+        return img.width, img.height, img.tobytes()
+    except Exception as exc:
+        print(f"[PDF][REMOTE IMAGE FETCH FAULT] {url} -> {exc}")
+        return None
+
 def _build_pdf_content_items(text: str, diagram_files: dict, max_width_chars: int):
     """Splits `text` on [DIAGRAM: filename] markers (the convention the
     system prompt tells the model to use for construction/geometry
@@ -638,24 +665,45 @@ def _build_pdf_content_items(text: str, diagram_files: dict, max_width_chars: in
     generation failed) is simply skipped — the surrounding text still gets
     exported, just without that one image, rather than crashing the whole
     export."""
+    # Merge diagram markers ([DIAGRAM: x.html]) and markdown image links
+    # (![...](https://...), used for Pollinations-generated images) into one
+    # ordered list of embed points, so both diagrams AND generated pictures
+    # land in the exported PDF at the right position, not just diagrams.
+    embed_points = []
+    for m in _DIAGRAM_MARKER_RE.finditer(text):
+        embed_points.append(("diagram", m.start(), m.end(), m.group(1).strip()))
+    for m in _MARKDOWN_IMAGE_RE.finditer(text):
+        embed_points.append(("remote_image", m.start(), m.end(), m.group(1).strip()))
+    embed_points.sort(key=lambda p: p[1])
+
     items = []
     last_end = 0
-    for m in _DIAGRAM_MARKER_RE.finditer(text):
-        chunk = text[last_end:m.start()]
+    for kind, start, end, value in embed_points:
+        if start < last_end:
+            continue  # overlapping match (shouldn't normally happen) — skip
+        chunk = text[last_end:start]
         if chunk.strip():
             items.extend(_markdownish_lines_for_pdf(chunk, max_width_chars))
-        filename = m.group(1).strip()
-        svg_markup = diagram_files.get(filename)
-        if svg_markup:
-            rasterized = _rasterize_svg_to_rgb(svg_markup)
+        if kind == "diagram":
+            filename = value
+            svg_markup = diagram_files.get(filename)
+            if svg_markup:
+                rasterized = _rasterize_svg_to_rgb(svg_markup)
+                if rasterized:
+                    width, height, rgb = rasterized
+                    items.append({"type": "image", "width": width, "height": height, "rgb": rgb})
+                else:
+                    items.append(("F1", 0, f"[Diagram '{filename}' could not be rendered for this PDF export.]"))
+            else:
+                print(f"[PDF][DIAGRAM] marker referenced '{filename}' but no matching createfile diagram was found in this response.")
+        else:  # remote_image (e.g. Pollinations-generated picture)
+            rasterized = _fetch_and_rasterize_remote_image(value)
             if rasterized:
                 width, height, rgb = rasterized
                 items.append({"type": "image", "width": width, "height": height, "rgb": rgb})
             else:
-                items.append(("F1", 0, f"[Diagram '{filename}' could not be rendered for this PDF export.]"))
-        else:
-            print(f"[PDF][DIAGRAM] marker referenced '{filename}' but no matching createfile diagram was found in this response.")
-        last_end = m.end()
+                items.append(("F1", 0, "[Generated image could not be embedded in this PDF export.]"))
+        last_end = end
     tail = text[last_end:]
     if tail.strip():
         items.extend(_markdownish_lines_for_pdf(tail, max_width_chars))
@@ -2001,6 +2049,12 @@ SYSTEM_PROMPT = (
     "answer, no filler intros ('Great question!'), no restating the question, no long bulleted feature "
     "lists unless the person asked for a list. Expand length only when the task genuinely needs it "
     "(full code files, multi-step explanations the person asked to go deep on).\n\n"
+    "STAY STRICTLY ON THE ASKED TOPIC: answer exactly what was asked and stop. Do not add unrequested "
+    "extra sections like 'related topics', 'you might also want to know', 'additional tips', bonus "
+    "examples, or tangents the person didn't ask for. Do not pad a short factual question with "
+    "background context, history, or caveats they didn't ask for. If something extra is genuinely "
+    "useful and non-obvious, offer it in ONE short line at the very end ('Want me to also cover X?') "
+    "rather than including it unprompted — never dump it into the main answer.\n\n"
     "MATH FORMATTING: always wrap math in LaTeX delimiters — inline: \\( x^2 \\) or $x^2$; "
     "display/standalone equations: \\[ \\frac{a}{b} \\] or $$ \\frac{a}{b} $$. Never write powers as "
     "'x^2' or fractions as 'a/b' in plain text outside these delimiters — the frontend renders proper "
@@ -2090,6 +2144,24 @@ SYSTEM_PROMPT = (
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "SANDBOX ENVIRONMENT AWARENESS — READ BEFORE RUNNING ANY COMMAND: this terminal is a minimal, "
+    "network-restricted Python sandbox, NOT a full dev machine. It has the Python standard library "
+    "and whatever is already imported at the top of this backend (pypdf, fpdf, etc. — some optional). "
+    "It does NOT have npm, node, a package manager with internet access, or any JS runtime, and pip "
+    "installs will usually fail or hang because there is no reliable network access from inside this "
+    "sandbox. NEVER run `npm install`, `npm start`, `pip install`, `apt install`, or any package-manager "
+    "command as a first step — assume nothing beyond the Python standard library is installed, and "
+    "write pure-stdlib Python (or plain HTML/CSS/JS via createfile, which needs no install/runtime at "
+    "all since it just runs in the user's browser) instead of reaching for a package. If a task "
+    "genuinely seems to need a package, check whether a stdlib-only approach exists first — there "
+    "almost always is one — before ever attempting an install command. If a command fails because "
+    "something isn't installed, do NOT retry the same install — pivot to a stdlib-only solution "
+    "and say so briefly, don't silently loop on install failures.\n\n"
+    "WHEN A TERMINAL COMMAND ERRORS: never paste the raw traceback/stderr into your main reply text — "
+    "the person already sees the full technical stdout/stderr in an expandable detail row in the UI. "
+    "In your own words, explain in one short plain-language sentence what went wrong and what you're "
+    "doing about it (fixing it and retrying, or explaining why it can't be done here), then continue. "
+    "Reserve full tracebacks for that automatic detail row, not your prose.\n\n"
     "ZIP WITH COMPLEX FOLDER STRUCTURE: when asked to create a zip file with multiple folders/files "
     "(e.g. 'make a zip with src/, docs/, tests/ each having several files'), use a single ```bash block "
     "to build the real folder structure — use `mkdir -p` for folders, write actual content to files "
@@ -2125,6 +2197,13 @@ SYSTEM_PROMPT = (
     "blocks in the same reply can read/use files you created this way, since they share the same "
     "working directory. Prefer ```createfile: over python's open()/write() for simple file output; "
     "reserve python/bash for when you actually need to compute, transform, or execute something.\n\n"
+    "FILE NAMING — KEEP IT SHORT AND ON-TOPIC: give every file a short, lowercase, hyphen-or-"
+    "underscore name that reflects what it actually is, not a long descriptive sentence-like name. "
+    "'invoice.py' not 'python_script_to_generate_monthly_invoice_report_v1.py'; 'todo-app.html' not "
+    "'my_todo_application_final_version.html'. If a task naturally produces several intermediate or "
+    "supporting files, that's fine — the UI automatically shows only the newest/final one prominently "
+    "and tucks the rest behind a small 'N other files' toggle, so you don't need to minimize the "
+    "actual number of files, just keep each individual name short and clear.\n\n"
     "Your response length budget is large (tens of thousands of tokens) and multiple API keys are "
     "in rotation behind you, so when someone asks for a big file (e.g. a large reference file, a "
     "long knowledge base, a file with thousands of lines), do NOT artificially cut it short or "
