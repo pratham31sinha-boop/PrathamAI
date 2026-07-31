@@ -199,6 +199,19 @@
         @keyframes fccShimmer { 0% { left: -40%; } 100% { left: 100%; } }
         .fcc-openhint { font-size: 10px; color: var(--accent); font-weight: 600; white-space: nowrap; }
 
+        /* File group: when a single response produces multiple files, only the
+           latest is shown by default; earlier ones collapse behind a small
+           text toggle instead of stacking up as several separate cards. */
+        .file-group-container { display: flex; flex-direction: column; max-width: 92%; }
+        .file-group-list { display: flex; flex-direction: column; gap: 6px; }
+        .file-group-list .fg-collapsed { display: none; }
+        .file-group-container.fg-expanded .file-group-list .fg-collapsed { display: flex; }
+        .file-group-toggle {
+            display: none; font-size: 11px; color: var(--text-dim); cursor: pointer;
+            padding: 2px 2px 6px; order: -1; user-select: none;
+        }
+        .file-group-toggle:hover { color: var(--accent); }
+
         /* ── Activity cards (file created, edited, terminal ran) ── */
         .activity-card {
             display: flex; flex-direction: column; gap: 0;
@@ -531,11 +544,58 @@
             /* Disable heavy animations on phones for performance */
             .file-creation-card { animation: msgEnterFlat .25s ease both !important; }
             .msg-enter { animation: msgEnterFlat .25s ease both !important; }
+            /* iOS Safari auto-zooms the page when a focused input's font-size
+               is under 16px — this is what causes the jarring "zoom in when I
+               tap the message box" feel on phones. Force 16px on all typed
+               inputs. */
+            #user-prompt-input-field, input[type="text"], input[type="email"], textarea {
+                font-size: 16px !important;
+            }
+            /* Tap targets under ~40px are hard to hit reliably on a phone —
+               bump icon-only buttons up to a comfortable minimum. */
+            button, .nav-row, a[role="button"] {
+                min-height: 40px;
+            }
+            /* Prevent iOS double-tap-to-zoom on the whole app shell, since
+               this is a chat app, not a page meant to be pinch-zoomed. */
+            body { touch-action: manipulation; }
         }
 
         @supports (padding: max(0px)) {
             .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
             .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+        }
+
+        /* Jump-to-bottom arrow: hidden and inert until the user scrolls up
+           away from the latest message, then fades/lifts in above the input
+           bar. Tapping it (or scrolling back down manually) re-attaches
+           auto-scroll and hides it again. */
+        .jtb-btn {
+            position: absolute;
+            left: 50%;
+            bottom: 108px;
+            transform: translate(-50%, 8px);
+            z-index: 25;
+            width: 34px; height: 34px;
+            border-radius: 999px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--panel);
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-premium);
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .18s ease, transform .18s ease;
+        }
+        .jtb-btn.jtb-visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, 0);
+        }
+        .jtb-btn:hover { background: var(--hover); }
+        @media (max-width: 820px) {
+            .jtb-btn { bottom: 118px; }
         }
 
         /* === ADDITIVE ENHANCEMENT LAYER (does not override existing rules) === */
@@ -1408,8 +1468,6 @@
         </div>
     </div>
 
-    <div id="sidebar-scrim" onclick="closeMobileSidebar()"></div>
-
     <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden relative" style="z-index:1;">
 
         <aside id="sidebar-panel" class="w-72 h-full border-r border-[var(--border)] flex flex-col justify-between safe-top relative" style="background:var(--sidebar);">
@@ -1458,6 +1516,8 @@
             </div>
         </aside>
 
+        <div id="sidebar-scrim" onclick="closeMobileSidebar()"></div>
+
         <main class="flex-1 h-full flex flex-row min-w-0" style="background:var(--bg);">
 
             <div class="flex-1 h-full flex flex-col justify-between min-w-0 relative">
@@ -1480,6 +1540,10 @@
                         <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                     </div>
                 </div>
+
+                <button id="jump-to-bottom-btn" onclick="jumpToBottomAndRepin()" aria-label="Jump to latest message" class="jtb-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                </button>
 
                 <div class="absolute bottom-0 left-0 w-full pt-6 pb-4 px-3 sm:px-4 z-20 safe-bottom" style="background:linear-gradient(to top, var(--bg) 30%, transparent);">
                     <div class="max-w-2xl mx-auto w-full flex flex-col gap-2 relative">
@@ -1705,6 +1769,45 @@
         const historyItemsBox = document.getElementById('history-items-box');
         const activeChatTitleHeader = document.getElementById('active-chat-title-header');
         const conversationViewportPanel = document.getElementById('conversation-viewport-panel');
+
+        // ── Scroll-pin system (Claude-style): while streaming, auto-follow the
+        // bottom of the conversation ONLY if the user hasn't scrolled up. If
+        // they scroll up mid-response, we stop yanking them back down and
+        // instead show a jump-to-bottom arrow — tapping it re-attaches to the
+        // bottom and hides itself; scrolling back to the bottom manually does
+        // the same. This mirrors how Claude's own chat scroll behaves.
+        let _scrollPinned = true;
+        const SCROLL_PIN_THRESHOLD_PX = 48;
+
+        function _isNearBottom() {
+            const distanceFromBottom = conversationViewportPanel.scrollHeight - conversationViewportPanel.scrollTop - conversationViewportPanel.clientHeight;
+            return distanceFromBottom <= SCROLL_PIN_THRESHOLD_PX;
+        }
+
+        function pinnedAutoScroll() {
+            if (_scrollPinned) {
+                conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            }
+        }
+
+        function jumpToBottomAndRepin() {
+            _scrollPinned = true;
+            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            const btn = document.getElementById('jump-to-bottom-btn');
+            if (btn) btn.classList.remove('jtb-visible');
+        }
+
+        conversationViewportPanel.addEventListener('scroll', () => {
+            const nearBottom = _isNearBottom();
+            _scrollPinned = nearBottom;
+            const btn = document.getElementById('jump-to-bottom-btn');
+            if (!btn) return;
+            if (nearBottom) {
+                btn.classList.remove('jtb-visible');
+            } else {
+                btn.classList.add('jtb-visible');
+            }
+        }, { passive: true });
         const interactionSubmissionForm = document.getElementById('interaction-submission-form');
         const userPromptInputField = document.getElementById('user-prompt-input-field');
         const roleBadgeDisplay = document.getElementById('role-badge-display');
@@ -2105,7 +2208,7 @@
             `;
             row.querySelector('.copy-msg-btn').onclick = (e) => copyPlainText(promptText, e.currentTarget);
             conversationViewportPanel.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            pinnedAutoScroll();
         }
 
         const LANG_EXT_MAP = {
@@ -2166,6 +2269,58 @@
             return segments;
         }
 
+        const FILE_ICON_MAP = {
+            html: { icon: '⧉', bg: '#e34c26' }, htm: { icon: '⧉', bg: '#e34c26' },
+            css:  { icon: '#', bg: '#2965f1' },
+            js:   { icon: 'J', bg: '#f0db4f' }, mjs: { icon: 'J', bg: '#f0db4f' },
+            py:   { icon: '🐍', bg: '#3776ab' },
+            json: { icon: '{}', bg: '#8a8a8a' },
+            md:   { icon: '✎', bg: '#586069' },
+            txt:  { icon: '≡', bg: '#8a8a8a' },
+            csv:  { icon: '▦', bg: '#1f9d55' }, xlsx: { icon: '▦', bg: '#1f9d55' },
+            pdf:  { icon: '▤', bg: '#d93025' },
+            zip:  { icon: '▣', bg: '#8e5cd9' },
+            sh:   { icon: '›_', bg: '#2b2b2b' }, bash: { icon: '›_', bg: '#2b2b2b' },
+            svg:  { icon: '◇', bg: '#ff9800' }, png: { icon: '▧', bg: '#ff9800' }, jpg: { icon: '▧', bg: '#ff9800' }, jpeg: { icon: '▧', bg: '#ff9800' },
+        };
+        function fileIconFor(ext) {
+            const e = (ext || '').toLowerCase().replace(/^\./, '');
+            return FILE_ICON_MAP[e] || { icon: e.slice(0, 2).toUpperCase() || '▤', bg: 'var(--accent)' };
+        }
+
+        function appendToFileGroup(wrapper, card) {
+            if (!wrapper._fileGroup) {
+                const group = document.createElement('div');
+                group.className = 'file-group-container';
+                group.innerHTML = '<div class="file-group-toggle"></div><div class="file-group-list"></div>';
+                wrapper.appendChild(group);
+                wrapper._fileGroup = group;
+                wrapper._fileGroupList = group.querySelector('.file-group-list');
+                wrapper._fileGroupToggle = group.querySelector('.file-group-toggle');
+                wrapper._fileGroupCount = 0;
+            }
+            wrapper._fileGroupCount += 1;
+            // Only the newest file stays visible by default — earlier ones in
+            // this same response collapse behind the toggle below, so a task
+            // that quietly produces several intermediate files doesn't read as
+            // "why are there so many files" to the user.
+            Array.from(wrapper._fileGroupList.children).forEach(c => c.classList.add('fg-collapsed'));
+            wrapper._fileGroupList.appendChild(card);
+            const count = wrapper._fileGroupCount;
+            if (count > 1) {
+                const toggle = wrapper._fileGroupToggle;
+                toggle.style.display = 'block';
+                const others = count - 1;
+                const label = `▸ ${others} other file${others > 1 ? 's' : ''} created`;
+                toggle.textContent = label;
+                toggle.onclick = () => {
+                    const nowExpanded = wrapper._fileGroup.classList.toggle('fg-expanded');
+                    toggle.textContent = nowExpanded ? '▾ Hide other files' : label;
+                };
+            }
+            return card;
+        }
+
         function buildFileCreationCard(lang, content, closed, ordinal) {
             const card = document.createElement('div');
             card.className = `file-creation-card ${closed ? 'done' : 'in-progress'} msg-enter`;
@@ -2181,10 +2336,10 @@
             const extForBadge = (isDirect || isEdit)
                 ? (filename.includes('.') ? filename.split('.').pop() : 'txt')
                 : (LANG_EXT_MAP[lang] || 'txt');
-            const ext = extForBadge.toUpperCase();
+            const iconInfo = fileIconFor(extForBadge);
             const inProgressLabel = isEdit ? 'Applying edits...' : (isDirect ? 'Writing file to terminal...' : 'Writing file...');
             card.innerHTML = `
-                <div class="fcc-icon">${ext.slice(0, 2)}</div>
+                <div class="fcc-icon" style="background:${iconInfo.bg};color:#fff;">${iconInfo.icon}</div>
                 <div class="fcc-meta">
                     <div class="fcc-name">${filename}</div>
                     <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready to preview' : inProgressLabel}</span></div>
@@ -2556,30 +2711,49 @@
                         wrapper.appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
-                    if (seg.closed && !node._rendered && typeof Chart !== 'undefined') {
-                        try {
-                            const cfg = JSON.parse(seg.content);
-                            cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false }, cfg.options || {});
-                            node.querySelector('canvas').parentElement.style.position = 'relative';
-                            node.querySelector('canvas').parentElement.style.height = '260px';
+                    if (seg.closed && !node._rendered) {
+                        if (typeof Chart === 'undefined') {
+                            // Chart.js CDN failed to load (common on slow/mobile networks) —
+                            // show a visible retry instead of a silent empty box.
                             node._rendered = true;
-                            new Chart(node.querySelector('canvas').getContext('2d'), cfg);
-                            if (!node.querySelector('.chart-dl-btn')) {
-                                const dlBtn = document.createElement('button');
-                                dlBtn.type = 'button';
-                                dlBtn.className = 'chart-dl-btn';
-                                dlBtn.innerText = '⭳ Save chart as image';
-                                dlBtn.style.cssText = 'margin-top:8px;font-size:11px;color:var(--accent);background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;';
-                                dlBtn.onclick = () => {
-                                    const canvas = node.querySelector('canvas');
-                                    const url = canvas.toDataURL('image/png');
-                                    const a = document.createElement('a');
-                                    a.href = url; a.download = 'chart.png';
-                                    document.body.appendChild(a); a.click(); a.remove();
-                                };
-                                node.appendChild(dlBtn);
+                            node.querySelector('canvas').outerHTML =
+                                '<div style="padding:16px;text-align:center;font-size:12.5px;color:var(--text-dim);">'
+                                + 'Chart library failed to load. <button class="chart-retry-btn" style="color:var(--accent);text-decoration:underline;background:none;border:none;cursor:pointer;">Retry</button></div>';
+                            const retryBtn = node.querySelector('.chart-retry-btn');
+                            if (retryBtn) retryBtn.onclick = () => location.reload();
+                        } else {
+                            try {
+                                const cfg = JSON.parse(seg.content);
+                                cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false }, cfg.options || {});
+                                node.querySelector('canvas').parentElement.style.position = 'relative';
+                                node.querySelector('canvas').parentElement.style.height = '260px';
+                                node._rendered = true;
+                                new Chart(node.querySelector('canvas').getContext('2d'), cfg);
+                                if (!node.querySelector('.chart-dl-btn')) {
+                                    const dlBtn = document.createElement('button');
+                                    dlBtn.type = 'button';
+                                    dlBtn.className = 'chart-dl-btn';
+                                    dlBtn.innerText = '⭳ Save chart as image';
+                                    dlBtn.style.cssText = 'margin-top:8px;font-size:11px;color:var(--accent);background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;';
+                                    dlBtn.onclick = () => {
+                                        const canvas = node.querySelector('canvas');
+                                        const url = canvas.toDataURL('image/png');
+                                        const a = document.createElement('a');
+                                        a.href = url; a.download = 'chart.png';
+                                        document.body.appendChild(a); a.click(); a.remove();
+                                    };
+                                    node.appendChild(dlBtn);
+                                }
+                            } catch (e) {
+                                // JSON was malformed — show the raw config so it's debuggable
+                                // instead of a mysteriously empty box, and DON'T mark as
+                                // rendered so a later stream fix-up can still succeed.
+                                node.querySelector('canvas').outerHTML =
+                                    '<div style="padding:12px;font-size:11.5px;color:#c0392b;background:rgba(192,57,43,0.06);border-radius:8px;">'
+                                    + 'Couldn\'t render this chart (invalid data). <details style="margin-top:4px;"><summary style="cursor:pointer;">Show details</summary>'
+                                    + '<pre style="white-space:pre-wrap;font-size:10.5px;margin-top:4px;">' + (e.message || 'Unknown error').replace(/</g,'&lt;') + '</pre></details></div>';
                             }
-                        } catch (e) {}
+                        }
                     }
                 } else if (seg.lang === 'finaldoc') {
                     wrapper._fileOrdinal += 1;
@@ -2604,19 +2778,32 @@
                 } else {
                     if (!node || node.dataset.segType !== 'code') {
                         wrapper._fileOrdinal += 1;
-                        node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
-                        node.dataset.segType = 'code';
-                        wrapper.appendChild(node);
-                        wrapper._segNodes[i] = node;
-                        setAgentActivity(`Writing ${node.dataset.filename}...`);
-                        pushTerminalLog(`Creating ${node.dataset.filename}...`);
+                        const candidateFilename = guessFileName(seg.lang, wrapper._fileOrdinal);
+                        // Dedup: if this exact filename already has a card in this
+                        // message (e.g. a python script + a createfile block both
+                        // targeting the same output), update that card instead of
+                        // creating a visible duplicate — fixes files appearing twice.
+                        wrapper._fileCardsByName = wrapper._fileCardsByName || {};
+                        if (wrapper._fileCardsByName[candidateFilename]) {
+                            node = wrapper._fileCardsByName[candidateFilename];
+                            updateFileCreationCard(node, seg.content, seg.closed);
+                            wrapper._segNodes[i] = node;
+                        } else {
+                            node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
+                            node.dataset.segType = 'code';
+                            wrapper._fileCardsByName[candidateFilename] = node;
+                            wrapper._segNodes[i] = node;
+                            appendToFileGroup(wrapper, node);
+                            setAgentActivity(`Writing ${node.dataset.filename}...`);
+                            pushTerminalLog(`Creating ${node.dataset.filename}...`);
+                        }
                     } else {
                         updateFileCreationCard(node, seg.content, seg.closed);
                         if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
                     }
                 }
             });
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            pinnedAutoScroll();
         }
 
         function appendGeneratedImage(wrapper, url, promptText) {
@@ -2637,7 +2824,7 @@
                 </div>
             `;
             wrapper.appendChild(holder);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            pinnedAutoScroll();
 
             const fill = holder.querySelector('.igen-progress-fill');
             const pctLabel = holder.querySelector('.igen-progress-pct');
@@ -2667,7 +2854,7 @@
                                    style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.55); color:#fff; width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:14px; text-decoration:none;">⭳</a>
                             </div>
                         `;
-                        conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                        pinnedAutoScroll();
                     }, 250);
                 };
                 preload.onerror = () => {
@@ -2723,14 +2910,14 @@
                 }
             };
             wrapper.appendChild(card);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            pinnedAutoScroll();
         }
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
             containerNode.className = 'w-full flex flex-col items-start gap-1.5 msg-enter';
             containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
             conversationViewportPanel.appendChild(containerNode);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            pinnedAutoScroll();
             return containerNode;
         }
 
@@ -2758,7 +2945,7 @@
                 </div>
             `;
             conversationViewportPanel.appendChild(row);
-            conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+            pinnedAutoScroll();
         }
         function removeTypingIndicator() {
             const row = document.getElementById('typing-indicator-row');
@@ -2987,6 +3174,17 @@
                                 const tw = getThinkingWrap(modelWrapper);
                                 const summary = tw.querySelector('.tw-summary');
                                 if (summary) summary.innerText = payload.label || 'Thinking...';
+                                // Cycle through short reassurance phrases if the first token
+                                // takes a moment — otherwise a static "Thinking..." for several
+                                // seconds reads as frozen/broken rather than working.
+                                const thinkingPhrases = ['Thinking...', 'Reading your message...', 'Working on it...', 'Almost there...'];
+                                let phraseIdx = 0;
+                                if (window._thinkingCycleTimer) clearInterval(window._thinkingCycleTimer);
+                                window._thinkingCycleTimer = setInterval(() => {
+                                    phraseIdx = (phraseIdx + 1) % thinkingPhrases.length;
+                                    if (summary && summary.isConnected) summary.innerText = thinkingPhrases[phraseIdx];
+                                    else clearInterval(window._thinkingCycleTimer);
+                                }, 2600);
                             } else if (payload.step_type === 'executing') {
                                 // Show a "Executing..." step row while the code block runs
                                 // This row stays as "running" (spinning circle) until the
@@ -3001,6 +3199,7 @@
                                 addStep(modelWrapper, '\u25CB', payload.label || 'Building task plan...');
                             }
                         } else if (payload.type === 'token') {
+                            if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (!modelWrapper) {
                                 removeTypingIndicator();
                                 modelWrapper = mountModelOutputTargetShell();
@@ -3321,7 +3520,7 @@
                         appendAssistantCopyButton(wrapper, log.content);
                     }
                 });
-                conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                pinnedAutoScroll();
             }
             closeMobileSidebar();
             // Then refresh from server in the background
@@ -3342,7 +3541,7 @@
                             appendAssistantCopyButton(wrapper, log.content);
                         }
                     });
-                    conversationViewportPanel.scrollTop = conversationViewportPanel.scrollHeight;
+                    pinnedAutoScroll();
                 }
             } catch (err) {}
             synchronizeConversationsHistoryIndex();
