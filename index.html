@@ -2682,7 +2682,14 @@
         function updateAssistantMessageDOM(wrapper, fullText) {
             const segments = parseAssistantSegments(fullText);
             if (!wrapper._segNodes) wrapper._segNodes = [];
-            if (!wrapper._fileOrdinal) wrapper._fileOrdinal = 0;
+            // IMPORTANT: this is a LOCAL counter, recomputed fresh every single
+            // call (streaming re-renders this whole function many times per
+            // second). It must never be stored on `wrapper` and accumulated
+            // across calls — that was the bug behind filenames like
+            // "generated_65.txt" for what was really the first generated file:
+            // every re-render bumped a persistent counter instead of counting
+            // fresh from the current, final segment layout each time.
+            let fileOrdinal = 0;
             segments.forEach((seg, i) => {
                 let node = wrapper._segNodes[i];
                 if (seg.type === 'text') {
@@ -2756,7 +2763,7 @@
                         }
                     }
                 } else if (seg.lang === 'finaldoc') {
-                    wrapper._fileOrdinal += 1;
+                    fileOrdinal += 1;
                     if (!node || node.dataset.segType !== 'finaldoc') {
                         node = document.createElement('div');
                         node.dataset.segType = 'finaldoc';
@@ -2777,8 +2784,8 @@
                     }
                 } else {
                     if (!node || node.dataset.segType !== 'code') {
-                        wrapper._fileOrdinal += 1;
-                        const candidateFilename = guessFileName(seg.lang, wrapper._fileOrdinal);
+                        fileOrdinal += 1;
+                        const candidateFilename = guessFileName(seg.lang, fileOrdinal);
                         // Dedup: if this exact filename already has a card in this
                         // message (e.g. a python script + a createfile block both
                         // targeting the same output), update that card instead of
@@ -2789,7 +2796,7 @@
                             updateFileCreationCard(node, seg.content, seg.closed);
                             wrapper._segNodes[i] = node;
                         } else {
-                            node = buildFileCreationCard(seg.lang, seg.content, seg.closed, wrapper._fileOrdinal);
+                            node = buildFileCreationCard(seg.lang, seg.content, seg.closed, fileOrdinal);
                             node.dataset.segType = 'code';
                             wrapper._fileCardsByName[candidateFilename] = node;
                             wrapper._segNodes[i] = node;
@@ -2876,13 +2883,34 @@
         }
 
         function appendDownloadCard(wrapper, relativeUrl, filename) {
+            // If a card for this exact filename already exists (created via a
+            // ```createfile block streaming in), this is the SAME file just
+            // confirmed ready by the backend — upgrade that card in place
+            // instead of adding a second, differently-styled duplicate. This
+            // was the actual cause of files appearing twice with two
+            // different looks (one "Open/Ready to preview", one "Download/
+            // Built in background terminal").
+            wrapper._fileCardsByName = wrapper._fileCardsByName || {};
+            const existing = wrapper._fileCardsByName[filename];
+            if (existing) {
+                existing.dataset.downloadUrl = relativeUrl;
+                const statusText = existing.querySelector('.fcc-status-text');
+                if (statusText) statusText.innerText = 'Ready to preview';
+                const openHint = existing.querySelector('.fcc-openhint');
+                if (openHint) openHint.innerText = 'Open';
+                return existing;
+            }
+            const ext = filename.includes('.') ? filename.split('.').pop() : '';
+            const iconInfo = fileIconFor(ext);
             const card = document.createElement('div');
             card.className = 'file-creation-card done msg-enter';
+            card.dataset.filename = filename;
+            card.dataset.downloadUrl = relativeUrl;
             card.innerHTML = `
-                <div class="fcc-icon">⭳</div>
+                <div class="fcc-icon" style="background:${iconInfo.bg};color:#fff;">${iconInfo.icon}</div>
                 <div class="fcc-meta">
                     <div class="fcc-name">${sanitizeOutputText(filename)}</div>
-                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Built in background terminal — ready</span></div>
+                    <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Ready to download</span></div>
                 </div>
                 <span class="fcc-openhint">Download</span>
             `;
@@ -2902,15 +2930,17 @@
                     a.click();
                     a.remove();
                     URL.revokeObjectURL(blobUrl);
-                    statusText.innerText = 'Built in background terminal — ready';
+                    statusText.innerText = 'Ready to download';
                     pushTerminalLog(`Downloaded ${filename}.`);
                 } catch (err) {
                     statusText.innerText = 'Download failed — tap to retry';
                     console.error('[DOWNLOAD][FAULT]', err);
                 }
             };
-            wrapper.appendChild(card);
+            wrapper._fileCardsByName[filename] = card;
+            appendToFileGroup(wrapper, card);
             pinnedAutoScroll();
+            return card;
         }
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
