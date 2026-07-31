@@ -518,6 +518,15 @@ _PDF_UNICODE_SUBSTITUTIONS = {
     "±": "+/-", "∆": "delta", "π": "pi", "θ": "theta", "α": "alpha", "β": "beta",
     "△": "triangle ", "∈": "in", "∞": "infinity", "‘": "'", "’": "'", "“": '"', "”": '"',
     "–": "-", "—": "-", "•": "-", "​": "",
+    # Superscript/subscript digits (very common in complexity notation like
+    # O(n²), x³, H₂O — these were previously falling through to garbled
+    # latin-1 replacement characters instead of readable text).
+    "⁰": "^0", "¹": "^1", "²": "^2", "³": "^3", "⁴": "^4", "⁵": "^5",
+    "⁶": "^6", "⁷": "^7", "⁸": "^8", "⁹": "^9", "⁺": "^+", "⁻": "^-",
+    "₀": "_0", "₁": "_1", "₂": "_2", "₃": "_3", "₄": "_4", "₅": "_5",
+    "₆": "_6", "₇": "_7", "₈": "_8", "₉": "_9",
+    "…": "...", "→": "->", "←": "<-", "↑": "^", "↓": "v", "✓": "OK", "✗": "x",
+    "€": "EUR", "£": "GBP", "₹": "Rs.", "™": "(TM)", "®": "(R)", "©": "(C)",
 }
 _PDF_UNICODE_RE = re.compile("|".join(re.escape(k) for k in _PDF_UNICODE_SUBSTITUTIONS))
 
@@ -2368,6 +2377,47 @@ _IMAGE_FOLLOWUP_RE = re.compile(
     re.IGNORECASE
 )
 
+def _enhance_image_prompt_via_llm(raw_prompt: str) -> str:
+    """Turns a short user request ('a fox in snow') into a detailed,
+    vivid image-generation prompt (style, lighting, composition, quality
+    tags) BEFORE it's sent to Pollinations — short raw prompts consistently
+    produce weaker/blander images. Uses a fast, non-streaming call with a
+    short timeout and always falls back to the raw prompt on any failure,
+    so image generation never breaks or stalls because of this step."""
+    keys = GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
+    if not keys:
+        return raw_prompt
+    try:
+        body = json.dumps({
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": (
+                    "You expand short image requests into a single detailed, vivid "
+                    "text-to-image prompt: describe subject, setting, lighting, mood, "
+                    "composition/camera angle, and art style/quality tags in one dense "
+                    "paragraph (2-3 sentences). Output ONLY the enriched prompt itself, "
+                    "no preamble, no quotes, no explanation."
+                )},
+                {"role": "user", "content": raw_prompt},
+            ],
+            "stream": False,
+            "max_tokens": 220,
+            "temperature": 0.8,
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=body,
+            headers={"Authorization": f"Bearer {keys[0]}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        enriched = payload["choices"][0]["message"]["content"].strip().strip('"')
+        return enriched if enriched else raw_prompt
+    except Exception as exc:
+        print(f"[IMAGE PROMPT ENHANCE FAULT — using raw prompt instead] {exc}")
+        return raw_prompt
+
 def _detect_image_prompt(message: str, last_image_prompt: str = None):
     """
     Returns a plain-language image description if `message` looks like an
@@ -3428,7 +3478,8 @@ def chat_stream():
     # let the full LLM run so it can handle EVERYTHING including images.
     if image_prompt and not _is_complex_multitask_message(message):
         _append_message(conv_id, "user", message)
-        image_url = _pollinations_image_url(image_prompt)
+        enriched_image_prompt = _enhance_image_prompt_via_llm(image_prompt)
+        image_url = _pollinations_image_url(enriched_image_prompt)
         assistant_note = f"Here's your generated image for: \"{image_prompt}\""
         _append_message(conv_id, "assistant", f"{assistant_note}\n![generated image]({image_url})")
 
@@ -3442,7 +3493,7 @@ def chat_stream():
         def generate_image():
             yield _sse({"type": "metadata", "conversation_id": conv_id})
             yield _sse({"type": "token", "text": assistant_note + "\n\n"})
-            yield _sse({"type": "image", "url": image_url, "prompt": image_prompt})
+            yield _sse({"type": "image", "url": image_url, "prompt": enriched_image_prompt})
             yield _sse({"type": "complete"})
 
         resp = Response(stream_with_context(generate_image()), content_type="text/event-stream")
