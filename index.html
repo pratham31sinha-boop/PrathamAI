@@ -296,27 +296,29 @@
 
         /* ── Thinking wrap: collapsible header + step list ── */
         .thinking-wrap {
-            margin: 4px 0 8px; max-width: 420px;
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 14px; overflow: hidden;
-            box-shadow: 0 1px 4px rgba(0,0,0,.05);
+            margin: 2px 0 10px; max-width: 480px;
+            /* No card chrome — plain text row, like a minimal "thinking" line
+               rather than a boxed widget. */
             animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
         .thinking-header {
-            display: flex; align-items: center; gap: 9px; cursor: pointer;
-            font-size: 12.5px; color: var(--text-dim); padding: 10px 14px; user-select: none;
-            transition: color .15s ease, background .15s ease;
+            display: flex; align-items: center; gap: 7px; cursor: pointer;
+            font-size: 12.5px; color: var(--text-dim); padding: 2px 0; user-select: none;
+            transition: color .15s ease;
         }
-        .thinking-header:hover { color: var(--text); background: var(--hover); }
-        .thinking-header .tw-caret { font-size: 8px; transition: transform .2s ease; flex-shrink: 0; opacity: .6; }
+        .thinking-header:hover { color: var(--text); }
+        .thinking-header .tw-caret { font-size: 8px; transition: transform .2s ease; flex-shrink: 0; opacity: .5; }
         .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); }
         .thinking-header .tw-dot {
-            width: 7px; height: 7px; border-radius: 999px; background: var(--accent);
+            width: 6px; height: 6px; border-radius: 999px; background: var(--accent);
             animation: glowPulse 1s ease-in-out infinite; flex-shrink: 0;
         }
         .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
-        .thinking-header .tw-summary { flex: 1; font-weight: 500; }
-        .thinking-body { display: none; padding: 4px 6px 8px; border-top: 1px solid var(--border); }
+        .thinking-header .tw-summary { flex: 1; font-weight: 400; }
+        .thinking-body {
+            display: none; padding: 6px 0 4px 13px; margin-top: 2px;
+            border-left: 1px solid var(--border);
+        }
         .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .2s ease; }
         @keyframes fadeSlide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
 
@@ -2393,6 +2395,7 @@
                 <div class="thinking-body"></div>
             `;
             wrap.querySelector('.thinking-header').onclick = () => wrap.classList.toggle('expanded');
+            wrap._startedAt = performance.now();
             wrapper.appendChild(wrap);
             _activeThinkingWrap = wrap;
             _activeStepList = null;
@@ -2482,8 +2485,10 @@
             _activeThinkingWrap.classList.add('done');
             const summary = _activeThinkingWrap.querySelector('.tw-summary');
             if (summary) {
-                const n = _activeStepList ? _activeStepList.querySelectorAll('.step-row').length : 0;
-                summary.innerText = n > 0 ? `Done — ${n} step${n === 1 ? '' : 's'}` : 'Done';
+                const elapsedSeconds = _activeThinkingWrap._startedAt
+                    ? Math.max(1, Math.round((performance.now() - _activeThinkingWrap._startedAt) / 1000))
+                    : null;
+                summary.innerText = elapsedSeconds ? `Thought for ${elapsedSeconds}s` : 'Done';
             }
         }
 
