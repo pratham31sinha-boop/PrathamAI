@@ -3858,7 +3858,16 @@ def chat_stream():
                             # task_created events so the plan card fills up live ──
                             accumulated_so_far = "".join(iteration_text_parts)
                             if "- [" in accumulated_so_far or "* [" in accumulated_so_far:
-                                new_tasks = _extract_task_items_from_text(accumulated_so_far)
+                                # Only scan COMPLETE lines (i.e. up through the last newline).
+                                # The final, still-streaming line is deliberately excluded —
+                                # without this, a checklist item gets re-matched on every
+                                # single token as it grows ("Define" -> "Define the" ->
+                                # "Define the new" -> ...), each partial version treated as
+                                # a brand-new distinct task. That's what caused a 5-step plan
+                                # to explode into 22 "tasks" of jagged text fragments.
+                                _last_newline = accumulated_so_far.rfind("\n")
+                                complete_text_for_tasks = accumulated_so_far[:_last_newline] if _last_newline != -1 else ""
+                                new_tasks = _extract_task_items_from_text(complete_text_for_tasks)
                                 for task_id, label, is_done in new_tasks:
                                     if task_id not in _tasks_emitted:
                                         _tasks_emitted[task_id] = is_done
