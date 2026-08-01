@@ -2153,6 +2153,18 @@ SYSTEM_PROMPT = (
     "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
     "conversation turn allows a limited number of execute-and-continue cycles, so work "
     "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
+    "IMAGES INSIDE A MULTI-STEP TASK: if part of a bigger request needs a generated image (not a "
+    "standalone 'make me an image of X' message, which is already handled automatically), emit a "
+    "```image fenced block containing just the detailed image description, e.g.\n"
+    "```image\na red fox standing in deep snow at dusk, cinematic lighting\n```\n"
+    "This actually generates and inserts a real image at that point — don't just describe an image "
+    "in prose and assume it appeared, and don't skip the image half of a combined request.\n\n"
+    "PACKAGED/ARCHIVE DELIVERABLES (.zip, .mcaddon, .mrpack, or any other bundled file format): "
+    "actually run the real packaging command (e.g. `zip -r Name.mcaddon folder/`) in a ```bash "
+    "block — don't just print the command as illustrative text. The backend automatically detects "
+    "any new file your terminal commands create and makes it downloadable, so once the archive is "
+    "actually built on disk, the person can download it — but only if you really executed the "
+    "command instead of just showing it.\n\n"
     "FOR COMPLEX MULTI-STEP OR MULTI-FILE BUILD REQUESTS (a mod, a small app, anything needing "
     "several files or clear stages — NOT simple questions or single small files): before writing "
     "any code, first output a short markdown checklist naming each concrete step, one per line, "
@@ -3793,6 +3805,10 @@ def chat_stream():
                                       # SEARCH/REPLACE markers instead of the resolved content": the
                                       # old lookup only searched already-persisted history, which
                                       # doesn't include anything from the response still streaming.
+        _images_emitted_this_turn = set()  # raw image prompts already generated this turn, so a
+                                            # ```image block re-appearing across iterations (the
+                                            # model re-quoting its own earlier output) doesn't
+                                            # trigger a second, wasted generation.
 
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
@@ -3822,6 +3838,21 @@ def chat_stream():
                     yield chunk
 
             iteration_reply = "".join(iteration_text_parts)
+
+            # ── Inline image generation: catches ```image blocks anywhere in
+            # the reply, so an image requested alongside other tasks (e.g.
+            # "make an image AND a file") still actually produces one — the
+            # separate simple-image-request path never runs once a message
+            # is classified as multi-task, which was the root cause of
+            # images silently going missing on combined requests. ──
+            for _img_m in re.finditer(r"```image\s*\n([\s\S]*?)```", iteration_reply):
+                _raw_img_prompt = _img_m.group(1).strip()
+                if not _raw_img_prompt or _raw_img_prompt in _images_emitted_this_turn:
+                    continue
+                _images_emitted_this_turn.add(_raw_img_prompt)
+                _enriched_prompt = _enhance_image_prompt_via_llm(_raw_img_prompt)
+                _img_url = _pollinations_image_url(_enriched_prompt)
+                yield _sse({"type": "image", "url": _img_url, "prompt": _enriched_prompt})
 
             # ── Direct file-creation blocks (```createfile:name) — handled
             # before code execution so a reply that both creates files AND
@@ -3959,7 +3990,47 @@ def chat_stream():
                     "label": f"Executing {lang.upper()} block \u2014 please wait...",
                     "timestamp": time.time()
                 })
+                # Snapshot the working directory BEFORE running this block so
+                # we can tell what's genuinely new afterward — this is what
+                # catches files a bash/python block builds directly (a zip,
+                # a .mcaddon, a compiled asset) that aren't created via
+                # ```createfile: and would otherwise silently never reach
+                # the user even though the terminal really built them.
+                _pre_exec_files = set()
+                if terminal_workdir and os.path.isdir(terminal_workdir):
+                    for _root, _dirs, _files in os.walk(terminal_workdir):
+                        for _f in _files:
+                            _pre_exec_files.add(os.path.join(_root, _f))
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
+                # ── Auto-discover new files this block just created directly
+                # (not via ```createfile:) and make them downloadable. This is
+                # what makes a real `zip -r Thing.mcaddon folder/` command (or
+                # any other build/package step) actually deliver the result to
+                # the person instead of leaving it stranded server-side. ──
+                if terminal_workdir and os.path.isdir(terminal_workdir):
+                    _post_exec_files = set()
+                    for _root, _dirs, _files in os.walk(terminal_workdir):
+                        for _f in _files:
+                            _post_exec_files.add(os.path.join(_root, _f))
+                    for _new_path in sorted(_post_exec_files - _pre_exec_files):
+                        try:
+                            _new_name = os.path.basename(_new_path)
+                            with open(_new_path, "rb") as _fh:
+                                _new_bytes = _fh.read()
+                            if len(_new_bytes) > 60 * 1024 * 1024:  # 60MB sanity cap
+                                continue
+                            _new_mimetype = mimetypes.guess_type(_new_name)[0] or "application/octet-stream"
+                            _new_token = str(uuid.uuid4())
+                            _generated_files_store[_new_token] = {
+                                "bytes": _new_bytes, "filename": _new_name, "mimetype": _new_mimetype,
+                            }
+                            yield _sse({
+                                "type": "file_ready",
+                                "url": f"/download/{_new_token}",
+                                "filename": _new_name,
+                            })
+                        except Exception as _reg_exc:
+                            print(f"[AUTO FILE DISCOVERY FAULT] {_new_path} -> {_reg_exc}")
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
                     "type": "terminal_output",
