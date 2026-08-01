@@ -3858,6 +3858,12 @@ def chat_stream():
                                             # ```image block re-appearing across iterations (the
                                             # model re-quoting its own earlier output) doesn't
                                             # trigger a second, wasted generation.
+        _produced_filenames_this_turn = set()  # lowercased basenames of every file actually
+                                                # registered this turn (createfile: cards AND
+                                                # auto-discovered terminal output) — used to catch
+                                                # the model describing a deliverable as "ready" in
+                                                # prose without ever actually building it.
+        _promise_correction_attempted = False  # cap the corrective retry to once per turn
 
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
@@ -3952,6 +3958,7 @@ def chat_stream():
                     session_file_contents[filename] = final_content
                     file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
                     _register_session_file(conv_id, filename, file_ext, written["size_bytes"], line_count=written["line_count"])
+                    _produced_filenames_this_turn.add(filename.lower())
                     with open(written["path"], "rb") as fh:
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -4008,6 +4015,7 @@ def chat_stream():
                     session_file_contents[filename] = new_content
                     file_ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
                     _register_session_file(conv_id, filename, file_ext, written["size_bytes"], line_count=written["line_count"])
+                    _produced_filenames_this_turn.add(filename.lower())
                     with open(written["path"], "rb") as fh:
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -4037,6 +4045,33 @@ def chat_stream():
                 (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
             )
             if not executable_present:
+                # ── Safety net: catch "I said X.mcaddon is ready" without ever
+                # actually running the command that builds X.mcaddon. This is
+                # a real, observed failure mode — the model describes the
+                # deliverable in prose and stops, instead of executing the
+                # packaging step. Scan for a package-like filename mentioned
+                # in the reply that was never actually produced this turn,
+                # and if found, force ONE corrective iteration instead of
+                # ending on a broken promise. ──
+                if not _promise_correction_attempted:
+                    _promised_filenames = set(
+                        m.group(0) for m in re.finditer(
+                            r"\b[\w\-]+\.(?:mcaddon|zip|mrpack|apk|jar|exe|dmg|tar\.gz|7z)\b",
+                            iteration_reply, re.IGNORECASE
+                        )
+                    )
+                    _unfulfilled = [f for f in _promised_filenames if f.lower() not in _produced_filenames_this_turn]
+                    if _unfulfilled:
+                        _promise_correction_attempted = True
+                        working_messages.append({"role": "assistant", "content": iteration_reply})
+                        working_messages.append({"role": "user", "content": (
+                            f"You said {', '.join(sorted(_unfulfilled))} is ready, but no such file was "
+                            f"actually created — you described it without running the real command to "
+                            f"build it. Actually execute the packaging/build command now in a ```bash or "
+                            f"```python block (e.g. the real `zip`/archive command), don't just describe "
+                            f"it again."
+                        )})
+                        continue
                 break  # nothing to execute -> the model's answer is final
 
             results = []
@@ -4095,6 +4130,7 @@ def chat_stream():
                                 "url": f"/download/{_new_token}",
                                 "filename": _new_name,
                             })
+                            _produced_filenames_this_turn.add(_new_name.lower())
                         except Exception as _reg_exc:
                             print(f"[AUTO FILE DISCOVERY FAULT] {_new_path} -> {_reg_exc}")
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
