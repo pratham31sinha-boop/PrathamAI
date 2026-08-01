@@ -1035,6 +1035,13 @@ _GENERIC_EXTENSION_RE = re.compile(
     r"convert\s+(?:this\s+|it\s+)?to|save\s+(?:this\s+|it\s+)?as)\s+(?:an?\s+)?\.?([a-zA-Z0-9]{1,6})\b",
     re.IGNORECASE
 )
+# An explicit dot-extension anywhere in the message (e.g. "as a real .mcaddon
+# file") is a much stronger, unambiguous signal than the phrase-pattern above
+# — that regex was greedily matching the word right after "as a" ("real")
+# instead of the actual extension a few words later, which is what produced
+# filenames like "output.real". Require a letter first (excludes numbers
+# like "1.5") and try this BEFORE the softer phrase-based regex.
+_EXPLICIT_DOT_EXTENSION_RE = re.compile(r"\.([a-zA-Z][a-zA-Z0-9]{1,9})\b")
 _HANDLED_EXTENSIONS = {"zip", "pdf"}  # these already have dedicated builders above
 
 # ── CONTENT-AWARE EXPORT FILENAME ──
@@ -1088,7 +1095,9 @@ def _derive_export_basename(message: str, deliverable_text: str = "") -> str:
 def _detect_generic_extension_intent(message: str):
     if "?" in message:
         return None
-    m = _GENERIC_EXTENSION_RE.search(message)
+    m = _EXPLICIT_DOT_EXTENSION_RE.search(message)
+    if not m:
+        m = _GENERIC_EXTENSION_RE.search(message)
     if not m:
         return None
     ext = m.group(1).lower()
@@ -2166,8 +2175,20 @@ SYSTEM_PROMPT = (
     "actually built on disk, the person can download it — but only if you really executed the "
     "command instead of just showing it.\n\n"
     "FOR COMPLEX MULTI-STEP OR MULTI-FILE BUILD REQUESTS (a mod, a small app, anything needing "
-    "several files or clear stages — NOT simple questions or single small files): before writing "
-    "any code, first output a short markdown checklist naming each concrete step, one per line, "
+    "several supporting files that get bundled into ONE final deliverable — e.g. a Minecraft addon, "
+    "a packaged project): the person should see ONE clean result, not a card for every intermediate "
+    "file. Write all INTERMEDIATE/supporting files (manifests, entity JSON, source files that only "
+    "exist to be packaged) using python's open()/write() or a ```bash heredoc inside your normal "
+    "```python / ```bash execution blocks — NOT ```createfile: blocks, since every ```createfile: "
+    "becomes its own visible card. This keeps intermediate work purely in the background, visible "
+    "only as activity/progress steps (which is exactly what should show your real-time progress), "
+    "while the ONLY thing that becomes a visible file card is the final packaged output (the .zip / "
+    ".mcaddon / etc. — which the backend auto-detects and surfaces once you actually build it). "
+    "Reserve ```createfile: for the opposite case: a single standalone file that IS the whole "
+    "deliverable on its own (a script, a webpage, a document) — that should still show up "
+    "immediately as its own card, since there's nothing to bundle it into.\n\n"
+    "For any complex multi-step build, before writing any code, first output a short markdown "
+    "checklist naming each concrete step, one per line, "
     "using this exact format:\n"
     "- [ ] Step name\n"
     "- [ ] Next step name\n"
@@ -2770,12 +2791,24 @@ _TASK_CHECKBOX_RE = re.compile(r"^[-*]\s+\[[ xX]\]\s+(.+)$", re.MULTILINE)
 
 def _extract_task_items_from_text(text: str) -> list:
     """Extracts task items from - [ ] or - [x] checkbox lines in the text.
-    Returns [(task_id, label, is_done), ...]"""
+    Returns [(task_id, label, is_done), ...]. task_id is derived from the
+    normalized label text (not positional index) — this matters because the
+    model is instructed to re-print the SAME checklist with boxes checked
+    off as it completes each step, so the same label appears multiple times
+    across the growing response. Keying by position gave each reprint a
+    brand-new task_id (5 real steps -> 10 "tasks" once the model reprinted
+    them all checked), which is what caused doubled/duplicate task lists."""
     tasks = []
-    for i, m in enumerate(_TASK_CHECKBOX_RE.finditer(text)):
+    seen_ids = set()
+    for m in _TASK_CHECKBOX_RE.finditer(text):
         label = m.group(1).strip()
         is_done = m.group(0)[3] in ('x', 'X')
-        task_id = f"task_{i+1}"
+        task_id = "task_" + re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:60]
+        if task_id in seen_ids:
+            # Same label seen again (e.g. now checked) — keep only the LATEST
+            # state for it rather than adding a second entry.
+            tasks = [t for t in tasks if t[0] != task_id]
+        seen_ids.add(task_id)
         tasks.append((task_id, label, is_done))
     return tasks
 
@@ -3507,7 +3540,7 @@ def chat_stream():
         _append_message(conv_id, "user", message)
         enriched_image_prompt = _enhance_image_prompt_via_llm(image_prompt)
         image_url = _pollinations_image_url(enriched_image_prompt)
-        assistant_note = f"Here's your generated image for: \"{image_prompt}\""
+        assistant_note = f"Here's your generated image for: \"{image_prompt}\"\n(enhanced prompt used: \"{enriched_image_prompt}\")"
         _append_message(conv_id, "assistant", f"{assistant_note}\n![generated image]({image_url})")
 
         current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -3828,8 +3861,16 @@ def chat_stream():
                                 new_tasks = _extract_task_items_from_text(accumulated_so_far)
                                 for task_id, label, is_done in new_tasks:
                                     if task_id not in _tasks_emitted:
-                                        _tasks_emitted[task_id] = label
+                                        _tasks_emitted[task_id] = is_done
                                         yield _sse({"type": "task_created", "task_id": task_id, "label": label})
+                                        if is_done:
+                                            yield _sse({"type": "task_completed", "task_id": task_id, "ok": True})
+                                    elif is_done and not _tasks_emitted[task_id]:
+                                        # Task was created unchecked earlier and the model has now
+                                        # re-printed the checklist with this item checked off —
+                                        # update the SAME row instead of leaving it stuck.
+                                        _tasks_emitted[task_id] = True
+                                        yield _sse({"type": "task_completed", "task_id": task_id, "ok": True})
                         elif payload.get("type") == "complete":
                             continue  # only forward the final "complete" once, after the loop ends
                 except Exception:
