@@ -302,24 +302,36 @@
             animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
         .thinking-header {
-            display: flex; align-items: center; gap: 7px; cursor: pointer;
-            font-size: 12.5px; color: var(--text-dim); padding: 2px 0; user-select: none;
-            transition: color .15s ease;
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+            font-size: 12.5px; color: var(--text-dim); padding: 3px 0; user-select: none;
+            letter-spacing: .1px;
+            transition: color .2s ease;
         }
         .thinking-header:hover { color: var(--text); }
-        .thinking-header .tw-caret { font-size: 8px; transition: transform .2s ease; flex-shrink: 0; opacity: .5; }
-        .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); }
-        .thinking-header .tw-dot {
-            width: 6px; height: 6px; border-radius: 999px; background: var(--accent);
-            animation: glowPulse 1s ease-in-out infinite; flex-shrink: 0;
+        .thinking-header .tw-caret {
+            font-size: 8px; transition: transform .25s cubic-bezier(.4,0,.2,1); flex-shrink: 0; opacity: .45;
         }
-        .thinking-wrap.done .tw-dot { background: #4ade80; animation: none; }
-        .thinking-header .tw-summary { flex: 1; font-weight: 400; }
+        .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); opacity: .7; }
+        .thinking-header .tw-dot {
+            width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0;
+            background: radial-gradient(circle at 35% 35%, var(--accent) 0%, var(--accent) 40%, transparent 100%);
+            box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 55%, transparent);
+            animation: glowPulse 1.4s ease-in-out infinite;
+        }
+        .thinking-wrap.done .tw-dot {
+            background: radial-gradient(circle at 35% 35%, #4ade80 0%, #4ade80 40%, transparent 100%);
+            box-shadow: 0 0 5px 0 rgba(74,222,128,.45);
+            animation: none;
+        }
+        .thinking-header .tw-summary {
+            flex: 1; font-weight: 400;
+            transition: opacity .2s ease;
+        }
         .thinking-body {
-            display: none; padding: 6px 0 4px 13px; margin-top: 2px;
+            display: none; padding: 7px 0 5px 13px; margin-top: 3px;
             border-left: 1px solid var(--border);
         }
-        .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .2s ease; }
+        .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .22s cubic-bezier(.4,0,.2,1); }
         @keyframes fadeSlide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
 
         /* ── Task plan card (rendered when planning_started / task_created events arrive) ── */
