@@ -2383,7 +2383,7 @@
         function getThinkingWrap(wrapper) {
             if (_activeThinkingWrap && wrapper.contains(_activeThinkingWrap)) return _activeThinkingWrap;
             const wrap = document.createElement('div');
-            wrap.className = 'thinking-wrap expanded';
+            wrap.className = 'thinking-wrap';
             wrap.innerHTML = `
                 <div class="thinking-header">
                     <span class="tw-caret">&#9654;</span>
@@ -3277,7 +3277,7 @@
                                         <span class="tph-title">${sanitizeOutputText(payload.label || 'Task Plan')}</span>
                                         <span class="tph-count" style="display:none">0 tasks</span>
                                     </div>
-                                    <div class="task-plan-body">
+                                    <div class="task-plan-body hidden">
                                         <div class="task-item pending" data-placeholder>
                                             <span class="ti-icon" style="animation:stepIconSpin .9s linear infinite;color:var(--accent);border-color:var(--accent);"></span>
                                             <span class="ti-label" style="color:var(--text-dim);font-style:italic;">Analyzing request…</span>
@@ -3293,7 +3293,7 @@
                             if (!modelWrapper._taskPlanCard) {
                                 const tpc = document.createElement('div');
                                 tpc.className = 'task-plan-card msg-enter';
-                                tpc.innerHTML = `<div class="task-plan-header"><span class="tph-icon">📋</span><span class="tph-title">Task Plan</span><span class="tph-count" style="display:none">0 tasks</span></div><div class="task-plan-body"></div>`;
+                                tpc.innerHTML = `<div class="task-plan-header" onclick="this.parentElement.querySelector('.task-plan-body').classList.toggle('hidden')"><span class="tph-icon">📋</span><span class="tph-title">Task Plan</span><span class="tph-count" style="display:none">0 tasks</span></div><div class="task-plan-body hidden"></div>`;
                                 modelWrapper.appendChild(tpc);
                                 modelWrapper._taskPlanCard = tpc;
                                 modelWrapper._taskItems = {};
