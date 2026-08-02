@@ -2835,50 +2835,6 @@ def _extract_task_items_from_text(text: str) -> list:
         tasks.append((task_id, label, is_done))
     return tasks
 
-def validate_generated_code(file_ext: str, content: str) -> dict:
-    """Lightweight, stdlib-only validation of generated file content.
-    Returns {"valid": bool, "error": str|None} — no external deps required.
-    Only checks syntax/well-formedness for types that have reliable parsers;
-    for everything else it returns valid=True with no false negatives."""
-    ext = (file_ext or "").lower().strip(".")
-    try:
-        if ext == "json":
-            json.loads(content)
-        elif ext == "py" or ext == "python":
-            import ast
-            ast.parse(content)
-        elif ext in ("html", "htm", "xml"):
-            # Cheap tag balance check — not a full parser, catches obvious errors
-            import html.parser
-            class _TagChecker(html.parser.HTMLParser):
-                def __init__(self):
-                    super().__init__()
-                    self.errors = []
-            checker = _TagChecker()
-            checker.feed(content)
-        elif ext in ("js", "javascript", "mjs", "cjs"):
-            # Very minimal check: ensure no unclosed string literals or brackets
-            # (a full JS parse needs a real parser we can't guarantee is installed)
-            stack = []
-            in_str, str_char = False, None
-            for ch in content:
-                if in_str:
-                    if ch == str_char: in_str = False
-                elif ch in ('"', "'", "`"):
-                    in_str, str_char = True, ch
-                elif ch in ('{', '[', '('):
-                    stack.append(ch)
-                elif ch in ('}', ']', ')'):
-                    if not stack:
-                        return {"valid": False, "error": f"Unmatched closing bracket '{ch}'"}
-                    stack.pop()
-            if stack:
-                return {"valid": False, "error": f"Unclosed bracket '{stack[-1]}'"}
-        # For all other types: no validation, assume valid
-        return {"valid": True, "error": None}
-    except Exception as exc:
-        return {"valid": False, "error": str(exc)[:200]}
-
 def _extract_createfile_blocks(text: str):
     """Returns [(filename, content), ...] for every ```createfile:name block
     in `text`, in the order they appear."""
@@ -4577,6 +4533,52 @@ def validate_html_block(code: str) -> dict:
         issues.append(f"Unclosed tag: <{leftover}>")
     return {"valid": len(issues) == 0, "error": "; ".join(issues) if issues else None}
 
+def validate_js_block(code: str) -> dict:
+    """Lightweight, dependency-free JS/TS check: balanced brackets outside of
+    string/template literals and comments. Not a full parser — catches the
+    most common generation mistakes (an unclosed brace/bracket/paren) without
+    needing a real JS toolchain installed on the server."""
+    stack = []
+    in_str, str_char = False, None
+    in_line_comment, in_block_comment = False, False
+    i, n = 0, len(code)
+    while i < n:
+        ch = code[i]
+        nxt = code[i + 1] if i + 1 < n else ""
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+        elif in_block_comment:
+            if ch == "*" and nxt == "/":
+                in_block_comment = False
+                i += 1
+        elif in_str:
+            if ch == "\\":
+                i += 1  # skip escaped char
+            elif ch == str_char:
+                in_str = False
+        elif ch == "/" and nxt == "/":
+            in_line_comment = True
+            i += 1
+        elif ch == "/" and nxt == "*":
+            in_block_comment = True
+            i += 1
+        elif ch in ('"', "'", "`"):
+            in_str, str_char = True, ch
+        elif ch in ("{", "[", "("):
+            stack.append(ch)
+        elif ch in ("}", "]", ")"):
+            pairs = {"}": "{", "]": "[", ")": "("}
+            if not stack or stack[-1] != pairs[ch]:
+                return {"valid": False, "error": f"Unexpected '{ch}' at position {i} (unmatched or wrong bracket type)"}
+            stack.pop()
+        i += 1
+    if stack:
+        return {"valid": False, "error": f"Unclosed '{stack[-1]}' — {len(stack)} bracket(s) never closed"}
+    if in_str:
+        return {"valid": False, "error": f"Unterminated string literal (started with {str_char})"}
+    return {"valid": True, "error": None}
+
 def validate_generated_code(lang: str, code: str) -> dict:
     lang = (lang or "").lower()
     if lang == "json":
@@ -4585,6 +4587,8 @@ def validate_generated_code(lang: str, code: str) -> dict:
         return validate_python_block(code)
     if lang in ("html", "htm"):
         return validate_html_block(code)
+    if lang in ("js", "javascript", "mjs", "cjs", "ts", "typescript"):
+        return validate_js_block(code)
     return {"valid": True, "error": None}
 
 @app.route("/validate-code", methods=["POST", "OPTIONS"])
