@@ -69,6 +69,7 @@ import uuid
 import base64
 import hmac
 import hashlib
+import sqlite3
 import zipfile
 import urllib.request
 import urllib.parse
@@ -124,7 +125,7 @@ try:
 except ImportError:
     _PDF_WRITE_SUPPORTED = False
 
-from flask import Flask, request, Response, jsonify, stream_with_context
+from flask import Flask, request, Response, jsonify, stream_with_context, send_file
 from flask_cors import CORS
 
 try:
@@ -400,9 +401,6 @@ def _lookup_vip(email: str):
 # cards: when the person's message asks for a zip or a PDF, the backend
 # actually builds that file in Python (zipfile from stdlib; PDF via the
 # optional fpdf2 package) and hands back a one-time download link.
-_generated_files_store: dict = {}
-_GENERATED_FILE_TTL = 3600  # 1 hour
-
 _ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
 _PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
 
@@ -419,17 +417,109 @@ def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
         return False
     return bool(regex.search(message))
 
-def _prune_generated_files():
-    cutoff = time.time() - _GENERATED_FILE_TTL
-    stale = [tok for tok, entry in _generated_files_store.items() if entry["t"] < cutoff]
-    for tok in stale:
-        _generated_files_store.pop(tok, None)
+# ── PERSISTENT ARTIFACT STORE (SQLite metadata + files on disk) ──
+# Replaces the old in-memory-only `_generated_files_store` dict, which was
+# the actual root cause of "downloads disappear after refresh" and "old
+# downloads disappear": it lived purely in RAM with a 1-hour eviction timer,
+# so ANY server restart — or just waiting an hour — wiped every download.
+#
+# HONEST LIMIT: this survives a process restart on the SAME disk (a crash,
+# a `systemctl restart`, etc.), because the .db file and the artifact files
+# both live on disk, not in RAM. It does NOT survive a redeploy on a host
+# with ephemeral storage (e.g. a fresh container with a wiped filesystem) —
+# no application-level code can survive that; it needs a persistent volume
+# or external object storage (S3-style) on the hosting side. This fixes the
+# bug that's actually fixable from here.
+_ARTIFACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artifacts_storage")
+_ARTIFACTS_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artifacts.db")
+_ARTIFACT_RETENTION_SECONDS = 30 * 24 * 3600  # 30 days — generous, but bounded so disk usage on a
+                                                # small host doesn't grow forever. Was 1 hour before.
+os.makedirs(_ARTIFACTS_DIR, exist_ok=True)
 
-def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
+def _artifacts_db():
+    conn = sqlite3.connect(_ARTIFACTS_DB_PATH, timeout=10)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS artifacts (
+            id TEXT PRIMARY KEY,
+            conv_id TEXT,
+            filename TEXT NOT NULL,
+            mimetype TEXT,
+            size_bytes INTEGER,
+            sha256 TEXT,
+            md5 TEXT,
+            storage_path TEXT NOT NULL,
+            manifest_json TEXT,
+            kind TEXT,
+            created_at REAL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_conv ON artifacts(conv_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at)")
+    return conn
+
+def _hash_bytes(data: bytes):
+    return hashlib.sha256(data).hexdigest(), hashlib.md5(data).hexdigest()
+
+def _prune_generated_files():
+    """Deletes artifacts (row + file on disk) older than the retention
+    window. Runs lazily on each store, not on a background timer — simple
+    and sufficient for this app's actual traffic."""
+    cutoff = time.time() - _ARTIFACT_RETENTION_SECONDS
+    conn = _artifacts_db()
+    try:
+        rows = conn.execute("SELECT id, storage_path FROM artifacts WHERE created_at < ?", (cutoff,)).fetchall()
+        for artifact_id, storage_path in rows:
+            try:
+                if os.path.isfile(storage_path):
+                    os.remove(storage_path)
+            except OSError:
+                pass
+        conn.execute("DELETE FROM artifacts WHERE created_at < ?", (cutoff,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def _store_generated_file(data: bytes, filename: str, mimetype: str, conv_id: str = None,
+                           manifest: dict = None, kind: str = "file") -> str:
+    """Persists a generated file to disk and indexes it in SQLite. Same
+    call signature/return type (a token string) as the old in-memory
+    version, so every existing caller keeps working unchanged — only the
+    storage layer underneath actually persists now."""
     _prune_generated_files()
     token = uuid.uuid4().hex
-    _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
+    sha256, md5 = _hash_bytes(data)
+    artifact_dir = os.path.join(_ARTIFACTS_DIR, token)
+    os.makedirs(artifact_dir, exist_ok=True)
+    storage_path = os.path.join(artifact_dir, filename)
+    with open(storage_path, "wb") as f:
+        f.write(data)
+    conn = _artifacts_db()
+    try:
+        conn.execute(
+            "INSERT INTO artifacts (id, conv_id, filename, mimetype, size_bytes, sha256, md5, "
+            "storage_path, manifest_json, kind, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (token, conv_id, filename, mimetype, len(data), sha256, md5, storage_path,
+             json.dumps(manifest) if manifest else None, kind, time.time())
+        )
+        conn.commit()
+    finally:
+        conn.close()
     return token
+
+def _get_artifact(token: str):
+    conn = _artifacts_db()
+    try:
+        row = conn.execute(
+            "SELECT id, conv_id, filename, mimetype, size_bytes, sha256, md5, storage_path, "
+            "manifest_json, kind, created_at FROM artifacts WHERE id = ?", (token,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    keys = ["id", "conv_id", "filename", "mimetype", "size_bytes", "sha256", "md5",
+            "storage_path", "manifest_json", "kind", "created_at"]
+    return dict(zip(keys, row))
 
 _FINALDOC_RE = re.compile(r"```finaldoc\s*\n([\s\S]*?)```", re.IGNORECASE)
 
@@ -1163,12 +1253,62 @@ def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: st
 @app.route("/api/download/<token>", methods=["GET"])
 @app.route("/api/app/download/<token>", methods=["GET"])
 def download_generated_file(token):
-    entry = _generated_files_store.get(token)
-    if not entry:
+    artifact = _get_artifact(token)
+    if not artifact or not os.path.isfile(artifact["storage_path"]):
         return jsonify({"error": "This download has expired or does not exist."}), 404
-    resp = Response(entry["bytes"], mimetype=entry["mimetype"])
-    resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
-    return resp
+    # conditional=True makes Werkzeug handle Range/If-Range headers itself —
+    # this is what gives resumable downloads and retry-after-partial-failure
+    # for free, without hand-rolling byte-range parsing.
+    return send_file(
+        artifact["storage_path"],
+        mimetype=artifact["mimetype"] or "application/octet-stream",
+        as_attachment=True,
+        download_name=artifact["filename"],
+        conditional=True,
+        etag=artifact["sha256"],
+    )
+
+@app.route("/artifacts", methods=["GET"])
+@app.route("/api/artifacts", methods=["GET"])
+@app.route("/api/app/artifacts", methods=["GET"])
+def list_artifacts():
+    """Persistent artifact history — survives refresh, unlike the old
+    per-message file cards. Optional ?conv_id= filter."""
+    conv_id = request.args.get("conv_id")
+    conn = _artifacts_db()
+    try:
+        if conv_id:
+            rows = conn.execute(
+                "SELECT id, filename, mimetype, size_bytes, sha256, kind, created_at "
+                "FROM artifacts WHERE conv_id = ? ORDER BY created_at DESC LIMIT 200", (conv_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, filename, mimetype, size_bytes, sha256, kind, created_at "
+                "FROM artifacts ORDER BY created_at DESC LIMIT 200"
+            ).fetchall()
+    finally:
+        conn.close()
+    return jsonify({"artifacts": [
+        {"id": r[0], "filename": r[1], "mimetype": r[2], "size_bytes": r[3],
+         "sha256": r[4], "kind": r[5], "created_at": r[6], "download_url": f"/download/{r[0]}"}
+        for r in rows
+    ]})
+
+@app.route("/artifacts/<artifact_id>", methods=["GET"])
+@app.route("/api/artifacts/<artifact_id>", methods=["GET"])
+@app.route("/api/app/artifacts/<artifact_id>", methods=["GET"])
+def get_artifact_metadata(artifact_id):
+    artifact = _get_artifact(artifact_id)
+    if not artifact:
+        return jsonify({"error": "Artifact not found."}), 404
+    manifest = json.loads(artifact["manifest_json"]) if artifact["manifest_json"] else None
+    return jsonify({
+        "id": artifact["id"], "filename": artifact["filename"], "mimetype": artifact["mimetype"],
+        "size_bytes": artifact["size_bytes"], "sha256": artifact["sha256"], "md5": artifact["md5"],
+        "kind": artifact["kind"], "created_at": artifact["created_at"],
+        "download_url": f"/download/{artifact['id']}", "manifest": manifest,
+    })
 
 # ── "@education" PDF-backed Q&A ──
 _education_cache = {"files": {}, "listing_t": 0}
@@ -2174,6 +2314,12 @@ SYSTEM_PROMPT = (
     "any new file your terminal commands create and makes it downloadable, so once the archive is "
     "actually built on disk, the person can download it — but only if you really executed the "
     "command instead of just showing it.\n\n"
+    "MANY-FILE PROJECTS (more than ~5 supporting files, e.g. a small app or game with a real folder "
+    "structure): write ALL of that project's files in a SINGLE ```python execution block (loop over "
+    "them, or multiple open().write() calls one after another) rather than spreading them across "
+    "several separate blocks. The backend automatically detects when one execution step produces "
+    "many files and bundles them into one validated, verified project.zip instead of showing each "
+    "file separately — that only works correctly when the files are created together in one step.\n\n"
     "UUIDs — NEVER HAND-TYPE THEM: any format that requires a UUID (Minecraft addon manifests, "
     "app configs, etc.) needs a REAL, valid UUID — 32 hex characters (0-9 and a-f ONLY, never g-z), "
     "in the 8-4-4-4-12 pattern. Hand-typing something that merely looks like a UUID reliably produces "
@@ -2834,6 +2980,85 @@ def _extract_task_items_from_text(text: str) -> list:
         seen_ids.add(task_id)
         tasks.append((task_id, label, is_done))
     return tasks
+
+_PROJECT_BUNDLE_THRESHOLD = 5  # more than this many new files in one execution step
+                                # is treated as "a project", not "a few files" —
+                                # below this, individual file cards are still fine
+                                # and arguably clearer than a zip for 2-3 files.
+
+def _build_project_zip_artifact(conv_id: str, new_file_paths: list, base_dir: str, project_name: str, sse_emit):
+    """The actual staged pipeline: manifest -> validate every file -> only
+    THEN build the zip -> verify the zip's own integrity -> checksum ->
+    persist. If any file fails validation, the whole build aborts and
+    nothing is exposed as downloadable — this is the "atomic build, no
+    partial/broken downloads" requirement. `sse_emit` is a callback the
+    caller uses to yield SSE dicts as this function reports progress, so
+    the UI shows real staged progress instead of a wall of file cards.
+    Returns (artifact_id_or_None, error_message_or_None)."""
+    sse_emit({"type": "activity_terminal", "label": f"Validating {len(new_file_paths)} files..."})
+    manifest = {"project_name": project_name, "created_at": datetime.now(timezone.utc).isoformat(), "files": []}
+    failures = []
+    for abs_path in new_file_paths:
+        rel_path = os.path.relpath(abs_path, base_dir)
+        try:
+            with open(abs_path, "rb") as f:
+                data = f.read()
+        except OSError as exc:
+            failures.append(f"{rel_path}: could not read file ({exc})")
+            continue
+        ext = rel_path.rsplit(".", 1)[-1] if "." in rel_path else ""
+        try:
+            text_content = data.decode("utf-8")
+            val_result = validate_generated_code(ext, text_content)
+        except UnicodeDecodeError:
+            val_result = {"valid": True, "error": None}  # binary asset (image, etc.) — not text-validated
+        if not val_result["valid"]:
+            failures.append(f"{rel_path}: {val_result['error']}")
+        sha256, md5 = _hash_bytes(data)
+        manifest["files"].append({
+            "path": rel_path, "size_bytes": len(data), "sha256": sha256, "md5": md5,
+            "mimetype": mimetypes.guess_type(rel_path)[0] or "application/octet-stream",
+            "valid": val_result["valid"], "validation_error": val_result["error"],
+        })
+    if failures:
+        # ATOMIC BUILD: abort entirely rather than ship a project with a
+        # known-broken file inside it — nothing gets zipped or exposed.
+        sse_emit({"type": "activity_terminal", "label": f"Validation failed for {len(failures)} file(s) — aborting build."})
+        return None, "; ".join(failures[:5]) + (f" (+{len(failures) - 5} more)" if len(failures) > 5 else "")
+
+    sse_emit({"type": "activity_terminal", "label": "Packaging into archive..."})
+    zip_bytes_io = io.BytesIO()
+    with zipfile.ZipFile(zip_bytes_io, "w", zipfile.ZIP_DEFLATED) as zf:
+        for abs_path in new_file_paths:
+            rel_path = os.path.relpath(abs_path, base_dir)
+            zf.write(abs_path, arcname=rel_path)
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+    zip_bytes = zip_bytes_io.getvalue()
+
+    sse_emit({"type": "activity_terminal", "label": "Verifying archive integrity..."})
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf_check:
+            bad_file = zf_check.testzip()  # returns the name of the first corrupt member, or None
+            if bad_file is not None:
+                return None, f"Archive verification failed — '{bad_file}' is corrupted in the built zip."
+            if len(zf_check.namelist()) != len(new_file_paths) + 1:  # +1 for manifest.json
+                return None, "Archive verification failed — file count in the zip doesn't match what was built."
+    except zipfile.BadZipFile as exc:
+        return None, f"Archive verification failed — zip is not readable ({exc})."
+
+    sse_emit({"type": "activity_terminal", "label": "Computing checksums..."})
+    zip_filename = f"{project_name}.zip"
+    zip_sha256, _ = _hash_bytes(zip_bytes)
+    manifest["archive_sha256"] = zip_sha256
+    manifest["file_count"] = len(new_file_paths)
+    manifest["total_size_bytes"] = sum(f["size_bytes"] for f in manifest["files"])
+
+    artifact_id = _store_generated_file(
+        zip_bytes, zip_filename, "application/zip",
+        conv_id=conv_id, manifest=manifest, kind="project_zip",
+    )
+    sse_emit({"type": "activity_terminal", "label": "Ready."})
+    return artifact_id, None
 
 def _extract_createfile_blocks(text: str):
     """Returns [(filename, content), ...] for every ```createfile:name block
@@ -4076,26 +4301,47 @@ def chat_stream():
                     for _root, _dirs, _files in os.walk(terminal_workdir):
                         for _f in _files:
                             _post_exec_files.add(os.path.join(_root, _f))
-                    for _new_path in sorted(_post_exec_files - _pre_exec_files):
-                        try:
-                            _new_name = os.path.basename(_new_path)
-                            with open(_new_path, "rb") as _fh:
-                                _new_bytes = _fh.read()
-                            if len(_new_bytes) > 60 * 1024 * 1024:  # 60MB sanity cap
-                                continue
-                            _new_mimetype = mimetypes.guess_type(_new_name)[0] or "application/octet-stream"
-                            _new_token = str(uuid.uuid4())
-                            _generated_files_store[_new_token] = {
-                                "bytes": _new_bytes, "filename": _new_name, "mimetype": _new_mimetype,
-                            }
-                            yield _sse({
-                                "type": "file_ready",
-                                "url": f"/download/{_new_token}",
-                                "filename": _new_name,
-                            })
-                            _produced_filenames_this_turn.add(_new_name.lower())
-                        except Exception as _reg_exc:
-                            print(f"[AUTO FILE DISCOVERY FAULT] {_new_path} -> {_reg_exc}")
+                    _newly_created = sorted(
+                        p for p in (_post_exec_files - _pre_exec_files)
+                        if os.path.getsize(p) <= 60 * 1024 * 1024  # 60MB sanity cap per file
+                    )
+                    if len(_newly_created) > _PROJECT_BUNDLE_THRESHOLD:
+                        # Many files at once = a project, not "a few files".
+                        # Run the full staged pipeline instead of exposing
+                        # every individual file: manifest -> validate all ->
+                        # atomic zip -> verify -> checksum -> persist. Only
+                        # the ONE resulting zip becomes visible.
+                        def _emit(evt):
+                            events_to_yield.append(evt)
+                        events_to_yield = []
+                        _project_name = re.sub(r"[^a-zA-Z0-9_\-]+", "_", os.path.basename(terminal_workdir) or "project").strip("_") or "project"
+                        _artifact_id, _build_error = _build_project_zip_artifact(
+                            conv_id, _newly_created, terminal_workdir, _project_name, _emit
+                        )
+                        for _evt in events_to_yield:
+                            yield _sse(_evt)
+                        if _artifact_id:
+                            _zip_name = f"{_project_name}.zip"
+                            yield _sse({"type": "file_ready", "url": f"/download/{_artifact_id}", "filename": _zip_name})
+                            _produced_filenames_this_turn.add(_zip_name.lower())
+                        else:
+                            yield _sse({"type": "activity_terminal", "label": f"Build aborted: {_build_error}"})
+                    else:
+                        for _new_path in _newly_created:
+                            try:
+                                _new_name = os.path.basename(_new_path)
+                                with open(_new_path, "rb") as _fh:
+                                    _new_bytes = _fh.read()
+                                _new_mimetype = mimetypes.guess_type(_new_name)[0] or "application/octet-stream"
+                                _new_token = _store_generated_file(_new_bytes, _new_name, _new_mimetype, conv_id=conv_id)
+                                yield _sse({
+                                    "type": "file_ready",
+                                    "url": f"/download/{_new_token}",
+                                    "filename": _new_name,
+                                })
+                                _produced_filenames_this_turn.add(_new_name.lower())
+                            except Exception as _reg_exc:
+                                print(f"[AUTO FILE DISCOVERY FAULT] {_new_path} -> {_reg_exc}")
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
                     "type": "terminal_output",
