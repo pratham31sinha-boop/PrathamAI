@@ -272,6 +272,25 @@
             width: 1px; height: 12px; background: var(--border); margin: 0 2px;
         }
 
+        /* Two-zone layout: process zone (thinking/steps/code) above answer zone */
+        .process-zone {
+            padding: 4px 0 8px;
+            margin-bottom: 4px;
+        }
+        .process-zone:empty { display: none; }
+        .answer-zone {
+            padding-top: 4px;
+        }
+        /* Subtle separator between process and answer zones */
+        .answer-zone:not(:empty)::before {
+            content: '';
+            display: block;
+            width: 32px; height: 2px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-bottom: 8px;
+        }
+
         /* ── Step list inside the thinking wrap ── */
         .step-list { display: flex; flex-direction: column; margin: 2px 0 4px; gap: 1px; }
         .step-list .step-row {
@@ -2335,7 +2354,7 @@
                 const group = document.createElement('div');
                 group.className = 'file-group-container';
                 group.innerHTML = '<div class="file-group-toggle"></div><div class="file-group-list"></div>';
-                wrapper.appendChild(group);
+                (wrapper._processZone || wrapper).appendChild(group);
                 wrapper._fileGroup = group;
                 wrapper._fileGroupList = group.querySelector('.file-group-list');
                 wrapper._fileGroupToggle = group.querySelector('.file-group-toggle');
@@ -2744,7 +2763,7 @@
                         node.dataset.segType = 'text';
                         node.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs msg-enter';
                         node.style.borderRadius = '4px 16px 16px 16px';
-                        wrapper.appendChild(node);
+                        (wrapper._answerZone || wrapper).appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
                     if (seg.content.trim().length > 0) {
@@ -2761,7 +2780,7 @@
                         node.className = 'glass rounded-2xl p-4 max-w-[92%] sm:max-w-[520px] msg-enter';
                         node.style.borderRadius = '16px';
                         node.innerHTML = '<canvas></canvas>';
-                        wrapper.appendChild(node);
+                        (wrapper._answerZone || wrapper).appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
                     if (seg.closed && !node._rendered) {
@@ -2815,7 +2834,7 @@
                         node.dataset.segType = 'finaldoc';
                         node.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs whitespace-pre-wrap msg-enter';
                         node.style.borderRadius = '4px 16px 16px 16px';
-                        wrapper.appendChild(node);
+                        (wrapper._answerZone || wrapper).appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
                     node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
@@ -2825,7 +2844,7 @@
                         node = document.createElement('div');
                         node.style.display = 'none';
                         node.dataset.segType = 'suppressed-exec';
-                        wrapper.appendChild(node);
+                        (wrapper._processZone || wrapper).appendChild(node);
                         wrapper._segNodes[i] = node;
                     }
                 } else {
@@ -2876,7 +2895,7 @@
                     </div>
                 </div>
             `;
-            wrapper.appendChild(holder);
+            (wrapper._processZone || wrapper).appendChild(holder);
             pinnedAutoScroll();
 
             const fill = holder.querySelector('.igen-progress-fill');
@@ -3005,7 +3024,7 @@
             btn.className = 'copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none self-start transition-colors';
             btn.innerText = '⧉ Copy';
             btn.onclick = (e) => copyPlainText(fullText, e.currentTarget);
-            wrapper.appendChild(btn);
+            (wrapper._answerZone || wrapper).appendChild(btn);
         }
 
         function mountTypingIndicator() {
@@ -3514,7 +3533,7 @@
                                         parts.push(`<span>Used ${window._toolCount} ${window._toolCount === 1 ? 'tool' : 'tools'}</span>`);
                                     }
                                     summary.innerHTML = '<span class="as-icon">✓</span>' + parts.join('<span class="asl-sep"></span>');
-                                    modelWrapper.appendChild(summary);
+                                    (modelWrapper._answerZone || modelWrapper).appendChild(summary);
                                 }
                             }
                             finalizeThinkingWrap();
