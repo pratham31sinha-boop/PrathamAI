@@ -2383,6 +2383,32 @@ def _build_verification_feedback(assistant_text: str, web_results: list) -> str:
     if errors are found, or None if everything checks out."""
     issues = []
 
+    # 0. Detect fabricated source URLs — links to domain roots with no article path
+    source_urls = re.findall(r'\[([^\]]+)\]\((https?://[^)]+)\)', assistant_text)
+    for label, url in source_urls:
+        parsed = urllib.parse.urlparse(url)
+        path = parsed.path.strip('/')
+        if not path or path in ('news', 'home'):
+            issues.append(
+                f"FABRICATED SOURCE: The link '{label}' ({url}) points to a domain root with no "
+                f"article path — this looks fabricated. Remove it unless you have the real URL."
+            )
+
+    # 0b. Detect suspicious party/organization names
+    suspicious = re.findall(
+        r'\b([A-Z][a-z]+ (?:Janata Party|Party|Congress|Alliance|Front|League|Movement))\b',
+        assistant_text
+    )
+    known = ['bjp', 'congress', 'inc', 'bsp', 'cpi', 'cpm', 'tmc', 'dmk', 'aiadmk', 'aap',
+             'shiv sena', 'ncp', 'sp', 'jdu', 'rjd', 'janata party', 'janata dal',
+             'bharatiya janata', 'indian national congress']
+    for name in suspicious:
+        if not any(k in name.lower() for k in known):
+            issues.append(
+                f"SUSPICIOUS NAME: '{name}' doesn't match any known Indian political party. "
+                f"If not in web results, REMOVE it — do not invent party names."
+            )
+
     # 1. Math verification
     math_results = _verify_math_expressions(assistant_text)
     for expr, claimed, actual, is_correct in math_results:
@@ -2487,6 +2513,26 @@ def _classify_query_temperature(message: str) -> float:
 
     # Default: balanced
     return 0.4
+    # Default: balanced
+    return 0.4
+
+# Questions that demand factual accuracy and web verification
+_FACT_CHECK_QUERY_RE = re.compile(
+    r'\b(did|does|has|have|is|was|were|are|who|what|when|where|why|how)\b'
+    r'.{0,60}\b(resign|resigned|die|died|appointed|elected|fired|arrested|'
+    r'killed|married|divorced|born|founded|launched|released|announced|'
+    r'happened|occur|ocurred|started|ended|cancelled|banned|'
+    r'prime minister|president|minister|ceo|chief|director|'
+    r'government|parliament|supreme court|election|'
+    r'party|protest|march|strike|scam|scandal|verdict|'
+    r'latest|current|today|yesterday|this week|this month|this year)'
+, re.IGNORECASE)
+
+def _is_fact_check_question(message: str) -> bool:
+    """Returns True if this question asks about a specific factual claim
+    that MUST be verified via web search, not guessed from training data."""
+    return bool(_FACT_CHECK_QUERY_RE.search(message))
+
 
 def _stream_openai_compatible(url, api_key, model, messages, state=None, temperature=0.4):
     """`state`, if provided, is a plain dict this function writes
@@ -3866,25 +3912,21 @@ def chat_stream():
         # If the search fails or returns nothing, silently proceed with no
         # extra context rather than telling the user every single time —
         # that would get noisy since this now runs on almost every message.
-        elif _CURRENT_EVENTS_INTENT_RE.search(outgoing_user_message or message):
-            # DETERMINISTIC GUARD, not a prompt instruction: a prior version
-            # relied only on a system-prompt instruction telling the model
-            # not to fabricate fake news when search comes back empty — and
-            # it did it anyway (invented specific fake headlines with
-            # real-sounding details and wrong dates). Prompt instructions
-            # are not reliable enough for this exact failure mode, so for a
-            # message that clearly asks about current events/news/today
-            # with genuinely zero search results, the LLM is bypassed
-            # entirely and a fixed, honest response is sent instead — this
-            # cannot be talked around by the model no matter how it phrases
-            # things.
+        elif _CURRENT_EVENTS_INTENT_RE.search(outgoing_user_message or message) or _is_fact_check_question(outgoing_user_message or message):
+            # DETERMINISTIC GUARD: when web search returns NO results for a
+            # factual/current-events question, bypass the LLM entirely. The
+            # model has proven it will fabricate fake details (fake party
+            # names, fake dates, fake resignation events, fake sources) when
+            # it has no web data but is told to answer.
             _append_message(conv_id, "user", message)
             no_results_text = (
-                "A live web search didn't return results for this just now (rate limit or temporary "
-                "search issue). I don't want to guess at current news from memory, since that risks "
-                "giving you outdated or made-up information. Try asking again in a moment, or check "
-                "a live source directly: [BBC News](https://www.bbc.com/news), "
-                "[Reuters](https://www.reuters.com), or [Google News](https://news.google.com)."
+                "I couldn't verify this through a live web search right now (the search didn't return "
+                "results). Rather than risk giving you incorrect or outdated information, I'd recommend "
+                "checking a reliable source directly:\n\n"
+                "- [Google News](https://news.google.com) — search for the topic\n"
+                "- [Wikipedia](https://en.wikipedia.org) — for verified facts\n"
+                "- [Reuters](https://www.reuters.com) or [BBC News](https://www.bbc.com/news)\n\n"
+                "You can also try asking me again in a moment — the search may work on retry."
             )
             _append_message(conv_id, "assistant", no_results_text)
             def generate_no_results():
@@ -3897,27 +3939,28 @@ def chat_stream():
             resp.headers["Access-Control-Allow-Credentials"] = "true"
             return resp
         else:
+            # Web search returned NO results — inject a CRITICAL anti-hallucination
+            # guard. The model must NOT fabricate facts, names, dates, sources, or
+            # events when it has no web data.
             api_messages[0]["content"] += (
-                " (A live web search was attempted for this message but returned no results this time "
-                "— rate limit or transient failure, not a missing capability. NEVER tell the user you "
-                "don't have web/internet access — you do, it just didn't return anything useful for "
-                "this specific query. If the question needs current info you don't have, say the "
-                "search didn't turn up a clear answer this time and suggest they try rephrasing or "
-                "asking again, rather than claiming you lack web access at all. NEVER mention a "
-                "specific training cutoff date (e.g. 'my data is from mid-2024') as the reason you "
-                "can't answer a current-events question — that framing implies you didn't even try a "
-                "live search, when one was actually attempted for this message. If it came back empty, "
-                "just say a live search didn't return a clear answer this time, without citing any "
-                "cutoff date at all. CRITICAL: if asked for "
-                "'today's news', 'current affairs', or anything time-sensitive and you have NO live "
-                "search results, do NOT invent specific-sounding headlines, dates, names, or events from "
-                "your training data and present them as if they're current — that is fabricating fake "
-                "news and is actively harmful even when phrased confidently. Instead say plainly that "
-                "you don't have live results for this right now and suggest a real news source, or ask "
-                "them to retry.)"
+                " CRITICAL: A live web search was just attempted for this message but returned "
+                "NO results. You have NO current web data for this question. You MUST follow these rules:\n"
+                "1. Do NOT fabricate or invent any facts, dates, names, events, quotes, or sources.\n"
+                "2. Do NOT create fake URLs or cite sources that don't exist.\n"
+                "3. Do NOT present information from your training data as if it were current/verified.\n"
+                "4. If the question is about a specific factual claim (did X happen, who is Y, when did Z occur) "
+                "and you are NOT certain from your training data, say: 'I don't have confirmed information "
+                "about this right now — a live web search didn't return results. I'd rather not guess "
+                "and risk giving you wrong information. Could you check a reliable news source directly?'\n"
+                "5. NEVER say 'my training cutoff is [date]' — instead say the live search didn't return results.\n"
+                "6. If you ARE answering from training knowledge (not web results), you MUST add at the "
+                "start of your answer: 'Note: I'm answering from my training data, not a live web search "
+                "(the search didn't return results). Please verify this information independently.'\n"
+                "7. Do NOT mix training-data knowledge with fabricated 'current' details to make an answer "
+                "look more authoritative than it is."
             )
 
-    api_messages.append({"role": "user", "content": outgoing_user_message or message})
+            api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
     # ── ADAPTIVE TEMPERATURE: classify the query and set the optimal temperature ──
     _query_temperature = _classify_query_temperature(message)
