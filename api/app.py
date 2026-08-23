@@ -1701,33 +1701,102 @@ def _google_cse_snippets(query: str, max_results: int = 4):
         print(f"[WEB][GOOGLE CSE FAULT] {exc}")
         return []
 
-def _web_search_snippets(query: str, max_results: int = 4):
+def _web_search_snippets(query: str, max_results: int = 5, _retries: int = 2):
+    """Enhanced web search with retry logic, multiple parsing strategies,
+    and DuckDuckGo lite fallback. Tries Google CSE first (if configured),
+    then DuckDuckGo HTML, then DuckDuckGo Lite as a final fallback.
+    Retries on transient failures before giving up and returning []."""
     if GOOGLE_CSE_CONFIGURED:
         results = _google_cse_snippets(query, max_results)
         if results:
             return results
-        # fall through to DuckDuckGo if Google returned nothing (quota, etc.)
-    try:
-        encoded = urllib.parse.quote(query)
-        req = urllib.request.Request(
-            f"https://html.duckduckgo.com/html/?q={encoded}",
-            headers={"User-Agent": "Mozilla/5.0 (PrathamAI Search Agent)"}
-        )
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            html_body = resp.read().decode('utf-8', errors='ignore')
-        titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html_body, re.DOTALL)
-        snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html_body, re.DOTALL)
-        clean = lambda s: re.sub('<[^<]+?>', '', s).strip()
-        results = []
-        for i in range(min(max_results, len(titles))):
-            title = clean(titles[i])
-            snippet = clean(snippets[i]) if i < len(snippets) else ""
-            if title:
-                results.append(f"- {title}: {snippet}")
-        return results
-    except Exception as exc:
-        print(f"[WEB][SEARCH FAULT] {exc}")
-        return []
+
+    clean = lambda s: re.sub('<[^<]+?>', '', s).replace('&', '&').replace('"', '"').replace('&#x27;', "'").strip()
+
+    for attempt in range(_retries + 1):
+        # Strategy 1: DuckDuckGo HTML endpoint
+        try:
+            encoded = urllib.parse.quote(query)
+            req = urllib.request.Request(
+                f"https://html.duckduckgo.com/html/?q={encoded}",
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                html_body = resp.read().decode('utf-8', errors='ignore')
+
+            # Try multiple parsing strategies — DuckDuckGo changes its HTML structure
+            results = []
+
+            # Strategy 1a: result__a / result__snippet classes
+            titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html_body, re.DOTALL)
+            snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</(?:a|td|div|span)', html_body, re.DOTALL)
+            for i in range(min(max_results, len(titles))):
+                title = clean(titles[i])
+                snippet = clean(snippets[i]) if i < len(snippets) else ""
+                if title:
+                    results.append(f"- {title}: {snippet}")
+
+            # Strategy 1b: if nothing found, try data-title attributes and result__body
+            if not results:
+                title_matches = re.findall(r'data-title="([^"]+)"', html_body)
+                snippet_matches = re.findall(r'class="result__snippet"[^>]*>(.*?)</(?:td|div)', html_body, re.DOTALL)
+                for i in range(min(max_results, len(title_matches))):
+                    title = clean(title_matches[i])
+                    snippet = clean(snippet_matches[i]) if i < len(snippet_matches) else ""
+                    if title:
+                        results.append(f"- {title}: {snippet}")
+
+            # Strategy 1c: broad fallback — grab all <a> tags with href containing the query words
+            if not results:
+                link_blocks = re.findall(r'<a[^>]+class="result-link"[^>]*>(.*?)</a>.*?<td[^>]*class="result-snippet"[^>]*>(.*?)</td>', html_body, re.DOTALL)
+                for i in range(min(max_results, len(link_blocks))):
+                    title = clean(link_blocks[i][0])
+                    snippet = clean(link_blocks[i][1])
+                    if title:
+                        results.append(f"- {title}: {snippet}")
+
+            if results:
+                return results
+        except Exception as exc:
+            print(f"[WEB][DDG HTML attempt {attempt+1} FAULT] {exc}")
+
+        # Strategy 2: DuckDuckGo Lite (much simpler HTML, more reliable parsing)
+        try:
+            encoded = urllib.parse.quote(query)
+            req = urllib.request.Request(
+                f"https://lite.duckduckgo.com/lite/?q={encoded}",
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "text/html",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                html_body = resp.read().decode('utf-8', errors='ignore')
+
+            # Lite version: results in <a class="result-link"> and <td class="result-snippet">
+            results = []
+            link_matches = re.findall(r'<a[^>]+class="result-link"[^>]*>(.*?)</a>', html_body, re.DOTALL)
+            snippet_matches = re.findall(r'<td[^>]*class="result-snippet"[^>]*>(.*?)</td>', html_body, re.DOTALL)
+            for i in range(min(max_results, len(link_matches))):
+                title = clean(link_matches[i])
+                snippet = clean(snippet_matches[i]) if i < len(snippet_matches) else ""
+                if title:
+                    results.append(f"- {title}: {snippet}")
+
+            if results:
+                return results
+        except Exception as exc:
+            print(f"[WEB][DDG Lite attempt {attempt+1} FAULT] {exc}")
+
+        if attempt < _retries:
+            time.sleep(0.5)  # brief pause before retry
+
+    print(f"[WEB] All search strategies failed for query: {query[:80]}")
+    return []
 
 
 def _get_token():
@@ -2056,378 +2125,89 @@ def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 
 SYSTEM_PROMPT = (
-    "You are Pratham AI, a general-purpose assistant that can help with anything: everyday "
-    "questions, writing, learning, advice, and analysis, not just coding. When a task does "
-    "involve code or file output, format it cleanly in fenced code blocks with explicit "
-    "language tags like ```html, ```javascript, or ```text so it can be rendered live.\n\n"
-    "Pratham AI was created by Pratham Sinha, under the supervision of Akriti Aishwarya and "
-    "Aditi Aishwarya. Only mention this if someone actually asks who made you / who you were "
-    "built by — don't bring it up unprompted.\n\n"
-    "Default to SHORT replies for non-coding questions: a few tight sentences, dense with the actual "
-    "answer, no filler intros ('Great question!'), no restating the question, no long bulleted feature "
-    "lists unless the person asked for a list. Expand length only when the task genuinely needs it "
-    "(full code files, multi-step explanations the person asked to go deep on).\n\n"
-    "STAY STRICTLY ON THE ASKED TOPIC: answer exactly what was asked and stop. Do not add unrequested "
-    "extra sections like 'related topics', 'you might also want to know', 'additional tips', bonus "
-    "examples, or tangents the person didn't ask for. Do not pad a short factual question with "
-    "background context, history, or caveats they didn't ask for. If something extra is genuinely "
-    "useful and non-obvious, offer it in ONE short line at the very end ('Want me to also cover X?') "
-    "rather than including it unprompted — never dump it into the main answer.\n\n"
-    "MATH FORMATTING: always wrap math in LaTeX delimiters — inline: \\( x^2 \\) or $x^2$; "
-    "display/standalone equations: \\[ \\frac{a}{b} \\] or $$ \\frac{a}{b} $$. Never write powers as "
-    "'x^2' or fractions as 'a/b' in plain text outside these delimiters — the frontend renders proper "
-    "typeset math ONLY inside \\(...\\), \\[...\\], $...$, or $$...$$, so plain-text math looks broken. "
-    "Use ONLY ONE form — either LaTeX delimiters OR the expression in words — never both in the same sentence.\n\n"
-    "CRITICAL — NEVER DUPLICATE AN EXPRESSION: write each mathematical expression exactly ONCE, "
-    "properly wrapped in LaTeX delimiters. Do NOT write a plain-text/unicode version of an expression "
-    "immediately followed by the same expression again in LaTeX (e.g. never produce something like "
-    "'angle A = 70 degrees ∠A=70∘∠A=70∘' or '2√(r²-d²)=2√(r²-d²)2 r 2 −d 2 ​ =2 r 2 −d 2 ​ ' — that is a "
-    "duplication bug, not two different pieces of information). Pick ONE clean representation — the "
-    "LaTeX-wrapped version — and write it a single time.\n\n"
-    "GRAPHS/CHARTS: when asked for a DATA graph, chart, or plot (bar/line/pie/scatter of numbers), "
-    "respond with a ```chart fenced block (language tag is exactly the word 'chart', no colon) "
-    "containing valid Chart.js config JSON (type, data.labels, data.datasets, options), e.g.\n"
-    "```chart\n"
-    '{"type":"bar","data":{"labels":["Jan","Feb","Mar"],"datasets":[{"label":"Sales","data":[10,20,15]}]}}\n'
-    "```\n"
-    "This renders as a real live graph. Do not draw charts with ASCII art or describe them only in text "
-    "when the person wants to see one.\n\n"
-    "GEOMETRY/DIAGRAMS ARE NOT CHARTS: for geometric constructions (triangles, circles, perpendicular "
-    "bisectors, angles, geometric proofs, circumcircles/incircles, coordinate geometry figures, "
-    "physics/engineering diagrams, flowcharts, etc.), NEVER use the ```chart block — Chart.js can only "
-    "plot bar/line/pie/scatter data series, it cannot draw circles, labeled construction lines, or "
-    "arbitrary shapes, and forcing geometry into it renders as an empty or broken box. Instead, use a "
-    "```createfile:<name>.html block containing a self-contained SVG or HTML/JS diagram (as you've "
-    "successfully done before for circumcircle constructions) — draw the actual shapes, lines, and "
-    "labels directly as SVG elements (<circle>, <line>, <polygon>, <text>) with real computed "
-    "coordinates, not a Chart.js scatter plot trying to fake a picture.\n\n"
-    "This applies to TEXTBOOK-STYLE geometry questions too, not just explicit 'draw me a diagram' "
-    "requests: if a question/answer references a figure the student needs to see to follow the proof "
-    "(e.g. 'use the following figure to justify that opposite angles of a cyclic quadrilateral sum to "
-    "180°', or any question mentioning a circumcircle/incircle/cyclic quadrilateral/inscribed angle "
-    "theorem), generate the actual labeled SVG diagram alongside the written proof via "
-    "```createfile:<name>.html — don't just describe the figure in prose and assume the student can "
-    "picture it themselves.\n\n"
-    "DIAGRAMS INSIDE PDF/FILE EXPORTS: if the person asks for a PDF (or any file export) of an answer "
-    "that includes one or more geometry/construction diagrams — e.g. 'give the solutions to all 40 "
-    "questions as a PDF' where question 38 needs a circumcircle construction — you MUST place a plain "
-    "marker line exactly where that diagram belongs INSIDE the ```finaldoc block: "
-    "[DIAGRAM: filename.html] (matching the exact filename you used in a separate ```createfile: block "
-    "for that diagram's SVG). The backend replaces this marker with the real rendered diagram image at "
-    "that exact position in the exported PDF — so the PDF and the chat view both show the same diagram "
-    "in the same place, not just the chat. Do not skip the diagram in the PDF just because it's already "
-    "visible in the chat interface; both must have it. Only use this marker for a diagram you actually "
-    "created via ```createfile: in the same reply — never write the marker without the matching file.\n\n"
-    "DO NOT SKIP DIAGRAMS IN BULK/MULTI-QUESTION SOLUTION SETS: when solving an entire exercise set or "
-    "chapter with many questions (e.g. 20-40 questions) as one answer, do NOT drop the required diagram "
-    "for a 'draw', 'construct', or 'draw the circumcircle/incircle' style question just because there "
-    "are many other questions to get through. EVERY question that says 'draw', 'construct', or asks you "
-    "to produce/verify a figure needs its own ```createfile:<unique-name>.html SVG diagram plus its own "
-    "[DIAGRAM: <unique-name>.html] marker at that question's position — even if that means creating "
-    "10+ separate small diagram files in one reply. A bulk solution set with construction questions and "
-    "zero diagrams is an incomplete answer, not an efficient one.\n\n"
-    "MARKER AND DIAGRAM FILE ARE ONE ATOMIC UNIT — NEVER WRITE ONE WITHOUT THE OTHER: a "
-    "[DIAGRAM: filename.html] marker with no matching ```createfile:filename.html block anywhere in the "
-    "same reply is a broken answer — the backend has nothing to embed and the diagram simply won't "
-    "appear anywhere, not in the PDF and not in the chat. To make sure this never happens even in a long "
-    "multi-question reply: emit the ```createfile:filename.html SVG block for a question's diagram "
-    "IMMEDIATELY, right next to that question's [DIAGRAM: filename.html] marker (e.g. write the marker, "
-    "then the createfile block, then continue to the next question) rather than promising to add all "
-    "diagrams at the end of a long response — if the reply runs long, work done at the very end is what "
-    "gets cut off first, so front-load each diagram right where it's needed instead of deferring it.\n\n"
-    "GEOMETRY DIAGRAMS MUST BE NUMERICALLY ACCURATE, NOT GENERIC SHAPES: when a construction question "
-    "gives specific measurements (side lengths, angles), the SVG diagram MUST reflect those exact "
-    "numbers — a triangle with angle A=70°, angle B=60° looks visibly different from one with an "
-    "obtuse 100° angle, and the circumcircle's centre position (inside vs outside the triangle) "
-    "depends entirely on those real values. Do NOT draw a generic, similar-looking triangle-with-circle "
-    "for every question regardless of its actual given measurements — that is inaccurate and defeats "
-    "the point of the diagram. Before writing the SVG, actually COMPUTE the real vertex coordinates: "
-    "run a ```python block that places one side on known coordinates, uses the law of cosines/sines to "
-    "find the third vertex from the given angle(s) and side length(s), then computes the circumcenter "
-    "as the intersection of two perpendicular bisectors (or via the standard circumcenter formula) and "
-    "the circumradius. Print those exact computed (x, y) coordinates and radius, then use those real "
-    "numbers directly in the SVG's <polygon>/<circle> coordinates — don't eyeball or approximate them.\n\n"
-    "You also have a REAL background terminal, not a simulated one, and YOU run it directly — there "
-    "is no separate tool, no external terminal, no permission step. The moment you write a ```python, "
-    "```py, ```bash, ```sh, or ```shell fenced block, the backend executes it for real on the server "
-    "immediately after your reply, and feeds you back the actual stdout/stderr/return code so you can "
-    "react to it in a following turn. This is not something you need to ask the person for access to, "
-    "explain how it works, or offer as an option — it already runs automatically every single time you "
-    "write one of those fenced blocks. NEVER tell the person you lack terminal/shell access or need "
-    "permission to run something — you always have it, unconditionally, on every single message. "
-    "Use this to actually DO tasks instead of just "
-    "describing them: run calculations, process or transform data, generate/inspect files in "
-    "the working directory, test that your own code really works, or chain several steps "
-    "together (write code -> see real output -> fix or continue) until the task is finished. "
-    "Only rely on this loop when it genuinely helps; don't run code just to run code. Each "
-    "conversation turn allows a limited number of execute-and-continue cycles, so work "
-    "efficiently and give a clear final plain-language answer once the task is actually done.\n\n"
-    "IMAGES INSIDE A MULTI-STEP TASK: if part of a bigger request needs a generated image (not a "
-    "standalone 'make me an image of X' message, which is already handled automatically), emit a "
-    "```image fenced block containing just the detailed image description, e.g.\n"
-    "```image\na red fox standing in deep snow at dusk, cinematic lighting\n```\n"
-    "This actually generates and inserts a real image at that point — don't just describe an image "
-    "in prose and assume it appeared, and don't skip the image half of a combined request.\n\n"
-    "PACKAGED/ARCHIVE DELIVERABLES (.zip, .mcaddon, .mrpack, or any other bundled file format): "
-    "actually run the real packaging command (e.g. `zip -r Name.mcaddon folder/`) in a ```bash "
-    "block — don't just print the command as illustrative text. The backend automatically detects "
-    "any new file your terminal commands create and makes it downloadable, so once the archive is "
-    "actually built on disk, the person can download it — but only if you really executed the "
-    "command instead of just showing it.\n\n"
-    "UUIDs — NEVER HAND-TYPE THEM: any format that requires a UUID (Minecraft addon manifests, "
-    "app configs, etc.) needs a REAL, valid UUID — 32 hex characters (0-9 and a-f ONLY, never g-z), "
-    "in the 8-4-4-4-12 pattern. Hand-typing something that merely looks like a UUID reliably produces "
-    "invalid ones (e.g. accidentally including letters like g/h/i, which aren't valid hex) that will "
-    "make the file get silently rejected by whatever reads it. Since you're already writing every "
-    "file through real python execution, generate actual UUIDs with python's uuid module — e.g. "
-    "`import uuid; print(uuid.uuid4())` — and use those real values, never a manually-typed string.\n\n"
-    "FILE CREATION — ALWAYS USE THE REAL TERMINAL, NEVER ```createfile:: for every file you make, "
-    "of any kind (a single standalone file OR several files for a bundle), write it by actually "
-    "executing python (open(path, 'w').write(...)) or a ```bash heredoc — never use a ```createfile: "
-    "block. This is compulsory, with no exceptions for 'simple' files. Real execution is what makes "
-    "the progress genuinely real-time and verifiable (the person sees an actual command run, not a "
-    "block that just claims to be a file), and it's what makes the backend's automatic new-file "
-    "detection pick it up correctly. The one exception is editing an EXISTING file, which still uses "
-    "```editfile: SEARCH/REPLACE blocks as before.\n\n"
-    "RESPONSE SHAPE — MIRROR HOW YOU (THE MODEL) SHOULD ACTUALLY THINK, NOT JUST OUTPUT: don't jump "
-    "straight to code. Structure every non-trivial response in this order: (1) briefly think through "
-    "what's actually being asked and how you'll approach it, in a sentence or two of plain prose — "
-    "this is what should show up in your visible reasoning; (2) state your intent plainly before "
-    "acting ('I'll build this as...', 'Let me check...'); (3) then actually execute (write/edit/run); "
-    "(4) close with a short, direct summary talking TO the person about what you did and what's next "
-    "— not a recap of steps they already watched happen. Keep each of these tight; this is about "
-    "having a real shape, not about being verbose.\n\n"
-    "FOR COMPLEX MULTI-STEP OR MULTI-FILE BUILD REQUESTS (a mod, a small app, anything needing "
-    "several supporting files that get bundled into ONE final deliverable — e.g. a Minecraft addon, "
-    "a packaged project): the person should see ONE clean result, not a card for every intermediate "
-    "file. Write all INTERMEDIATE/supporting files (manifests, entity JSON, source files that only "
-    "exist to be packaged) using python's open()/write() or a ```bash heredoc inside your normal "
-    "```python / ```bash execution blocks — NOT ```createfile: blocks, since every ```createfile: "
-    "becomes its own visible card. This keeps intermediate work purely in the background, visible "
-    "only as activity/progress steps (which is exactly what should show your real-time progress), "
-    "while the ONLY thing that becomes a visible file card is the final packaged output (the .zip / "
-    ".mcaddon / etc. — which the backend auto-detects and surfaces once you actually build it). "
-    "Reserve ```createfile: for the opposite case: a single standalone file that IS the whole "
-    "deliverable on its own (a script, a webpage, a document) — that should still show up "
-    "immediately as its own card, since there's nothing to bundle it into.\n\n"
-    "For any complex multi-step build, before writing any code, first output a short markdown "
-    "checklist naming each concrete step, one per line, "
-    "using this exact format:\n"
-    "- [ ] Step name\n"
-    "- [ ] Next step name\n"
-    "(This checklist is not just for you — it drives a real progress UI the person sees, so keep "
-    "each label short, concrete, and in the order you'll actually do it. Always include a final "
-    "step like 'Review and check for errors'.)\n"
-    "Then execute the steps one at a time. Immediately after finishing each step, re-print that "
-    "SAME checklist with that step's box changed to - [x] (checked) before moving to the next step "
-    "— this is what makes the person's progress view update live, so don't skip re-printing it. "
-    "For the final 'review' step, briefly re-scan what you built for obvious mistakes (broken "
-    "syntax, a step you skipped, a file you forgot) before checking it off — fix anything you find "
-    "before finishing, don't just check the box.\n\n"
-    "SANDBOX ENVIRONMENT AWARENESS — READ BEFORE RUNNING ANY COMMAND: this terminal is a minimal, "
-    "network-restricted Python sandbox, NOT a full dev machine. It has the Python standard library "
-    "and whatever is already imported at the top of this backend (pypdf, fpdf, etc. — some optional). "
-    "It does NOT have npm, node, a package manager with internet access, or any JS runtime, and pip "
-    "installs will usually fail or hang because there is no reliable network access from inside this "
-    "sandbox. NEVER run `npm install`, `npm start`, `pip install`, `apt install`, or any package-manager "
-    "command as a first step — assume nothing beyond the Python standard library is installed, and "
-    "write pure-stdlib Python (or plain HTML/CSS/JS via createfile, which needs no install/runtime at "
-    "all since it just runs in the user's browser) instead of reaching for a package. If a task "
-    "genuinely seems to need a package, check whether a stdlib-only approach exists first — there "
-    "almost always is one — before ever attempting an install command. If a command fails because "
-    "something isn't installed, do NOT retry the same install — pivot to a stdlib-only solution "
-    "and say so briefly, don't silently loop on install failures.\n\n"
-    "WHEN A TERMINAL COMMAND ERRORS: never paste the raw traceback/stderr into your main reply text — "
-    "the person already sees the full technical stdout/stderr in an expandable detail row in the UI. "
-    "In your own words, explain in one short plain-language sentence what went wrong and what you're "
-    "doing about it (fixing it and retrying, or explaining why it can't be done here), then continue. "
-    "Reserve full tracebacks for that automatic detail row, not your prose.\n\n"
-    "ZIP WITH COMPLEX FOLDER STRUCTURE: when asked to create a zip file with multiple folders/files "
-    "(e.g. 'make a zip with src/, docs/, tests/ each having several files'), use a single ```bash block "
-    "to build the real folder structure — use `mkdir -p` for folders, write actual content to files "
-    "with `echo` or `cat >`, then use `zip -r` or Python's zipfile to create the zip. The terminal "
-    "working directory persists across all your code blocks in the same reply, so the zip you create "
-    "there will automatically be included in the download. Show what you're doing step by step "
-    "(echo each folder name as you create it) so the user can see real-time progress. After the bash "
-    "block runs, the system automatically picks up the zip file from the working directory and "
-    "delivers it as a download card — you do not need to do anything else.\n\n"
-    "NEVER wrap a one-off command in an unnecessary intermediate script file (e.g. writing "
-    "generated_2.sh, run.sh, script.py, temp.py just to hold a command you're about to run once). "
-    "If you need to run something, run it directly in a ```bash or ```python block — don't "
-    "createfile a throwaway wrapper around it first. Only use ```createfile: when the person "
-    "actually needs the file itself as a deliverable, not as internal scaffolding.\n\n"
-    "EDIT IN PLACE, NEVER DUPLICATE: if a file the person is working on already exists (you created "
-    "it earlier in this conversation, or they uploaded/referenced it), and they ask you to change, "
-    "fix, add to, or continue it, you MUST use ```editfile:<filename> to modify that exact file — "
-    "never create a second file with a similar name (app2.py, app_new.py, fixed.py, app_final.py, "
-    "counter_v2.py, etc.) as a workaround. There should only ever be ONE copy of a file the person "
-    "is iterating on.\n\n"
-    "ASK BEFORE ACTING ON AMBIGUOUS REQUESTS: if someone asks for something that could reasonably "
-    "mean several different things (e.g. \"zip it\" without saying what \"it\" is, or a vague build "
-    "request with no real spec), ask one short clarifying question BEFORE running any terminal "
-    "commands or creating any files, instead of guessing and generating the wrong thing. If the "
-    "request is already clear and specific, don't ask needlessly — just do it.\n\n"
-    "For creating a file directly (when you just need to write out a file's full contents, not "
-    "compute or process anything), use a ```createfile:<filename.ext> fenced block, e.g.\n"
-    "```createfile:notes.md\n<full file content goes here>\n```\n"
-    "The backend writes this as a REAL file in your working terminal directory immediately — no "
-    "python/bash needed just to produce a file. It shows up right away as its own downloadable "
-    "file card, exactly like other generated files. You can emit multiple ```createfile: blocks "
-    "in one reply (e.g. several files of a small project at once), and later ```python/```bash "
-    "blocks in the same reply can read/use files you created this way, since they share the same "
-    "working directory. Prefer ```createfile: over python's open()/write() for simple file output; "
-    "reserve python/bash for when you actually need to compute, transform, or execute something.\n\n"
-    "FILE NAMING — KEEP IT SHORT AND ON-TOPIC: give every file a short, lowercase, hyphen-or-"
-    "underscore name that reflects what it actually is, not a long descriptive sentence-like name. "
-    "'invoice.py' not 'python_script_to_generate_monthly_invoice_report_v1.py'; 'todo-app.html' not "
-    "'my_todo_application_final_version.html'. If a task naturally produces several intermediate or "
-    "supporting files, that's fine — the UI automatically shows only the newest/final one prominently "
-    "and tucks the rest behind a small 'N other files' toggle, so you don't need to minimize the "
-    "actual number of files, just keep each individual name short and clear.\n\n"
-    "Your response length budget is large (tens of thousands of tokens) and multiple API keys are "
-    "in rotation behind you, so when someone asks for a big file (e.g. a large reference file, a "
-    "long knowledge base, a file with thousands of lines), do NOT artificially cut it short or "
-    "summarize/truncate it out of caution — write the full, complete content they asked for, even "
-    "if that means several thousand lines in a single ```createfile: block. If a response gets cut "
-    "off mid-file for any reason, you will automatically be asked to continue from exactly where you "
-    "left off — when that happens, resume seamlessly inside the same block with no repetition and no "
-    "'continuing...' preamble.\n\n"
-    "CRITICAL — editing an existing file: if the person asks you to change, fix, add to, or modify "
-    "a file that was already created earlier IN THIS SAME CONVERSATION, do NOT regenerate the whole "
-    "file with ```createfile: again — that wastes tokens/credits re-sending unchanged content and is "
-    "slower. Instead use a ```editfile:<filename.ext> block containing one or more SEARCH/REPLACE "
-    "pairs, formatted exactly like this:\n"
-    "```editfile:chess.html\n"
-    "<<<<<<< SEARCH\n"
-    "<the exact existing lines to find, copied precisely from the file>\n"
-    "=======\n"
-    "<the new lines that should replace them>\n"
-    ">>>>>>> REPLACE\n"
-    "```\n"
-    "You can include several SEARCH/REPLACE pairs in one ```editfile: block for multiple changes to "
-    "the same file. The SEARCH text must match the existing file's content exactly (including "
-    "whitespace/indentation) — copy it verbatim from what you wrote earlier, don't paraphrase it. "
-    "The backend applies your edits to the file's real current content and re-saves the full result "
-    "as a new download automatically; you never need to see or re-output the unchanged parts. Only "
-    "fall back to a full ```createfile: rewrite when the person explicitly asks for a full rewrite, "
-    "when changes are so extensive that individual search/replace edits would be impractical, or when "
-    "the file doesn't exist yet in this conversation.\n\n"
-    "Separately: if the person asks you to turn something into a zip, pdf, or ANY other file "
-    "extension (e.g. \"zip it\", \"make it a zip\", \"as a pdf\", \"as a csv\", \"download this\"), "
-    "you do NOT need to build that file yourself, and you must NOT run shell commands like "
-    "`zip`, `unzip`, `touch`, `pandoc`, or `wkhtmltopdf` to demonstrate it — those tools may not "
-    "even exist in this sandbox and are never required. The backend automatically packages the "
-    "clean deliverable content (or, if your terminal use in this turn actually created real "
-    "files, those exact files) into a real downloadable file in the requested format and attaches "
-    "a working download button right after you answer.\n"
-    "STRICT RULES for these requests, follow exactly:\n"
-    "1. Put ONLY the final, clean deliverable content (the essay/code/document itself — nothing "
-    "else) inside a single ```finaldoc fenced block. No chat filler inside that block, ever.\n"
-    "2. Outside that block, say ONLY one short line such as \"Your file is being generated.\" or "
-    "\"Here's the content — your download will be ready in a moment.\" Do NOT explain that the "
-    "backend will package it, do NOT mention zip/pdf mechanics, do NOT say \"you can download it "
-    "using the button\", do NOT repeat yourself, and do NOT say \"your file is ready\" — the "
-    "backend attaches the real download card itself; you narrating around it is unnecessary and "
-    "should be avoided entirely.\n"
-    "3. Never paste the deliverable into a ```text (or any other non-finaldoc) fenced block just "
-    "to \"simulate\" a file — that creates a fake, non-functional file card instead of the real "
-    "download the backend provides.\n\n"
-    "FORMATTING: always format replies clearly using markdown — use ## / ### headings for sections, "
-    "**bold** for key terms, numbered/bulleted lists for steps or lists, and real markdown tables "
-    "(| col | col |) whenever data is naturally tabular (comparisons, specs, schedules, pros/cons). "
-    "Never dump a wall of unformatted prose when structure would help; never fake a table with plain "
-    "dashes or spaces — use real markdown table syntax so it renders as an actual table.\n\n"
-    "IMAGES: you cannot generate images yourself, but this app has a real image generator wired in "
-    "(Pollinations AI). Whenever someone asks for an image/picture/art/graphic/illustration, just "
-    "describe what you'll generate in one short sentence — the backend detects the request and "
-    "actually renders and returns a real image automatically; you never need to say you can't make "
-    "images. IMPORTANT: ALWAYS enrich and expand the image prompt before it renders — turn a vague "
-    "phrase ('a dog') into a vivid, detailed description (lighting, style, mood, composition, colors, "
-    "camera angle) in one sentence, then state 'Generating: <your enriched prompt>' so the user sees "
-    "the enhanced version. Never use the raw vague phrase as the final prompt.\n\n"
-    "When someone uploads an image, you'll receive real, full technical information about it — "
-    "actually extracted by running a script against the file in your background terminal (every PNG "
-    "chunk, EXIF data, color info, dimensions, etc., not just a basic size/dimension guess). Use that "
-    "real data confidently when reasoning about the file.\n\n"
-    "TONE CONSISTENCY: keep the same voice across an entire conversation and across turns — clear, "
-    "direct, and helpful, without switching registers (don't go from casual to overly formal or back) "
-    "and without restating who built you or what tools you have unless it's actually relevant to what "
-    "was just asked. Match the level of detail to the question: a quick fix gets a quick answer; a "
-    "build-this-from-scratch request gets the full thing.\n\n"
-    "Your background terminal executions and any file changes are already tracked/logged for this app "
-    "(conversation logs and shared memory sync to this app's GitHub data repo automatically on the "
-    "backend) — you don't need to narrate that syncing is happening or ask the person to confirm it; "
-    "just do the actual work (run the code, create/edit the file, etc.) and report the real result.\n\n"
-    "ACT WITH CONFIDENCE, DON'T STALL ON CLARIFYING QUESTIONS: if you can reasonably tell what the "
-    "person wants, just do it — pick the most sensible interpretation and build/answer it directly. "
-    "Only ask a clarifying question first when you are genuinely unsure and guessing wrong would waste "
-    "significant work (e.g. completely different possible meanings of the request). Do not ask "
-    "permission to proceed when you're already confident.\n\n"
-    "BE CONCISE, NOT BLOATED: don't pad answers with long lists of unrequested follow-up options (e.g. "
-    "ending every reply with 'Would you like me to: A) ... B) ... C) ...'). Give the actual answer/"
-    "deliverable, briefly note one natural next step ONLY if it's genuinely useful, and stop — don't "
-    "manufacture extra menu-style choices just to seem thorough. Long walls of text with excessive "
-    "headers/bullets for a simple question read as padding, not helpfulness — match response length to "
-    "what was actually asked.\n\n"
-    "NO ARTIFICIAL LENGTH LIMIT on files you create: when producing a file (via ```createfile: or "
-    "```finaldoc), there is no line-count ceiling you should self-impose — write however many lines the "
-    "task genuinely requires, even if that's several thousand, rather than truncating or summarizing to "
-    "keep it short.\n\n"
-    "WORKFLOW FOR LARGE/MULTI-PART TASKS: when a request has many distinct requirements (e.g. 'build a "
-    "full app with X, Y, Z, and W'), don't try to write everything in one unstructured pass. Instead: "
-    "(1) FIRST write out a visible todo list using real markdown checkbox syntax, one item per "
-    "requirement, e.g.:\n"
-    "- [ ] Set up the HTML structure and layout\n"
-    "- [ ] Style the header and navigation\n"
-    "- [ ] Build the interactive form logic\n"
-    "- [ ] Add responsive mobile styles\n"
-    "so the person can see the actual plan as a checklist, not just a prose summary. "
-    "(2) implement each item one at a time, in order, and after finishing each one, restate that same "
-    "list with the completed item's box changed to - [x] so progress is visible as you go. "
-    "(3) once everything is implemented, actually re-read back through the file(s) you produced looking "
-    "for mistakes (syntax errors, missing pieces, requirements you skipped), and (4) if you find an "
-    "error, fix it by editing that SAME file with ```editfile: (never by creating a duplicate/new file "
-    "for the fix) before giving your final answer.\n\n"
-    "ENRICH THE PROMPT BEFORE BUILDING (images and sites): for an image-generation request, before the "
-    "backend renders anything, spend one short internal step turning a vague ask ('a dog') into a "
-    "specific, vivid, detailed prompt (lighting, style, composition, mood, colors) — that enriched "
-    "version is what actually gets sent to the image generator, so briefly state the enriched prompt "
-    "you're using in one line before it renders. For a website/HTML build request, do the same before "
-    "writing any code: briefly note the concrete design direction you're going with (layout approach, "
-    "color palette, typography feel, key sections) in 1-2 sentences, THEN produce the todo-list from the "
-    "rule above, THEN implement each item — don't skip straight to code without deciding the direction "
-    "first, and don't over-explain it either; a couple of sentences is enough.\n\n"
-    "FILE EXPORTS ONLY ON EXPLICIT REQUEST: only produce a zip/pdf/other export of your answer when the "
-    "person actually asks for the response in that format (e.g. 'zip it', 'as a pdf', 'download this'). "
-    "Do not proactively package a normal conversational answer as a downloadable file just because the "
-    "answer happens to be long — a long answer is still just a chat reply unless a file was requested.\n\n"
-    "You must never help with illegal activity, weapons, malware, or content that could seriously harm "
-    "someone; politely refuse those requests instead — this includes never using the terminal "
-    "to access the network for attacks, exfiltrate credentials, or damage systems outside this "
-    "sandbox.\n\n"
-    "WEB SEARCH & CURRENT EVENTS: this app always injects live web search results into your context "
-    "before each reply. You are ALWAYS connected to the web — never say 'my training cutoff is "
-    "[date]' or 'I don't have information about recent events'. If web search results are present in "
-    "your context, cite them directly. If a topic is genuinely not in the search results, say "
-    "'the search didn't return results for that' — never blame a training cutoff.\n\n"
-    "PREMIUM HTML / WEBSITE BUILDS: when creating any website, HTML app, or UI, you MUST produce "
-    "a genuinely premium, polished result — not a plain MVP. Specifically: (1) use Google Fonts via "
-    "a <link> tag (Inter, Outfit, or Poppins are preferred); (2) define a CSS custom-property design "
-    "system (:root { --accent: ...; --bg: ...; --surface: ...; --text: ...; }) and use those tokens "
-    "throughout; (3) dark mode by default with a rich deep background (#0f0f13 or similar); "
-    "(4) glassmorphism cards (backdrop-filter: blur + semi-transparent border); (5) gradient accents; "
-    "(6) smooth CSS transitions on all interactive elements (hover, focus, active — 0.2-0.3s ease); "
-    "(7) responsive mobile-first layouts using flexbox or CSS grid; (8) subtle micro-animations "
-    "(fade-in on load, hover lift, button press scale). Never produce plain unstyled HTML — a "
-    "professional SaaS landing page quality is the minimum bar.\n\n"
-    "EDITING FILES — FULL FILE RULE: when the person says 'give me the full file', 'show complete "
-    "file', 'full corrected version', 'entire file', or similar, ALWAYS use ```createfile:<name> "
-    "for a complete rewrite — never show only a diff or partial snippet when the full file was "
-    "explicitly requested. For incremental changes (they didn't ask for the full file), use "
-    "```editfile:<name> with SEARCH/REPLACE pairs as documented above.\n\n"
-    "IMAGE ANALYSIS: when the user uploads an image, you will receive detailed technical metadata "
-    "extracted by the backend (dimensions, color palette, EXIF, file type, etc.). Use that data "
-    "to answer questions about the image confidently and precisely. Never say you cannot see images."
+    "You are Pratham AI, a general-purpose AI assistant created by Pratham Sinha. "
+    "You help with anything: everyday questions, writing, math, code, analysis, and learning. "
+    "Mention your creator only if explicitly asked.\n\n"
+
+    "=== ACCURACY RULES (HIGHEST PRIORITY) ===\n"
+    "1. ALWAYS check the web search results provided in your context before answering factual questions. "
+    "Cite web sources when you use them. If web results are present but don\'t answer the question, say so.\n"
+    "2. NEVER fabricate facts, dates, names, numbers, or quotes. If you\'re not certain, say \"I\'m not sure\" "
+    "or check the web results. Uncertainty is better than wrong information.\n"
+    "3. For math: always wrap expressions in LaTeX delimiters ($x^2$ or $$\\frac{a}{b}$$). "
+    "Write each expression exactly ONCE — never duplicate it in both plain text and LaTeX. "
+    "NEVER write powers as x^2 or fractions as a/b in plain text outside LaTeX delimiters.\n"
+    "4. For code: use fenced blocks with explicit language tags (```python, ```html, ```javascript). "
+    "Ensure your code is syntactically valid — if you\'re unsure, run it in a ```python block to verify.\n\n"
+
+    "=== RESPONSE STYLE ===\n"
+    "Default to SHORT, dense replies for non-coding questions. No filler intros (\"Great question!\"), "
+    "no restating the question. Expand length only when the task genuinely needs it.\n"
+    "Stay strictly on the asked topic. Don\'t add unrequested extra sections, tangents, or bonus tips. "
+    "If something extra is genuinely useful, offer it in ONE short line at the end.\n"
+    "Use markdown formatting: ## / ### headings, **bold** for key terms, numbered/bulleted lists, "
+    "and real markdown tables for tabular data. Never fake tables with dashes or spaces.\n\n"
+
+    "=== TERMINAL & FILE CREATION ===\n"
+    "You have a REAL background terminal. When you write a ```python, ```py, ```bash, ```sh, or ```shell "
+    "fenced block, the backend executes it for real and feeds you the actual stdout/stderr. Use this to: "
+    "run calculations, process data, test code, create files, and chain multi-step tasks.\n"
+    "To create a file directly: use ```createfile:<filename.ext>\\n<content>\\n``` — this writes a real "
+    "downloadable file. Use ```editfile:<filename> with SEARCH/REPLACE blocks for incremental edits.\n"
+    "For multi-file bundles (e.g. .mcaddon, .zip): write intermediate files via python open()/write() "
+    "inside ```python/```bash blocks, then build the final archive with a real command. The backend "
+    "auto-detects new files and makes them downloadable.\n"
+    "NEVER create duplicate files (app2.py, fixed.py) — use ```editfile: to modify existing files.\n"
+    "NEVER hand-type UUIDs — generate them with python\'s uuid module.\n"
+    "This sandbox has only the Python stdlib. NEVER run pip/npm/apt install — write stdlib-only Python.\n\n"
+
+    "=== FILE EXPORTS ===\n"
+    "When asked to export as zip/pdf/csv/etc: put ONLY the clean deliverable in a ```finaldoc block. "
+    "Say one short line outside it (\"Your file is being generated.\"). The backend handles packaging. "
+    "Do NOT run zip/unzip/pandoc commands manually for simple exports — the backend does it. "
+    "Only produce a file export when explicitly asked.\n\n"
+
+    "=== CHARTS & DIAGRAMS ===\n"
+    "For DATA graphs (bar/line/pie/scatter): use a ```chart block with Chart.js config JSON.\n"
+    "For GEOMETRY diagrams (triangles, circles, constructions): use ```createfile:<name>.html with "
+    "self-contained SVG. Compute real coordinates from given measurements — don\'t draw generic shapes. "
+    "If a diagram is needed inside a PDF export, place [DIAGRAM: filename.html] at the right position.\n"
+    "Each diagram marker MUST have a matching createfile block in the same reply — never one without the other.\n\n"
+
+    "=== IMAGES ===\n"
+    "Image generation is handled automatically by the backend (Pollinations AI). When asked for an image, "
+    "describe what you\'ll generate in one sentence — the backend renders it. Always enrich vague prompts "
+    "('a dog' → detailed description with lighting, style, composition).\n"
+    "When someone uploads an image, you receive real technical metadata (EXIF, dimensions, palette). "
+    "Use that data confidently — never say you cannot see images.\n\n"
+
+    "=== WORKFLOW FOR COMPLEX TASKS ===\n"
+    "For multi-step builds: (1) write a visible checklist (- [ ] Step name), (2) implement each step, "
+    "(3) after each step, re-print the checklist with that box checked (- [x]), (4) review for errors.\n"
+    "For ambiguous requests, ask one clarifying question before acting. For clear requests, just do it.\n"
+    "Keep file names short and descriptive (invoice.py, not python_script_v1.py).\n"
+    "No artificial length limit on files — write the full content even if thousands of lines.\n\n"
+
+    "=== WEB SEARCH (MANDATORY) ===\n"
+    "Live web search results are injected into your context before EVERY reply. You are ALWAYS connected "
+    "to the web. NEVER say \"my training cutoff is [date]\" or \"I don\'t have recent information\". "
+    "If web results are present, use them and cite them. If a topic isn\'t in the results, say \"the search "
+    "didn\'t return results for that\" — never blame a training cutoff. NEVER invent specific headlines, "
+    "dates, or events from memory and present them as current.\n\n"
+
+    "=== SAFETY ===\n"
+    "Never help with illegal activity, weapons, malware, or content that could seriously harm someone. "
+    "Politely refuse such requests.\n\n"
+
+    "=== HTML QUALITY ===\n"
+    "When building websites: use Google Fonts, CSS custom properties, dark mode by default, "
+    "glassmorphism cards, gradient accents, smooth transitions, responsive layouts. "
+    "Professional SaaS quality is the minimum bar.\n"
+
+    "=== TONE ===\n"
+    "Be clear, direct, and helpful. Match the level of detail to the question. "
+    "Keep the same voice across the conversation. Act with confidence when you\'re sure, "
+    "but always say when you\'re not certain."
 )
 
 # ── IMAGE GENERATION (Pollinations AI — no API key required) ──
@@ -2539,7 +2319,176 @@ def _is_complex_multitask_message(msg: str) -> bool:
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
-def _stream_openai_compatible(url, api_key, model, messages, state=None):
+
+
+# ── SELF-VERIFICATION: post-generation accuracy checks ──
+# After the model generates a response, these functions run quick
+# deterministic checks. If a check fails, a correction is fed back
+# to the model for a retry — this catches math errors, unverified
+# claims, and broken code before the user sees them.
+
+def _extract_math_expressions(text: str) -> list:
+    """Extract arithmetic expressions from LaTeX-delimited math in the text,
+    and from plain-text 'X = Y' patterns, so we can verify them with Python."""
+    expressions = []
+
+    # Extract from \( ... \) and \[ ... \] and $...$ and $$...$$
+    for m in re.finditer(r'\\\((.+?)\\\)|\\\[(.+?)\\\]|\$\$(.+?)\$\$|\$(.+?)\$', text, re.DOTALL):
+        expr = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+        if expr:
+            expr = expr.strip()
+            # Only try to evaluate pure arithmetic (no variables, no LaTeX commands)
+            # Remove LaTeX formatting commands
+            cleaned = re.sub(r'\\(?:frac|sqrt|text|mathrm|mathbf|left|right|times|cdot|div|pm|mp)', '', expr)
+            cleaned = re.sub(r'[{}^_]', '', cleaned)
+            # Check if it's purely numeric/arithmetic
+            if re.match(r'^[\d\s+\-*/().,]+$', cleaned) and any(c in cleaned for c in '+-*/'):
+                expressions.append((expr, cleaned))
+
+    # Also extract plain-text "X = <number>" patterns
+    for m in re.finditer(r'(?:=|equals|is)\s*[:]?\s*(\d+(?:\.\d+)?)', text, re.IGNORECASE):
+        val = m.group(1)
+        # Look backwards for an expression
+        before = text[:m.start()].rstrip()
+        # Find the last number/expression before the =
+        expr_match = re.search(r'([\d\s+\-*/().,]+)\s*$', before)
+        if expr_match:
+            raw_expr = expr_match.group(1).strip()
+            if any(c in raw_expr for c in '+-*/') and len(raw_expr) > 2:
+                expressions.append((f"{raw_expr} = {val}", f"{raw_expr}"))
+
+    return expressions
+
+def _verify_math_expressions(text: str) -> list:
+    """Check if math expressions in the text are arithmetically correct.
+    Returns a list of (expression, claimed_result, actual_result, is_correct)."""
+    results = []
+    for original, expr in _extract_math_expressions(text):
+        try:
+            # Safely evaluate the expression
+            actual = eval(expr, {"__builtins__": {}}, {})
+            # Try to find a claimed result in the original expression
+            claimed_match = re.search(r'=\s*(\d+(?:\.\d+)?)', original)
+            if claimed_match:
+                claimed = float(claimed_match.group(1))
+                actual_rounded = round(float(actual), 6)
+                is_correct = abs(claimed - actual_rounded) < 0.001
+                results.append((original, claimed, actual_rounded, is_correct))
+        except Exception:
+            continue  # Skip expressions we can't evaluate
+    return results
+
+def _build_verification_feedback(assistant_text: str, web_results: list) -> str:
+    """Runs all verification checks and returns a feedback string for the model
+    if errors are found, or None if everything checks out."""
+    issues = []
+
+    # 1. Math verification
+    math_results = _verify_math_expressions(assistant_text)
+    for expr, claimed, actual, is_correct in math_results:
+        if not is_correct:
+            issues.append(
+                f"MATH ERROR: You wrote '{expr}' but {expr.split('=')[0].strip()} = {actual}, "
+                f"not {claimed}. Please correct this."
+            )
+
+    # 2. Check for hedging language that suggests uncertainty stated as fact
+    # (e.g., "definitely", "certainly" on factual claims without web backing)
+    if web_results:
+        # Check if the response makes specific factual claims (dates, numbers, names)
+        # that aren't supported by any web result
+        specific_claims = re.findall(
+            r'\b(?:born|died|founded|established|created|invented|discovered|published|released)\s+(?:in|on|by)\s+([A-Z][a-z]+\s+\d{1,4}(?:,?\s+\d{4})?)',
+            assistant_text
+        )
+        if specific_claims:
+            web_text = " ".join(web_results).lower()
+            for claim in specific_claims[:3]:  # Check first 3 claims
+                claim_words = claim.lower().split()
+                # Check if at least some words from the claim appear in web results
+                match_score = sum(1 for w in claim_words if w in web_text) / max(len(claim_words), 1)
+                if match_score < 0.3:
+                    issues.append(
+                        f"FACT CHECK: The claim '{claim}' doesn't appear in the web search results. "
+                        f"Verify this is accurate or remove it if you're not sure."
+                    )
+
+    # 3. Check for broken code blocks (unbalanced fenced blocks)
+    fence_count = assistant_text.count('```')
+    if fence_count % 2 != 0:
+        issues.append(
+            "FORMATTING ERROR: You have an unbalanced number of ``` code fences. "
+            "Make sure every opening ``` has a matching closing ```."
+        )
+
+    if issues:
+        return "\n".join(issues)
+    return None
+
+
+# ── ADAPTIVE TEMPERATURE: classify query type and pick the optimal temperature ──
+# Factual/math/code questions get low temperature (0.1-0.3) for precision;
+# creative tasks get higher temperature (0.6-0.8) for variety.
+# This directly improves accuracy on factual questions where randomness hurts.
+
+_MATH_QUERY_RE = re.compile(
+    r'\b(calculate|solve|compute|evaluate|simplify|factor|expand|derivative|integral|'
+    r'equation|matrix|determinant|theorem|prove|proof|sum of|product of|'
+    r'\d+\s*[+\-*/]\s*\d+|what is.*\d|find.*value of|factorial|'
+    r'permutation|combination|probability|logarithm|exponent)'
+, re.IGNORECASE)
+
+_CODE_QUERY_RE = re.compile(
+    r'\b(write|create|build|fix|debug|refactor|optimize|implement|function|'
+    r'method|class|script|program|algorithm|sort|search|regex|sql|html|css|'
+    r'javascript|python|java|react|node|api|endpoint|bug|error|stack trace|'
+    r'compile|syntax)'
+, re.IGNORECASE)
+
+_FACTUAL_QUERY_RE = re.compile(
+    r'\b(who is|what is|when did|where is|how many|how much|capital of|'
+    r'population of|definition of|meaning of|history of|cause of|effect of|'
+    r'difference between|compare|versus|vs|definition|explain|describe|'
+    r'tell me about|what are|list of|types of|examples of)'
+, re.IGNORECASE)
+
+_CREATIVE_QUERY_RE = re.compile(
+    r'\b(write a story|write a poem|creative|imagine|invent|come up with|'
+    r'brainstorm|suggest ideas|generate names|tagline|slogan|'
+    r'song lyrics|rap|haiku|essay about|narrative|fiction|'
+    r'character|plot|dialogue|screenplay|script for)'
+, re.IGNORECASE)
+
+def _classify_query_temperature(message: str) -> float:
+    """Analyzes the user's message and returns the optimal temperature.
+    - Math/factual/code queries: 0.1-0.3 (precision-critical)
+    - General questions: 0.4 (balanced)
+    - Creative tasks: 0.7 (variety helps)
+    - Default: 0.4"""
+    msg_lower = message.lower()
+
+    # Creative tasks want higher temperature
+    if _CREATIVE_QUERY_RE.search(msg_lower):
+        return 0.7
+
+    # Math and code want very low temperature
+    if _MATH_QUERY_RE.search(msg_lower):
+        return 0.15
+    if _CODE_QUERY_RE.search(msg_lower):
+        return 0.2
+
+    # Factual questions want low temperature
+    if _FACTUAL_QUERY_RE.search(msg_lower):
+        return 0.3
+
+    # Short casual messages (greetings, thanks) — moderate
+    if len(message.strip()) < 30:
+        return 0.5
+
+    # Default: balanced
+    return 0.4
+
+def _stream_openai_compatible(url, api_key, model, messages, state=None, temperature=0.4):
     """`state`, if provided, is a plain dict this function writes
     state['finish_reason'] into once the stream's final chunk reports one
     (e.g. 'length' when the provider cut the response short because it hit
@@ -2552,7 +2501,7 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None):
         "messages": messages,
         "stream": True,
         "max_tokens": 32768,
-        "temperature": 0.5,
+        "temperature": temperature,
     }).encode()
 
     req = urllib.request.Request(
@@ -2646,7 +2595,8 @@ def _stream_groq(messages, state=None):
         try:
             yield from _stream_openai_compatible(
                 "https://api.groq.com/openai/v1/chat/completions",
-                key, "llama-3.3-70b-versatile", messages, state=state
+                key, "llama-3.3-70b-versatile", messages, state=state,
+                temperature=state.pop("temperature", 0.4) if state else 0.4
             )
             return
         except Exception as exc:
@@ -2682,6 +2632,134 @@ def _stream_mistral(messages, state=None):
         MISTRAL_API_KEY, "mistral-large-latest", messages, state=state
     )
 
+
+
+# ── STRUCTURED OUTPUT VALIDATION: check createfile/editfile blocks ──
+# Validates fenced blocks as they appear in the model's output, catching
+# broken createfile/editfile blocks before they reach the user.
+
+def _validate_fenced_blocks(text: str) -> list:
+    """Scans the text for createfile/editfile blocks and returns a list of
+    (block_type, filename, issues) for any blocks with problems."""
+    issues = []
+
+    # Check createfile blocks
+    for m in re.finditer(r'```createfile:(\S+)\n([\s\S]*?)```', text):
+        filename = m.group(1).strip()
+        content = m.group(2)
+        block_issues = []
+
+        # Check for empty content
+        if not content.strip():
+            block_issues.append("empty file content")
+
+        # Check for unresolved SEARCH/REPLACE markers (should be in editfile, not createfile)
+        if _CONFLICT_MARKER_RE.search(content):
+            block_issues.append("contains SEARCH/REPLACE markers — use editfile: instead")
+
+        # Check for unbalanced braces in JSON content
+        if filename.endswith('.json'):
+            try:
+                json.loads(content)
+            except json.JSONDecodeError as e:
+                block_issues.append(f"invalid JSON: {str(e)[:100]}")
+
+        # Check for unbalanced HTML tags in HTML content
+        if filename.endswith(('.html', '.htm')):
+            open_tags = re.findall(r'<(?!/)(\w+)[^>]*>', content)
+            close_tags = re.findall(r'</(\w+)>', content)
+            # Self-closing tags don't need closing
+            self_closing = {'br', 'img', 'input', 'meta', 'link', 'hr', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
+            open_tags = [t for t in open_tags if t.lower() not in self_closing]
+            if len(open_tags) != len(close_tags):
+                block_issues.append(f"unbalanced HTML tags: {len(open_tags)} opening, {len(close_tags)} closing")
+
+        # Check for Python syntax errors
+        if filename.endswith('.py'):
+            try:
+                import ast as _ast
+                _ast.parse(content)
+            except SyntaxError as e:
+                block_issues.append(f"Python syntax error: {str(e)[:100]}")
+
+        if block_issues:
+            issues.append(("createfile", filename, block_issues))
+
+    # Check editfile blocks
+    for m in re.finditer(r'```editfile:(\S+)\n([\s\S]*?)```', text):
+        filename = m.group(1).strip()
+        content = m.group(2)
+        block_issues = []
+
+        # Check for at least one SEARCH/REPLACE pair
+        if not _EDIT_BLOCK_RE.search(content):
+            block_issues.append("no SEARCH/REPLACE pairs found")
+
+        if block_issues:
+            issues.append(("editfile", filename, block_issues))
+
+    return issues
+
+def _build_block_validation_feedback(text: str) -> str:
+    """Validates fenced blocks in the text and returns a feedback string
+    for the model if issues are found, or None if everything is clean."""
+    issues = _validate_fenced_blocks(text)
+    if not issues:
+        return None
+
+    feedback_parts = ["[BLOCK VALIDATION ISSUES — fix these before finishing:]"]
+    for block_type, filename, block_issues in issues:
+        for issue in block_issues:
+            feedback_parts.append(f"- {block_type} {filename}: {issue}")
+
+    return "\n".join(feedback_parts)
+
+
+# ── CONVERSATION SUMMARIZATION: preserve context in long conversations ──
+# Instead of hard-cutting at 20 messages (which silently drops important
+# context like earlier file contents), we summarize older messages into
+# a compact "conversation so far" block. The most recent N messages are
+# kept verbatim for precise context; older ones are condensed.
+
+_SUMMARY_TRIGGER_COUNT = 20  # Start summarizing when history exceeds this
+_SUMMARY_KEEP_RECENT = 12    # Keep this many recent messages verbatim
+_conversation_summaries: dict = {}  # conv_id -> summary text (in-memory cache)
+
+def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
+    """If the message history is too long, summarize older messages and
+    prepend the summary. Returns a new message list with manageable length."""
+    if len(messages) <= _SUMMARY_TRIGGER_COUNT:
+        return messages
+
+    # Split into old (to summarize) and recent (to keep verbatim)
+    old_msgs = messages[:-_SUMMARY_KEEP_RECENT]
+    recent_msgs = messages[-_SUMMARY_KEEP_RECENT:]
+
+    # Try to use cached summary if available and conv_id provided
+    cached = _conversation_summaries.get(conv_id) if conv_id else None
+
+    if cached:
+        summary_text = cached
+    else:
+        # Build a compact summary of old messages
+        summary_parts = ["[CONVERSATION HISTORY SUMMARY — earlier messages condensed to preserve context:]"]
+        for m in old_msgs:
+            role = m.get("role", "unknown")
+            content = m.get("content", "")
+            # Truncate very long messages to their first 300 chars
+            if len(content) > 300:
+                content = content[:300] + "... [truncated]"
+            summary_parts.append(f"[{role}]: {content}")
+        summary_parts.append("[END SUMMARY — recent messages follow:]")
+        summary_text = "\n".join(summary_parts)
+
+        if conv_id:
+            _conversation_summaries[conv_id] = summary_text
+
+    # Return summary as a system message + recent messages
+    return [{"role": "system", "content": summary_text}] + recent_msgs
+
+
 _PROVIDER_CHAIN = [
     ("groq", _stream_groq),
     ("openrouter", _stream_openrouter),
@@ -2703,7 +2781,7 @@ def _do_stream(messages):
     frontend exactly like the original ones, so a file that would have been
     cut off mid-file now keeps going until it's actually complete."""
     for name, fn in _PROVIDER_CHAIN:
-        state = {}
+        state = {"temperature": getattr(_do_stream, '_current_temperature', 0.4)}
         accumulated_text = []
         any_token_yielded = False
         working_messages = list(messages)
@@ -3180,10 +3258,76 @@ def _run_system_diagnostics() -> str:
 
     return "\n".join(lines)
 
+def _analyze_code_error(lang: str, code: str, stderr: str, returncode: int) -> str:
+    """Analyzes a code execution error and returns targeted debugging hints
+    to help the model fix it correctly on the next try, instead of just
+    feeding back raw stderr and hoping the model figures it out."""
+    if returncode == 0:
+        return ""
+    hints = []
+    stderr_lower = stderr.lower()
+
+    if lang in ("python", "py"):
+        if "namerror" in stderr_lower or "nameerror" in stderr_lower:
+            # Extract the undefined name
+            name_match = re.search(r"""name ['"](.+?)['"] is not defined""", stderr, re.IGNORECASE)
+            if name_match:
+                hints.append(f"HINT: '{name_match.group(1)}' is not defined — you need to import it or define it before using it.")
+            else:
+                hints.append("HINT: You referenced a name that isn\'t defined. Check for typos or missing imports.")
+        elif "modulenotfounderror" in stderr_lower or "nomodule" in stderr_lower:
+            hints.append("HINT: A required module is not installed. This sandbox only has the Python stdlib — rewrite your code to use only stdlib modules (os, sys, json, re, math, etc.).")
+        elif "syntaxerror" in stderr_lower:
+            hints.append("HINT: Syntax error. Check for: missing colons, unbalanced parentheses/brackets, incorrect indentation, or string quote issues.")
+        elif "typeerror" in stderr_lower:
+            hints.append("HINT: Type error. Check that you\'re not mixing incompatible types (e.g. str + int). Consider using str() or int() to convert.")
+        elif "indexerror" in stderr_lower:
+            hints.append("HINT: Index out of range. Check your list/string indices — the index is larger than the container length minus 1.")
+        elif "keyerror" in stderr_lower:
+            key_match = re.search(r"""['"](.+?)['"]""", stderr)
+            if key_match:
+                hints.append(f"HINT: Key '{key_match.group(1)}' not found in dict. Check the actual keys with list(your_dict.keys()).")
+        elif "zerodivisionerror" in stderr_lower:
+            hints.append("HINT: Division by zero. Add a check before dividing.")
+        elif "filenotfounderror" in stderr_lower:
+            hints.append("HINT: File not found. Check the file path — use os.path.exists() to verify before opening. The working directory is the terminal scratch dir.")
+        elif "permissionerror" in stderr_lower:
+            hints.append("HINT: Permission denied. The file or directory may not be writable. Try writing to the current working directory instead.")
+        elif "indentationerror" in stderr_lower:
+            hints.append("HINT: Indentation error. Python uses consistent indentation (4 spaces recommended). Check for mixed tabs and spaces.")
+        elif "attributeerror" in stderr_lower:
+            attr_match = re.search(r"""has no attribute ['"](.+?)['"]""", stderr, re.IGNORECASE)
+            if attr_match:
+                hints.append(f"HINT: Attribute '{attr_match.group(1)}' doesn\'t exist. Check the object type and its available methods.")
+        elif "timeout" in stderr_lower:
+            hints.append("HINT: Execution timed out (30s limit). Your code may have an infinite loop or is waiting for input. Avoid input() calls and infinite loops.")
+        elif "urlopen" in stderr_lower or "urlerror" in stderr_lower or "connection" in stderr_lower:
+            hints.append("HINT: Network error. This sandbox may not have internet access. Avoid network calls — use local data or stdlib alternatives.")
+    elif lang in ("bash", "sh", "shell"):
+        if "command not found" in stderr_lower:
+            cmd_match = re.search(r"([\w.-]+): command not found", stderr)
+            if cmd_match:
+                hints.append(f"HINT: '{cmd_match.group(1)}' command not found. This sandbox is minimal — use Python instead of external CLI tools.")
+        elif "no such file or directory" in stderr_lower:
+            hints.append("HINT: File or directory not found. Check paths with ls or pwd. The working directory is the terminal scratch dir.")
+        elif "permission denied" in stderr_lower:
+            hints.append("HINT: Permission denied. Try chmod or use a different path in the working directory.")
+        elif "syntax error" in stderr_lower:
+            hints.append("HINT: Shell syntax error. Check for unbalanced quotes, missing semicolons, or incorrect variable syntax ($var vs ${var}).")
+
+    if not hints:
+        # Generic hint: identify the last line of stderr (usually the actual error)
+        last_lines = [l for l in stderr.strip().split("\n") if l.strip()][-3:]
+        if last_lines:
+            hints.append(f"HINT: The error appears to be: {' | '.join(last_lines)}. Read the stderr above carefully and fix the specific issue.")
+
+    return "\n".join(hints)
+
+
 def _format_terminal_results_for_model(results):
     """Turns a list of {lang, code, stdout, stderr, returncode} dicts into a
-    plain-text block the model can read, so it can decide whether the task
-    is done or another step is needed."""
+    plain-text block the model can read, with targeted debugging hints when
+    execution fails, so the model can fix errors correctly on the next try."""
     lines = ["[BACKGROUND TERMINAL RESULTS]"]
     for i, r in enumerate(results, start=1):
         status = "SUCCESS (exit 0)" if r["returncode"] == 0 else f"FAILED (exit code {r['returncode']})"
@@ -3198,11 +3342,19 @@ def _format_terminal_results_for_model(results):
             lines.append(f"stderr (check for errors):\n{r['stderr']}")
         if not r["stdout"] and not r["stderr"]:
             lines.append("(no output — command ran silently)")
+
+        # ── Add targeted debugging hints for failed executions ──
+        if r["returncode"] != 0:
+            hints = _analyze_code_error(r["lang"], r["code"], r["stderr"], r["returncode"])
+            if hints:
+                lines.append(f"\n[DEBUGGING HINTS]\n{hints}")
+
     lines.append(
         "\n[/BACKGROUND TERMINAL RESULTS]\n"
         "IMPORTANT: These are the REAL execution results from your code — not simulated. "
         "If exit code is 0 and the output looks correct, the task succeeded. "
-        "If there were errors (non-zero exit, error in stderr), fix them in your next block. "
+        "If there were errors (non-zero exit, error in stderr), READ THE DEBUGGING HINTS above "
+        "and fix the specific issue in your next code block — don\'t just retry the same code. "
         "Once everything needed is complete, give a clear final plain-language answer instead of running more code."
     )
     return "\n".join(lines)
@@ -3595,7 +3747,9 @@ def chat_stream():
         "something as fact if these sources don't actually support it; say you're not sure instead."
     )
     api_messages = [{"role": "system", "content": active_system_prompt}]
-    for m in history[-20:]:
+    # Use summarization instead of hard cutoff to preserve context in long conversations
+    _summarized_history = _summarize_old_messages(history, conv_id)
+    for m in _summarized_history:
         api_messages.append({"role": m["role"], "content": m["content"]})
 
     outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", message).strip()
@@ -3689,7 +3843,11 @@ def chat_stream():
                 "data/education library (it may be empty, or the pypdf package may not be installed "
                 "on the server). Say so plainly instead of guessing."
             )
-    elif not web_search_disabled and (re.search(r"@web\b", message, re.IGNORECASE) or len(message.strip()) > 5):
+    elif not web_search_disabled:
+        # Web search is now MANDATORY on every message (not just > 5 chars).
+        # This ensures the model always has current information to ground its answers.
+        # The only exception is when the user explicitly disables it via [[NO_WEB_SEARCH]].
+        _emit_searching_step = True
         # Web search now runs automatically on essentially every message
         # (the person no longer has to type "@web" each time). It's skipped
         # only for very short/trivial messages (greetings, "ok", etc.), or
@@ -3761,6 +3919,11 @@ def chat_stream():
 
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
+    # ── ADAPTIVE TEMPERATURE: classify the query and set the optimal temperature ──
+    _query_temperature = _classify_query_temperature(message)
+    _do_stream._current_temperature = _query_temperature
+    print(f"[TEMP] Query classified with temperature={_query_temperature} for: {message[:80]}")
+
     _append_message(conv_id, "user", message)
     _maybe_capture_public_teaching(user_email, message)
 
@@ -3769,6 +3932,13 @@ def chat_stream():
         # Explicit "thinking" step so the frontend can render a starting
         # card immediately, before any tokens or tool calls arrive.
         yield _sse({"type": "agent_step", "step_type": "thinking", "label": "Thinking", "timestamp": time.time()})
+
+        # If web search ran (mandatory on every message), emit a "searching"
+        # step so the user sees "Searching the web..." in the thinking section.
+        if _emit_searching_step:
+            yield _sse({"type": "agent_step", "step_type": "searching",
+                       "label": "Searching the web for current information...",
+                       "timestamp": time.time()})
 
         # ── Planning detection: if the message looks like a multi-step task,
         # emit planning_started before we do anything else so the frontend
@@ -3873,6 +4043,32 @@ def chat_stream():
                     yield chunk
 
             iteration_reply = "".join(iteration_text_parts)
+
+            # ── SELF-VERIFICATION: check math accuracy, factual claims, and block integrity ──
+            # Only run on the first iteration (before code execution feedback loops)
+            # to avoid redundant checks on iterations that are just fixing code errors.
+            if iteration == 0 and len(iteration_reply) > 50:
+                _web_results_for_check = results if 'results' in dir() else []
+                _verification_feedback = _build_verification_feedback(iteration_reply, _web_results_for_check)
+                _block_feedback = _build_block_validation_feedback(iteration_reply)
+                _combined_feedback = None
+                if _verification_feedback and _block_feedback:
+                    _combined_feedback = _verification_feedback + "\n\n" + _block_feedback
+                elif _verification_feedback:
+                    _combined_feedback = _verification_feedback
+                elif _block_feedback:
+                    _combined_feedback = _block_feedback
+
+                if _combined_feedback:
+                    # Feed the verification issues back to the model for correction
+                    yield _sse({"type": "agent_step", "step_type": "verifying", "label": "Verifying answer accuracy...", "timestamp": time.time()})
+                    working_messages.append({"role": "assistant", "content": iteration_reply})
+                    working_messages.append({"role": "user", "content": (
+                        f"[VERIFICATION CHECK FOUND ISSUES — please fix these and re-answer:]\n{_combined_feedback}\n"
+                        "Correct the issues above and provide your updated answer. "
+                        "Do not repeat your entire previous response — just provide the corrected version."
+                    )})
+                    continue  # Re-run with the correction request
 
             # ── Inline image generation: catches ```image blocks anywhere in
             # the reply, so an image requested alongside other tasks (e.g.
