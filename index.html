@@ -216,41 +216,61 @@
         .activity-card {
             display: flex; flex-direction: column; gap: 0;
             background: var(--panel); border: 1px solid var(--border);
-            border-radius: 12px; max-width: 360px; margin: 4px 0;
-            overflow: hidden; font-size: 12.5px;
-            box-shadow: 0 1px 4px rgba(0,0,0,.06);
+            border-radius: 10px; max-width: 92%; margin: 4px 0;
+            overflow: hidden; font-size: 13px;
             animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
         .activity-card .ac-header {
-            display: flex; align-items: center; gap: 8px; padding: 9px 12px;
-            cursor: pointer; user-select: none; color: var(--text-dim);
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+            cursor: pointer; user-select: none; color: var(--text);
             transition: background .12s ease;
         }
         .activity-card .ac-header:hover { background: var(--hover); }
-        .activity-card .ac-caret { font-size: 9px; transition: transform .2s ease; flex-shrink: 0; opacity: .6; }
+        .activity-card .ac-caret { font-size: 9px; transition: transform .2s ease; flex-shrink: 0; opacity: .5; }
         .activity-card.expanded .ac-caret { transform: rotate(90deg); }
         .activity-card .ac-icon {
             flex-shrink: 0; font-size: 14px; width: 20px; height: 20px;
             display: flex; align-items: center; justify-content: center;
         }
-        .activity-card .ac-label { flex: 1; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .activity-card .ac-label { flex: 1; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
         .activity-card .ac-diffstat { font-size: 11px; font-weight: 600; white-space: nowrap; }
         .activity-card .ac-added { color: #4ade80; }
         .activity-card .ac-removed { color: #f87171; margin-left: 4px; }
-        .activity-card .ac-status { font-size: 11px; flex-shrink: 0; white-space: nowrap; }
+        .activity-card .ac-toggle {
+            font-size: 12px; color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+            text-decoration: none; transition: color .15s ease;
+        }
+        .activity-card .ac-toggle:hover { color: var(--accent); }
+        .activity-card .ac-status {
+            font-size: 11px; flex-shrink: 0; white-space: nowrap;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .activity-card .ac-status-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+        .activity-card .ac-status.running .ac-status-dot { background: var(--accent); animation: glowPulse 1s ease-in-out infinite; }
         .activity-card .ac-status.running { color: var(--accent); }
+        .activity-card .ac-status.done .ac-status-dot { background: #4ade80; }
         .activity-card .ac-status.done { color: #4ade80; }
+        .activity-card .ac-status.failed .ac-status-dot { background: #f87171; }
         .activity-card .ac-status.failed { color: #f87171; }
         .activity-card .ac-body {
-            display: none; max-height: 240px; overflow-y: auto;
-            border-top: 1px solid var(--border); padding: 10px 12px;
-            font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;
+            display: none; max-height: 300px; overflow-y: auto;
+            border-top: 1px solid var(--border); padding: 12px;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px;
             white-space: pre-wrap; word-break: break-word; color: var(--terminal-text);
-            background: var(--terminal-bg);
+            background: var(--terminal-bg); line-height: 1.6;
         }
         .activity-card.expanded .ac-body { display: block; animation: fadeSlide .2s ease; }
         .activity-card .ac-body .diff-add { color: #4ade80; }
         .activity-card .ac-body .diff-remove { color: #f87171; }
+        .activity-summary-line {
+            display: none; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--text-dim);
+            padding: 4px 0 8px; margin-top: 2px;
+        }
+        .activity-summary-line.active { display: flex; }
+        .activity-summary-line .asl-sep {
+            width: 1px; height: 12px; background: var(--border); margin: 0 2px;
+        }
 
         /* ── Step list inside the thinking wrap ── */
         .step-list { display: flex; flex-direction: column; margin: 2px 0 4px; gap: 1px; }
@@ -296,35 +316,43 @@
 
         /* ── Thinking wrap: collapsible header + step list ── */
         .thinking-wrap {
-            margin: 2px 0 10px; max-width: 480px;
-            /* No card chrome — plain text row, like a minimal "thinking" line
-               rather than a boxed widget. */
+            margin: 4px 0 8px; max-width: 92%;
             animation: stepSlideIn .3s cubic-bezier(.4,0,.2,1) both;
         }
         .thinking-header {
-            display: flex; align-items: center; gap: 8px; cursor: pointer;
-            font-size: 12.5px; color: var(--text-dim); padding: 3px 0; user-select: none;
-            letter-spacing: .1px;
+            display: flex; align-items: center; gap: 6px; cursor: pointer;
+            font-size: 13px; font-weight: 600; color: var(--text);
+            padding: 4px 0; user-select: none;
             transition: color .2s ease;
         }
-        .thinking-header:hover { color: var(--text); }
-        .thinking-header .tw-caret {
-            font-size: 8px; transition: transform .25s cubic-bezier(.4,0,.2,1); flex-shrink: 0; opacity: .45;
+        .thinking-header:hover { color: var(--accent); }
+        .thinking-body {
+            display: none; padding: 8px 14px; margin-top: 2px;
+            border-left: 3px solid var(--accent);
+            background: var(--panel-2);
+            border-radius: 0 8px 8px 0;
+            font-size: 13px; color: var(--text-dim); line-height: 1.6;
+            max-height: 300px; overflow-y: auto;
         }
-        .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); opacity: .7; }
-        .thinking-header .tw-dot {
-            width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0;
-            background: radial-gradient(circle at 35% 35%, var(--accent) 0%, var(--accent) 40%, transparent 100%);
-            box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 55%, transparent);
+        .thinking-wrap.expanded .thinking-body { display: block; animation: fadeSlide .22s ease; }
+        .thinking-wrap.expanded .tw-caret { transform: rotate(90deg); }
+        .tw-caret {
+            font-size: 9px; transition: transform .25s cubic-bezier(.4,0,.2,1); flex-shrink: 0; opacity: .5;
+        }
+        .tw-dot {
+            width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0;
+            background: var(--accent);
+            box-shadow: 0 0 8px 0 color-mix(in srgb, var(--accent) 50%, transparent);
             animation: glowPulse 1.4s ease-in-out infinite;
         }
         .thinking-wrap.done .tw-dot {
-            background: radial-gradient(circle at 35% 35%, #4ade80 0%, #4ade80 40%, transparent 100%);
-            box-shadow: 0 0 5px 0 rgba(74,222,128,.45);
+            background: #4ade80;
+            box-shadow: 0 0 6px 0 rgba(74,222,128,.4);
             animation: none;
         }
+        .tw-label { font-size: 13px; font-weight: 600; color: var(--text); }
         .thinking-header .tw-summary {
-            flex: 1; font-weight: 400;
+            flex: 1; font-weight: 400; color: var(--text-dim); font-size: 12px;
             transition: opacity .2s ease;
         }
         .thinking-body {
@@ -2402,7 +2430,8 @@
                 <div class="thinking-header">
                     <span class="tw-caret">&#9654;</span>
                     <span class="tw-dot"></span>
-                    <span class="tw-summary">Thinking...</span>
+                    <span class="tw-label">Thought</span>
+                    <span class="tw-summary"></span>
                 </div>
                 <div class="thinking-body"></div>
             `;
@@ -3179,6 +3208,8 @@
                 _pendingTerminalOutputs = {};
                 if (!window._pendingExecRows) window._pendingExecRows = [];
                 window._pendingExecRows = [];
+                window._execCount = 0;
+                window._toolCount = 0;
 
                 const flushRender = () => {
                     renderQueued = false;
@@ -3232,6 +3263,8 @@
                                     if (summary && summary.isConnected) summary.innerText = thinkingPhrases[phraseIdx];
                                     else clearInterval(window._thinkingCycleTimer);
                                 }, 2600);
+                                const tw2 = getThinkingWrap(modelWrapper);
+                                if (tw2) tw2.classList.add('expanded');
                             } else if (payload.step_type === 'executing') {
                                 // Show a "Executing..." step row while the code block runs
                                 // This row stays as "running" (spinning circle) until the
@@ -3252,19 +3285,31 @@
                                 modelWrapper = mountModelOutputTargetShell();
                                 setAgentActivity('Writing response...');
                             }
+                            if (_activeThinkingWrap) {
+                                _activeThinkingWrap.classList.remove('expanded');
+                                _activeThinkingWrap.classList.add('done');
+                                const sm = _activeThinkingWrap.querySelector('.tw-summary');
+                                if (sm) sm.innerText = 'Completed';
+                            }
                             fullText += payload.text;
                             if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
                         } else if (payload.type === 'image') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            if (!window._toolCount) window._toolCount = 0;
+                            window._toolCount++;
                             setAgentActivity('Rendering image...');
                             pushTerminalLog(`Requesting image from Pollinations AI: "${payload.prompt}"`);
                             appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
                         } else if (payload.type === 'file_ready') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            if (!window._toolCount) window._toolCount = 0;
+                            window._toolCount++;
                             pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
                         } else if (payload.type === 'terminal_output') {
                             const ok = payload.returncode === 0;
+                            if (!window._execCount) window._execCount = 0;
+                            window._execCount++;
                             pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
                             if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
                             if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
@@ -3453,19 +3498,31 @@
                             }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
-                            // Final render of text so math, tables, etc are
-                            // all cleanly applied to the fully-streamed content.
                             if (modelWrapper) {
-                                // Reset KaTeX flags so final render always runs on all nodes
                                 modelWrapper.querySelectorAll('[data-seg-type="text"]').forEach(n => { n._katexDone = false; });
                                 updateAssistantMessageDOM(modelWrapper, fullText);
                                 appendAssistantCopyButton(modelWrapper, fullText);
+                                // Inject activity summary: "Executed code X times · Used Y tools"
+                                if (window._execCount > 0 || window._toolCount > 0) {
+                                    const summary = document.createElement('div');
+                                    summary.className = 'activity-summary-line active';
+                                    let parts = [];
+                                    if (window._execCount > 0) {
+                                        parts.push(`<span>Executed code ${window._execCount} ${window._execCount === 1 ? 'time' : 'times'}</span>`);
+                                    }
+                                    if (window._toolCount > 0) {
+                                        parts.push(`<span>Used ${window._toolCount} ${window._toolCount === 1 ? 'tool' : 'tools'}</span>`);
+                                    }
+                                    summary.innerHTML = '<span class="as-icon">✓</span>' + parts.join('<span class="asl-sep"></span>');
+                                    modelWrapper.appendChild(summary);
+                                }
                             }
-                            // Collapse thinking-wrap and finish any spinning steps
                             finalizeThinkingWrap();
                             _activeStepList = null;
                             _activeThinkingWrap = null;
                             pushTerminalLog('Response complete.');
+                            window._execCount = 0;
+                            window._toolCount = 0;
                         }
                     }
                 }
