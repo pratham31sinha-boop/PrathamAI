@@ -211,6 +211,24 @@ VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
 
+# ── STARTUP DIAGNOSTIC: print which LLM providers actually have a key
+# configured, right when the process boots. This is the #1 place to look
+# when "all providers offline" shows up — if this log line shows all False
+# / 0, the env vars simply were never set (or were cleared) on the host,
+# and no request will ever succeed no matter what the code does. ──
+print(
+    "[STARTUP] Provider keys configured -> "
+    f"groq={len(GROQ_API_KEYS)} keys, "
+    f"openrouter={bool(OPENROUTER_API_KEY)}, "
+    f"cerebras={bool(CEREBRAS_API_KEY)}, "
+    f"mistral={bool(MISTRAL_API_KEY)}"
+)
+if not GROQ_API_KEYS and not OPENROUTER_API_KEY and not CEREBRAS_API_KEY and not MISTRAL_API_KEY:
+    print("[STARTUP][WARNING] NO LLM PROVIDER KEYS ARE SET. Every chat request will fail "
+          "with 'All model providers are temporarily unavailable' until at least one of "
+          "GROQ_API_KEY / OPENROUTER_API_KEY / CEREBRAS_API_KEY / MISTRAL_API_KEY is set "
+          "in this server's environment variables.")
+
 # Mirrors the creator list already hardcoded in the frontend's
 # paintIdentityIntoShell(), so the backend can also recognize these accounts
 # for creator-only features (like the live system-diagnostics short-circuit
@@ -2826,6 +2844,7 @@ def _do_stream(messages):
     continuation cap is hit. The continued tokens are streamed to the
     frontend exactly like the original ones, so a file that would have been
     cut off mid-file now keeps going until it's actually complete."""
+    _failure_log = []  # collects (provider_name, error_str) for every provider that failed this call
     for name, fn in _PROVIDER_CHAIN:
         state = {"temperature": getattr(_do_stream, '_current_temperature', 0.4)}
         accumulated_text = []
@@ -2871,7 +2890,9 @@ def _do_stream(messages):
                 yield _sse({"type": "complete"})
                 return
         except Exception as exc:
-            print(f"[FAILOVER] {name} dropped: {exc}")
+            err_str = str(exc) or exc.__class__.__name__
+            print(f"[FAILOVER] {name} dropped: {err_str}")
+            _failure_log.append((name, err_str))
             if any_token_yielded:
                 # We already streamed partial content to the user for this
                 # provider — better to end cleanly here than silently retry
@@ -2881,10 +2902,23 @@ def _do_stream(messages):
             _cool(name)
             continue
 
-    yield _sse({
-        "type": "token",
-        "text": "All model providers are temporarily unavailable. Please check your API keys or try again shortly."
-    })
+    # Build a diagnostic summary instead of a generic message so the actual
+    # root cause (missing key vs. bad key vs. rate limit vs. network) is
+    # visible immediately, both in server logs and to whoever reads the
+    # response — instead of every outage looking identical.
+    print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
+    if _failure_log:
+        detail_lines = "\n".join(f"- {n}: {e}" for n, e in _failure_log)
+        diagnostic = (
+            "All model providers failed for this request:\n"
+            f"{detail_lines}\n\n"
+            "Check `/config/public` on this backend to see which provider keys are "
+            "actually configured (a provider shows an error here even when its key is "
+            "simply missing from your host's environment variables)."
+        )
+    else:
+        diagnostic = "No providers are configured at all — set at least GROQ_API_KEY in your environment."
+    yield _sse({"type": "token", "text": diagnostic})
     yield _sse({"type": "complete"})
 
 # ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
