@@ -3116,11 +3116,7 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
 
 
 _PROVIDER_CHAIN = [
-    ("pratham_worker", _stream_qwen_worker),  # self-hosted GPU worker, tried first when online
-    ("groq", _stream_groq),
-    ("openrouter", _stream_openrouter),
-    ("cerebras", _stream_cerebras),
-    ("mistral", _stream_mistral),
+    ("pratham_worker", _stream_qwen_worker),  # sole provider — self-hosted GPU worker (Colab T4)
 ]
 
 _MAX_AUTO_CONTINUATIONS = 6  # hard cap on "continue where you left off" cycles per single reply
@@ -3194,23 +3190,15 @@ def _do_stream(messages):
             _cool(name)
             continue
 
-    # Build a diagnostic summary instead of a generic message so the actual
-    # root cause (missing key vs. bad key vs. rate limit vs. network) is
-    # visible immediately, both in server logs and to whoever reads the
-    # response — instead of every outage looking identical.
+    # All providers (just the worker in this config) failed — log details
+    # server-side for diagnosis but never expose infrastructure internals
+    # (URLs, provider names, error codes) to the user.
     print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
-    if _failure_log:
-        detail_lines = "\n".join(f"- {n}: {e}" for n, e in _failure_log)
-        diagnostic = (
-            "All model providers failed for this request:\n"
-            f"{detail_lines}\n\n"
-            "Check `/config/public` on this backend to see which provider keys are "
-            "actually configured (a provider shows an error here even when its key is "
-            "simply missing from your host's environment variables)."
-        )
-    else:
-        diagnostic = "No providers are configured at all — set at least GROQ_API_KEY in your environment."
-    yield _sse({"type": "token", "text": diagnostic})
+    user_message = (
+        "I'm temporarily unavailable. My compute worker is starting up or "
+        "reconnecting — please try again in a moment."
+    )
+    yield _sse({"type": "token", "text": user_message})
     yield _sse({"type": "complete"})
 
 # ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
