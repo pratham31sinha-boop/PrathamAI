@@ -6,7 +6,7 @@
   "vram_gb": 14.56,
   "version": "1.0",
   "endpoint_url": "https://issn-visual-events-sol.trycloudflare.com",
-  "last_seen": "2026-09-12T17:28:06.563050+00:00",
-  "last_seen_epoch": 1789234086.563041,
-  "latency_ms": 375
+  "last_seen": "2026-09-12T17:28:37.571424+00:00",
+  "last_seen_epoch": 1789234117.5714145,
+  "latency_ms": null
 }
