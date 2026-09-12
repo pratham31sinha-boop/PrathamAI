@@ -5,8 +5,8 @@
   "gpu": "Tesla T4",
   "vram_gb": 14.56,
   "version": "1.0",
-  "endpoint_url": "https://issn-visual-events-sol.trycloudflare.com",
-  "last_seen": "2026-09-12T17:31:12.700672+00:00",
-  "last_seen_epoch": 1789234272.7006645,
+  "endpoint_url": "https://treat-oakland-buf-immigrants.trycloudflare.com",
+  "last_seen": "2026-09-12T17:31:43.759802+00:00",
+  "last_seen_epoch": 1789234303.7597919,
   "latency_ms": null
 }
