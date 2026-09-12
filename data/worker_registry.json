@@ -1,1 +1,12 @@
-{}
+{
+  "worker_id": "qwen-t4-colab",
+  "status": "online",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ",
+  "gpu": "Tesla T4",
+  "vram_gb": 14.56,
+  "version": "1.0",
+  "endpoint_url": "https://issn-visual-events-sol.trycloudflare.com",
+  "last_seen": "2026-09-12T17:16:06.982938+00:00",
+  "last_seen_epoch": 1789233366.9829304,
+  "latency_ms": null
+}
