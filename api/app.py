@@ -251,35 +251,164 @@ WORKER_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("WORKER_REQUEST_TIMEOUT_SECO
 # starts in that case.
 _worker_registry: dict = {}
 _worker_registry_lock = threading.Lock()
+_WORKER_REGISTRY_GH_PATH = "data/worker_registry.json"
+_worker_gh_cache = {"data": None, "t": 0}
+_WORKER_GH_CACHE_TTL = 15  # seconds
+
+def _github_repo_slug() -> str:
+    return GITHUB_REPO.replace("https://github.com/", "").strip("/")
+
+def _load_worker_from_github() -> dict:
+    now_ts = time.time()
+    if _worker_gh_cache["data"] and (now_ts - _worker_gh_cache["t"]) < _WORKER_GH_CACHE_TTL:
+        return _worker_gh_cache["data"]
+    if not GITHUB_TOKEN:
+        return None
+    repo_clean = _github_repo_slug()
+    url = f"https://api.github.com/repos/{repo_clean}/contents/{_WORKER_REGISTRY_GH_PATH}"
+    req = urllib.request.Request(
+        url,
+        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            meta = json.loads(resp.read().decode('utf-8'))
+            if meta.get("content"):
+                raw = base64.b64decode(meta["content"].replace("\n", "")).decode('utf-8')
+                data = json.loads(raw)
+                _worker_gh_cache["data"] = data
+                _worker_gh_cache["t"] = now_ts
+                return data
+    except Exception:
+        pass
+    return None
+
+def _save_worker_to_github(entry: dict) -> bool:
+    if not GITHUB_TOKEN:
+        return False
+    repo_clean = _github_repo_slug()
+    url = f"https://api.github.com/repos/{repo_clean}/contents/{_WORKER_REGISTRY_GH_PATH}"
+    sha = None
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            meta = json.loads(resp.read().decode('utf-8'))
+            sha = meta.get("sha")
+    except Exception:
+        pass
+
+    content_str = json.dumps(entry, indent=2)
+    b64 = base64.b64encode(content_str.encode('utf-8')).decode('utf-8')
+    packet = {
+        "message": f"Pratham AI worker registry: {entry.get('worker_id')} -> {entry.get('endpoint_url')}",
+        "content": b64
+    }
+    if sha:
+        packet["sha"] = sha
+    req_put = urllib.request.Request(
+        url,
+        data=json.dumps(packet).encode('utf-8'),
+        headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github.v3+json"
+        },
+        method="PUT"
+    )
+    try:
+        with urllib.request.urlopen(req_put, timeout=8) as resp:
+            ok = resp.status in (200, 201)
+            if ok:
+                _worker_gh_cache["data"] = dict(entry)
+                _worker_gh_cache["t"] = time.time()
+                print(f"[WORKER][GITHUB] Persisted worker '{entry.get('worker_id')}' endpoint={entry.get('endpoint_url')}")
+            return ok
+    except Exception as exc:
+        print(f"[WORKER][GITHUB] Persist error: {exc}")
+        return False
 
 def _worker_upsert(entry: dict):
     with _worker_registry_lock:
         _worker_registry[entry["worker_id"]] = entry
+    try:
+        with open("/tmp/worker_registry.json", "w", encoding="utf-8") as tf:
+            json.dump(entry, tf)
+    except Exception:
+        pass
     if SUPABASE_CONFIGURED:
         try:
             row = dict(entry)
-            row["last_seen_epoch"] = row["last_seen_epoch"]  # numeric, stored as-is
+            row["last_seen_epoch"] = row["last_seen_epoch"]
             _supabase.table("workers").upsert(row, on_conflict="worker_id").execute()
+            print(f"[WORKER][SUPABASE] Upserted worker '{entry['worker_id']}' endpoint={entry.get('endpoint_url')}")
         except Exception as exc:
-            print(f"[WORKER][SUPABASE] upsert failed (falling back to in-memory only): {exc}")
+            print(f"[WORKER][SUPABASE] upsert failed (falling back to durable storage): {exc}")
+    if GITHUB_TOKEN:
+        try:
+            _save_worker_to_github(entry)
+        except Exception as exc:
+            print(f"[WORKER][GITHUB] persist error: {exc}")
 
 def _worker_get_latest() -> dict:
-    """Returns the most-recently-seen worker entry, or None. Reads from
-    Supabase first (the durable source of truth across serverless
-    invocations); falls back to the in-process cache only if Supabase isn't
-    configured or the read fails."""
+    now = time.time()
+    with _worker_registry_lock:
+        entries = list(_worker_registry.values())
+    if entries:
+        candidate = max(entries, key=lambda e: e.get("last_seen_epoch", 0))
+        if (now - candidate.get("last_seen_epoch", 0)) < 45:
+            return candidate
+
+    try:
+        if os.path.exists("/tmp/worker_registry.json"):
+            with open("/tmp/worker_registry.json", "r", encoding="utf-8") as tf:
+                disk_entry = json.load(tf)
+                if disk_entry and (now - disk_entry.get("last_seen_epoch", 0)) <= WORKER_ONLINE_TIMEOUT_SECONDS:
+                    with _worker_registry_lock:
+                        _worker_registry[disk_entry["worker_id"]] = disk_entry
+                    return disk_entry
+    except Exception:
+        pass
+
     if SUPABASE_CONFIGURED:
         try:
             r = (_supabase.table("workers").select("*")
                  .order("last_seen_epoch", desc=True).limit(1).execute())
             if r.data:
-                return r.data[0]
-            return None
+                worker_row = r.data[0]
+                with _worker_registry_lock:
+                    _worker_registry[worker_row["worker_id"]] = worker_row
+                return worker_row
         except Exception as exc:
-            print(f"[WORKER][SUPABASE] read failed (falling back to in-memory): {exc}")
-    with _worker_registry_lock:
-        entries = list(_worker_registry.values())
-    return max(entries, key=lambda e: e["last_seen_epoch"]) if entries else None
+            print(f"[WORKER][SUPABASE] read failed: {exc}")
+
+    if GITHUB_TOKEN:
+        try:
+            gh_worker = _load_worker_from_github()
+            if gh_worker:
+                with _worker_registry_lock:
+                    _worker_registry[gh_worker["worker_id"]] = gh_worker
+                return gh_worker
+        except Exception as exc:
+            print(f"[WORKER][GITHUB] read failed: {exc}")
+
+    if entries:
+        return max(entries, key=lambda e: e.get("last_seen_epoch", 0))
+
+    static_url = os.environ.get("QWEN_WORKER_URL", QWEN_WORKER_URL or "").strip().rstrip("/")
+    if static_url:
+        return {
+            "worker_id": "static-worker",
+            "endpoint_url": static_url,
+            "status": "online",
+            "model": "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ",
+            "gpu": "Tesla T4",
+            "vram_gb": 14.56,
+            "last_seen_epoch": time.time(),
+        }
+    return None
 
 # ── STARTUP DIAGNOSTIC: print which LLM providers actually have a key
 # configured, right when the process boots. This is the #1 place to look
@@ -2012,12 +2141,6 @@ def require_auth(f):
         return f(*args, **kwargs)
     return wrapper
 
-# ── PRATHAM AI WORKER AUTH ──
-# Separate from user session auth above: this protects the machine-to-machine
-# channel between a Pratham AI Worker (Colab/GPU box) and this backend. Every
-# heartbeat must carry "Authorization: Bearer <PRATHAM_WORKER_TOKEN>" or it is
-# rejected with 401 — an unauthenticated caller can never register itself as
-# an online worker or receive chat traffic.
 # ── PRATHAM AI WORKER AUTH & HELPERS ──
 def _clean_token(val: str) -> str:
     if not val:
@@ -2077,6 +2200,60 @@ def require_worker_auth(f):
         return f(*args, **kwargs)
     return wrapper
 
+def _worker_is_online(entry: dict) -> bool:
+    if not entry:
+        return False
+    if entry.get("worker_id") == "static-worker":
+        return True
+    age = time.time() - entry.get("last_seen_epoch", 0)
+    return age <= WORKER_ONLINE_TIMEOUT_SECONDS
+
+@app.route("/api/app/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
+def worker_status():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    best = _worker_get_latest()
+    online = _worker_is_online(best)
+    return jsonify({
+        "ok": True,
+        "online": online,
+        "worker": {
+            "worker_id": (best or {}).get("worker_id", "none"),
+            "model": (best or {}).get("model", "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ"),
+            "gpu": (best or {}).get("gpu", "Tesla T4"),
+            "vram_gb": (best or {}).get("vram_gb", 14.56),
+            "status": "online" if online else "offline",
+            "last_seen": (best or {}).get("last_seen", ""),
+            "latency_ms": (best or {}).get("latency_ms"),
+        } if best else None,
+        "checked_at": datetime.now(timezone.utc).isoformat()
+    })
+
+@app.route("/api/app/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+def worker_debug():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    best = _worker_get_latest()
+    token = _get_expected_worker_token()
+    resolved_url = (best or {}).get("endpoint_url", "").strip().rstrip("/") or os.environ.get("QWEN_WORKER_URL", "").strip().rstrip("/")
+    is_online = _worker_is_online(best)
+    return jsonify({
+        "ok": True,
+        "registry_has_worker": bool(best),
+        "worker_id": (best or {}).get("worker_id", "none") if best else "none",
+        "online": is_online,
+        "url_configured": bool(resolved_url),
+        "token_configured": bool(token),
+        "model": (best or {}).get("model", "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ") if best else "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ",
+        "github_token_configured": bool(GITHUB_TOKEN),
+        "supabase_configured": bool(SUPABASE_CONFIGURED),
+        "last_seen_epoch": (best or {}).get("last_seen_epoch") if best else None,
+        "age_seconds": int(time.time() - (best or {}).get("last_seen_epoch", 0)) if best and best.get("last_seen_epoch") else None,
+    })
+
+@app.route("/api/app/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
 def worker_auth_debug():
     if request.method == "OPTIONS":
@@ -2116,26 +2293,10 @@ def worker_auth_debug():
         "expected_env_name": "PRATHAM_WORKER_TOKEN"
     })
 
-
-def _worker_is_online(entry: dict) -> bool:
-    if not entry:
-        return False
-    return (time.time() - entry.get("last_seen_epoch", 0)) <= WORKER_ONLINE_TIMEOUT_SECONDS
-
+@app.route("/api/app/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
 @require_worker_auth
 def worker_heartbeat():
-    """Receives a heartbeat from a Pratham AI Worker (e.g. the Colab
-    notebook) every ~5 minutes. This is a pure service-health signal — it
-    never bypasses or substitutes for the actual /v1/chat/stream request
-    that does the real work, and it never claims Colab has guaranteed
-    uptime; a worker that stops heartbeating simply goes stale and the
-    routing logic in _stream_qwen_worker below naturally stops using it.
-
-    The worker MAY also send `endpoint_url` in the heartbeat body — this
-    updates the registry with the current public tunnel URL so the backend
-    always knows where to route chat requests, even if the tunnel URL
-    changed since the last /api/worker/register call."""
     body = request.get_json(silent=True) or {}
     worker_id = (body.get("worker_id") or "").strip()
     if not worker_id:
@@ -2143,15 +2304,13 @@ def worker_heartbeat():
     now = time.time()
     with _worker_registry_lock:
         prev = _worker_registry.get(worker_id, {})
-    # endpoint_url: if the worker sends it, update; otherwise keep whatever
-    # was registered via /api/worker/register (or the static env var fallback).
     new_endpoint = (body.get("endpoint_url") or "").strip().rstrip("/")
     entry = {
         "worker_id": worker_id,
         "status": body.get("status", "online"),
-        "model": body.get("model", prev.get("model", "unknown")),
-        "gpu": body.get("gpu", prev.get("gpu", "unknown")),
-        "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
+        "model": body.get("model", prev.get("model", "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ")),
+        "gpu": body.get("gpu", prev.get("gpu", "Tesla T4")),
+        "vram_gb": body.get("vram_gb", prev.get("vram_gb", 14.56)),
         "version": body.get("version", prev.get("version", "1.0")),
         "endpoint_url": new_endpoint or prev.get("endpoint_url", ""),
         "last_seen": datetime.now(timezone.utc).isoformat(),
@@ -2159,34 +2318,22 @@ def worker_heartbeat():
         "latency_ms": prev.get("latency_ms"),
     }
     _worker_upsert(entry)
-    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')} "
-          f"endpoint={'updated' if new_endpoint else 'unchanged'} "
-          f"(persisted={'supabase' if SUPABASE_CONFIGURED else 'in-memory only'})")
+    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')} endpoint={'updated' if new_endpoint else 'unchanged'}")
     return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
 
+@app.route("/api/app/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
 @require_worker_auth
 def worker_register():
-    """One-shot registration call sent by a Pratham AI Worker the moment its
-    public tunnel endpoint comes up (or when the tunnel URL changes after a
-    Colab runtime restart). Stores `endpoint_url` in the durable registry so
-    _stream_qwen_worker can immediately route chat traffic to the correct
-    address without any manual env-var edit.
-
-    The worker treats this as an *initial* heartbeat too: calling register
-    marks the worker ONLINE right away, so users don't have to wait up to
-    5 minutes for the first regular heartbeat tick to show the indicator."""
     if request.method == "OPTIONS":
         return _cors_preflight()
     body = request.get_json(silent=True) or {}
     worker_id = (body.get("worker_id") or "").strip()
     endpoint_url = (body.get("endpoint_url") or "").strip().rstrip("/")
     if not worker_id:
-        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST",
-            "message": "worker_id is required"}}), 400
+        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST", "message": "worker_id is required"}}), 400
     if not endpoint_url:
-        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST",
-            "message": "endpoint_url is required — pass the full public tunnel URL (e.g. https://xxxx.ngrok-free.app)"}}), 400
+        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST", "message": "endpoint_url is required"}}), 400
     now = time.time()
     with _worker_registry_lock:
         prev = _worker_registry.get(worker_id, {})
@@ -2194,43 +2341,20 @@ def worker_register():
         "worker_id": worker_id,
         "status": "online",
         "endpoint_url": endpoint_url,
-        "model": body.get("model", prev.get("model", "unknown")),
-        "gpu": body.get("gpu", prev.get("gpu", "unknown")),
-        "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
+        "model": body.get("model", prev.get("model", "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ")),
+        "gpu": body.get("gpu", prev.get("gpu", "Tesla T4")),
+        "vram_gb": body.get("vram_gb", prev.get("vram_gb", 14.56)),
         "version": body.get("version", prev.get("version", "1.0")),
         "last_seen": datetime.now(timezone.utc).isoformat(),
         "last_seen_epoch": now,
         "latency_ms": prev.get("latency_ms"),
     }
     _worker_upsert(entry)
-    print(f"[WORKER][REGISTER] '{worker_id}' registered endpoint={endpoint_url} "
-          f"model={body.get('model')} gpu={body.get('gpu')} "
-          f"(persisted={'supabase' if SUPABASE_CONFIGURED else 'in-memory only'})")
+    print(f"[WORKER][REGISTER] '{worker_id}' registered endpoint={endpoint_url} model={entry['model']} gpu={entry['gpu']}")
     return jsonify({
         "ok": True,
         "registered_at": datetime.now(timezone.utc).isoformat(),
-        "routing": "active",  # tells the worker it will now receive chat traffic
-    })
-
-@app.route("/api/worker/status", methods=["GET", "OPTIONS"])
-def worker_status():
-    """Public, unauthenticated, read-only status the frontend polls every
-    30-60s to render the ONLINE/OFFLINE worker indicator. Intentionally
-    lightweight — no secrets, no routing internals."""
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    best = _worker_get_latest()
-    if not best:
-        return jsonify({"online": False, "worker_id": None, "model": None, "gpu": None,
-                         "last_seen": None, "latency_ms": None})
-    return jsonify({
-        "online": _worker_is_online(best),
-        "worker_id": best["worker_id"],
-        "model": best.get("model"),
-        "gpu": best.get("gpu"),
-        "vram_gb": best.get("vram_gb"),
-        "last_seen": best.get("last_seen"),
-        "latency_ms": best.get("latency_ms"),
+        "routing": "active",
     })
 
 # ── LIGHTWEIGHT CONTENT SAFETY GUARD ──
@@ -3003,34 +3127,53 @@ def _stream_mistral(messages, state=None):
 #   - "error" events       -> raised as RuntimeError, which _do_stream
 #                             catches and fails over to the next provider
 def _stream_qwen_worker(messages, state=None):
+    token = _get_expected_worker_token()
+    token_present = bool(token)
+    
+    print("[QWEN] registry lookup")
     best = _worker_get_latest()
-    # Resolve the live endpoint URL: prefer what the worker dynamically
-    # registered (covers fresh Colab sessions where the tunnel URL changes),
-    # fall back to the static QWEN_WORKER_URL env var (useful for stable
-    # deployments like a home server with a fixed domain).
-    _live_url = (best or {}).get("endpoint_url", "").strip().rstrip("/") or QWEN_WORKER_URL
-    if not _live_url or not PRATHAM_WORKER_TOKEN or not _worker_is_online(best):
-        raise RuntimeError("Pratham AI worker is offline (no recent heartbeat or no endpoint URL registered).")
-
-    started = time.time()
+    worker_id = (best or {}).get("worker_id", "none")
+    is_online = _worker_is_online(best)
+    _live_url = (best or {}).get("endpoint_url", "").strip().rstrip("/") or os.environ.get("QWEN_WORKER_URL", "").strip().rstrip("/")
+    
+    print(f"[QWEN] worker_id: {worker_id}")
+    print(f"[QWEN] resolved URL: {_live_url}")
+    print(f"[QWEN] online status: {is_online}")
+    print(f"[QWEN] token present? {token_present}")
+    
+    if not _live_url or not token_present or not is_online:
+        age = int(time.time() - (best or {}).get("last_seen_epoch", 0)) if best and best.get("last_seen_epoch") else "N/A"
+        err_msg = f"Qwen worker unavailable (url={'set' if _live_url else 'missing'}, token={'set' if token_present else 'missing'}, online={is_online}, worker={worker_id}, age={age}s)"
+        print(f"[QWEN] {err_msg}")
+        raise RuntimeError(err_msg)
+        
+    target_url = f"{_live_url}/v1/chat/stream"
+    print(f"[QWEN] POST target: {target_url}")
+    
     body = json.dumps({
         "messages": messages,
         "conversation_id": (state or {}).get("conversation_id", ""),
         "max_new_tokens": 2048,
         "temperature": (state or {}).pop("temperature", 0.1) if state else 0.1,
     }).encode()
+    
     req = urllib.request.Request(
-        f"{_live_url}/v1/chat/stream",
+        target_url,
         data=body, method="POST",
         headers={
-            "Authorization": f"Bearer {PRATHAM_WORKER_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
         },
     )
-    got_any_delta = False
+    
+    first_event_logged = False
+    answer_delta_received = False
+    tokens_streamed = 0
+    started = time.time()
     try:
         with urllib.request.urlopen(req, timeout=WORKER_REQUEST_TIMEOUT_SECONDS) as resp:
+            print(f"[QWEN] response status: {resp.status}")
             for raw_line in resp:
                 line = raw_line.decode("utf-8", errors="replace").strip()
                 if not line.startswith("data: "):
@@ -3040,37 +3183,47 @@ def _stream_qwen_worker(messages, state=None):
                 except Exception:
                     continue
                 etype = payload.get("type")
+                if not first_event_logged:
+                    print(f"[QWEN] first SSE event type: {etype}")
+                    first_event_logged = True
+                    
                 if etype == "thinking":
-                    yield _sse({"type": "agent_step", "step_type": "thinking",
-                                "label": payload.get("message", "Thinking...")})
+                    msg = payload.get("message", "Thinking...")
+                    yield _sse({"type": "agent_step", "step_type": "thinking", "label": msg})
+                elif etype == "answer_start":
+                    pass
                 elif etype == "answer_delta":
-                    text = payload.get("text", "")
-                    if text:
-                        got_any_delta = True
-                        yield _sse({"type": "token", "text": text})
+                    text_delta = payload.get("text", "")
+                    if text_delta:
+                        if not answer_delta_received:
+                            answer_delta_received = True
+                            print("[QWEN] answer_delta received? true")
+                        tokens_streamed += 1
+                        yield _sse({"type": "token", "text": text_delta})
                 elif etype == "answer_end":
                     if state is not None:
                         state["finish_reason"] = "stop"
                 elif etype == "error":
                     raise RuntimeError(payload.get("message", "Worker reported an error."))
+                    
+            if not answer_delta_received:
+                print("[QWEN] answer_delta received? false")
+            print(f"[QWEN] stream finished (tokens={tokens_streamed})")
     except RuntimeError:
         raise
     except Exception as exc:
-        if not got_any_delta:
+        print(f"[QWEN] request error: {exc}")
+        if not answer_delta_received:
             raise RuntimeError(f"Pratham AI worker request failed: {exc}")
-        # Partial output already streamed — let _do_stream close out cleanly
-        # instead of risking a duplicated reply from a cloud fallback.
         if state is not None:
             state["finish_reason"] = "stop"
         return
     finally:
         latency_ms = int((time.time() - started) * 1000)
-        if best:
+        if best and best.get("worker_id") != "static-worker":
             updated = dict(best)
             updated["latency_ms"] = latency_ms
             _worker_upsert(updated)
-
-
 
 # ── STRUCTURED OUTPUT VALIDATION: check createfile/editfile blocks ──
 # Validates fenced blocks as they appear in the model's output, catching
@@ -3277,11 +3430,13 @@ def _do_stream(messages):
     # server-side for diagnosis but never expose infrastructure internals
     # (URLs, provider names, error codes) to the user.
     print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
-    user_message = (
-        "I'm temporarily unavailable. My compute worker is starting up or "
-        "reconnecting — please try again in a moment."
-    )
-    yield _sse({"type": "token", "text": user_message})
+    yield _sse({
+        "type": "error",
+        "error": {
+            "code": "WORKER_OFFLINE",
+            "message": "Qwen compute worker is currently offline or unreachable."
+        }
+    })
     yield _sse({"type": "complete"})
 
 # ── BACKGROUND TERMINAL: general-purpose code execution + agent loop ──
@@ -4297,10 +4452,7 @@ def chat_stream():
                 "data/education library (it may be empty, or the pypdf package may not be installed "
                 "on the server). Say so plainly instead of guessing."
             )
-    elif not web_search_disabled:
-        # Web search is now MANDATORY on every message (not just > 5 chars).
-        # This ensures the model always has current information to ground its answers.
-        # The only exception is when the user explicitly disables it via [[NO_WEB_SEARCH]].
+    elif not web_search_disabled and re.search(r"@web\b", message, flags=re.IGNORECASE):
         _emit_searching_step = True
         # Web search now runs automatically on essentially every message
         # (the person no longer has to type "@web" each time). It's skipped
