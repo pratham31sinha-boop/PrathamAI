@@ -236,13 +236,50 @@ WORKER_ONLINE_TIMEOUT_SECONDS = int(os.environ.get("WORKER_ONLINE_TIMEOUT_SECOND
 # over to the cloud chain — must never hang the user's chat.
 WORKER_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("WORKER_REQUEST_TIMEOUT_SECONDS", "45"))
 
-# In-memory worker registry: worker_id -> {status, model, gpu, vram_gb,
-# last_seen (epoch float), version, latency_ms}. A worker "disappearing"
-# (Colab runtime recycled, laptop closed, etc.) is expected and handled by
-# simply letting its last_seen go stale — no special shutdown handshake
-# needed.
+# ── WORKER REGISTRY PERSISTENCE ──
+# IMPORTANT: this backend runs as a Vercel serverless function, meaning each
+# request can land on a fresh process with empty memory — a plain in-memory
+# dict does NOT reliably survive between one heartbeat and the next
+# /api/worker/status read. So the registry is persisted in the SAME
+# Supabase project this app already uses for conversations/messages, in a
+# "workers" table (create it once — see the CREATE TABLE statement in
+# PRATHAM_AI_WORKER_SETUP.md). The in-memory dict below is kept ONLY as a
+# same-process fast-path cache; Supabase is the source of truth whenever
+# it's configured. If Supabase isn't configured (e.g. local dev without
+# SUPABASE_SERVICE_KEY set), it transparently falls back to the in-memory
+# dict so nothing breaks — it just won't persist across serverless cold
+# starts in that case.
 _worker_registry: dict = {}
 _worker_registry_lock = threading.Lock()
+
+def _worker_upsert(entry: dict):
+    with _worker_registry_lock:
+        _worker_registry[entry["worker_id"]] = entry
+    if SUPABASE_CONFIGURED:
+        try:
+            row = dict(entry)
+            row["last_seen_epoch"] = row["last_seen_epoch"]  # numeric, stored as-is
+            _supabase.table("workers").upsert(row, on_conflict="worker_id").execute()
+        except Exception as exc:
+            print(f"[WORKER][SUPABASE] upsert failed (falling back to in-memory only): {exc}")
+
+def _worker_get_latest() -> dict:
+    """Returns the most-recently-seen worker entry, or None. Reads from
+    Supabase first (the durable source of truth across serverless
+    invocations); falls back to the in-process cache only if Supabase isn't
+    configured or the read fails."""
+    if SUPABASE_CONFIGURED:
+        try:
+            r = (_supabase.table("workers").select("*")
+                 .order("last_seen_epoch", desc=True).limit(1).execute())
+            if r.data:
+                return r.data[0]
+            return None
+        except Exception as exc:
+            print(f"[WORKER][SUPABASE] read failed (falling back to in-memory): {exc}")
+    with _worker_registry_lock:
+        entries = list(_worker_registry.values())
+    return max(entries, key=lambda e: e["last_seen_epoch"]) if entries else None
 
 # ── STARTUP DIAGNOSTIC: print which LLM providers actually have a key
 # configured, right when the process boots. This is the #1 place to look
@@ -2018,18 +2055,20 @@ def worker_heartbeat():
     now = time.time()
     with _worker_registry_lock:
         prev = _worker_registry.get(worker_id, {})
-        _worker_registry[worker_id] = {
-            "worker_id": worker_id,
-            "status": body.get("status", "online"),
-            "model": body.get("model", prev.get("model", "unknown")),
-            "gpu": body.get("gpu", prev.get("gpu", "unknown")),
-            "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
-            "version": body.get("version", prev.get("version", "1.0")),
-            "last_seen": datetime.now(timezone.utc).isoformat(),
-            "last_seen_epoch": now,
-            "latency_ms": prev.get("latency_ms"),
-        }
-    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')}")
+    entry = {
+        "worker_id": worker_id,
+        "status": body.get("status", "online"),
+        "model": body.get("model", prev.get("model", "unknown")),
+        "gpu": body.get("gpu", prev.get("gpu", "unknown")),
+        "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
+        "version": body.get("version", prev.get("version", "1.0")),
+        "last_seen": datetime.now(timezone.utc).isoformat(),
+        "last_seen_epoch": now,
+        "latency_ms": prev.get("latency_ms"),
+    }
+    _worker_upsert(entry)
+    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')} "
+          f"(persisted={'supabase' if SUPABASE_CONFIGURED else 'in-memory only'})")
     return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
 
 @app.route("/api/worker/status", methods=["GET", "OPTIONS"])
@@ -2039,12 +2078,10 @@ def worker_status():
     lightweight — no secrets, no routing internals."""
     if request.method == "OPTIONS":
         return _cors_preflight()
-    with _worker_registry_lock:
-        entries = list(_worker_registry.values())
-    if not entries:
+    best = _worker_get_latest()
+    if not best:
         return jsonify({"online": False, "worker_id": None, "model": None, "gpu": None,
                          "last_seen": None, "latency_ms": None})
-    best = max(entries, key=lambda e: e["last_seen_epoch"])
     return jsonify({
         "online": _worker_is_online(best),
         "worker_id": best["worker_id"],
@@ -2825,9 +2862,7 @@ def _stream_mistral(messages, state=None):
 #   - "error" events       -> raised as RuntimeError, which _do_stream
 #                             catches and fails over to the next provider
 def _stream_qwen_worker(messages, state=None):
-    with _worker_registry_lock:
-        entries = list(_worker_registry.values())
-    best = max(entries, key=lambda e: e["last_seen_epoch"]) if entries else None
+    best = _worker_get_latest()
     if not QWEN_WORKER_URL or not PRATHAM_WORKER_TOKEN or not _worker_is_online(best):
         raise RuntimeError("Pratham AI worker is offline (no recent heartbeat).")
 
@@ -2885,9 +2920,9 @@ def _stream_qwen_worker(messages, state=None):
     finally:
         latency_ms = int((time.time() - started) * 1000)
         if best:
-            with _worker_registry_lock:
-                if best["worker_id"] in _worker_registry:
-                    _worker_registry[best["worker_id"]]["latency_ms"] = latency_ms
+            updated = dict(best)
+            updated["latency_ms"] = latency_ms
+            _worker_upsert(updated)
 
 
 
