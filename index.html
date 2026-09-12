@@ -1341,6 +1341,10 @@
                         <h2 id="active-chat-title-header" class="text-xs font-semibold uppercase tracking-wider text-[var(--text-dim)] truncate">New conversation</h2>
                     </div>
                     <div class="flex items-center gap-2">
+                        <div id="pratham-worker-indicator" title="Pratham AI worker status" style="display:none; align-items:center; gap:5px; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:600; letter-spacing:.02em; border:1px solid var(--border); background:var(--panel); white-space:nowrap;">
+                            <span id="pratham-worker-dot" style="width:6px;height:6px;border-radius:50%;background:#9ca3af;flex:none;"></span>
+                            <span id="pratham-worker-label" class="text-[var(--text-dim)]">Worker offline</span>
+                        </div>
                         <button id="workbench-toggle-mobile" onclick="toggleWorkbenchMobile()" class="mobile-hamburger px-2.5 py-1 text-xs text-[var(--text-dim)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden">⚡</button>
                         <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Export</button>
                         <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Delete</button>
@@ -1938,6 +1942,44 @@
             }
             return lastResponse || new Response(JSON.stringify({ error: "Route not resolved (404)." }), { status: 404 });
         }
+
+        // ── PRATHAM AI WORKER STATUS INDICATOR ──
+        // Polls the lightweight, unauthenticated /api/worker/status endpoint
+        // every 45s (well inside the "30-60s" guidance) and updates a small
+        // pill in the header. Never shown until the first successful poll
+        // resolves, so a backend without a worker configured just never
+        // shows the pill instead of flashing "offline" forever.
+        let _workerIndicatorSeenOnce = false;
+        async function pollPrathamWorkerStatus() {
+            try {
+                const response = await smartFetchRequest('/worker/status', { method: 'GET' });
+                if (!response.ok) return;
+                const data = await response.json();
+                const wrap = document.getElementById('pratham-worker-indicator');
+                const dot = document.getElementById('pratham-worker-dot');
+                const label = document.getElementById('pratham-worker-label');
+                if (!wrap || !dot || !label) return;
+                if (!data.worker_id) { wrap.style.display = 'none'; return; }
+                wrap.style.display = 'inline-flex';
+                if (data.online) {
+                    dot.style.background = '#22c55e';
+                    label.textContent = 'Worker online';
+                    label.className = 'text-[var(--text)]';
+                } else {
+                    dot.style.background = '#9ca3af';
+                    let ago = '';
+                    if (data.last_seen) {
+                        const secs = Math.max(0, Math.round((Date.now() - new Date(data.last_seen).getTime()) / 1000));
+                        ago = secs < 90 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
+                    }
+                    label.textContent = ago ? `Worker offline · last seen ${ago}` : 'Worker offline';
+                    label.className = 'text-[var(--text-dim)]';
+                }
+                _workerIndicatorSeenOnce = true;
+            } catch (e) {}
+        }
+        pollPrathamWorkerStatus();
+        setInterval(pollPrathamWorkerStatus, 45000);
 
         function convCacheKey() {
             return `prathamai_convcache_${activeUserIdentityEmail || 'anon'}`;
