@@ -81,6 +81,7 @@ import mimetypes
 import difflib
 import shlex
 import zlib
+import threading
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -210,6 +211,38 @@ GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/data")
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
+
+# ── PRATHAM AI WORKER (self-hosted GPU worker, e.g. Google Colab T4) ──
+# Built by Pratham Sinha, under the supervision of Aditi and Akriti Aishwaryam.
+#
+# This is a REAL, first-class provider in the existing failover chain — not a
+# separate demo. When a worker (any machine running the Pratham AI Worker
+# script — a Colab notebook, a home GPU box, a rented GPU box, etc.) is
+# online and authenticated, it is tried FIRST, before Groq/OpenRouter/
+# Cerebras/Mistral. If it is offline, busy, or times out, Pratham AI
+# automatically falls back to the existing cloud chain below — nothing about
+# the existing failover logic is removed or bypassed.
+#
+# The worker is always presented to the end user simply as "Pratham AI" —
+# the underlying model name (Qwen, or whatever the worker operator loads)
+# is an internal implementation detail and is never shown in the product UI.
+QWEN_WORKER_URL       = os.environ.get("QWEN_WORKER_URL", "").strip().rstrip("/")
+PRATHAM_WORKER_TOKEN  = os.environ.get("PRATHAM_WORKER_TOKEN", "").strip()
+# How long (seconds) a worker is considered ONLINE after its last heartbeat.
+# Heartbeats arrive every 5 minutes (300s); 360s gives one heartbeat's worth
+# of tolerance for jitter/slow network before we mark it OFFLINE.
+WORKER_ONLINE_TIMEOUT_SECONDS = int(os.environ.get("WORKER_ONLINE_TIMEOUT_SECONDS", "360"))
+# Hard cap on how long we wait on a single worker request before failing
+# over to the cloud chain — must never hang the user's chat.
+WORKER_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("WORKER_REQUEST_TIMEOUT_SECONDS", "45"))
+
+# In-memory worker registry: worker_id -> {status, model, gpu, vram_gb,
+# last_seen (epoch float), version, latency_ms}. A worker "disappearing"
+# (Colab runtime recycled, laptop closed, etc.) is expected and handled by
+# simply letting its last_seen go stale — no special shutdown handshake
+# needed.
+_worker_registry: dict = {}
+_worker_registry_lock = threading.Lock()
 
 # ── STARTUP DIAGNOSTIC: print which LLM providers actually have a key
 # configured, right when the process boots. This is the #1 place to look
@@ -1942,6 +1975,86 @@ def require_auth(f):
         return f(*args, **kwargs)
     return wrapper
 
+# ── PRATHAM AI WORKER AUTH ──
+# Separate from user session auth above: this protects the machine-to-machine
+# channel between a Pratham AI Worker (Colab/GPU box) and this backend. Every
+# heartbeat must carry "Authorization: Bearer <PRATHAM_WORKER_TOKEN>" or it is
+# rejected with 401 — an unauthenticated caller can never register itself as
+# an online worker or receive chat traffic.
+def require_worker_auth(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if request.method == "OPTIONS":
+            return _cors_preflight()
+        if not PRATHAM_WORKER_TOKEN:
+            return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED",
+                "message": "No PRATHAM_WORKER_TOKEN configured on this backend; worker auth is disabled."}}), 401
+        auth_header = request.headers.get("Authorization", "")
+        presented = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
+        if not presented or not hmac.compare_digest(presented, PRATHAM_WORKER_TOKEN):
+            return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED",
+                "message": "Invalid or missing worker token."}}), 401
+        return f(*args, **kwargs)
+    return wrapper
+
+def _worker_is_online(entry: dict) -> bool:
+    if not entry:
+        return False
+    return (time.time() - entry.get("last_seen_epoch", 0)) <= WORKER_ONLINE_TIMEOUT_SECONDS
+
+@app.route("/api/worker/heartbeat", methods=["POST", "OPTIONS"])
+@require_worker_auth
+def worker_heartbeat():
+    """Receives a heartbeat from a Pratham AI Worker (e.g. the Colab
+    notebook) every ~5 minutes. This is a pure service-health signal — it
+    never bypasses or substitutes for the actual /v1/chat/stream request
+    that does the real work, and it never claims Colab has guaranteed
+    uptime; a worker that stops heartbeating simply goes stale and the
+    routing logic in _stream_qwen_worker below naturally stops using it."""
+    body = request.get_json(silent=True) or {}
+    worker_id = (body.get("worker_id") or "").strip()
+    if not worker_id:
+        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST", "message": "worker_id is required"}}), 400
+    now = time.time()
+    with _worker_registry_lock:
+        prev = _worker_registry.get(worker_id, {})
+        _worker_registry[worker_id] = {
+            "worker_id": worker_id,
+            "status": body.get("status", "online"),
+            "model": body.get("model", prev.get("model", "unknown")),
+            "gpu": body.get("gpu", prev.get("gpu", "unknown")),
+            "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
+            "version": body.get("version", prev.get("version", "1.0")),
+            "last_seen": datetime.now(timezone.utc).isoformat(),
+            "last_seen_epoch": now,
+            "latency_ms": prev.get("latency_ms"),
+        }
+    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')}")
+    return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
+
+@app.route("/api/worker/status", methods=["GET", "OPTIONS"])
+def worker_status():
+    """Public, unauthenticated, read-only status the frontend polls every
+    30-60s to render the ONLINE/OFFLINE worker indicator. Intentionally
+    lightweight — no secrets, no routing internals."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    with _worker_registry_lock:
+        entries = list(_worker_registry.values())
+    if not entries:
+        return jsonify({"online": False, "worker_id": None, "model": None, "gpu": None,
+                         "last_seen": None, "latency_ms": None})
+    best = max(entries, key=lambda e: e["last_seen_epoch"])
+    return jsonify({
+        "online": _worker_is_online(best),
+        "worker_id": best["worker_id"],
+        "model": best.get("model"),
+        "gpu": best.get("gpu"),
+        "vram_gb": best.get("vram_gb"),
+        "last_seen": best.get("last_seen"),
+        "latency_ms": best.get("latency_ms"),
+    })
+
 # ── LIGHTWEIGHT CONTENT SAFETY GUARD ──
 # This does NOT try to be a full moderation system, but it catches a set of
 # obviously illegal-intent patterns so the assistant can refuse rather than
@@ -2696,6 +2809,86 @@ def _stream_mistral(messages, state=None):
         MISTRAL_API_KEY, "mistral-large-latest", messages, state=state
     )
 
+# ── PRATHAM AI WORKER PROVIDER (self-hosted GPU, e.g. Google Colab T4) ──
+# Tried FIRST in the provider chain, before any cloud provider. Fails over
+# instantly (raises, no partial output) if the worker is offline per the
+# heartbeat registry, so a stale/absent worker never adds latency to a
+# normal request. If it IS online, it opens a real SSE stream to the
+# worker's /v1/chat/stream endpoint and relays:
+#   - "thinking" events   -> agent_step/thinking cards (existing frontend
+#                             pipeline used for planning/execution steps —
+#                             reused here so no new frontend event type is
+#                             needed), never the model's real chain-of-thought
+#   - "answer_delta" events -> real token-by-token streaming (type: "token"),
+#                             which is what _do_stream's accumulator/
+#                             continuation logic already expects
+#   - "error" events       -> raised as RuntimeError, which _do_stream
+#                             catches and fails over to the next provider
+def _stream_qwen_worker(messages, state=None):
+    with _worker_registry_lock:
+        entries = list(_worker_registry.values())
+    best = max(entries, key=lambda e: e["last_seen_epoch"]) if entries else None
+    if not QWEN_WORKER_URL or not PRATHAM_WORKER_TOKEN or not _worker_is_online(best):
+        raise RuntimeError("Pratham AI worker is offline (no recent heartbeat).")
+
+    started = time.time()
+    body = json.dumps({
+        "messages": messages,
+        "conversation_id": (state or {}).get("conversation_id", ""),
+        "max_new_tokens": 2048,
+        "temperature": (state or {}).pop("temperature", 0.1) if state else 0.1,
+    }).encode()
+    req = urllib.request.Request(
+        f"{QWEN_WORKER_URL}/v1/chat/stream",
+        data=body, method="POST",
+        headers={
+            "Authorization": f"Bearer {PRATHAM_WORKER_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        },
+    )
+    got_any_delta = False
+    try:
+        with urllib.request.urlopen(req, timeout=WORKER_REQUEST_TIMEOUT_SECONDS) as resp:
+            for raw_line in resp:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line.startswith("data: "):
+                    continue
+                try:
+                    payload = json.loads(line[6:])
+                except Exception:
+                    continue
+                etype = payload.get("type")
+                if etype == "thinking":
+                    yield _sse({"type": "agent_step", "step_type": "thinking",
+                                "label": payload.get("message", "Thinking...")})
+                elif etype == "answer_delta":
+                    text = payload.get("text", "")
+                    if text:
+                        got_any_delta = True
+                        yield _sse({"type": "token", "text": text})
+                elif etype == "answer_end":
+                    if state is not None:
+                        state["finish_reason"] = "stop"
+                elif etype == "error":
+                    raise RuntimeError(payload.get("message", "Worker reported an error."))
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        if not got_any_delta:
+            raise RuntimeError(f"Pratham AI worker request failed: {exc}")
+        # Partial output already streamed — let _do_stream close out cleanly
+        # instead of risking a duplicated reply from a cloud fallback.
+        if state is not None:
+            state["finish_reason"] = "stop"
+        return
+    finally:
+        latency_ms = int((time.time() - started) * 1000)
+        if best:
+            with _worker_registry_lock:
+                if best["worker_id"] in _worker_registry:
+                    _worker_registry[best["worker_id"]]["latency_ms"] = latency_ms
+
 
 
 # ── STRUCTURED OUTPUT VALIDATION: check createfile/editfile blocks ──
@@ -2825,6 +3018,7 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
 
 
 _PROVIDER_CHAIN = [
+    ("pratham_worker", _stream_qwen_worker),  # self-hosted GPU worker, tried first when online
     ("groq", _stream_groq),
     ("openrouter", _stream_openrouter),
     ("cerebras", _stream_cerebras),
