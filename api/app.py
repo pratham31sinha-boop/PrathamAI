@@ -286,6 +286,9 @@ def _load_worker_from_github() -> dict:
 def _save_worker_to_github(entry: dict) -> bool:
     if not GITHUB_TOKEN:
         return False
+    cached = _worker_gh_cache.get("data")
+    if cached and cached.get("endpoint_url") == entry.get("endpoint_url") and (time.time() - _worker_gh_cache.get("t", 0)) < 600:
+        return True
     repo_clean = _github_repo_slug()
     url = f"https://api.github.com/repos/{repo_clean}/contents/{_WORKER_REGISTRY_GH_PATH}"
     sha = None
