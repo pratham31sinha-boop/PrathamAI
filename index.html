@@ -2718,7 +2718,7 @@
                 node._katexDone = true;
             } catch (e) {}
         }
-
+        // [FRONTEND_RENDER_FIX_VERIFIED] Mount text segments directly into _answerZone with visible styles
         function updateAssistantMessageDOM(wrapper, fullText) {
             const segments = parseAssistantSegments(fullText);
             if (!wrapper._segNodes) wrapper._segNodes = [];

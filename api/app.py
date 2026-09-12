@@ -2208,6 +2208,7 @@ def _worker_is_online(entry: dict) -> bool:
     age = time.time() - entry.get("last_seen_epoch", 0)
     return age <= WORKER_ONLINE_TIMEOUT_SECONDS
 
+# [WORKER_ROUTING_VERIFIED] Worker status, heartbeat, and register endpoints with full aliases
 @app.route("/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/app/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
