@@ -2208,8 +2208,10 @@ def _worker_is_online(entry: dict) -> bool:
     age = time.time() - entry.get("last_seen_epoch", 0)
     return age <= WORKER_ONLINE_TIMEOUT_SECONDS
 
-@app.route("/api/app/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/app/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/app/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
 def worker_status():
     if request.method == "OPTIONS":
         return _cors_preflight()
@@ -2230,8 +2232,10 @@ def worker_status():
         "checked_at": datetime.now(timezone.utc).isoformat()
     })
 
-@app.route("/api/app/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/app/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/app/worker/debug", methods=["GET", "OPTIONS"], strict_slashes=False)
 def worker_debug():
     if request.method == "OPTIONS":
         return _cors_preflight()
@@ -2253,8 +2257,10 @@ def worker_debug():
         "age_seconds": int(time.time() - (best or {}).get("last_seen_epoch", 0)) if best and best.get("last_seen_epoch") else None,
     })
 
-@app.route("/api/app/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/app/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/app/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
 def worker_auth_debug():
     if request.method == "OPTIONS":
         return _cors_preflight()
@@ -2293,8 +2299,10 @@ def worker_auth_debug():
         "expected_env_name": "PRATHAM_WORKER_TOKEN"
     })
 
-@app.route("/api/app/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/app/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/api/app/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
 @require_worker_auth
 def worker_heartbeat():
     body = request.get_json(silent=True) or {}
@@ -2321,8 +2329,10 @@ def worker_heartbeat():
     print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')} endpoint={'updated' if new_endpoint else 'unchanged'}")
     return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
 
-@app.route("/api/app/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/app/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/api/app/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
 @require_worker_auth
 def worker_register():
     if request.method == "OPTIONS":
