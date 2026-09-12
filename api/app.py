@@ -4371,6 +4371,7 @@ def chat_stream():
     for m in _summarized_history:
         api_messages.append({"role": m["role"], "content": m["content"]})
 
+    _emit_searching_step = False
     outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", message).strip()
     _edu_tag_match = _EDU_TAG_RE.search(message)
     if _edu_tag_match:
@@ -4509,9 +4510,6 @@ def chat_stream():
             resp.headers["Access-Control-Allow-Credentials"] = "true"
             return resp
         else:
-            # Web search returned NO results — inject a CRITICAL anti-hallucination
-            # guard. The model must NOT fabricate facts, names, dates, sources, or
-            # events when it has no web data.
             api_messages[0]["content"] += (
                 " CRITICAL: A live web search was just attempted for this message but returned "
                 "NO results. You have NO current web data for this question. You MUST follow these rules:\n"
@@ -4530,7 +4528,7 @@ def chat_stream():
                 "look more authoritative than it is."
             )
 
-            api_messages.append({"role": "user", "content": outgoing_user_message or message})
+    api_messages.append({"role": "user", "content": outgoing_user_message or message})
 
     # ── ADAPTIVE TEMPERATURE: classify the query and set the optimal temperature ──
     _query_temperature = _classify_query_temperature(message)
