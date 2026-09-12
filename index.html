@@ -2723,12 +2723,15 @@
             const segments = parseAssistantSegments(fullText);
             if (!wrapper._segNodes) wrapper._segNodes = [];
 
-            console.log('[RENDER]', {
-                fullText,
-                segmentCount: segments.length,
-                textSegments: segments.filter(s => s.type === 'text').map(s => s.content),
-                answerZone: !!wrapper._answerZone
-            });
+            const isDebug = Boolean(window.__DEBUG_RENDER__ || (typeof localStorage !== 'undefined' && localStorage.getItem('debug_render') === '1'));
+            if (isDebug) {
+                console.log('[RENDER]', {
+                    fullText,
+                    segmentCount: segments.length,
+                    textSegments: segments.filter(s => s.type === 'text').map(s => s.content),
+                    answerZone: !!wrapper._answerZone
+                });
+            }
 
             const target = wrapper._answerZone || wrapper;
 
@@ -2736,11 +2739,13 @@
             segments.forEach((seg, i) => {
                 let node = wrapper._segNodes[i];
                 if (seg.type === 'text') {
-                    console.log('[RENDER TEXT]', {
-                        index: i,
-                        content: seg.content,
-                        target: target
-                    });
+                    if (isDebug) {
+                        console.log('[RENDER TEXT]', {
+                            index: i,
+                            content: seg.content,
+                            target: target
+                        });
+                    }
 
                     if (!node || node.dataset.segType !== 'text') {
                         node = document.createElement('div');
