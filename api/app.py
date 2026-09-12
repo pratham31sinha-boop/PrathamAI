@@ -207,7 +207,7 @@ MISTRAL_API_KEY      = os.environ.get("MISTRAL_API_KEY", "").strip()
 SUPABASE_URL         = os.environ.get("SUPABASE_URL", "https://ksroorygbrhwpnqtjbxo.supabase.co").strip()
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 GITHUB_TOKEN         = os.environ.get("GITHUB_TOKEN", "").strip()
-GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/data").strip()
+GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/PrathamAI").strip()
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
@@ -2251,6 +2251,8 @@ def worker_debug():
         "online": is_online,
         "url_configured": bool(resolved_url),
         "token_configured": bool(token),
+        "endpoint_url": resolved_url,
+        "repo_slug": _github_repo_slug(),
         "model": (best or {}).get("model", "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ") if best else "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ",
         "github_token_configured": bool(GITHUB_TOKEN),
         "supabase_configured": bool(SUPABASE_CONFIGURED),
@@ -3441,11 +3443,12 @@ def _do_stream(messages):
     # server-side for diagnosis but never expose infrastructure internals
     # (URLs, provider names, error codes) to the user.
     print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
+    last_err = _failure_log[0][1] if _failure_log else "Worker unreachable"
     yield _sse({
         "type": "error",
         "error": {
             "code": "WORKER_OFFLINE",
-            "message": "Qwen compute worker is currently offline or unreachable."
+            "message": f"Qwen compute worker is currently offline or unreachable: {last_err}"
         }
     })
     yield _sse({"type": "complete"})

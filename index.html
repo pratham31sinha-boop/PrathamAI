@@ -3390,6 +3390,21 @@
                             }
                             fullText += payload.text;
                             if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
+                        } else if (payload.type === 'error') {
+                            if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
+                            if (!modelWrapper) {
+                                removeTypingIndicator();
+                                modelWrapper = mountModelOutputTargetShell();
+                            }
+                            if (_activeThinkingWrap) {
+                                _activeThinkingWrap.classList.remove('expanded');
+                                _activeThinkingWrap.classList.add('done');
+                                const sm = _activeThinkingWrap.querySelector('.tw-summary');
+                                if (sm) sm.innerText = 'Interrupted';
+                            }
+                            const errMsg = (payload.error && payload.error.message) ? payload.error.message : (typeof payload.error === 'string' ? payload.error : 'An error occurred.');
+                            fullText += (fullText ? '\n\n' : '') + `⚠️ ${errMsg}`;
+                            updateAssistantMessageDOM(modelWrapper, fullText);
                         } else if (payload.type === 'image') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             if (!window._toolCount) window._toolCount = 0;
@@ -3595,6 +3610,7 @@
                             }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
+                            if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (modelWrapper) {
                                 modelWrapper.querySelectorAll('[data-seg-type="text"]').forEach(n => { n._katexDone = false; });
                                 updateAssistantMessageDOM(modelWrapper, fullText);
