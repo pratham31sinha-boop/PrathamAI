@@ -2047,7 +2047,12 @@ def worker_heartbeat():
     never bypasses or substitutes for the actual /v1/chat/stream request
     that does the real work, and it never claims Colab has guaranteed
     uptime; a worker that stops heartbeating simply goes stale and the
-    routing logic in _stream_qwen_worker below naturally stops using it."""
+    routing logic in _stream_qwen_worker below naturally stops using it.
+
+    The worker MAY also send `endpoint_url` in the heartbeat body — this
+    updates the registry with the current public tunnel URL so the backend
+    always knows where to route chat requests, even if the tunnel URL
+    changed since the last /api/worker/register call."""
     body = request.get_json(silent=True) or {}
     worker_id = (body.get("worker_id") or "").strip()
     if not worker_id:
@@ -2055,9 +2060,57 @@ def worker_heartbeat():
     now = time.time()
     with _worker_registry_lock:
         prev = _worker_registry.get(worker_id, {})
+    # endpoint_url: if the worker sends it, update; otherwise keep whatever
+    # was registered via /api/worker/register (or the static env var fallback).
+    new_endpoint = (body.get("endpoint_url") or "").strip().rstrip("/")
     entry = {
         "worker_id": worker_id,
         "status": body.get("status", "online"),
+        "model": body.get("model", prev.get("model", "unknown")),
+        "gpu": body.get("gpu", prev.get("gpu", "unknown")),
+        "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
+        "version": body.get("version", prev.get("version", "1.0")),
+        "endpoint_url": new_endpoint or prev.get("endpoint_url", ""),
+        "last_seen": datetime.now(timezone.utc).isoformat(),
+        "last_seen_epoch": now,
+        "latency_ms": prev.get("latency_ms"),
+    }
+    _worker_upsert(entry)
+    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')} "
+          f"endpoint={'updated' if new_endpoint else 'unchanged'} "
+          f"(persisted={'supabase' if SUPABASE_CONFIGURED else 'in-memory only'})")
+    return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
+
+@app.route("/api/worker/register", methods=["POST", "OPTIONS"])
+@require_worker_auth
+def worker_register():
+    """One-shot registration call sent by a Pratham AI Worker the moment its
+    public tunnel endpoint comes up (or when the tunnel URL changes after a
+    Colab runtime restart). Stores `endpoint_url` in the durable registry so
+    _stream_qwen_worker can immediately route chat traffic to the correct
+    address without any manual env-var edit.
+
+    The worker treats this as an *initial* heartbeat too: calling register
+    marks the worker ONLINE right away, so users don't have to wait up to
+    5 minutes for the first regular heartbeat tick to show the indicator."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    worker_id = (body.get("worker_id") or "").strip()
+    endpoint_url = (body.get("endpoint_url") or "").strip().rstrip("/")
+    if not worker_id:
+        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST",
+            "message": "worker_id is required"}}), 400
+    if not endpoint_url:
+        return jsonify({"ok": False, "error": {"code": "INVALID_REQUEST",
+            "message": "endpoint_url is required — pass the full public tunnel URL (e.g. https://xxxx.ngrok-free.app)"}}), 400
+    now = time.time()
+    with _worker_registry_lock:
+        prev = _worker_registry.get(worker_id, {})
+    entry = {
+        "worker_id": worker_id,
+        "status": "online",
+        "endpoint_url": endpoint_url,
         "model": body.get("model", prev.get("model", "unknown")),
         "gpu": body.get("gpu", prev.get("gpu", "unknown")),
         "vram_gb": body.get("vram_gb", prev.get("vram_gb")),
@@ -2067,9 +2120,14 @@ def worker_heartbeat():
         "latency_ms": prev.get("latency_ms"),
     }
     _worker_upsert(entry)
-    print(f"[WORKER] heartbeat from '{worker_id}' — status={body.get('status')} model={body.get('model')} "
+    print(f"[WORKER][REGISTER] '{worker_id}' registered endpoint={endpoint_url} "
+          f"model={body.get('model')} gpu={body.get('gpu')} "
           f"(persisted={'supabase' if SUPABASE_CONFIGURED else 'in-memory only'})")
-    return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
+    return jsonify({
+        "ok": True,
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+        "routing": "active",  # tells the worker it will now receive chat traffic
+    })
 
 @app.route("/api/worker/status", methods=["GET", "OPTIONS"])
 def worker_status():
@@ -2863,8 +2921,13 @@ def _stream_mistral(messages, state=None):
 #                             catches and fails over to the next provider
 def _stream_qwen_worker(messages, state=None):
     best = _worker_get_latest()
-    if not QWEN_WORKER_URL or not PRATHAM_WORKER_TOKEN or not _worker_is_online(best):
-        raise RuntimeError("Pratham AI worker is offline (no recent heartbeat).")
+    # Resolve the live endpoint URL: prefer what the worker dynamically
+    # registered (covers fresh Colab sessions where the tunnel URL changes),
+    # fall back to the static QWEN_WORKER_URL env var (useful for stable
+    # deployments like a home server with a fixed domain).
+    _live_url = (best or {}).get("endpoint_url", "").strip().rstrip("/") or QWEN_WORKER_URL
+    if not _live_url or not PRATHAM_WORKER_TOKEN or not _worker_is_online(best):
+        raise RuntimeError("Pratham AI worker is offline (no recent heartbeat or no endpoint URL registered).")
 
     started = time.time()
     body = json.dumps({
@@ -2874,7 +2937,7 @@ def _stream_qwen_worker(messages, state=None):
         "temperature": (state or {}).pop("temperature", 0.1) if state else 0.1,
     }).encode()
     req = urllib.request.Request(
-        f"{QWEN_WORKER_URL}/v1/chat/stream",
+        f"{_live_url}/v1/chat/stream",
         data=body, method="POST",
         headers={
             "Authorization": f"Bearer {PRATHAM_WORKER_TOKEN}",
