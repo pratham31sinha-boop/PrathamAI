@@ -2018,28 +2018,111 @@ def require_auth(f):
 # heartbeat must carry "Authorization: Bearer <PRATHAM_WORKER_TOKEN>" or it is
 # rejected with 401 — an unauthenticated caller can never register itself as
 # an online worker or receive chat traffic.
+# ── PRATHAM AI WORKER AUTH & HELPERS ──
+def _clean_token(val: str) -> str:
+    if not val:
+        return ""
+    val = val.strip()
+    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+        val = val[1:-1].strip()
+    return val
+
+def _get_expected_worker_token() -> str:
+    raw = os.environ.get("PRATHAM_WORKER_TOKEN") or PRATHAM_WORKER_TOKEN or ""
+    return _clean_token(raw)
+
+def _get_auth_header() -> str:
+    h = request.headers.get("Authorization", "")
+    if not h:
+        h = request.environ.get("HTTP_AUTHORIZATION", "")
+    return h.strip() if h else ""
+
 def require_worker_auth(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if request.method == "OPTIONS":
             return _cors_preflight()
-        if not PRATHAM_WORKER_TOKEN:
+        
+        expected = _get_expected_worker_token()
+        env_present = bool(expected)
+        
+        auth_header = _get_auth_header()
+        header_present = bool(auth_header)
+        
+        scheme = "missing"
+        presented = ""
+        if header_present:
+            if auth_header.lower().startswith("bearer "):
+                scheme = "Bearer"
+                presented = _clean_token(auth_header[7:])
+            else:
+                scheme = "other"
+                presented = _clean_token(auth_header)
+        
+        token_match = False
+        if env_present and presented:
+            token_match = hmac.compare_digest(presented, expected)
+            
+        print(f"[WORKER AUTH] env_present={str(env_present).lower()}")
+        print(f"[WORKER AUTH] header_present={str(header_present).lower()}")
+        print(f"[WORKER AUTH] scheme={scheme}")
+        print(f"[WORKER AUTH] token_match={str(token_match).lower()}")
+        
+        if not env_present:
             return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED",
                 "message": "No PRATHAM_WORKER_TOKEN configured on this backend; worker auth is disabled."}}), 401
-        auth_header = request.headers.get("Authorization", "")
-        presented = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
-        if not presented or not hmac.compare_digest(presented, PRATHAM_WORKER_TOKEN):
+        if not token_match:
             return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED",
                 "message": "Invalid or missing worker token."}}), 401
         return f(*args, **kwargs)
     return wrapper
+
+@app.route("/api/worker/auth-debug", methods=["GET", "OPTIONS"], strict_slashes=False)
+def worker_auth_debug():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    
+    expected = _get_expected_worker_token()
+    env_present = bool(expected)
+    env_length = len(expected)
+    
+    auth_header = _get_auth_header()
+    header_received = bool(auth_header)
+    
+    scheme = "missing"
+    presented = ""
+    if header_received:
+        if auth_header.lower().startswith("bearer "):
+            scheme = "Bearer"
+            presented = _clean_token(auth_header[7:])
+        else:
+            scheme = "other"
+            presented = _clean_token(auth_header)
+            
+    token_match = False
+    if env_present and presented:
+        token_match = hmac.compare_digest(presented, expected)
+        
+    print(f"[WORKER AUTH] env_present={str(env_present).lower()}")
+    print(f"[WORKER AUTH] header_present={str(header_received).lower()}")
+    print(f"[WORKER AUTH] scheme={scheme}")
+    print(f"[WORKER AUTH] token_match={str(token_match).lower()}")
+    
+    return jsonify({
+        "env_present": env_present,
+        "env_length": env_length,
+        "header_received": header_received,
+        "auth_scheme": scheme,
+        "expected_env_name": "PRATHAM_WORKER_TOKEN"
+    })
+
 
 def _worker_is_online(entry: dict) -> bool:
     if not entry:
         return False
     return (time.time() - entry.get("last_seen_epoch", 0)) <= WORKER_ONLINE_TIMEOUT_SECONDS
 
-@app.route("/api/worker/heartbeat", methods=["POST", "OPTIONS"])
+@app.route("/api/worker/heartbeat", methods=["POST", "OPTIONS"], strict_slashes=False)
 @require_worker_auth
 def worker_heartbeat():
     """Receives a heartbeat from a Pratham AI Worker (e.g. the Colab
@@ -2081,7 +2164,7 @@ def worker_heartbeat():
           f"(persisted={'supabase' if SUPABASE_CONFIGURED else 'in-memory only'})")
     return jsonify({"ok": True, "received_at": datetime.now(timezone.utc).isoformat()})
 
-@app.route("/api/worker/register", methods=["POST", "OPTIONS"])
+@app.route("/api/worker/register", methods=["POST", "OPTIONS"], strict_slashes=False)
 @require_worker_auth
 def worker_register():
     """One-shot registration call sent by a Pratham AI Worker the moment its
