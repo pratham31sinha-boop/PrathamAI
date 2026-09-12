@@ -3825,6 +3825,17 @@ def chat_stream():
     conv_id = body.get("conversation_id") or None
     web_search_disabled = bool(_NO_WEB_SEARCH_TAG_RE.search(message))
 
+    # When the Pratham AI worker (Colab GPU) is online, skip the mandatory
+    # web-search preamble entirely. The worker is a fast, always-resident
+    # local model meant for quick/coding-oriented replies — forcing every
+    # message through a ~20s web search first defeats that purpose and
+    # produces a confusing "why did 'hi' search the web" experience. Cloud
+    # provider replies (when the worker is offline) keep the existing
+    # mandatory web-search grounding behavior unchanged.
+    _worker_available_for_request = _worker_is_online(_worker_get_latest())
+    if _worker_available_for_request:
+        web_search_disabled = True
+
     if not message:
         return jsonify({"error": "Message content cannot be blank"}), 400
 
