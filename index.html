@@ -3220,8 +3220,38 @@
             return rawText.replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char] || char));
         }
 
+        function prathamAIForceComposerReady() {
+            try {
+                isGenerating = false;
+            } catch (e) {}
+            try { window.isGenerating = false; } catch (e) {}
+            try {
+                if (window._thinkingCycleTimer) {
+                    clearInterval(window._thinkingCycleTimer);
+                    window._thinkingCycleTimer = null;
+                }
+            } catch (e) {}
+            try {
+                if (typeof inputActionSubmitBtn !== 'undefined' && inputActionSubmitBtn) {
+                    inputActionSubmitBtn.disabled = false;
+                    inputActionSubmitBtn.removeAttribute('disabled');
+                    inputActionSubmitBtn.classList.remove('opacity-60', 'is-stopping', 'sending');
+                    inputActionSubmitBtn.innerHTML = '↑';
+                    inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
+                    inputActionSubmitBtn.title = 'Send message';
+                }
+            } catch (e) {}
+            try { clearAgentActivity(); } catch (e) {}
+            try { userPromptInputField.focus(); } catch (e) {}
+        }
+        window.prathamAIForceComposerReady = prathamAIForceComposerReady;
+
         async function dispatchChatMessage() {
             const typedMessage = userPromptInputField.value.trim();
+            // Never let a stale flag block a new message after a completed/stopped stream.
+            if (isGenerating && !window._activeChatReader && !window._activeChatAbortController) {
+                prathamAIForceComposerReady();
+            }
             if ((!typedMessage && !pendingPasteAttachment && !pendingFileAttachment) || isGenerating) return;
 
             if (typedMessage === "31082011") {
@@ -3730,6 +3760,7 @@
                 }
             } finally {
                 isGenerating = false;
+                window.isGenerating = false;
                 _activeChatReader = null;
                 _activeChatAbortController = null;
                 _activeChatStoppedByUser = false;
@@ -4246,6 +4277,11 @@
             });
             interactionSubmissionForm.addEventListener('submit', (e) => {
                 e.preventDefault();
+                // If the previous stream ended but left a stale UI flag behind,
+                // recover synchronously before dispatching the next message.
+                if (isGenerating && !window._activeChatReader && !window._activeChatAbortController) {
+                    prathamAIForceComposerReady();
+                }
                 dispatchChatMessage();
             });
 
@@ -4847,6 +4883,24 @@
     const b=document.getElementById('input-action-submit-btn');
     if(!b) return;
     b.dataset.streamReady='true';
+
+    // Final recovery watchdog: after any stream finishes/stops, a stale state
+    // must never permanently lock the composer.
+    const recoverComposer = () => {
+        try {
+            const generating = (typeof isGenerating !== 'undefined' && isGenerating);
+            const active = !!window._activeChatReader || !!window._activeChatAbortController;
+            if (!generating && !active) {
+                b.disabled = false;
+                b.removeAttribute('disabled');
+                b.classList.remove('opacity-60','is-stopping','sending');
+                b.innerHTML = '↑';
+                b.setAttribute('aria-label','Send message');
+                b.title = 'Send message';
+            }
+        } catch(e) {}
+    };
+    window.setInterval(recoverComposer, 750);
 })();
 </script>
 </body>
