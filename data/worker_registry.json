@@ -1,12 +1,12 @@
 {
   "worker_id": "daytona-ollama-primary",
   "status": "online",
-  "endpoint_url": "https://7860-nzwxmotemek69szg.daytonaproxy01.eu",
   "model": "qwen-local",
   "gpu": "CPU",
-  "vram_gb": 0,
-  "version": "daytona-ollama-1.0",
-  "last_seen": "2026-09-13T11:00:25.081802+00:00",
-  "last_seen_epoch": 1789297225.0817935,
+  "vram_gb": 14.56,
+  "version": "1.0",
+  "endpoint_url": "https://7860-nzwxmotemek69szg.daytonaproxy01.eu",
+  "last_seen": "2026-09-13T11:45:16.891536+00:00",
+  "last_seen_epoch": 1789299916.8915267,
   "latency_ms": null
 }
