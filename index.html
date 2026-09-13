@@ -3247,6 +3247,11 @@
         window.prathamAIForceComposerReady = prathamAIForceComposerReady;
 
         async function dispatchChatMessage() {
+            // Track whether useful output already reached the browser so a late
+            // transport close cannot overwrite a valid streamed answer with a
+            // misleading connection-error card.
+            let _streamReceivedOutput = false;
+            let _streamFinishedByProtocol = false;
             const typedMessage = userPromptInputField.value.trim();
             // Never let a stale flag block a new message after a completed/stopped stream.
             if (isGenerating && !window._activeChatReader && !window._activeChatAbortController) {
@@ -3444,6 +3449,7 @@
                                 if (sm) sm.innerText = 'Completed';
                             }
                             fullText += payload.text;
+                            _streamReceivedOutput = true;
                             // Paint each SSE delta as soon as it arrives. This keeps the answer visibly
                             // live while Qwen is still generating instead of waiting for the full response.
                             if (modelWrapper) {
@@ -3671,6 +3677,7 @@
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
                             sawCompleteEvent = true;
+                            _streamFinishedByProtocol = true;
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (modelWrapper) {
                                 modelWrapper.querySelectorAll('[data-seg-type="text"]').forEach(n => { n._katexDone = false; });
@@ -3709,12 +3716,17 @@
                             window._toolCount = 0;
                         }
                     }
+
+                    // `complete` is authoritative. Stop reading immediately instead of
+                    // waiting for a proxy/worker socket to close. This is what makes the
+                    // composer return to Send mode promptly after a finished response.
+                    if (sawCompleteEvent) break;
                 }
 
                 // Final safety net: whether the server sent `complete`,
                 // closed the SSE stream normally, or a proxy ended the stream
                 // after the answer, always restore the composer to Send mode.
-                if (!sawCompleteEvent) {
+                if (!sawCompleteEvent && !_streamFinishedByProtocol) {
                     if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                     clearAgentActivity();
                     try { finalizeThinkingWrap(); } catch (e) {}
@@ -3746,10 +3758,20 @@
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
                 // Abort is an intentional user action — never turn it into a fake error.
+                // If useful output has already streamed, keep that answer visible and
+                // simply finalize the UI; a late proxy/socket close is not a new chat error.
                 const wasUserStopped = _activeChatStoppedByUser || (err && err.name === 'AbortError');
+                const alreadyHasAnswer = _streamReceivedOutput || !!fullText;
                 removeTypingIndicator();
                 clearAgentActivity();
-                if (!wasUserStopped) {
+                try {
+                    if (window._thinkingCycleTimer) {
+                        clearInterval(window._thinkingCycleTimer);
+                        window._thinkingCycleTimer = null;
+                    }
+                    finalizeThinkingWrap();
+                } catch (e) {}
+                if (!wasUserStopped && !alreadyHasAnswer) {
                     const wrapper = mountModelOutputTargetShell();
                     const cell = document.createElement('div');
                     cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
@@ -3757,6 +3779,12 @@
                     cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
                     wrapper.appendChild(cell);
                     console.error("[CHAT][STREAM ERROR]", err);
+                } else if (!wasUserStopped && alreadyHasAnswer) {
+                    console.warn("[CHAT][STREAM CLOSED AFTER OUTPUT]", err);
+                    try {
+                        const active = document.querySelector('.model-output-target-shell:last-child');
+                        if (active && fullText) updateAssistantMessageDOM(active, fullText);
+                    } catch (e) {}
                 }
             } finally {
                 isGenerating = false;
@@ -3771,7 +3799,12 @@
                     inputActionSubmitBtn.title = 'Send message';
                 }
                 inputActionSubmitBtn.disabled = false;
-                inputActionSubmitBtn.classList.remove('opacity-60');
+                inputActionSubmitBtn.removeAttribute('disabled');
+                inputActionSubmitBtn.classList.remove('opacity-60', 'is-stopping', 'sending');
+                inputActionSubmitBtn.innerHTML = '↑';
+                inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
+                inputActionSubmitBtn.title = 'Send message';
+                try { if (window.prathamAIForceComposerReady) window.prathamAIForceComposerReady(); } catch (e) {}
                 userPromptInputField.focus();
             }
         }
@@ -4901,6 +4934,32 @@
         } catch(e) {}
     };
     window.setInterval(recoverComposer, 750);
+})();
+</script>
+
+<script>
+/* FINAL COMPOSER GUARD: a dead/stale stream must never lock the next turn. */
+(function(){
+    const form=document.getElementById('interaction-submission-form');
+    const btn=document.getElementById('input-action-submit-btn');
+    if(!form || !btn) return;
+    function recover(){
+        try{
+            const generating=(typeof isGenerating!=='undefined') && isGenerating;
+            const active=!!window._activeChatReader || !!window._activeChatAbortController;
+            if(!generating && !active){
+                btn.disabled=false;
+                btn.removeAttribute('disabled');
+                btn.classList.remove('opacity-60','is-stopping','sending');
+                btn.innerHTML='↑';
+                btn.setAttribute('aria-label','Send message');
+                btn.title='Send message';
+            }
+        }catch(e){}
+    }
+    setInterval(recover,500);
+    window.addEventListener('focus',recover);
+    document.addEventListener('visibilitychange',recover);
 })();
 </script>
 </body>
