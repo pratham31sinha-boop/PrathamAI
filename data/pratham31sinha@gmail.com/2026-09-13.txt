@@ -22,3 +22,9 @@ User: who is ur creator can u give breif about him
 Pratham AI:
 I was created by Pratham Sinha, a developer who built and runs this app. Pratham is likely a person with expertise in artificial intelligence and software development, responsible for designing and implementing the features and functionality of this application. If you have any specific questions about the app or its features, feel free to ask!
 ================================================================================
+
+=== 2026-09-13T12:15:51.898606+00:00 ===
+User: hi
+Pratham AI:
+Hello! How can I assist you today?
+================================================================================
