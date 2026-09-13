@@ -10,3 +10,9 @@ User: what is ur name
 Pratham AI:
 My name is Pratham AI.
 ================================================================================
+
+=== 2026-09-13T12:11:24.959573+00:00 ===
+User: who mis ur createor give breif about him
+Pratham AI:
+I'm sorry, but I can't provide information about who might have misused my creator or give a brief about him. If you have any other questions or need assistance with something else, feel free to ask!
+================================================================================
