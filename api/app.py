@@ -248,6 +248,15 @@ QWEN_WORKER_SIMPLE_MAX_CHARS = int(os.environ.get("QWEN_WORKER_SIMPLE_MAX_CHARS"
 QWEN_WORKER_CODE_MAX_CHARS = int(os.environ.get("QWEN_WORKER_CODE_MAX_CHARS", "9000"))
 QWEN_WORKER_SIMPLE_HISTORY_MESSAGES = int(os.environ.get("QWEN_WORKER_SIMPLE_HISTORY_MESSAGES", "4"))
 QWEN_WORKER_CODE_HISTORY_MESSAGES = int(os.environ.get("QWEN_WORKER_CODE_HISTORY_MESSAGES", "6"))
+# Keep the Ollama model resident in memory so ordinary turns do not repeatedly
+# pay the model-load penalty.  The worker must pass this field through to
+# Ollama's /api/chat request; older worker builds may safely ignore it.
+QWEN_WORKER_KEEP_ALIVE = os.environ.get("QWEN_WORKER_KEEP_ALIVE", "-1")
+# Small-context defaults reduce CPU prompt-evaluation time.  Code requests get
+# a larger window so long HTML/JS work still has room, while simple chat starts
+# as quickly as possible on CPU-only Daytona workers.
+QWEN_WORKER_SIMPLE_NUM_CTX = int(os.environ.get("QWEN_WORKER_SIMPLE_NUM_CTX", "2048"))
+QWEN_WORKER_CODE_NUM_CTX = int(os.environ.get("QWEN_WORKER_CODE_NUM_CTX", "4096"))
 QWEN_WORKER_RECENT_MESSAGE_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_RECENT_MESSAGE_CHAR_LIMIT", "1800"))
 QWEN_WORKER_SPECIAL_CONTEXT_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_SPECIAL_CONTEXT_CHAR_LIMIT", "3000"))
 QWEN_WORKER_SYSTEM_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_SYSTEM_CHAR_LIMIT", "4200"))
@@ -3572,7 +3581,13 @@ def _stream_qwen_worker(messages, state=None):
         "temperature": worker_temperature,
         # Newer worker builds can use this hint to construct a smaller llama.cpp
         # context.  Older worker builds safely ignore unknown JSON fields.
-        "num_ctx": worker_meta["context_tokens"],
+        "num_ctx": min(
+            worker_meta["context_tokens"],
+            QWEN_WORKER_CODE_NUM_CTX if worker_meta["code_request"] else QWEN_WORKER_SIMPLE_NUM_CTX,
+        ),
+        # Ollama accepts -1 to keep the model loaded in memory indefinitely.
+        # This removes repeated model-load latency between normal turns.
+        "keep_alive": QWEN_WORKER_KEEP_ALIVE,
     }).encode()
     
     req = urllib.request.Request(
