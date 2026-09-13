@@ -3327,9 +3327,16 @@
                     if (modelWrapper) updateAssistantMessageDOM(modelWrapper, fullText);
                 };
 
+                let sawCompleteEvent = false;
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        // Some proxies/workers may close the SSE stream without
+                        // delivering the final `complete` event. Treat a clean
+                        // stream EOF as completion so the UI can never remain
+                        // stuck in the generating state.
+                        break;
+                    }
                     if (_activeChatStoppedByUser) {
                         try { await reader.cancel(); } catch (e) {}
                         break;
@@ -3633,6 +3640,7 @@
                             }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
+                            sawCompleteEvent = true;
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (modelWrapper) {
                                 modelWrapper.querySelectorAll('[data-seg-type="text"]').forEach(n => { n._katexDone = false; });
@@ -3670,6 +3678,25 @@
                             window._execCount = 0;
                             window._toolCount = 0;
                         }
+                    }
+                }
+
+                // Final safety net: whether the server sent `complete`,
+                // closed the SSE stream normally, or a proxy ended the stream
+                // after the answer, always restore the composer to Send mode.
+                if (!sawCompleteEvent) {
+                    if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
+                    clearAgentActivity();
+                    try { finalizeThinkingWrap(); } catch (e) {}
+                    _activeChatReader = null;
+                    _activeChatAbortController = null;
+                    _activeChatStoppedByUser = false;
+                    if (inputActionSubmitBtn) {
+                        inputActionSubmitBtn.classList.remove('is-stopping');
+                        inputActionSubmitBtn.classList.remove('sending');
+                        inputActionSubmitBtn.innerHTML = '↑';
+                        inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
+                        inputActionSubmitBtn.title = 'Send message';
                     }
                 }
 
