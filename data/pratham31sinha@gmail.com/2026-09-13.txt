@@ -381,3 +381,9 @@ The conversation's own prior messages for context.
 Pratham AI:
 Understood. I will adhere to the guidelines you provided. If you have any questions or need assistance, feel free to ask.
 ================================================================================
+
+=== 2026-09-13T13:02:08.958825+00:00 ===
+User: Hi
+Pratham AI:
+Hello! How can I assist you today?
+================================================================================
