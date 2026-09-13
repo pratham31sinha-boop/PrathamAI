@@ -263,6 +263,25 @@ QWEN_WORKER_SYSTEM_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_SYSTEM_CHAR_LIMI
 QWEN_WORKER_SIMPLE_CONTEXT_TOKENS = int(os.environ.get("QWEN_WORKER_SIMPLE_CONTEXT_TOKENS", "1024"))
 QWEN_WORKER_CODE_CONTEXT_TOKENS = int(os.environ.get("QWEN_WORKER_CODE_CONTEXT_TOKENS", "2048"))
 
+# ── FINAL QWEN CPU PERFORMANCE OVERRIDES ────────────────────────────────────
+# Keep these as additive overrides so older configuration remains compatible.
+# Simple chats get a much smaller prompt/context, which sharply reduces
+# time-to-first-token on CPU while preserving the larger path for coding work.
+QWEN_WORKER_SIMPLE_MAX_CHARS = min(QWEN_WORKER_SIMPLE_MAX_CHARS, 2600)
+QWEN_WORKER_SIMPLE_HISTORY_MESSAGES = min(QWEN_WORKER_SIMPLE_HISTORY_MESSAGES, 2)
+QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS = min(QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS, 256)
+QWEN_WORKER_SIMPLE_NUM_CTX = min(QWEN_WORKER_SIMPLE_NUM_CTX, 1024)
+QWEN_WORKER_SIMPLE_CONTEXT_TOKENS = min(QWEN_WORKER_SIMPLE_CONTEXT_TOKENS, 768)
+QWEN_WORKER_CODE_MAX_CHARS = min(QWEN_WORKER_CODE_MAX_CHARS, 6500)
+QWEN_WORKER_CODE_HISTORY_MESSAGES = min(QWEN_WORKER_CODE_HISTORY_MESSAGES, 4)
+QWEN_WORKER_CODE_MAX_NEW_TOKENS = min(QWEN_WORKER_CODE_MAX_NEW_TOKENS, 768)
+QWEN_WORKER_CODE_NUM_CTX = min(QWEN_WORKER_CODE_NUM_CTX, 3072)
+QWEN_WORKER_CODE_CONTEXT_TOKENS = min(QWEN_WORKER_CODE_CONTEXT_TOKENS, 2048)
+
+# Disable expensive auto-continuation for ordinary conversational turns.
+# Long coding/build requests still retain the existing continuation safety net.
+QWEN_SIMPLE_MAX_AUTO_CONTINUATIONS = 0
+
 # ── SELF-HEALING WORKER HEALTH PROBE ────────────────────────────────────────
 # Heartbeats are useful, but serverless cold starts and paused notebooks can
 # make the registry timestamp stale even while the worker HTTP service is
@@ -3802,6 +3821,18 @@ _PROVIDER_CHAIN = [
 
 _MAX_AUTO_CONTINUATIONS = 6  # hard cap on "continue where you left off" cycles per single reply
 
+
+def _qwen_allows_auto_continuation(messages: list) -> bool:
+    """Only use expensive continuation requests for code/build-style tasks."""
+    try:
+        user_text = _qwen_last_user_message(messages or "")
+    except Exception:
+        user_text = ""
+    try:
+        return not _qwen_is_simple_request(user_text) or _qwen_is_code_request(user_text, messages or [])
+    except Exception:
+        return True
+
 def _do_stream(messages):
     """Streams a reply from the first available provider, then — this is
     the fix for "it stops making the HTML in the middle" — automatically
@@ -3839,6 +3870,11 @@ def _do_stream(messages):
                 if not got_tokens_this_round:
                     break
                 if state.get("finish_reason") != "length":
+                    break
+                # A normal chat should finish immediately after Qwen's natural stop.
+                # Only code/build requests may trigger an additional model call.
+                if not _qwen_allows_auto_continuation(messages):
+                    print("[QWEN] natural/simple turn — continuation disabled")
                     break
                 if continuation_count >= _MAX_AUTO_CONTINUATIONS:
                     break
