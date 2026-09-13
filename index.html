@@ -1786,6 +1786,10 @@
         let activeUserIdentityEmail = "";
         let currentExtractedPreviewArtifactPayload = "";
         let isGenerating = false;
+        // Live-stream controls: the current reader can be cancelled cleanly from the UI.
+        let _activeChatReader = null;
+        let _activeChatStoppedByUser = false;
+        let _activeChatAbortController = null;
         let allHistoryItemsCache = [];
         let pendingPasteAttachment = null;
         let pendingFileAttachment = null;
@@ -3298,6 +3302,8 @@
                 }
 
                 const reader = response.body.getReader();
+                _activeChatReader = reader;
+                _activeChatStoppedByUser = false;
                 const decoder = new TextDecoder();
                 let buffer = '', modelWrapper = null, fullText = '';
                 let renderQueued = false;
@@ -3389,7 +3395,12 @@
                                 if (sm) sm.innerText = 'Completed';
                             }
                             fullText += payload.text;
-                            if (!renderQueued) { renderQueued = true; requestAnimationFrame(flushRender); }
+                            // Paint each SSE delta as soon as it arrives. This keeps the answer visibly
+                            // live while Qwen is still generating instead of waiting for the full response.
+                            if (modelWrapper) {
+                                updateAssistantMessageDOM(modelWrapper, fullText);
+                            }
+                            renderQueued = false;
                         } else if (payload.type === 'error') {
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (!modelWrapper) {
@@ -3634,6 +3645,16 @@
                             _activeStepList = null;
                             _activeThinkingWrap = null;
                             pushTerminalLog('Response complete.');
+                            clearAgentActivity();
+                            _activeChatReader = null;
+                            _activeChatAbortController = null;
+                            _activeChatStoppedByUser = false;
+                            if (inputActionSubmitBtn) {
+                                inputActionSubmitBtn.classList.remove('is-stopping');
+                                inputActionSubmitBtn.innerHTML = '↑';
+                                inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
+                                inputActionSubmitBtn.title = 'Send message';
+                            }
                             window._execCount = 0;
                             window._toolCount = 0;
                         }
@@ -3666,6 +3687,15 @@
                 console.error("[CHAT][STREAM ERROR]", err);
             } finally {
                 isGenerating = false;
+                _activeChatReader = null;
+                _activeChatAbortController = null;
+                _activeChatStoppedByUser = false;
+                if (inputActionSubmitBtn) {
+                    inputActionSubmitBtn.classList.remove('is-stopping');
+                    inputActionSubmitBtn.innerHTML = '↑';
+                    inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
+                    inputActionSubmitBtn.title = 'Send message';
+                }
                 inputActionSubmitBtn.disabled = false;
                 inputActionSubmitBtn.classList.remove('opacity-60');
                 userPromptInputField.focus();
@@ -4622,6 +4652,97 @@
         // rely on the browser's own rAF throttling when hidden. This is a no-op safety net.
     })();
     </script>
+
+
+
+        /* ================================================================
+           LIVE QWEN STREAM CONTROLS — additive patch
+           - Stop button cancels the active browser stream immediately.
+           - The current partial answer stays visible.
+           - Streaming deltas are painted as they arrive.
+           ================================================================ */
+        const _liveStreamPatchStyle = document.createElement('style');
+        _liveStreamPatchStyle.textContent = `
+            #input-action-submit-btn.is-stopping {
+                background: var(--panel) !important;
+                color: var(--accent) !important;
+                border: 1px solid var(--accent) !important;
+                box-shadow: 0 0 0 1px rgba(194,97,63,.18), 0 6px 18px rgba(194,97,63,.18) !important;
+                transform: scale(.96);
+            }
+            #input-action-submit-btn.is-stopping::after {
+                content: '';
+                width: 10px;
+                height: 10px;
+                border-radius: 2px;
+                background: currentColor;
+                display: block;
+            }
+            #agent-activity-strip.stream-stopped #agent-activity-strip-text {
+                color: var(--text-dim);
+            }
+        `;
+        document.head.appendChild(_liveStreamPatchStyle);
+
+        window.stopPrathamAIResponse = function () {
+            if (!window._activeChatReader && !isGenerating) return;
+            _activeChatStoppedByUser = true;
+            try { clearAgentActivity(); } catch (e) {}
+            try { setAgentActivity('Stopped'); } catch (e) {}
+            if (agentActivityStrip) agentActivityStrip.classList.add('stream-stopped');
+            if (window._thinkingCycleTimer) {
+                clearInterval(window._thinkingCycleTimer);
+                window._thinkingCycleTimer = null;
+            }
+            try {
+                if (_activeChatReader) _activeChatReader.cancel();
+            } catch (e) {}
+            if (inputActionSubmitBtn) {
+                inputActionSubmitBtn.classList.remove('is-stopping');
+                inputActionSubmitBtn.disabled = true;
+            }
+        };
+
+        // The normal send button becomes a real Stop button while Qwen is streaming.
+        if (inputActionSubmitBtn) {
+            inputActionSubmitBtn.addEventListener('click', (event) => {
+                if (!isGenerating) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                window.stopPrathamAIResponse();
+            }, true);
+        }
+
+        // If the activity strip is cleared after a stop, remove the stopped styling too.
+        const _originalClearAgentActivity = window.clearAgentActivity || clearAgentActivity;
+        window.clearAgentActivity = function () {
+            const result = _originalClearAgentActivity.apply(this, arguments);
+            if (agentActivityStrip) agentActivityStrip.classList.remove('stream-stopped');
+            return result;
+        };
+
+        // Make active state visually explicit as soon as a request begins.
+        const _originalDispatchForLiveState = window.dispatchChatMessage || dispatchChatMessage;
+        if (typeof _originalDispatchForLiveState === 'function') {
+            window.dispatchChatMessage = async function () {
+                _activeChatStoppedByUser = false;
+                if (agentActivityStrip) agentActivityStrip.classList.remove('stream-stopped');
+                const resultPromise = _originalDispatchForLiveState.apply(this, arguments);
+                if (inputActionSubmitBtn) {
+                    inputActionSubmitBtn.classList.add('is-stopping');
+                    inputActionSubmitBtn.innerHTML = '';
+                    inputActionSubmitBtn.setAttribute('aria-label', 'Stop response');
+                    inputActionSubmitBtn.title = 'Stop response';
+                }
+                return resultPromise;
+            };
+        }
+
+        // Prevent other code from leaving the input locked after a stopped stream.
+        window.addEventListener('beforeunload', () => {
+            try { if (_activeChatReader) _activeChatReader.cancel(); } catch (e) {}
+        });
 
 </body>
 </html>
