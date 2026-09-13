@@ -3282,10 +3282,14 @@
             pushTerminalLog(`Received request: "${message.slice(0, 60)}"`);
 
             try {
+                // Dedicated controller lets Stop terminate the network request itself,
+                // instead of merely stopping DOM updates while the server keeps working.
+                _activeChatAbortController = new AbortController();
                 const response = await smartFetchRequest('/chat-stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                    body: JSON.stringify({ message: message, conversation_id: currentConversationId })
+                    body: JSON.stringify({ message: message, conversation_id: currentConversationId }),
+                    signal: _activeChatAbortController.signal
                 });
 
                 if (!response.ok) {
@@ -3326,6 +3330,10 @@
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
+                    if (_activeChatStoppedByUser) {
+                        try { await reader.cancel(); } catch (e) {}
+                        break;
+                    }
                     buffer += decoder.decode(value, { stream: true });
                     const events = buffer.split('\n\n');
                     buffer = events.pop();
@@ -3680,15 +3688,19 @@
                 }
                 synchronizeConversationsHistoryIndex();
             } catch (err) {
+                // Abort is an intentional user action — never turn it into a fake error.
+                const wasUserStopped = _activeChatStoppedByUser || (err && err.name === 'AbortError');
                 removeTypingIndicator();
                 clearAgentActivity();
-                const wrapper = mountModelOutputTargetShell();
-                const cell = document.createElement('div');
-                cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
-                cell.style.borderRadius = '4px 16px 16px 16px';
-                cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
-                wrapper.appendChild(cell);
-                console.error("[CHAT][STREAM ERROR]", err);
+                if (!wasUserStopped) {
+                    const wrapper = mountModelOutputTargetShell();
+                    const cell = document.createElement('div');
+                    cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                    cell.style.borderRadius = '4px 16px 16px 16px';
+                    cell.innerText = "Connection interrupted. Check the target host gateway in Settings and try again.";
+                    wrapper.appendChild(cell);
+                    console.error("[CHAT][STREAM ERROR]", err);
+                }
             } finally {
                 isGenerating = false;
                 _activeChatReader = null;
@@ -4755,6 +4767,12 @@
         button.innerHTML = originalButtonHTML;
         button.setAttribute('aria-label', originalAria);
         button.title = originalTitle;
+        try {
+            isGenerating = false;
+        } catch (e) {}
+        try {
+            window.isGenerating = false;
+        } catch (e) {}
     };
 
     /* Capture phase runs before the form's normal submit/click handlers.
@@ -4794,5 +4812,15 @@
 })();
 </script>
 
+
+
+<script>
+/* FINAL STREAM POLISH: make stream state explicit and fail-safe. */
+(function(){
+    const b=document.getElementById('input-action-submit-btn');
+    if(!b) return;
+    b.dataset.streamReady='true';
+})();
+</script>
 </body>
 </html>
