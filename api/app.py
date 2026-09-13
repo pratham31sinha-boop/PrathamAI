@@ -2787,6 +2787,59 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+# ── REALTIME WORD-STREAM FLUSHER ────────────────────────────────────────────
+# Qwen may emit a delta containing several token pieces at once.  The worker
+# transport is still fully streaming, but splitting larger deltas here gives
+# the browser smaller SSE frames so the answer visibly grows while generation
+# is happening instead of appearing as one large completed response.
+#
+# We deliberately preserve whitespace with each fragment so markdown, code,
+# punctuation, and word boundaries remain exactly as generated.
+_REALTIME_STREAM_MAX_FRAGMENT_CHARS = int(
+    os.environ.get("REALTIME_STREAM_MAX_FRAGMENT_CHARS", "24")
+)
+
+def _qwen_realtime_fragments(text: str):
+    """Yield small display-ready fragments from a Qwen streaming delta.
+
+    The upstream model decides the actual tokenization.  This function only
+    controls how those already-generated characters are forwarded to the UI.
+    Very short chunks pass through immediately; larger chunks are split at
+    whitespace/punctuation boundaries and then hard-split as a final guard.
+    """
+    value = str(text or "")
+    if not value:
+        return
+
+    limit = max(4, _REALTIME_STREAM_MAX_FRAGMENT_CHARS)
+    if len(value) <= limit:
+        yield value
+        return
+
+    # Prefer word/punctuation boundaries so the UI looks natural while still
+    # remaining much more granular than a single multi-sentence delta.
+    pieces = re.findall(r"\s+|[^\s]+", value)
+    current = ""
+    for piece in pieces:
+        if current and len(current) + len(piece) > limit:
+            yield current
+            current = piece
+        else:
+            current += piece
+
+    if current:
+        yield current
+
+# Extra SSE framing guarantees for streaming deployments.  These headers are
+# harmless on normal Flask/Werkzeug and help prevent intermediary buffering.
+def _configure_realtime_sse_response(resp):
+    resp.headers["Cache-Control"] = "no-cache, no-transform"
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers["Connection"] = "keep-alive"
+    resp.headers["Content-Type"] = "text/event-stream; charset=utf-8"
+    return resp
+
+
 
 # ── SELF-VERIFICATION: post-generation accuracy checks ──
 # After the model generates a response, these functions run quick
@@ -3485,8 +3538,14 @@ def _stream_qwen_worker(messages, state=None):
                         if not answer_delta_received:
                             answer_delta_received = True
                             print("[QWEN] answer_delta received? true")
-                        tokens_streamed += 1
-                        yield _sse({"type": "token", "text": text_delta})
+                        # Forward every generated delta immediately.  When a
+                        # single upstream delta is larger, split it into small
+                        # word/punctuation fragments so the UI visibly updates
+                        # throughout a long generation instead of waiting for
+                        # the entire answer.
+                        for realtime_fragment in _qwen_realtime_fragments(text_delta):
+                            tokens_streamed += 1
+                            yield _sse({"type": "token", "text": realtime_fragment})
                 elif etype == "answer_end":
                     if state is not None:
                         state["finish_reason"] = "stop"
@@ -5283,8 +5342,7 @@ def chat_stream():
         _cleanup_terminal_workdir(terminal_workdir)
 
     resp = Response(stream_with_context(generate()), content_type="text/event-stream")
-    resp.headers["Cache-Control"] = "no-cache"
-    resp.headers["X-Accel-Buffering"] = "no"
+    _configure_realtime_sse_response(resp)
     resp.headers["Access-Control-Allow-Credentials"] = "true"
     return resp
 
