@@ -5,8 +5,8 @@
   "gpu": "CPU",
   "vram_gb": 14.56,
   "version": "1.0",
-  "endpoint_url": "https://7860-nzwxmotemek69szg.daytonaproxy01.eu",
-  "last_seen": "2026-09-13T11:53:20.295799+00:00",
-  "last_seen_epoch": 1789300400.2957907,
+  "endpoint_url": "7860-nzwxmotemek69szg.daytonaproxy01.eu",
+  "last_seen": "2026-09-13T12:00:45.002190+00:00",
+  "last_seen_epoch": 1789300845.0021832,
   "latency_ms": 949
 }
