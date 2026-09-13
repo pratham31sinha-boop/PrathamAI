@@ -234,7 +234,7 @@ PRATHAM_WORKER_TOKEN  = os.environ.get("PRATHAM_WORKER_TOKEN", "").strip()
 WORKER_ONLINE_TIMEOUT_SECONDS = int(os.environ.get("WORKER_ONLINE_TIMEOUT_SECONDS", "360"))
 # Hard cap on how long we wait on a single worker request before failing
 # over to the cloud chain — must never hang the user's chat.
-WORKER_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("WORKER_REQUEST_TIMEOUT_SECONDS", "45"))
+WORKER_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("WORKER_REQUEST_TIMEOUT_SECONDS", "120"))
 
 # ── QWEN FAST-LANE PERFORMANCE CONTROLS (additive) ──
 # CPU inference is especially sensitive to prompt-prefill size. These controls let the
@@ -3339,8 +3339,22 @@ def _qwen_worker_messages(messages: list) -> tuple[list, dict]:
 #                             continuation logic already expects
 #   - "error" events       -> raised as RuntimeError, which _do_stream
 #                             catches and fails over to the next provider
+
+_qwen_user_request_active = 0
+_qwen_user_request_lock = threading.Lock()
+
+def _qwen_mark_user_request_active(delta: int) -> None:
+    global _qwen_user_request_active
+    with _qwen_user_request_lock:
+        _qwen_user_request_active = max(0, _qwen_user_request_active + delta)
+
+def _qwen_user_request_is_active() -> bool:
+    with _qwen_user_request_lock:
+        return _qwen_user_request_active > 0
+
 def _stream_qwen_worker(messages, state=None):
     """Stream from Daytona Qwen with minimal CPU-prefill context and immediate SSE relays."""
+    _qwen_mark_user_request_active(1)
     token = _get_expected_worker_token()
     best = _worker_get_latest()
     worker_id = (best or {}).get("worker_id", "none")
@@ -3444,6 +3458,7 @@ def _stream_qwen_worker(messages, state=None):
         return
     finally:
         _worker_touch_latency(worker_id, int((time.time() - started) * 1000))
+        _qwen_mark_user_request_active(-1)
 
 
 # ── STRUCTURED OUTPUT VALIDATION: check createfile/editfile blocks ──
@@ -5724,7 +5739,7 @@ if __name__ == "__main__":
 # frozen or recycled at any time, this is a best-effort background helper, not a
 # guarantee that a serverless process will live forever. Every real chat request also
 # sends keep_alive=-1 through _stream_qwen_worker.
-QWEN_APP_HEARTBEAT_ENABLED = os.environ.get("QWEN_APP_HEARTBEAT_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+QWEN_APP_HEARTBEAT_ENABLED = os.environ.get("QWEN_APP_HEARTBEAT_ENABLED", "0").strip().lower() not in {"0", "false", "no", "off"}
 QWEN_APP_HEARTBEAT_INTERVAL_SECONDS = int(os.environ.get("QWEN_APP_HEARTBEAT_INTERVAL_SECONDS", "120"))
 QWEN_APP_HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("QWEN_APP_HEARTBEAT_TIMEOUT_SECONDS", "20"))
 QWEN_APP_HEARTBEAT_MAX_NEW_TOKENS = 1
@@ -5808,22 +5823,27 @@ def _qwen_entry_warmup_async() -> None:
     sends their second message. It never blocks the status HTTP response.
     """
     global _qwen_entry_warm_last_started
-    if not QWEN_ENTRY_WARMUP_ENABLED:
+    if not QWEN_ENTRY_WARMUP_ENABLED or _qwen_user_request_is_active():
         return
     now = time.time()
     with _qwen_entry_warm_lock:
         if now - _qwen_entry_warm_last_started < max(10, QWEN_ENTRY_WARMUP_MIN_INTERVAL_SECONDS):
             return
         _qwen_entry_warm_last_started = now
+    def _safe_entry_warmup():
+        if _qwen_user_request_is_active():
+            return
+        _qwen_app_send_keepwarm_once()
+
     threading.Thread(
-        target=_qwen_app_send_keepwarm_once,
+        target=_safe_entry_warmup,
         name="pratham-qwen-entry-warm",
         daemon=True,
     ).start()
 
 
 def _qwen_app_heartbeat_loop() -> None:
-    """Best-effort app-process heartbeat; never blocks a user request."""
+    """Optional periodic warmup. Disabled by default because CPU warmup can compete with real chats."""
     global _qwen_app_heartbeat_started
     while True:
         try:
