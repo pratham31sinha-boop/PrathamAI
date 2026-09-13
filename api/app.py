@@ -3663,8 +3663,16 @@ def _stream_qwen_worker(messages, state=None):
                             tokens_streamed += 1
                             yield _sse({"type": "token", "text": realtime_fragment})
                 elif etype == "answer_end":
+                    # The worker has definitively finished this generation.
+                    # Do not wait for the upstream HTTP connection to close:
+                    # some SSE gateways keep the connection alive after the
+                    # final event, which used to leave the browser stuck in
+                    # the Stop/Thinking state. Return immediately so _do_stream
+                    # can emit the final `complete` event to the browser.
                     if state is not None:
-                        state["finish_reason"] = "stop"
+                        state["finish_reason"] = payload.get("finish_reason") or payload.get("reason") or "stop"
+                    print("[QWEN] answer_end received; closing worker stream immediately")
+                    return
                 elif etype == "error":
                     raise RuntimeError(payload.get("message", "Worker reported an error."))
                     
