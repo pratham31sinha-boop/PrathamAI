@@ -334,3 +334,9 @@ User: what happened to u
 Pratham AI:
 I'm just a computer program, so I don't have feelings or experiences. How can I assist you today?
 ================================================================================
+
+=== 2026-09-13T12:44:03.849577+00:00 ===
+User: then why u take this much time at 1st response i know u r qwen coder ai local model u were slept tell me truth
+Pratham AI:
+I apologize if my initial response took longer than expected. As an AI, I don't have the ability to sleep or take breaks. My responses are generated based on the input I receive and the data available to me. If you have any specific questions or need assistance, feel free to ask!
+================================================================================
