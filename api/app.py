@@ -258,6 +258,10 @@ QWEN_WORKER_KEEP_ALIVE = os.environ.get("QWEN_WORKER_KEEP_ALIVE", "-1")
 QWEN_WORKER_SIMPLE_NUM_CTX = int(os.environ.get("QWEN_WORKER_SIMPLE_NUM_CTX", "2048"))
 QWEN_WORKER_CODE_NUM_CTX = int(os.environ.get("QWEN_WORKER_CODE_NUM_CTX", "4096"))
 QWEN_WORKER_RECENT_MESSAGE_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_RECENT_MESSAGE_CHAR_LIMIT", "1800"))
+# Ultra-fast ordinary-chat caps: keep the first-token prompt tiny on CPU.
+QWEN_WORKER_ULTRA_FAST_SYSTEM_CHARS = int(os.environ.get("QWEN_WORKER_ULTRA_FAST_SYSTEM_CHARS", "1000"))
+QWEN_WORKER_ULTRA_FAST_HISTORY_CHARS = int(os.environ.get("QWEN_WORKER_ULTRA_FAST_HISTORY_CHARS", "650"))
+QWEN_WORKER_ULTRA_FAST_USER_CHARS = int(os.environ.get("QWEN_WORKER_ULTRA_FAST_USER_CHARS", "900"))
 QWEN_WORKER_SPECIAL_CONTEXT_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_SPECIAL_CONTEXT_CHAR_LIMIT", "3000"))
 QWEN_WORKER_SYSTEM_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_SYSTEM_CHAR_LIMIT", "4200"))
 QWEN_WORKER_SIMPLE_CONTEXT_TOKENS = int(os.environ.get("QWEN_WORKER_SIMPLE_CONTEXT_TOKENS", "1024"))
@@ -267,10 +271,10 @@ QWEN_WORKER_CODE_CONTEXT_TOKENS = int(os.environ.get("QWEN_WORKER_CODE_CONTEXT_T
 # Keep these as additive overrides so older configuration remains compatible.
 # Simple chats get a much smaller prompt/context, which sharply reduces
 # time-to-first-token on CPU while preserving the larger path for coding work.
-QWEN_WORKER_SIMPLE_MAX_CHARS = min(QWEN_WORKER_SIMPLE_MAX_CHARS, 2600)
-QWEN_WORKER_SIMPLE_HISTORY_MESSAGES = min(QWEN_WORKER_SIMPLE_HISTORY_MESSAGES, 2)
-QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS = min(QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS, 256)
-QWEN_WORKER_SIMPLE_NUM_CTX = min(QWEN_WORKER_SIMPLE_NUM_CTX, 1024)
+QWEN_WORKER_SIMPLE_MAX_CHARS = min(QWEN_WORKER_SIMPLE_MAX_CHARS, 1700)
+QWEN_WORKER_SIMPLE_HISTORY_MESSAGES = min(QWEN_WORKER_SIMPLE_HISTORY_MESSAGES, 1)
+QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS = min(QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS, 192)
+QWEN_WORKER_SIMPLE_NUM_CTX = min(QWEN_WORKER_SIMPLE_NUM_CTX, 768)
 QWEN_WORKER_SIMPLE_CONTEXT_TOKENS = min(QWEN_WORKER_SIMPLE_CONTEXT_TOKENS, 768)
 QWEN_WORKER_CODE_MAX_CHARS = min(QWEN_WORKER_CODE_MAX_CHARS, 6500)
 QWEN_WORKER_CODE_HISTORY_MESSAGES = min(QWEN_WORKER_CODE_HISTORY_MESSAGES, 4)
@@ -4635,7 +4639,12 @@ def chat_stream():
         # title either (was showing literal "[[EDU_BOOK:English]]..." etc).
         title_source = _EDU_TAG_RE.sub("", message)
         title_source = _NO_WEB_SEARCH_TAG_RE.sub("", title_source).strip()
-        ai_title = _generate_ai_chat_title(title_source or message)
+        if _worker_available_for_request:
+            # Ultra-fast worker lane: do not spend another model/network round on a chat title.
+            clean_title = re.sub(r"\s+", " ", title_source or message).strip()
+            ai_title = (clean_title[:56] + "…") if len(clean_title) > 57 else (clean_title or "New conversation")
+        else:
+            ai_title = _generate_ai_chat_title(title_source or message)
         new_conv = {
             "id": conv_id, "user_id": user_id, "title": ai_title, "pinned": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -4793,8 +4802,14 @@ def chat_stream():
         return resp
 
     history = _get_messages(conv_id)
-    active_system_prompt = SYSTEM_PROMPT
     is_creator = user_email.lower() in CREATOR_EMAILS
+    if _worker_available_for_request:
+        # Ultra-fast CPU lane: avoid constructing/transporting the full production system prompt.
+        active_system_prompt = _qwen_trim_text(_QWEN_FEATURE_PROMPT, QWEN_WORKER_ULTRA_FAST_SYSTEM_CHARS)
+        if is_creator:
+            active_system_prompt += " The current user is the creator of Pratham AI. Be accurate about app behavior and clearly state uncertainty."
+    else:
+        active_system_prompt = SYSTEM_PROMPT
     if is_creator:
         active_system_prompt += (
             " IMPORTANT: the person you are speaking with right now is Pratham Sinha, YOUR CREATOR — "
@@ -4811,7 +4826,7 @@ def chat_stream():
             "memory file data/public_data.txt (via the remember/save-to-memory mechanism); everything "
             "else about how this app itself is built requires Pratham to make the change manually."
         )
-    vip_record = _lookup_vip(user_email)
+    vip_record = _lookup_vip(user_email) if not _worker_available_for_request else None
     if vip_record and not is_creator:
         active_system_prompt += (
             f" The person you are currently speaking with is a VIP contact registered by Pratham (the "
@@ -4827,7 +4842,14 @@ def chat_stream():
     # (see _fetch_full_public_data_text, no caching window) and only changes
     # which lines get selected (best keyword match, or the file's tail as a
     # fallback) — the read itself never skipped.
-    shared_memory_text = _search_intelligent_memory_excerpts(message)
+    # CPU worker fast lane: shared memory is expensive because it performs a live GitHub read.
+    # Only fetch it when the user explicitly asks about memory or when a special marker requires it.
+    _worker_memory_needed = bool(re.search(r"\b(memory|remember|forgot|taught|public_data)\b", message, re.IGNORECASE))
+    shared_memory_text = (
+        _search_intelligent_memory_excerpts(message)
+        if (not _worker_available_for_request or _worker_memory_needed)
+        else ""
+    )
     if shared_memory_text:
         active_system_prompt += (
             " You have just read data/public_data.txt (this happens before every single reply you "
@@ -4846,10 +4868,20 @@ def chat_stream():
         "something as fact if these sources don't actually support it; say you're not sure instead."
     )
     api_messages = [{"role": "system", "content": active_system_prompt}]
-    # Use summarization instead of hard cutoff to preserve context in long conversations
-    _summarized_history = _summarize_old_messages(history, conv_id)
-    for m in _summarized_history:
-        api_messages.append({"role": m["role"], "content": m["content"]})
+    # Worker requests intentionally bypass the richer summarization/history path.
+    if _worker_available_for_request:
+        _recent_for_worker = history[-1:] if history else []
+        for m in _recent_for_worker:
+            if m.get("role") in ("user", "assistant"):
+                _role = m.get("role", "user")
+                _content = _qwen_trim_text(m.get("content", ""), QWEN_WORKER_ULTRA_FAST_HISTORY_CHARS)
+                if _content:
+                    api_messages.append({"role": _role, "content": _content})
+    else:
+        # Use summarization instead of hard cutoff to preserve context in long conversations
+        _summarized_history = _summarize_old_messages(history, conv_id)
+        for m in _summarized_history:
+            api_messages.append({"role": m["role"], "content": m["content"]})
 
     _emit_searching_step = False
     outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", message).strip()
@@ -5008,7 +5040,13 @@ def chat_stream():
                 "look more authoritative than it is."
             )
 
-    api_messages.append({"role": "user", "content": outgoing_user_message or message})
+    _worker_final_user_text = outgoing_user_message or message
+    if _worker_available_for_request:
+        # Preserve the complete user request only for nontrivial coding/special tasks.
+        # Ordinary worker turns get a bounded user prompt to minimize CPU prefill latency.
+        if _qwen_is_simple_request(_worker_final_user_text) and not _qwen_is_code_request(_worker_final_user_text, api_messages):
+            _worker_final_user_text = _qwen_trim_text(_worker_final_user_text, QWEN_WORKER_ULTRA_FAST_USER_CHARS)
+    api_messages.append({"role": "user", "content": _worker_final_user_text})
 
     # ── ADAPTIVE TEMPERATURE: classify the query and set the optimal temperature ──
     _query_temperature = _classify_query_temperature(message)
@@ -5016,7 +5054,17 @@ def chat_stream():
     print(f"[TEMP] Query classified with temperature={_query_temperature} for: {message[:80]}")
 
     _append_message(conv_id, "user", message)
-    _maybe_capture_public_teaching(user_email, message)
+    # Keep first-token latency low: natural-language memory capture is moved off the request path.
+    if _TEACHING_INTENT_RE.search(message):
+        try:
+            threading.Thread(
+                target=_maybe_capture_public_teaching,
+                args=(user_email, message),
+                daemon=True,
+                name="pratham-memory-write",
+            ).start()
+        except Exception as _memory_thread_exc:
+            print(f"[MEMORY][BACKGROUND START FAULT] {_memory_thread_exc}")
 
     def generate():
         yield _sse({"type": "metadata", "conversation_id": conv_id})
@@ -5953,3 +6001,21 @@ def _cors_preflight():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+# ── FINAL WORKER FAST-LANE DIAGNOSTICS (additive) ───────────────────────────
+# These helpers are intentionally additive so existing routes/features remain intact.
+def _qwen_fast_lane_summary(message: str = "") -> dict:
+    """Return the effective worker fast-lane settings for a safe diagnostic/log."""
+    return {
+        "worker_available": bool(_worker_is_online(_worker_get_latest())),
+        "simple_request": bool(_qwen_is_simple_request(message)),
+        "simple_ctx": QWEN_WORKER_SIMPLE_NUM_CTX,
+        "simple_max_new_tokens": QWEN_WORKER_SIMPLE_MAX_NEW_TOKENS,
+        "simple_char_budget": QWEN_WORKER_SIMPLE_MAX_CHARS,
+        "fast_system_chars": QWEN_WORKER_ULTRA_FAST_SYSTEM_CHARS,
+        "fast_history_chars": QWEN_WORKER_ULTRA_FAST_HISTORY_CHARS,
+        "fast_user_chars": QWEN_WORKER_ULTRA_FAST_USER_CHARS,
+        "keep_alive": QWEN_WORKER_KEEP_ALIVE,
+    }
+
