@@ -1,12 +1,12 @@
 {
-  "worker_id": "qwen-t4-colab",
+  "worker_id": "daytona-ollama-primary",
   "status": "online",
-  "model": "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ",
-  "gpu": "Tesla T4",
-  "vram_gb": 14.56,
-  "version": "1.0",
-  "endpoint_url": "https://treat-oakland-buf-immigrants.trycloudflare.com",
-  "last_seen": "2026-09-12T17:47:05.275605+00:00",
-  "last_seen_epoch": 1789235225.2755957,
+  "endpoint_url": "https://7860-nzwxmotemek69szg.daytonaproxy01.eu",
+  "model": "qwen-local",
+  "gpu": "CPU",
+  "vram_gb": 0,
+  "version": "daytona-ollama-1.0",
+  "last_seen": "2026-09-13T10:47:26.973180+00:00",
+  "last_seen_epoch": 1789296446.973173,
   "latency_ms": null
 }
