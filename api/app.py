@@ -3405,7 +3405,7 @@ def _qwen_extract_relevant_special_context(system_text: str) -> str:
         if idx >= 0:
             # Include a little surrounding text so the retained section is intelligible.
             start = max(0, idx - 350)
-            end = min(len(text), idx + _QWEN_WORKER_SPECIAL_CONTEXT_CHAR_LIMIT)
+            end = min(len(text), idx + QWEN_WORKER_SPECIAL_CONTEXT_CHAR_LIMIT)
             snippet = text[start:end].strip()
             if snippet:
                 matches.append(snippet)
