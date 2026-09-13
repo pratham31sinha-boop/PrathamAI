@@ -254,6 +254,64 @@ QWEN_WORKER_SYSTEM_CHAR_LIMIT = int(os.environ.get("QWEN_WORKER_SYSTEM_CHAR_LIMI
 QWEN_WORKER_SIMPLE_CONTEXT_TOKENS = int(os.environ.get("QWEN_WORKER_SIMPLE_CONTEXT_TOKENS", "1024"))
 QWEN_WORKER_CODE_CONTEXT_TOKENS = int(os.environ.get("QWEN_WORKER_CODE_CONTEXT_TOKENS", "2048"))
 
+# ── SELF-HEALING WORKER HEALTH PROBE ────────────────────────────────────────
+# Heartbeats are useful, but serverless cold starts and paused notebooks can
+# make the registry timestamp stale even while the worker HTTP service is
+# actually reachable.  Before declaring a stale worker offline, the backend
+# performs a lightweight authenticated health check against the worker URL.
+# This lets Daytona/Colab workers recover automatically without manual
+# re-registration or a fresh heartbeat.
+WORKER_HEALTH_PROBE_TIMEOUT_SECONDS = float(os.environ.get("WORKER_HEALTH_PROBE_TIMEOUT_SECONDS", "5"))
+WORKER_HEALTH_PROBE_CACHE_SECONDS = float(os.environ.get("WORKER_HEALTH_PROBE_CACHE_SECONDS", "20"))
+_worker_health_probe_cache = {}
+_worker_health_probe_lock = threading.Lock()
+
+def _worker_health_probe(endpoint_url: str, token: str = "") -> bool:
+    endpoint = (endpoint_url or "").strip().rstrip("/")
+    if not endpoint:
+        return False
+
+    now = time.time()
+    with _worker_health_probe_lock:
+        cached = _worker_health_probe_cache.get(endpoint)
+        if cached and (now - cached.get("checked_at", 0)) < WORKER_HEALTH_PROBE_CACHE_SECONDS:
+            return bool(cached.get("ok"))
+
+    health_urls = [f"{endpoint}/health"]
+    last_error = None
+    ok = False
+    for health_url in health_urls:
+        try:
+            headers = {"Accept": "application/json", "Cache-Control": "no-cache"}
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+            req = urllib.request.Request(health_url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=WORKER_HEALTH_PROBE_TIMEOUT_SECONDS) as resp:
+                status = getattr(resp, "status", 200)
+                raw = resp.read(4096).decode("utf-8", "ignore")
+                ok = 200 <= int(status) < 300
+                if ok:
+                    try:
+                        payload = json.loads(raw) if raw else {}
+                        if payload and payload.get("ok") is False:
+                            ok = False
+                    except Exception:
+                        pass
+                if ok:
+                    break
+        except Exception as exc:
+            last_error = exc
+
+    with _worker_health_probe_lock:
+        _worker_health_probe_cache[endpoint] = {"checked_at": time.time(), "ok": ok}
+
+    if ok:
+        print(f"[WORKER][HEALTH] probe OK: {endpoint}/health")
+    else:
+        print(f"[WORKER][HEALTH] probe failed: {endpoint}/health error={last_error}")
+    return ok
+
+
 # ── WORKER REGISTRY PERSISTENCE ──
 # IMPORTANT: this backend runs as a Vercel serverless function, meaning each
 # request can land on a fresh process with empty memory — a plain in-memory
@@ -2225,9 +2283,33 @@ def _worker_is_online(entry: dict) -> bool:
     if not entry:
         return False
     if entry.get("worker_id") == "static-worker":
-        return True
+        # Static URLs are checked actively so a dead tunnel still fails cleanly.
+        static_endpoint = (entry.get("endpoint_url") or "").strip().rstrip("/")
+        static_token = _get_expected_worker_token()
+        return bool(static_endpoint) and _worker_health_probe(static_endpoint, static_token)
     age = time.time() - entry.get("last_seen_epoch", 0)
-    return age <= WORKER_ONLINE_TIMEOUT_SECONDS
+    if age <= WORKER_ONLINE_TIMEOUT_SECONDS:
+        return True
+
+    # Heartbeat is stale, but stale != dead.  Probe the worker directly before
+    # failing the user's request.  A successful probe refreshes the local
+    # registry timestamp so the same process treats it as online immediately.
+    endpoint = (entry.get("endpoint_url") or "").strip().rstrip("/")
+    token = _get_expected_worker_token()
+    if endpoint and _worker_health_probe(endpoint, token):
+        refreshed = dict(entry)
+        refreshed["status"] = "online"
+        refreshed["last_seen"] = datetime.now(timezone.utc).isoformat()
+        refreshed["last_seen_epoch"] = time.time()
+        with _worker_registry_lock:
+            _worker_registry[refreshed.get("worker_id")] = refreshed
+        print(
+            f"[WORKER][RECOVERED] stale heartbeat ({int(age)}s) but health probe succeeded; "
+            f"worker={refreshed.get('worker_id')}"
+        )
+        return True
+
+    return False
 
 # [WORKER_ROUTING_VERIFIED] Worker status, heartbeat, and register endpoints with full aliases
 @app.route("/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
