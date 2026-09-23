@@ -1321,14 +1321,14 @@
                     <div id="gsiButtonContainer"></div>
                 </div>
             </div>
-            <p class="text-[10px] text-[var(--text-dim)] font-mono opacity-60">Secure workspace session</p>
+            <p class="text-[10px] text-[var(--text-dim)] font-mono opacity-60">A Pratham Sinha workspace · Supervised by Akriti &amp; Aditi Aishwaryam</p>
         </div>
     </div>
     <div id="app-shell" class="w-full h-full hidden flex-row overflow-hidden relative" style="z-index:1;">
         <aside id="sidebar-panel" class="w-72 h-full border-r border-[var(--border)] flex flex-col justify-between safe-top relative" style="background:var(--sidebar);">
             <div class="p-3 flex flex-col flex-1 overflow-hidden space-y-3">
                 <div class="flex items-center justify-between px-1">
-                    <span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Pratham AI</span>
+                    <div class="min-w-0"><span class="brand-serif text-lg font-bold text-[var(--text)] tracking-tight">Pratham AI</span><div class="text-[8px] text-[var(--text-dim)] mt-0.5 truncate">Pratham Sinha · Akriti &amp; Aditi Aishwaryam</div></div>
                     <button onclick="closeMobileSidebar()" class="mobile-hamburger p-1.5 text-xs border border-[var(--border)] bg-[var(--panel)] rounded-md cursor-pointer">✕</button>
                 </div>
                 <button onclick="createNewConversation()" class="nav-row justify-start w-full" style="background:var(--panel); border:1px solid var(--border);">
@@ -1498,7 +1498,7 @@
                 <div class="settings-tab">🛡️ Privacy</div>
                 <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-3 pb-1">Customize</div>
                 <div class="settings-tab">🎨 Appearance</div>
-                <div class="settings-tab">🔌 Connectors</div>
+                <div class="settings-tab">ℹ️ About</div>
             </div>
             <div class="flex-1 flex flex-col min-w-0">
                 <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
@@ -1520,10 +1520,22 @@
                     </div>
                     <div class="settings-row" style="align-items:flex-start;gap:12px;">
                         <div class="min-w-0 flex-1">
-                            <div class="text-sm text-[var(--text)]">Gemini connection</div>
-                            <div id="gemini-connection-status" class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Not connected. Connect your Google account to use Gemini through PrathamAI.</div>
+                            <div class="text-sm text-[var(--text)]">Pratham AI</div>
+                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Your workspace is configured automatically when you sign in.</div>
                         </div>
-                        <button id="gemini-connect-btn" onclick="connectGeminiToPrathamAI()" class="px-3 py-2 rounded-lg text-xs font-semibold border border-[var(--border)] bg-[var(--panel-2)] text-[var(--text)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer whitespace-nowrap">Connect Gemini</button>
+                        <span class="text-[10px] font-semibold text-[var(--accent)] whitespace-nowrap">Ready</span>
+                    </div>
+                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm text-[var(--text)]">Product &amp; engineering</div>
+                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Pratham Sinha</div>
+                        </div>
+                    </div>
+                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm text-[var(--text)]">Supervision</div>
+                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Akriti &amp; Aditi Aishwaryam</div>
+                        </div>
                     </div>
                     <div class="settings-row">
                         <span class="text-sm text-[var(--text)]">Appearance</span>
@@ -1772,7 +1784,9 @@
             appShell.style.display = 'flex';
             synchronizeConversationsHistoryIndex();
             refreshVipBadgeFromBackend();
-            loadGeminiOAuthConfig().then(refreshGeminiConnectionStatus);
+            // AI workspace authorization is prepared automatically after sign-in.
+            // The provider name is intentionally not exposed in the normal UI.
+            preparePrathamAIEngine();
         }
         function persistSessionLocally(credential, claims) {
             try {
@@ -1824,15 +1838,6 @@
                 return false;
             }
         }
-        function updateGeminiConnectionUI(connected, message) {
-            const status = document.getElementById('gemini-connection-status');
-            const btn = document.getElementById('gemini-connect-btn');
-            if (!status || !btn) return;
-            status.innerText = message || (connected ? 'Connected to Google Gemini through Google OAuth — no Gemini API key is used by PrathamAI.' : 'Not connected. Connect your Google account to use Gemini through PrathamAI.');
-            status.style.color = connected ? 'var(--accent)' : 'var(--text-dim)';
-            btn.innerText = connected ? 'Reconnect Gemini' : 'Connect Gemini';
-            btn.disabled = false;
-        }
         function saveGeminiAccessToken(token, expiresIn) {
             geminiAccessToken = String(token || '');
             geminiAccessTokenExpiresAt = Date.now() + Math.max(60, Number(expiresIn || 3600)) * 1000;
@@ -1858,63 +1863,60 @@
             window._lastGeneratedImageDataUrl = null;
             try { sessionStorage.removeItem('prathamai_gemini_oauth_v1'); } catch (e) {}
         }
-        async function connectGeminiToPrathamAI() {
-            if (geminiTokenRequestInFlight) return;
+        async function connectGeminiToPrathamAI(options = {}) {
+            if (geminiTokenRequestInFlight) return false;
+            if (!globalAuthorizationToken) return false;
             if (!GEMINI_OAUTH_CLIENT_ID) await loadGeminiOAuthConfig();
-            if (!GEMINI_OAUTH_CLIENT_ID) {
-                alert('Gemini OAuth is not configured. Set GOOGLE_GEMINI_OAUTH_CLIENT_ID and GOOGLE_CLOUD_PROJECT_ID on the backend.');
-                return;
-            }
-            if (!(window.google?.accounts?.oauth2)) {
-                alert('Google Identity Services is still loading. Please try again in a moment.');
-                return;
-            }
+            if (!GEMINI_OAUTH_CLIENT_ID || !(window.google?.accounts?.oauth2)) return false;
             geminiTokenRequestInFlight = true;
-            const btn = document.getElementById('gemini-connect-btn');
-            if (btn) { btn.disabled = true; btn.innerText = 'Connecting…'; }
             try {
                 const tokenResponse = await new Promise((resolve, reject) => {
                     const client = google.accounts.oauth2.initTokenClient({
                         client_id: GEMINI_OAUTH_CLIENT_ID,
                         scope: GEMINI_OAUTH_SCOPES,
-                        callback: (resp) => resp?.access_token ? resolve(resp) : reject(new Error(resp?.error_description || resp?.error || 'Google did not return an access token.')),
-                        error_callback: (err) => reject(new Error(err?.message || err?.type || 'Google OAuth failed.'))
+                        callback: (resp) => resp?.access_token ? resolve(resp) : reject(new Error(resp?.error_description || resp?.error || 'Authorization was not completed.')),
+                        error_callback: (err) => reject(new Error(err?.message || err?.type || 'Authorization was not completed.'))
                     });
-                    client.requestAccessToken({ prompt: '' });
+                    client.requestAccessToken({ prompt: options.prompt || '' });
                 });
                 const response = await smartFetchRequest('/auth/gemini/connect', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken, 'X-Gemini-Access-Token': tokenResponse.access_token },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': globalAuthorizationToken,
+                        'X-Gemini-Access-Token': tokenResponse.access_token
+                    },
                     body: '{}'
                 });
                 const data = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(data?.error?.message || 'PrathamAI rejected the Gemini connection.');
+                if (!response.ok) throw new Error(data?.error?.message || 'Workspace authorization failed.');
                 saveGeminiAccessToken(tokenResponse.access_token, Number(data.expires_in || tokenResponse.expires_in || 3600));
-                updateGeminiConnectionUI(true, data.account_email ? `Connected as ${data.account_email}.` : null);
+                return true;
             } catch (e) {
-                console.error('[GEMINI][CONNECT]', e);
-                updateGeminiConnectionUI(false, String(e?.message || e));
-                alert(`Gemini connection failed: ${String(e?.message || e)}`);
+                console.warn('[PRATHAM AI][SETUP]', e);
+                return false;
             } finally {
                 geminiTokenRequestInFlight = false;
-                if (btn) { btn.disabled = false; btn.innerText = geminiAccessToken ? 'Reconnect Gemini' : 'Connect Gemini'; }
             }
         }
-        async function refreshGeminiConnectionStatus() {
-            if (!globalAuthorizationToken) return;
-            restoreGeminiAccessToken();
-            try {
-                const headers = { 'Authorization': globalAuthorizationToken };
-                if (geminiAccessToken) headers['X-Gemini-Access-Token'] = geminiAccessToken;
-                const response = await smartFetchRequest('/auth/gemini/status', { method: 'GET', headers });
-                const data = await response.json().catch(() => ({}));
-                if (response.ok && data.connected) updateGeminiConnectionUI(true, data.account_email ? `Connected as ${data.account_email}.` : null);
-                else { if (geminiAccessToken) clearGeminiAccessToken(); updateGeminiConnectionUI(false, data.configured === false ? 'Gemini backend project is not configured yet.' : null); }
-            } catch (e) {
-                updateGeminiConnectionUI(!!geminiAccessToken, geminiAccessToken ? 'Gemini token is available for this browser session.' : null);
+        async function preparePrathamAIEngine(options = {}) {
+            if (!globalAuthorizationToken) return false;
+            if (!GEMINI_OAUTH_CLIENT_ID) await loadGeminiOAuthConfig();
+            if (restoreGeminiAccessToken()) {
+                // Token may still be bound to this signed-in session; keep going.
+                try {
+                    const headers = { 'Authorization': globalAuthorizationToken, 'X-Gemini-Access-Token': geminiAccessToken };
+                    const response = await smartFetchRequest('/auth/gemini/status', { method: 'GET', headers });
+                    const data = await response.json().catch(() => ({}));
+                    if (response.ok && data.connected) return true;
+                } catch (e) {}
+                clearGeminiAccessToken();
             }
+            return await connectGeminiToPrathamAI(options);
         }
-
+        function isPrathamAIEngineReady() {
+            return !!(geminiAccessToken && geminiAccessTokenExpiresAt > Date.now() + 30000);
+        }
         function initializeGoogleOauthGate() {
             if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                 google.accounts.id.initialize({
@@ -3237,6 +3239,24 @@
             mountTypingIndicator();
             setAgentActivity('Thinking...');
             pushTerminalLog(`Received request: "${message.slice(0, 60)}"`);
+            if (!isPrathamAIEngineReady()) {
+                const ready = await preparePrathamAIEngine({ prompt: '' });
+                if (!ready) {
+                    removeTypingIndicator();
+                    clearAgentActivity();
+                    const wrapper = mountModelOutputTargetShell();
+                    const cell = document.createElement('div');
+                    cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
+                    cell.style.borderRadius = '4px 16px 16px 16px';
+                    cell.innerText = 'Pratham AI is finishing its secure workspace setup. Please try again in a moment.';
+                    wrapper.appendChild(cell);
+                    isGenerating = false;
+                    window.isGenerating = false;
+                    inputActionSubmitBtn.disabled = false;
+                    inputActionSubmitBtn.classList.remove('opacity-60');
+                    return;
+                }
+            }
             try {
                 // Dedicated controller lets Stop terminate the network request itself,
                 // instead of merely stopping DOM updates while the server keeps working.
@@ -3267,8 +3287,14 @@
                         const errPayload = await response.clone().json().catch(() => ({}));
                         const errCode = errPayload?.error?.code || "";
                         if (errCode === "GEMINI_AUTH_REQUIRED" || errCode === "GEMINI_RECONNECT_REQUIRED") {
-                            updateGeminiConnectionUI(false, "Gemini needs to be connected again. Open Settings → Connect Gemini.");
-                            alert("Gemini is not connected or its Google access token expired. Open Settings and reconnect Gemini.");
+                            clearGeminiAccessToken();
+                            const repaired = await preparePrathamAIEngine({ prompt: '' });
+                            if (repaired) {
+                                // Retry once automatically with the newly prepared workspace authorization.
+                                setTimeout(() => dispatchChatMessage(), 0);
+                                return;
+                            }
+                            alert("Your Pratham AI workspace could not finish its secure setup. Please sign in again and retry.");
                         } else {
                             alert("Session expired. Please sign in again.");
                             triggerIdentitySignout();
