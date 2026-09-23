@@ -2369,29 +2369,94 @@ def _extract_first_image_part(payload):
             if inline and inline.get('data'): return {'mime_type':inline.get('mimeType') or inline.get('mime_type') or 'image/png','data':inline['data']}
     return None
 
+def _extract_interaction_image(payload):
+    """Extract an image block from the current Interactions API response."""
+    for step in payload.get("steps") or []:
+        content = step.get("content") or []
+        if isinstance(content, dict):
+            content = [content]
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "image" and part.get("data"):
+                return {
+                    "mime_type": part.get("mime_type") or part.get("mimeType") or "image/png",
+                    "data": part["data"],
+                }
+    # Defensive compatibility for other JSON response shapes.
+    output_image = payload.get("output_image") or payload.get("outputImage")
+    if isinstance(output_image, dict) and output_image.get("data"):
+        return {
+            "mime_type": output_image.get("mime_type") or output_image.get("mimeType") or "image/png",
+            "data": output_image["data"],
+        }
+    return None
+
 def _gemini_generate_image(access_token,prompt_text,reference_image_data_url=None):
-    parts=[{'text':prompt_text}]
-    if isinstance(reference_image_data_url,str) and reference_image_data_url.startswith('data:image/'):
+    interaction_input=[{"type":"text","text":prompt_text}]
+    if isinstance(reference_image_data_url,str) and reference_image_data_url.startswith("data:image/"):
         try:
-            header,encoded=reference_image_data_url.split(',',1)
-            if len(encoded)<=8_000_000:
-                parts.append({'inlineData':{'mimeType':header.split(';',1)[0][5:] or 'image/png','data':encoded}})
-        except Exception: pass
-    body={'contents':[{'role':'user','parts':parts}], 'generationConfig':{'responseModalities':['TEXT','IMAGE'],'responseFormat':{'image':{'aspectRatio':'1:1','imageSize':'1K'}}}}
-    url=f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_IMAGE_MODEL,safe='-_.')}:generateContent"
-    req=urllib.request.Request(url,data=json.dumps(body).encode(),method='POST',headers={'Authorization':f'Bearer {access_token}','x-goog-user-project':GOOGLE_CLOUD_PROJECT_ID,'Content-Type':'application/json','Accept':'application/json'})
+            header,encoded=reference_image_data_url.split(",",1)
+            mime_type=header.split(";",1)[0][5:] or "image/png"
+            if len(encoded) <= 8_000_000:
+                interaction_input.append({"type":"image","mime_type":mime_type,"data":encoded})
+        except Exception:
+            pass
+
+    # Nano Banana 2 is the stable Gemini 3.1 Flash Image model. Google’s
+    # current image-generation docs use the Interactions API for this model.
+    body={
+        "model": GEMINI_IMAGE_MODEL,
+        "input": interaction_input,
+        "response_format": {
+            "type":"image",
+            "mime_type":"image/png",
+            "aspect_ratio":"1:1",
+            "image_size":"1K",
+        },
+    }
+    url="https://generativelanguage.googleapis.com/v1beta/interactions"
+    req=urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "x-goog-user-project": GOOGLE_CLOUD_PROJECT_ID,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
     try:
-        with urllib.request.urlopen(req,timeout=120) as resp: payload=json.loads(resp.read().decode('utf-8',errors='replace'))
+        with urllib.request.urlopen(req,timeout=120) as resp:
+            payload=json.loads(resp.read().decode("utf-8",errors="replace"))
     except urllib.error.HTTPError as exc:
-        raw=exc.read().decode('utf-8',errors='replace')
-        try: msg=(json.loads(raw).get('error') or {}).get('message') or raw[:500]
-        except Exception: msg=raw[:500]
-        if exc.code in (401,403): raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
-        raise RuntimeError(msg)
-    image=_extract_first_image_part(payload)
-    if not image: raise RuntimeError('Gemini returned no image data.')
-    text=[part['text'] for c in payload.get('candidates') or [] for part in ((c.get('content') or {}).get('parts') or []) if part.get('text')]
-    return image,'\n'.join(text).strip()
+        raw=exc.read().decode("utf-8",errors="replace")
+        try:
+            msg=(json.loads(raw).get("error") or {}).get("message") or raw[:1000]
+        except Exception:
+            msg=raw[:1000]
+        # 401 means the OAuth token is invalid/expired. Do not misclassify
+        # project permissions or billing errors (commonly 402/403) as a
+        # reconnect problem.
+        if exc.code == 401:
+            raise RuntimeError(f"GEMINI_RECONNECT_REQUIRED: {msg}")
+        raise RuntimeError(f"HTTP {exc.code}: {msg}")
+    except Exception as exc:
+        raise RuntimeError(f"Gemini image request failed: {exc}")
+
+    image=_extract_interaction_image(payload)
+    if not image:
+        raise RuntimeError("Nano Banana 2 returned no image data.")
+
+    text=[]
+    for step in payload.get("steps") or []:
+        content=step.get("content") or []
+        if isinstance(content,dict): content=[content]
+        for part in content:
+            if isinstance(part,dict) and part.get("type") == "text" and part.get("text"):
+                text.append(part["text"])
+    return image,"\n".join(text).strip()
 
 def _stream_google_oauth_gemini(messages,state=None):
     access_token,err=_require_gemini_connection()
@@ -2428,8 +2493,8 @@ def _stream_google_oauth_gemini(messages,state=None):
         try:
             raw=exc.read().decode('utf-8',errors='replace'); msg=(json.loads(raw).get('error') or {}).get('message') or raw[:500]
         except Exception: msg=str(exc)
-        if exc.code in (401,403): raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
-        raise RuntimeError(msg)
+        if exc.code == 401: raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
+        raise RuntimeError(f'HTTP {exc.code}: {msg}')
 
 _MULTITASK_VERB_RE = re.compile(
     r'\b(zip|pdf|csv|svg|python|bash|compute|calculate|create|build|write|make|then|also|plus|and then|export|generate.*and)\b',
@@ -4182,7 +4247,12 @@ def chat_stream():
                     })
                 except Exception as _img_exc:
                     _img_msg = str(_img_exc)
-                    _img_code = "GEMINI_RECONNECT_REQUIRED" if "GEMINI_RECONNECT_REQUIRED" in _img_msg else "GEMINI_IMAGE_FAILED"
+                    _low_img_msg = _img_msg.lower()
+                    _img_code = (
+                        "GEMINI_RECONNECT_REQUIRED" if "GEMINI_RECONNECT_REQUIRED" in _img_msg else
+                        "GEMINI_BILLING_OR_PERMISSION" if any(k in _low_img_msg for k in ("billing", "payment", "quota", "permission", "forbidden", "http 402", "http 403")) else
+                        "GEMINI_IMAGE_FAILED"
+                    )
                     yield _sse({
                         "type": "error",
                         "error": {"code": _img_code, "message": f"Gemini image generation failed: {_img_msg}"}
