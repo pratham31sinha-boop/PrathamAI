@@ -3274,11 +3274,18 @@
                             triggerIdentitySignout();
                         }
                     } else {
+                        let serverMessage = '';
+                        try {
+                            const errPayload = await response.clone().json();
+                            serverMessage = errPayload?.error?.message || errPayload?.error || '';
+                        } catch (e) {}
                         const wrapper = mountModelOutputTargetShell();
                         const cell = document.createElement('div');
                         cell.className = 'glass text-[var(--text)] text-sm px-4 py-3 max-w-[92%] sm:max-w-[90%] leading-relaxed break-words shadow-xs';
                         cell.style.borderRadius = '4px 16px 16px 16px';
-                        cell.innerText = "Something went wrong reaching the server. Please try again.";
+                        cell.innerText = serverMessage
+                            ? `Server error (${response.status}): ${serverMessage}`
+                            : `Server error (${response.status}). Please try again.`;
                         wrapper.appendChild(cell);
                     }
                     return;
