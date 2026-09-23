@@ -2066,7 +2066,7 @@
                 try {
                     const response = await fetch(targetUrl, {
                         ...options,
-                        credentials: options.credentials || 'include',
+                        credentials: 'include',
                         cache: options.cache || 'no-store'
                     });
                     if (response.status !== 404) return response;
