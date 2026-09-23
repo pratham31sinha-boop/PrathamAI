@@ -27,9 +27,8 @@ Second pass — new features (nothing above was removed):
   8. General-purpose assistant: the system prompt is no longer coding-only;
      Pratham AI now answers any topic like a normal chatbot, while still
      being great at code when asked.
-  9. Image generation via Pollinations AI (no API key required): a message
-     like "generate an image of a red fox in snow" or "/image a red fox in
-     snow" now returns a real rendered image instead of text.
+  9. Image generation via Google Gemini Nano Banana 2 through OAuth.
+     No Gemini developer API key is exposed or required by the website.
  10. "@education" tag: lists PDFs stored under data/education/ in the GitHub
      repo, extracts their text (best-effort, requires the optional `pypdf`
      package), scores paragraphs for relevance against the question, and
@@ -113,7 +112,8 @@ except ImportError:
     _supabase_sdk = False
 app = Flask(__name__)
 PRATHAM_AGENT_SHARED_SECRET = os.environ.get("PRATHAM_AGENT_SHARED_SECRET", "").strip()
-PRATHAM_AGENT_ONLY = os.environ.get("PRATHAM_AGENT_ONLY", "1").strip().lower() not in {"0", "false", "no", "off"}
+PRATHAM_AI_MODE = os.environ.get("PRATHAM_AI_MODE", "google_oauth").strip().lower()
+PRATHAM_AGENT_ONLY = PRATHAM_AI_MODE == "agent"
 PRATHAM_AGENT_STALE_CLAIM_SECONDS = int(os.environ.get("PRATHAM_AGENT_STALE_CLAIM_SECONDS", "300"))
 _PRATHAM_AGENT_JOBS = {}
 _PRATHAM_AGENT_LOCK = threading.RLock()
@@ -304,6 +304,14 @@ GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/Pratha
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
 SESSION_TOKEN_TTL_DAYS = int(os.environ.get("SESSION_TOKEN_TTL_DAYS", "30"))
+ALLOW_INSECURE_DEV_AUTH = os.environ.get("ALLOW_INSECURE_DEV_AUTH", "0").strip().lower() in {"1", "true", "yes", "on"}
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com").strip()
+GOOGLE_GEMINI_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_GEMINI_OAUTH_CLIENT_ID", GOOGLE_OAUTH_CLIENT_ID).strip()
+GOOGLE_CLOUD_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID", "").strip()
+GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-3.8-flash").strip()
+GEMINI_IMAGE_MODEL = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image").strip()
+GEMINI_OAUTH_SCOPES = os.environ.get("GEMINI_OAUTH_SCOPES", "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language.retriever").strip()
+GEMINI_ACCESS_TOKEN_HEADER = "X-Gemini-Access-Token"
 QWEN_WORKER_URL       = os.environ.get("QWEN_WORKER_URL", "").strip().rstrip("/")
 PRATHAM_WORKER_TOKEN  = os.environ.get("PRATHAM_WORKER_TOKEN", "").strip()
 WORKER_ONLINE_TIMEOUT_SECONDS = int(os.environ.get("WORKER_ONLINE_TIMEOUT_SECONDS", "360"))
@@ -484,18 +492,11 @@ def _worker_get_latest() -> dict:
             "last_seen_epoch": time.time(),
         }
     return None
-print(
-    "[STARTUP] Provider keys configured -> "
-    f"groq={len(GROQ_API_KEYS)} keys, "
-    f"openrouter={bool(OPENROUTER_API_KEY)}, "
-    f"cerebras={bool(CEREBRAS_API_KEY)}, "
-    f"mistral={bool(MISTRAL_API_KEY)}"
-)
-if not GROQ_API_KEYS and not OPENROUTER_API_KEY and not CEREBRAS_API_KEY and not MISTRAL_API_KEY:
-    print("[STARTUP][WARNING] NO LLM PROVIDER KEYS ARE SET. Every chat request will fail "
-          "with 'All model providers are temporarily unavailable' until at least one of "
-          "GROQ_API_KEY / OPENROUTER_API_KEY / CEREBRAS_API_KEY / MISTRAL_API_KEY is set "
-          "in this server's environment variables.")
+print("[STARTUP] AI mode=%s | Gemini OAuth=%s | Cloud project=%s | chat=%s | image=%s | insecure-dev-auth=%s" % (
+    PRATHAM_AI_MODE, "configured" if GOOGLE_GEMINI_OAUTH_CLIENT_ID else "missing",
+    "configured" if GOOGLE_CLOUD_PROJECT_ID else "MISSING", GEMINI_CHAT_MODEL, GEMINI_IMAGE_MODEL,
+    ALLOW_INSECURE_DEV_AUTH
+))
 CREATOR_EMAILS = {"pratham31sinha@gmail.com", "pratham08sinha@gmail.com", "pratham310811@gmail.com"}
 SUPABASE_CONFIGURED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and _supabase_sdk)
 _supabase = None
@@ -825,8 +826,8 @@ def _rasterize_svg_to_rgb(svg_text: str, target_width_px: int = 900):
         return None
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^\s\)]+)\)")
 def _fetch_and_rasterize_remote_image(url: str, target_width_px: int = 900, timeout: int = 20):
-    """Downloads a remote raster image (used for Pollinations-generated
-    images referenced as ![...](url) in the assistant's reply) and returns
+    """Downloads a remote raster image referenced as ![...](url) in the
+    assistant's reply and returns
     (width, height, raw_rgb_bytes) for PDF embedding — same shape as
     _rasterize_svg_to_rgb. Requires Pillow; returns None (and the PDF export
     simply skips that image, same as an unresolved diagram marker) if
@@ -1809,13 +1810,27 @@ def _get_token():
         return auth[7:].strip()
     return None
 def _decode_google_claims(token: str):
-    """Decode (without re-verifying signature) a Google-issued JWT's payload."""
+    """Best-effort decode used only for local parsing; not a trust boundary."""
     try:
-        payload_chunk = token.split('.')[1]
-        padded_chunk = payload_chunk + '=' * (-len(payload_chunk) % 4)
-        return json.loads(base64.b64decode(padded_chunk).decode('utf-8'))
-    except Exception:
+        payload=token.split('.')[1]; payload += '=' * (-len(payload)%4)
+        return json.loads(base64.b64decode(payload).decode('utf-8'))
+    except Exception: return None
+
+def _verify_google_id_token(token: str):
+    if not token or len(token.split('.')) != 3: return None
+    try:
+        q=urllib.parse.urlencode({"id_token":token})
+        req=urllib.request.Request(f"https://oauth2.googleapis.com/tokeninfo?{q}", method="GET")
+        with urllib.request.urlopen(req, timeout=8) as resp: data=json.loads(resp.read().decode('utf-8',errors='replace'))
+        if str(data.get('aud','')) != GOOGLE_OAUTH_CLIENT_ID: return None
+        if str(data.get('iss','')) not in {'accounts.google.com','https://accounts.google.com'}: return None
+        email=str(data.get('email','')).strip().lower()
+        if not email: return None
+        return {"sub":data.get('sub'),"email":email,"role":"standard","user_metadata":{"full_name":data.get('name'),"picture":data.get('picture')},"email_verified":str(data.get('email_verified','true')).lower()=='true'}
+    except Exception as exc:
+        print(f"[AUTH][GOOGLE VERIFY] {exc}")
         return None
+
 _SESSION_TOKEN_PREFIX = "PAI1"
 def _issue_session_token(user: dict) -> str:
     payload = {
@@ -1850,38 +1865,24 @@ def _verify_session_token(token: str):
     except Exception:
         return None
 def _verify_token(token: str):
-    if not token or token == "dev-session-active-token":
+    if ALLOW_INSECURE_DEV_AUTH and token == "dev-session-active-token":
         return {
             "sub": "dev-user",
             "email": "pratham31sinha@gmail.com",
             "role": "creator",
             "user_metadata": {"full_name": "Dev Master Creator"}
         }
+    if not token:
+        return None
     if token.startswith(f"{_SESSION_TOKEN_PREFIX}."):
         session_user = _verify_session_token(token)
-        if session_user:
-            return session_user
-        return None
+        return session_user if session_user else None
     if len(token.split('.')) == 3:
-        claims = _decode_google_claims(token)
-        if claims and ("accounts.google.com" in claims.get("iss", "") or "google.com" in claims.get("iss", "")):
-            exp = claims.get("exp", 0)
-            if exp and time.time() > exp:
-                return None
-            user_email = claims.get("email", "").lower()
-            return {
-                "sub": claims.get("sub"),
-                "email": user_email,
-                "role": "standard",
-                "user_metadata": {"full_name": claims.get("name"), "picture": claims.get("picture")}
-            }
+        verified = _verify_google_id_token(token)
+        if verified:
+            return verified
     if not SUPABASE_CONFIGURED or _supabase is None:
-        return {
-            "sub": "dev-user",
-            "email": "dev@local",
-            "role": "standard",
-            "user_metadata": {"full_name": "Fallback Dev Node Profile"}
-        }
+        return None
     try:
         resp = _supabase.auth.get_user(token)
         if resp and resp.user:
@@ -2317,7 +2318,7 @@ SYSTEM_PROMPT = (
     "If a diagram is needed inside a PDF export, place [DIAGRAM: filename.html] at the right position.\n"
     "Each diagram marker MUST have a matching createfile block in the same reply — never one without the other.\n\n"
     "=== IMAGES ===\n"
-    "Image generation is handled automatically by the backend (Pollinations AI). When asked for an image, "
+    "Image generation is handled by Google Gemini Nano Banana 2 through the connected Google OAuth session. When asked for an image, "
     "describe what you\'ll generate in one sentence — the backend renders it. Always enrich vague prompts "
     "('a dog' → detailed description with lighting, style, composition).\n"
     "When someone uploads an image, you receive real technical metadata (EXIF, dimensions, palette). "
@@ -2357,68 +2358,79 @@ _IMAGE_FOLLOWUP_RE = re.compile(
     re.IGNORECASE
 )
 def _enhance_image_prompt_via_llm(raw_prompt: str) -> str:
-    """Turns a short user request ('a fox in snow') into a detailed,
-    vivid image-generation prompt (style, lighting, composition, quality
-    tags) BEFORE it's sent to Pollinations — short raw prompts consistently
-    produce weaker/blander images. Uses a fast, non-streaming call with a
-    short timeout and always falls back to the raw prompt on any failure,
-    so image generation never breaks or stalls because of this step."""
-    keys = GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
-    if not keys:
-        return raw_prompt
-    try:
-        body = json.dumps({
-            "model": "llama-3.3-70b-versatile",
-            "messages": [
-                {"role": "system", "content": (
-                    "You expand short image requests into a single detailed, vivid "
-                    "text-to-image prompt: describe subject, setting, lighting, mood, "
-                    "composition/camera angle, and art style/quality tags in one dense "
-                    "paragraph (2-3 sentences). Output ONLY the enriched prompt itself, "
-                    "no preamble, no quotes, no explanation."
-                )},
-                {"role": "user", "content": raw_prompt},
-            ],
-            "stream": False,
-            "max_tokens": 220,
-            "temperature": 0.8,
-        }).encode()
-        req = urllib.request.Request(
-            "https://api.groq.com/openai/v1/chat/completions",
-            data=body,
-            headers={"Authorization": f"Bearer {keys[0]}", "Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-        enriched = payload["choices"][0]["message"]["content"].strip().strip('"')
-        return enriched if enriched else raw_prompt
-    except Exception as exc:
-        print(f"[IMAGE PROMPT ENHANCE FAULT — using raw prompt instead] {exc}")
-        return raw_prompt
-def _detect_image_prompt(message: str, last_image_prompt: str = None):
-    """
-    Returns a plain-language image description if `message` looks like an
-    image-generation request, else None. Kept intentionally simple (regex
-    heuristic) rather than a full intent classifier, to stay fast.
-    If the previous turn generated an image (last_image_prompt passed in)
-    and this message reads as a short edit/follow-up instruction without an
-    explicit image keyword, we treat it as "regenerate the same image with
-    this change" instead of falling through to a plain text reply — this is
-    the fix for "add this ... then it don't make img again".
-    """
-    stripped = message.strip()
-    m = _IMAGE_INTENT_RE.search(stripped)
-    if m:
-        prompt_text = (m.group(1) or m.group(2) or "").strip(" .!")
-        if prompt_text:
-            return prompt_text
-    if last_image_prompt and _IMAGE_FOLLOWUP_RE.match(stripped):
-        return f"{last_image_prompt}, {stripped.strip(' .!')}"
+    raw=str(raw_prompt or '').strip()
+    if len(raw)>=180: return raw
+    return f"{raw}. Create a polished production-quality image with strong subject clarity, intentional composition, natural lighting, coherent perspective, controlled detail, clean edges, accurate materials, and a professional visual finish."
+
+def _extract_first_image_part(payload):
+    for candidate in payload.get('candidates') or []:
+        for part in ((candidate.get('content') or {}).get('parts') or []):
+            inline=part.get('inlineData') or part.get('inline_data')
+            if inline and inline.get('data'): return {'mime_type':inline.get('mimeType') or inline.get('mime_type') or 'image/png','data':inline['data']}
     return None
-def _pollinations_image_url(prompt_text: str) -> str:
-    encoded = urllib.parse.quote(prompt_text)
-    return f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
+
+def _gemini_generate_image(access_token,prompt_text,reference_image_data_url=None):
+    parts=[{'text':prompt_text}]
+    if isinstance(reference_image_data_url,str) and reference_image_data_url.startswith('data:image/'):
+        try:
+            header,encoded=reference_image_data_url.split(',',1)
+            if len(encoded)<=8_000_000:
+                parts.append({'inlineData':{'mimeType':header.split(';',1)[0][5:] or 'image/png','data':encoded}})
+        except Exception: pass
+    body={'contents':[{'role':'user','parts':parts}], 'generationConfig':{'responseModalities':['TEXT','IMAGE'],'responseFormat':{'image':{'aspectRatio':'1:1','imageSize':'1K'}}}}
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_IMAGE_MODEL,safe='-_.')}:generateContent"
+    req=urllib.request.Request(url,data=json.dumps(body).encode(),method='POST',headers={'Authorization':f'Bearer {access_token}','x-goog-user-project':GOOGLE_CLOUD_PROJECT_ID,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=120) as resp: payload=json.loads(resp.read().decode('utf-8',errors='replace'))
+    except urllib.error.HTTPError as exc:
+        raw=exc.read().decode('utf-8',errors='replace')
+        try: msg=(json.loads(raw).get('error') or {}).get('message') or raw[:500]
+        except Exception: msg=raw[:500]
+        if exc.code in (401,403): raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
+        raise RuntimeError(msg)
+    image=_extract_first_image_part(payload)
+    if not image: raise RuntimeError('Gemini returned no image data.')
+    text=[part['text'] for c in payload.get('candidates') or [] for part in ((c.get('content') or {}).get('parts') or []) if part.get('text')]
+    return image,'\n'.join(text).strip()
+
+def _stream_google_oauth_gemini(messages,state=None):
+    access_token,err=_require_gemini_connection()
+    if err: raise RuntimeError('GEMINI_AUTH_REQUIRED')
+    system_parts=[]; contents=[]
+    for item in messages or []:
+        text=str(item.get('content','') or '')
+        if not text: continue
+        role=item.get('role','user')
+        if role=='system': system_parts.append(text)
+        else: contents.append({'role':'model' if role=='assistant' else 'user','parts':[{'text':text}]})
+    if not contents: raise RuntimeError('No user content was supplied to Gemini.')
+    temp=(state or {}).pop('temperature',0.4) if state is not None else 0.4
+    body={'contents':contents,'generationConfig':{'temperature':float(temp),'maxOutputTokens':32768}}
+    if system_parts: body['systemInstruction']={'parts':[{'text':'\n\n'.join(system_parts)}]}
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_CHAT_MODEL,safe='-_.')}:streamGenerateContent?alt=sse"
+    req=urllib.request.Request(url,data=json.dumps(body).encode(),method='POST',headers={'Authorization':f'Bearer {access_token}','x-goog-user-project':GOOGLE_CLOUD_PROJECT_ID,'Content-Type':'application/json','Accept':'text/event-stream','Cache-Control':'no-cache'})
+    try:
+        with urllib.request.urlopen(req,timeout=120) as resp:
+            for raw_line in resp:
+                line=raw_line.decode('utf-8',errors='replace').strip()
+                if not line.startswith('data:'): continue
+                raw=line[5:].strip()
+                if not raw: continue
+                try: payload=json.loads(raw)
+                except Exception: continue
+                if payload.get('error'): raise RuntimeError((payload.get('error') or {}).get('message') or 'Gemini API request failed.')
+                for candidate in payload.get('candidates') or []:
+                    finish=candidate.get('finishReason') or candidate.get('finish_reason')
+                    if finish and state is not None: state['finish_reason']='length' if str(finish).upper() in {'MAX_TOKENS','LENGTH'} else 'stop'
+                    for part in ((candidate.get('content') or {}).get('parts') or []):
+                        if part.get('text'): yield _sse({'type':'token','text':part['text']})
+    except urllib.error.HTTPError as exc:
+        try:
+            raw=exc.read().decode('utf-8',errors='replace'); msg=(json.loads(raw).get('error') or {}).get('message') or raw[:500]
+        except Exception: msg=str(exc)
+        if exc.code in (401,403): raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
+        raise RuntimeError(msg)
+
 _MULTITASK_VERB_RE = re.compile(
     r'\b(zip|pdf|csv|svg|python|bash|compute|calculate|create|build|write|make|then|also|plus|and then|export|generate.*and)\b',
     re.IGNORECASE
@@ -3026,9 +3038,7 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
     return [{"role": "system", "content": summary_text}] + recent_msgs
-_PROVIDER_CHAIN = [
-    ("pratham_worker", _stream_qwen_worker),                                                     
-]
+_PROVIDER_CHAIN = [("google_gemini_oauth", _stream_google_oauth_gemini)]
 _MAX_AUTO_CONTINUATIONS = 6                                                                     
 def _do_stream(messages):
     """Streams a reply from the first available provider, then — this is
@@ -3092,15 +3102,19 @@ def _do_stream(messages):
             _cool(name)
             continue
     print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
-    last_err = _failure_log[0][1] if _failure_log else "Worker unreachable"
-    yield _sse({
-        "type": "error",
-        "error": {
-            "code": "WORKER_OFFLINE",
-            "message": f"Qwen compute worker is currently offline or unreachable: {last_err}"
-        }
-    })
-    yield _sse({"type": "complete"})
+    last_err = _failure_log[0][1] if _failure_log else "Gemini unavailable"
+    if str(last_err).startswith("GEMINI_RECONNECT_REQUIRED") or str(last_err) == "GEMINI_AUTH_REQUIRED":
+        code = "GEMINI_RECONNECT_REQUIRED"
+        friendly = "Gemini is not connected to this PrathamAI session. Open Settings → Connect Gemini and authorize the Google account again."
+    elif not GOOGLE_CLOUD_PROJECT_ID:
+        code = "GEMINI_SERVER_CONFIG"
+        friendly = "GOOGLE_CLOUD_PROJECT_ID is missing on the backend. Configure the Google Cloud project first."
+    else:
+        code = "GEMINI_REQUEST_FAILED"
+        friendly = f"Gemini request failed: {last_err}"
+    yield _sse({"type":"error","error":{"code":code,"message":friendly}})
+    yield _sse({"type":"complete"})
+
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 4                                                                     
@@ -3553,6 +3567,79 @@ def _append_message(conv_id, role, content):
 @app.route("/api/app", methods=["GET"])
 def index_root():
     return jsonify({"message": "Pratham AI backend active"})
+def _gemini_access_token_from_request():
+    token=request.headers.get(GEMINI_ACCESS_TOKEN_HEADER, "").strip()
+    return token[7:].strip() if token.lower().startswith("bearer ") else token
+
+def _gemini_token_fingerprint(token,email):
+    return hmac.new(SESSION_SECRET.encode(), f"{str(email).lower()}\n{token}".encode(), hashlib.sha256).hexdigest()
+
+def _gemini_tokeninfo(token):
+    if not token: return None
+    try:
+        q=urllib.parse.urlencode({"access_token":token})
+        req=urllib.request.Request(f"https://oauth2.googleapis.com/tokeninfo?{q}", method="GET")
+        with urllib.request.urlopen(req, timeout=8) as resp: return json.loads(resp.read().decode('utf-8',errors='replace'))
+    except Exception as exc:
+        print(f"[GEMINI][TOKENINFO] {exc}")
+        return None
+
+def _require_gemini_connection():
+    token=_gemini_access_token_from_request(); user=getattr(request,'current_user',{}) or {}
+    if not token: return None,(jsonify({"error":{"code":"GEMINI_AUTH_REQUIRED","message":"Connect Gemini in Settings before using Gemini."}}),401)
+    binding=request.cookies.get('pratham_gemini_binding','')
+    expected=_gemini_token_fingerprint(token,user.get('email',''))
+    if not binding or not hmac.compare_digest(binding,expected):
+        return None,(jsonify({"error":{"code":"GEMINI_RECONNECT_REQUIRED","message":"Reconnect Gemini in Settings so this Google OAuth session is bound to your PrathamAI account."}}),401)
+    return token,None
+
+@app.route('/auth/gemini/config',methods=['GET','OPTIONS'])
+@app.route('/api/auth/gemini/config',methods=['GET','OPTIONS'])
+@app.route('/api/app/auth/gemini/config',methods=['GET','OPTIONS'])
+def gemini_oauth_config():
+    if request.method=='OPTIONS': return _cors_preflight()
+    return jsonify({"ok":True,"client_id":GOOGLE_GEMINI_OAUTH_CLIENT_ID,"scopes":GEMINI_OAUTH_SCOPES,"project_configured":bool(GOOGLE_CLOUD_PROJECT_ID),"chat_model":GEMINI_CHAT_MODEL,"image_model":GEMINI_IMAGE_MODEL})
+
+@app.route('/auth/gemini/connect',methods=['POST','OPTIONS'])
+@app.route('/api/auth/gemini/connect',methods=['POST','OPTIONS'])
+@app.route('/api/app/auth/gemini/connect',methods=['POST','OPTIONS'])
+@require_auth
+def gemini_oauth_connect():
+    if request.method=='OPTIONS': return _cors_preflight()
+    if not GOOGLE_CLOUD_PROJECT_ID: return jsonify({"error":{"code":"GEMINI_SERVER_CONFIG","message":"GOOGLE_CLOUD_PROJECT_ID is not configured on the backend."}}),503
+    token=_gemini_access_token_from_request(); info=_gemini_tokeninfo(token)
+    if not info: return jsonify({"error":{"code":"GEMINI_INVALID_TOKEN","message":"Google rejected the Gemini OAuth access token."}}),401
+    app_email=_user_email().lower(); token_email=str(info.get('email','')).lower()
+    if token_email and token_email!=app_email: return jsonify({"error":{"code":"GEMINI_ACCOUNT_MISMATCH","message":"The Gemini Google account must match the account signed into PrathamAI."}}),403
+    scopes=str(info.get('scope',''))
+    if not ('https://www.googleapis.com/auth/cloud-platform' in scopes or 'https://www.googleapis.com/auth/generative-language.retriever' in scopes): return jsonify({"error":{"code":"GEMINI_SCOPE_MISSING","message":"The Google authorization did not grant a Gemini/Cloud scope."}}),403
+    response=jsonify({"ok":True,"connected":True,"account_email":token_email or app_email,"expires_in":int(info.get('expires_in',3600) or 3600),"project_id":GOOGLE_CLOUD_PROJECT_ID})
+    response.set_cookie('pratham_gemini_binding',_gemini_token_fingerprint(token,app_email),max_age=min(3600,max(300,int(info.get('expires_in',3600) or 3600))),secure=True,httponly=True,samesite='Lax',path='/')
+    return response
+
+@app.route('/auth/gemini/status',methods=['GET','OPTIONS'])
+@app.route('/api/auth/gemini/status',methods=['GET','OPTIONS'])
+@app.route('/api/app/auth/gemini/status',methods=['GET','OPTIONS'])
+@require_auth
+def gemini_oauth_status():
+    if request.method=='OPTIONS': return _cors_preflight()
+    token=_gemini_access_token_from_request()
+    if not token: return jsonify({"ok":True,"connected":False,"configured":bool(GOOGLE_CLOUD_PROJECT_ID)})
+    info=_gemini_tokeninfo(token)
+    if not info: return jsonify({"ok":True,"connected":False,"configured":bool(GOOGLE_CLOUD_PROJECT_ID)})
+    binding=request.cookies.get('pratham_gemini_binding',''); expected=_gemini_token_fingerprint(token,_user_email())
+    return jsonify({"ok":True,"connected":bool(binding and hmac.compare_digest(binding,expected)),"configured":bool(GOOGLE_CLOUD_PROJECT_ID),"account_email":info.get('email'),"expires_in":int(info.get('expires_in',0) or 0)})
+
+@app.route('/auth/gemini/disconnect',methods=['POST','OPTIONS'])
+@app.route('/api/auth/gemini/disconnect',methods=['POST','OPTIONS'])
+@app.route('/api/app/auth/gemini/disconnect',methods=['POST','OPTIONS'])
+@require_auth
+def gemini_oauth_disconnect():
+    if request.method=='OPTIONS': return _cors_preflight()
+    response=jsonify({"ok":True,"connected":False})
+    response.set_cookie('pratham_gemini_binding','',max_age=0,secure=True,httponly=True,samesite='Lax',path='/')
+    return response
+
 @app.route("/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/exchange", methods=["POST", "OPTIONS"])
@@ -3771,26 +3858,32 @@ def chat_stream():
         _last_image_prompt = _m.group(1)                                     
     image_prompt = _detect_image_prompt(message, _last_image_prompt)
     if image_prompt and not _is_complex_multitask_message(message):
+        access_token, image_err = _require_gemini_connection()
+        if image_err: return image_err
         _append_message(conv_id, "user", message)
         enriched_image_prompt = _enhance_image_prompt_via_llm(image_prompt)
-        image_url = _pollinations_image_url(enriched_image_prompt)
-        assistant_note = f"Here's your generated image for: \"{image_prompt}\"\n(enhanced prompt used: \"{enriched_image_prompt}\")"
-        _append_message(conv_id, "assistant", f"{assistant_note}\n![generated image]({image_url})")
-        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        _write_to_github_repository(
-            f"data/{user_email}/{current_date_formatted}.txt",
-            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\nUser: {message}\n"
-            f"Pratham AI: [image generated] {image_url}\n{'=' * 80}\n"
-        )
+        try:
+            image_info,image_text=_gemini_generate_image(access_token,enriched_image_prompt,body.get('reference_image'))
+            image_url=f"data:{image_info['mime_type']};base64,{image_info['data']}"
+        except Exception as exc:
+            err_text=str(exc)
+            def generate_image_error():
+                yield _sse({"type":"metadata","conversation_id":conv_id})
+                code='GEMINI_RECONNECT_REQUIRED' if 'GEMINI_RECONNECT_REQUIRED' in err_text else 'GEMINI_IMAGE_FAILED'
+                yield _sse({"type":"error","error":{"code":code,"message":f"Gemini image generation failed: {err_text}"}})
+                yield _sse({"type":"complete"})
+            resp=Response(stream_with_context(generate_image_error()),content_type='text/event-stream')
+            resp.headers['Cache-Control']='no-cache'; resp.headers['X-Accel-Buffering']='no'; resp.headers['Access-Control-Allow-Credentials']='true'
+            return resp
+        assistant_note=image_text or f'Generated with Nano Banana 2 for: "{image_prompt}"'
+        _append_message(conv_id,'assistant',assistant_note+'\n[generated image delivered to browser]')
         def generate_image():
-            yield _sse({"type": "metadata", "conversation_id": conv_id})
-            yield _sse({"type": "token", "text": assistant_note + "\n\n"})
-            yield _sse({"type": "image", "url": image_url, "prompt": enriched_image_prompt})
-            yield _sse({"type": "complete"})
-        resp = Response(stream_with_context(generate_image()), content_type="text/event-stream")
-        resp.headers["Cache-Control"] = "no-cache"
-        resp.headers["X-Accel-Buffering"] = "no"
-        resp.headers["Access-Control-Allow-Credentials"] = "true"
+            yield _sse({"type":"metadata","conversation_id":conv_id})
+            if assistant_note: yield _sse({"type":"token","text":assistant_note+'\n\n'})
+            yield _sse({"type":"image","url":image_url,"prompt":enriched_image_prompt,"model":GEMINI_IMAGE_MODEL})
+            yield _sse({"type":"complete"})
+        resp=Response(stream_with_context(generate_image()),content_type='text/event-stream')
+        resp.headers['Cache-Control']='no-cache, no-transform'; resp.headers['X-Accel-Buffering']='no'; resp.headers['Access-Control-Allow-Credentials']='true'
         return resp
     history = _get_messages(conv_id)
     is_creator = user_email.lower() in CREATOR_EMAILS
@@ -4068,8 +4161,32 @@ def chat_stream():
                     continue
                 _images_emitted_this_turn.add(_raw_img_prompt)
                 _enriched_prompt = _enhance_image_prompt_via_llm(_raw_img_prompt)
-                _img_url = _pollinations_image_url(_enriched_prompt)
-                yield _sse({"type": "image", "url": _img_url, "prompt": _enriched_prompt})
+                try:
+                    _img_token, _img_err = _require_gemini_connection()
+                    if _img_err:
+                        yield _sse({
+                            "type": "error",
+                            "error": {
+                                "code": "GEMINI_AUTH_REQUIRED",
+                                "message": "Connect Gemini in Settings before generating images."
+                            }
+                        })
+                        continue
+                    _img_info, _img_text = _gemini_generate_image(_img_token, _enriched_prompt)
+                    _img_url = f"data:{_img_info['mime_type']};base64,{_img_info['data']}"
+                    yield _sse({
+                        "type": "image",
+                        "url": _img_url,
+                        "prompt": _enriched_prompt,
+                        "model": GEMINI_IMAGE_MODEL
+                    })
+                except Exception as _img_exc:
+                    _img_msg = str(_img_exc)
+                    _img_code = "GEMINI_RECONNECT_REQUIRED" if "GEMINI_RECONNECT_REQUIRED" in _img_msg else "GEMINI_IMAGE_FAILED"
+                    yield _sse({
+                        "type": "error",
+                        "error": {"code": _img_code, "message": f"Gemini image generation failed: {_img_msg}"}
+                    })
             for filename, content in _extract_createfile_blocks(iteration_reply):
                 try:
                     final_content = content
@@ -4502,14 +4619,15 @@ def config_public():
         "app_name": "Pratham AI",
         "supabase_configured": SUPABASE_CONFIGURED,
         "github_repo": GITHUB_REPO,
-        "providers_configured": {
-            "groq": bool(GROQ_API_KEY),
-            "groq_key_count": len(GROQ_API_KEYS),
-            "openrouter": bool(OPENROUTER_API_KEY),
-            "cerebras": bool(CEREBRAS_API_KEY),
-            "mistral": bool(MISTRAL_API_KEY),
-            "google_cse": GOOGLE_CSE_CONFIGURED,
+        "ai": {
+            "mode": PRATHAM_AI_MODE,
+            "gemini_oauth": True,
+            "google_cloud_project_configured": bool(GOOGLE_CLOUD_PROJECT_ID),
+            "google_oauth_client_configured": bool(GOOGLE_GEMINI_OAUTH_CLIENT_ID),
+            "chat_model": GEMINI_CHAT_MODEL,
+            "image_model": GEMINI_IMAGE_MODEL,
         },
+        "google_cse": GOOGLE_CSE_CONFIGURED,
         "pdf_read_supported": _PDF_READ_SUPPORTED,
         "pdf_extractors_available": {
             "pypdf_or_pypdf2": _PDF_READ_SUPPORTED,
