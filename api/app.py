@@ -3731,6 +3731,86 @@ def gemini_oauth_disconnect():
     response.set_cookie('pratham_gemini_binding','',max_age=0,secure=True,httponly=True,samesite='Lax',path='/')
     return response
 
+
+@app.route("/auth/unified-google-login", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/unified-google-login", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/unified-google-login", methods=["POST", "OPTIONS"])
+def unified_google_login():
+    """Single-click Google authorization endpoint.
+
+    The browser obtains one OAuth access token that contains both normal
+    identity scopes (openid/email/profile) and the configured Google Cloud
+    scope.  This endpoint validates that token, creates the normal Pratham AI
+    session, and binds the same token to the session so chat/image requests do
+    not require a second OAuth popup or an account-mismatch check.
+    """
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    token = _gemini_access_token_from_request()
+    if not token:
+        body = request.get_json(silent=True) or {}
+        token = str(body.get("access_token") or "").strip()
+    if not token:
+        return jsonify({"error": {"code": "GOOGLE_ACCESS_TOKEN_REQUIRED", "message": "Google authorization did not return an access token."}}), 401
+    info = _gemini_tokeninfo(token)
+    if not info:
+        return jsonify({"error": {"code": "GOOGLE_TOKEN_INVALID", "message": "Google rejected the authorization token."}}), 401
+    allowed_audiences = {x for x in [GOOGLE_GEMINI_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID] if x}
+    if allowed_audiences and str(info.get("aud", "")) not in allowed_audiences:
+        return jsonify({"error": {"code": "GOOGLE_CLIENT_MISMATCH", "message": "This Google account authorization was issued for a different Pratham AI client."}}), 403
+    if str(info.get("iss", "")) not in {"accounts.google.com", "https://accounts.google.com"}:
+        return jsonify({"error": {"code": "GOOGLE_ISSUER_INVALID", "message": "Google authorization issuer could not be verified."}}), 401
+    scopes = set(str(info.get("scope", "")).split())
+    required_scope = "https://www.googleapis.com/auth/cloud-platform"
+    if required_scope not in scopes:
+        return jsonify({"error": {"code": "GOOGLE_CLOUD_SCOPE_MISSING", "message": "Google authorization did not include the access required by this Pratham AI workspace."}}), 403
+    email = str(info.get("email", "")).strip().lower()
+    sub = str(info.get("sub", "")).strip()
+    if not email or not sub:
+        return jsonify({"error": {"code": "GOOGLE_IDENTITY_MISSING", "message": "Google did not return a complete identity for this account."}}), 401
+    name = str(info.get("name", "") or "").strip()
+    picture = str(info.get("picture", "") or "").strip()
+    # Tokeninfo normally includes identity metadata, but userinfo is used as a
+    # best-effort enrichment when the provider does not return name/picture.
+    if not name or not picture:
+        try:
+            ureq = urllib.request.Request(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                method="GET",
+            )
+            with urllib.request.urlopen(ureq, timeout=8) as uresp:
+                udata = json.loads(uresp.read().decode("utf-8", errors="replace"))
+                name = name or str(udata.get("name", "") or "").strip()
+                picture = picture or str(udata.get("picture", "") or "").strip()
+        except Exception as exc:
+            print(f"[AUTH][UNIFIED USERINFO] {exc}")
+    user = {
+        "sub": sub,
+        "email": email,
+        "role": "standard",
+        "user_metadata": {"full_name": name, "picture": picture},
+        "email_verified": str(info.get("email_verified", "true")).lower() == "true",
+    }
+    session_token = _issue_session_token(user)
+    expires_in = int(info.get("expires_in", 3600) or 3600)
+    response = jsonify({
+        "ok": True,
+        "session_token": session_token,
+        "user": user,
+        "gemini_expires_in": expires_in,
+    })
+    response.set_cookie(
+        "pratham_gemini_binding",
+        _gemini_token_fingerprint(token, email),
+        max_age=min(3600, max(300, expires_in)),
+        secure=True,
+        httponly=True,
+        samesite="Lax",
+        path="/",
+    )
+    return response
+
 @app.route("/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/auth/exchange", methods=["POST", "OPTIONS"])
 @app.route("/api/app/auth/exchange", methods=["POST", "OPTIONS"])
