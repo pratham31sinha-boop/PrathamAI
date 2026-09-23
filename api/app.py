@@ -297,6 +297,12 @@ GOOGLE_GEMINI_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_GEMINI_OAUTH_CLIENT_ID", 
 GOOGLE_CLOUD_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID", "").strip()
 GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-3.8-flash").strip()
 GEMINI_IMAGE_MODEL = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image").strip()
+# Primary text/reasoning brain. Uses the supplied OpenAI-compatible Ollama endpoint.
+QWEN_OLLAMA_BASE_URL = os.environ.get("QWEN_OLLAMA_BASE_URL", "https://civilization-reaction-beverly-reporting.trycloudflare.com/v1").strip().rstrip("/")
+QWEN_OLLAMA_MODEL = os.environ.get("QWEN_OLLAMA_MODEL", "qwen3.8-27b-uncensored-mtp").strip()
+QWEN_OLLAMA_API_KEY = os.environ.get("QWEN_OLLAMA_API_KEY", "").strip()
+QWEN_OLLAMA_TIMEOUT_SECONDS = int(os.environ.get("QWEN_OLLAMA_TIMEOUT_SECONDS", "180"))
+QWEN_OLLAMA_MAX_RETRIES = int(os.environ.get("QWEN_OLLAMA_MAX_RETRIES", "2"))
 GEMINI_OAUTH_SCOPES = os.environ.get("GEMINI_OAUTH_SCOPES", "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language.retriever").strip()
 GEMINI_ACCESS_TOKEN_HEADER = "X-Gemini-Access-Token"
 QWEN_WORKER_URL       = os.environ.get("QWEN_WORKER_URL", "").strip().rstrip("/")
@@ -2730,6 +2736,78 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None, tempera
                     state["finish_reason"] = finish_reason
             except Exception:
                 continue
+def _stream_qwen_ollama(messages, state=None):
+    """Primary Pratham AI text/reasoning brain using the supplied OpenAI-compatible Ollama endpoint.
+
+    The endpoint is configurable through QWEN_OLLAMA_BASE_URL and the model through
+    QWEN_OLLAMA_MODEL. It supports streaming, optional bearer auth, finish-reason
+    reporting for continuation logic, and small transient retries.
+    """
+    endpoint = f"{QWEN_OLLAMA_BASE_URL}/chat/completions"
+    if not endpoint.startswith(("http://", "https://")):
+        raise RuntimeError("QWEN_OLLAMA_BASE_URL is invalid.")
+    temperature = (state or {}).pop("temperature", 0.4) if state is not None else 0.4
+    body = json.dumps({
+        "model": QWEN_OLLAMA_MODEL,
+        "messages": messages,
+        "stream": True,
+        "max_tokens": 32768,
+        "temperature": temperature,
+    }).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+    }
+    if QWEN_OLLAMA_API_KEY:
+        headers["Authorization"] = f"Bearer {QWEN_OLLAMA_API_KEY}"
+    last_error = None
+    for attempt in range(max(0, QWEN_OLLAMA_MAX_RETRIES) + 1):
+        started = time.time()
+        got_delta = False
+        try:
+            req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=QWEN_OLLAMA_TIMEOUT_SECONDS) as resp:
+                if resp.status < 200 or resp.status >= 300:
+                    raise RuntimeError(f"Qwen HTTP {resp.status}")
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload_str = line[5:].strip()
+                    if payload_str == "[DONE]":
+                        break
+                    try:
+                        payload = json.loads(payload_str)
+                    except Exception:
+                        continue
+                    choices = payload.get("choices") or []
+                    if not choices:
+                        continue
+                    choice = choices[0] or {}
+                    delta = choice.get("delta") or {}
+                    token_text = delta.get("content", "")
+                    if isinstance(token_text, list):
+                        token_text = "".join(str(x.get("text", "") if isinstance(x, dict) else x) for x in token_text)
+                    if token_text:
+                        got_delta = True
+                        yield _sse({"type": "token", "text": str(token_text)})
+                    finish_reason = choice.get("finish_reason")
+                    if finish_reason and state is not None:
+                        state["finish_reason"] = finish_reason
+                if state is not None and got_delta and not state.get("finish_reason"):
+                    state["finish_reason"] = "stop"
+                return
+        except Exception as exc:
+            last_error = exc
+            elapsed = int((time.time() - started) * 1000)
+            print(f"[QWEN-OLLAMA] attempt {attempt + 1} failed after {elapsed}ms: {exc}")
+            if attempt < max(0, QWEN_OLLAMA_MAX_RETRIES):
+                time.sleep(min(6, 1.5 * (2 ** attempt)))
+                continue
+            raise RuntimeError(f"Qwen brain request failed: {last_error}")
+
 def _generate_ai_chat_title(message: str) -> str:
     """Uses the model itself to write a short, clean chat title (like
     ChatGPT/Claude do), instead of just truncating the raw first message.
@@ -3129,7 +3207,7 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
     return [{"role": "system", "content": summary_text}] + recent_msgs
-_PROVIDER_CHAIN = [("google_gemini_oauth", _stream_google_oauth_gemini)]
+_PROVIDER_CHAIN = [("qwen_ollama", _stream_qwen_ollama), ("google_gemini_oauth", _stream_google_oauth_gemini)]
 _MAX_AUTO_CONTINUATIONS = 6                                                                     
 def _do_stream(messages):
     """Streams a reply from the first available provider, then — this is
@@ -3193,16 +3271,19 @@ def _do_stream(messages):
             _cool(name)
             continue
     print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
-    last_err = _failure_log[0][1] if _failure_log else "Gemini unavailable"
-    if str(last_err).startswith("GEMINI_RECONNECT_REQUIRED") or str(last_err) == "GEMINI_AUTH_REQUIRED":
+    last_err = _failure_log[0][1] if _failure_log else "AI engine unavailable"
+    if "qwen_ollama" in [name for name, _ in _failure_log] and len(_failure_log) == 1:
+        code = "QWEN_BRAIN_UNAVAILABLE"
+        friendly = "Pratham AI's reasoning engine is temporarily unavailable. Please try again in a moment."
+    elif str(last_err).startswith("GEMINI_RECONNECT_REQUIRED") or str(last_err) == "GEMINI_AUTH_REQUIRED":
         code = "GEMINI_RECONNECT_REQUIRED"
-        friendly = "Gemini is not connected to this PrathamAI session. Open Settings → Connect Gemini and authorize the Google account again."
+        friendly = "Pratham AI's image/Google authorization is not connected for this session."
     elif not GOOGLE_CLOUD_PROJECT_ID:
         code = "GEMINI_SERVER_CONFIG"
-        friendly = "GOOGLE_CLOUD_PROJECT_ID is missing on the backend. Configure the Google Cloud project first."
+        friendly = "Pratham AI's image service is temporarily unavailable."
     else:
-        code = "GEMINI_REQUEST_FAILED"
-        friendly = f"Gemini request failed: {last_err}"
+        code = "AI_REQUEST_FAILED"
+        friendly = f"Pratham AI request failed: {last_err}"
     yield _sse({"type":"error","error":{"code":code,"message":friendly}})
     yield _sse({"type":"complete"})
 
@@ -3729,6 +3810,92 @@ def gemini_oauth_disconnect():
     if request.method=='OPTIONS': return _cors_preflight()
     response=jsonify({"ok":True,"connected":False})
     response.set_cookie('pratham_gemini_binding','',max_age=0,secure=True,httponly=True,samesite='Lax',path='/')
+    return response
+
+
+@app.route("/auth/unified-google-login", methods=["POST", "OPTIONS"])
+@app.route("/api/auth/unified-google-login", methods=["POST", "OPTIONS"])
+@app.route("/api/app/auth/unified-google-login", methods=["POST", "OPTIONS"])
+def unified_google_login():
+    """Single-click Google authorization endpoint.
+
+    The browser obtains one OAuth access token that contains both normal
+    identity scopes (openid/email/profile) and the configured Google Cloud
+    scope.  This endpoint validates that token, creates the normal Pratham AI
+    session, and binds the same token to the session so chat/image requests do
+    not require a second OAuth popup or an account-mismatch check.
+    """
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    token = _gemini_access_token_from_request()
+    body = request.get_json(silent=True) or {}
+    body_token = str(body.get("access_token") or "").strip()
+    # Accept the token from the body as the canonical path for the unified
+    # browser login. Authorization remains supported for compatibility.
+    if body_token:
+        token = body_token
+    if not token:
+        return jsonify({"error": {"code": "GOOGLE_ACCESS_TOKEN_REQUIRED", "message": "Google authorization did not return an access token."}}), 401
+    info = _gemini_tokeninfo(token)
+    if not info:
+        return jsonify({"error": {"code": "GOOGLE_TOKEN_INVALID", "message": "Google rejected the authorization token."}}), 401
+    allowed_audiences = {x for x in [GOOGLE_GEMINI_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID] if x}
+    # IMPORTANT: tokeninfo for an OAuth *access token* returns `audience` /
+    # `issued_to`; it is not an ID-token JWT and therefore does not expose an
+    # `iss`, `aud`, or `sub` claim in this response shape.
+    token_audience = str(info.get("audience") or info.get("issued_to") or "").strip()
+    if allowed_audiences and token_audience and token_audience not in allowed_audiences:
+        return jsonify({"error": {"code": "GOOGLE_CLIENT_MISMATCH", "message": "This Google authorization was issued for a different Pratham AI client."}}), 403
+    scopes = set(str(info.get("scope", "")).split())
+    required_scope = "https://www.googleapis.com/auth/cloud-platform"
+    if required_scope not in scopes:
+        return jsonify({"error": {"code": "GOOGLE_CLOUD_SCOPE_MISSING", "message": "Google authorization did not include the access required by this Pratham AI workspace."}}), 403
+
+    # Access-token tokeninfo is used for scope/audience validation. For the
+    # actual Google identity, use the OAuth userinfo endpoint, which returns
+    # the stable `sub`, email, name, and picture fields for the bearer token.
+    try:
+        ureq = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(ureq, timeout=8) as uresp:
+            udata = json.loads(uresp.read().decode("utf-8", errors="replace"))
+    except Exception as exc:
+        print(f"[AUTH][UNIFIED USERINFO] {exc}")
+        return jsonify({"error": {"code": "GOOGLE_USERINFO_FAILED", "message": "Google authorization succeeded, but Pratham AI could not retrieve the signed-in Google account."}}), 401
+
+    email = str(udata.get("email") or info.get("email") or "").strip().lower()
+    sub = str(udata.get("sub") or info.get("user_id") or "").strip()
+    name = str(udata.get("name") or "").strip()
+    picture = str(udata.get("picture") or "").strip()
+    if not email or not sub:
+        return jsonify({"error": {"code": "GOOGLE_IDENTITY_MISSING", "message": "Google did not return a complete identity for this account."}}), 401
+    user = {
+        "sub": sub,
+        "email": email,
+        "role": "standard",
+        "user_metadata": {"full_name": name, "picture": picture},
+        "email_verified": bool(udata.get("verified_email", True)),
+    }
+    session_token = _issue_session_token(user)
+    expires_in = int(info.get("expires_in", 3600) or 3600)
+    response = jsonify({
+        "ok": True,
+        "session_token": session_token,
+        "user": user,
+        "gemini_expires_in": expires_in,
+    })
+    response.set_cookie(
+        "pratham_gemini_binding",
+        _gemini_token_fingerprint(token, email),
+        max_age=min(3600, max(300, expires_in)),
+        secure=True,
+        httponly=True,
+        samesite="Lax",
+        path="/",
+    )
     return response
 
 @app.route("/auth/exchange", methods=["POST", "OPTIONS"])
@@ -4738,11 +4905,11 @@ def config_public():
         "supabase_configured": SUPABASE_CONFIGURED,
         "github_repo": GITHUB_REPO,
         "ai": {
-            "mode": PRATHAM_AI_MODE,
+            "mode": "pratham_ai",
             "gemini_oauth": True,
             "google_cloud_project_configured": bool(GOOGLE_CLOUD_PROJECT_ID),
             "google_oauth_client_configured": bool(GOOGLE_GEMINI_OAUTH_CLIENT_ID),
-            "chat_model": GEMINI_CHAT_MODEL,
+            "chat_model": QWEN_OLLAMA_MODEL,
             "image_model": GEMINI_IMAGE_MODEL,
         },
         "google_cse": GOOGLE_CSE_CONFIGURED,
