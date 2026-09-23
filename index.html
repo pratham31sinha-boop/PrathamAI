@@ -1318,9 +1318,18 @@
             <hr class="border-[var(--border)]">
             <div class="flex justify-center w-full py-2 min-h-[44px]">
                 <div id="googleSignInGate" class="w-full flex justify-center items-center">
-                    <div id="gsiButtonContainer"></div>
+                    <button id="prathamUnifiedGoogleSignInButton" type="button" onclick="startUnifiedGoogleSignIn()" class="w-full max-w-[270px] h-11 rounded-xl border border-[var(--border)] bg-[var(--panel)] hover:bg-[var(--hover)] transition-all flex items-center justify-center gap-3 text-sm font-semibold text-[var(--text)] shadow-sm cursor-pointer">
+                        <svg width="19" height="19" viewBox="0 0 48 48" aria-hidden="true">
+                            <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.655 32.657 29.154 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039L37.521 9.48C33.299 5.733 28.038 3.5 24 3.5 12.685 3.5 3.5 12.685 3.5 24S12.685 44.5 24 44.5 44.5 35.315 44.5 24c0-1.341-.138-2.65-.389-3.917z"/>
+                            <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 16.186 18.961 13 24 13c3.059 0 5.842 1.154 7.961 3.039L37.521 9.48C33.299 5.733 28.038 3.5 24 3.5 16.318 3.5 9.656 7.835 6.306 14.691z"/>
+                            <path fill="#4CAF50" d="M24 44.5c5.934 0 11.002-2.31 14.67-6.271l-6.777-5.583C30.011 34.46 27.198 36 24 36c-5.133 0-9.623-3.33-11.292-7.965l-6.522 5.025C9.122 39.556 15.974 44.5 24 44.5z"/>
+                            <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.189 5.647l6.777 5.583C37.498 39.492 44.5 34.5 44.5 24c0-1.341-.138-2.65-.389-3.917z"/>
+                        </svg>
+                        <span>Sign in with Google</span>
+                    </button>
                 </div>
             </div>
+            <div id="unified-signin-status" class="text-[11px] text-[var(--text-dim)] text-center min-h-[16px]" aria-live="polite"></div>
             <p class="text-[10px] text-[var(--text-dim)] font-mono opacity-60">A Pratham Sinha workspace · Supervised by Akriti &amp; Aditi Aishwaryam</p>
         </div>
     </div>
@@ -1796,52 +1805,42 @@
         function clearPersistedSession() {
             try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
         }
-        async function handleGoogleIdentityCallback(response) {
-            if (!response || !response.credential) return;
-            globalAuthorizationToken = `Bearer ${response.credential}`;
-            try {
-                const base64Url = response.credential.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const claims = JSON.parse(window.atob(base64));
-                activeUserIdentityEmail = claims.email.toLowerCase();
-                paintIdentityIntoShell(claims);
-                let tokenToPersist = response.credential;
-                try {
-                    const exchangeRes = await smartFetchRequest('/auth/exchange', {
-                        method: 'POST', headers: { 'Authorization': globalAuthorizationToken }
-                    });
-                    if (exchangeRes.ok) {
-                        const exchangeData = await exchangeRes.json();
-                        if (exchangeData.session_token) {
-                            tokenToPersist = exchangeData.session_token;
-                            globalAuthorizationToken = `Bearer ${exchangeData.session_token}`;
-                        }
-                    }
-                } catch (e) {}
-                persistSessionLocally(tokenToPersist, claims);
-                enterAppShell();
-            } catch (e) {
-                console.error("[AUTH][FAILURE]", e);
+        function setUnifiedSigninStatus(message, isError = false) {
+            const el = document.getElementById('unified-signin-status');
+            const btn = document.getElementById('prathamUnifiedGoogleSignInButton');
+            if (el) {
+                el.innerText = message || '';
+                el.style.color = isError ? 'var(--danger)' : 'var(--text-dim)';
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-wait');
+                btn.querySelector('span')?.replaceChildren(document.createTextNode('Sign in with Google'));
             }
         }
-        window.handleGoogleIdentityCallback = handleGoogleIdentityCallback;
-        async function loadGeminiOAuthConfig() {
+        function decodeJwtClaimsUnsafe(token) {
             try {
-                const response = await smartFetchRequest('/auth/gemini/config', { method: 'GET' });
-                if (!response.ok) return false;
-                const data = await response.json();
-                GEMINI_OAUTH_CLIENT_ID = String(data.client_id || '').trim();
-                GEMINI_OAUTH_SCOPES = String(data.scopes || GEMINI_OAUTH_SCOPES).trim();
-                return !!GEMINI_OAUTH_CLIENT_ID;
-            } catch (e) {
-                console.warn('[GEMINI][CONFIG]', e);
-                return false;
-            }
+                const part = String(token || '').split('.')[1];
+                if (!part) return {};
+                const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+                return JSON.parse(window.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')) || '{}');
+            } catch (e) { return {}; }
+        }
+        function persistSessionLocally(credential, claims) {
+            try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ credential, claims })); } catch (e) {}
+        }
+        function clearPersistedSession() {
+            try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
         }
         function saveGeminiAccessToken(token, expiresIn) {
             geminiAccessToken = String(token || '');
             geminiAccessTokenExpiresAt = Date.now() + Math.max(60, Number(expiresIn || 3600)) * 1000;
-            try { sessionStorage.setItem('prathamai_gemini_oauth_v1', JSON.stringify({ token: geminiAccessToken, expiresAt: geminiAccessTokenExpiresAt })); } catch (e) {}
+            try {
+                sessionStorage.setItem('prathamai_gemini_oauth_v1', JSON.stringify({
+                    token: geminiAccessToken,
+                    expiresAt: geminiAccessTokenExpiresAt
+                }));
+            } catch (e) {}
         }
         function restoreGeminiAccessToken() {
             try {
@@ -1863,9 +1862,114 @@
             window._lastGeneratedImageDataUrl = null;
             try { sessionStorage.removeItem('prathamai_gemini_oauth_v1'); } catch (e) {}
         }
+        async function loadGeminiOAuthConfig() {
+            try {
+                const response = await smartFetchRequest('/auth/gemini/config', { method: 'GET' });
+                if (!response.ok) return false;
+                const data = await response.json();
+                GEMINI_OAUTH_CLIENT_ID = String(data.client_id || '').trim();
+                const extraScopes = 'openid email profile';
+                const backendScopes = String(data.scopes || 'https://www.googleapis.com/auth/cloud-platform').trim();
+                GEMINI_OAUTH_SCOPES = Array.from(new Set((backendScopes + ' ' + extraScopes).split(/\s+/).filter(Boolean))).join(' ');
+                return !!GEMINI_OAUTH_CLIENT_ID;
+            } catch (e) {
+                console.warn('[PRATHAM AI][AUTH CONFIG]', e);
+                return false;
+            }
+        }
+        async function unifiedGoogleAccessTokenExchange(accessToken) {
+            const response = await smartFetchRequest('/auth/unified-google-login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: '{}'
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data?.ok || !data?.session_token) {
+                const message = data?.error?.message || data?.error || `Google sign-in failed (HTTP ${response.status}).`;
+                throw new Error(message);
+            }
+            return data;
+        }
+        async function startUnifiedGoogleSignIn() {
+            if (geminiTokenRequestInFlight) return;
+            const button = document.getElementById('prathamUnifiedGoogleSignInButton');
+            if (button) {
+                button.disabled = true;
+                button.classList.add('opacity-60', 'cursor-wait');
+                const label = button.querySelector('span');
+                if (label) label.innerText = 'Opening Google…';
+            }
+            setUnifiedSigninStatus('');
+            try {
+                if (!GEMINI_OAUTH_CLIENT_ID) {
+                    const loaded = await loadGeminiOAuthConfig();
+                    if (!loaded) throw new Error('Pratham AI sign-in is temporarily unavailable.');
+                }
+                if (!(window.google?.accounts?.oauth2)) {
+                    throw new Error('Google sign-in is still loading. Please try again.');
+                }
+                geminiTokenRequestInFlight = true;
+                const tokenResponse = await new Promise((resolve, reject) => {
+                    const client = google.accounts.oauth2.initTokenClient({
+                        client_id: GEMINI_OAUTH_CLIENT_ID,
+                        scope: GEMINI_OAUTH_SCOPES,
+                        callback: (resp) => {
+                            if (resp?.access_token) resolve(resp);
+                            else reject(new Error(resp?.error_description || resp?.error || 'Google authorization was not completed.'));
+                        },
+                        error_callback: (err) => reject(new Error(err?.message || err?.type || 'Google authorization was not completed.'))
+                    });
+                    // One user click -> one Google authorization popup. The same
+                    // OAuth grant supplies both Pratham AI identity and the
+                    // Google permission needed by the AI engine.
+                    client.requestAccessToken({ prompt: 'select_account' });
+                });
+                setUnifiedSigninStatus('Finishing sign-in…');
+                const authData = await unifiedGoogleAccessTokenExchange(tokenResponse.access_token);
+                const claims = authData.user || {};
+                const normalizedClaims = {
+                    sub: claims.sub,
+                    email: String(claims.email || '').toLowerCase(),
+                    name: claims.user_metadata?.full_name || claims.name || claims.email,
+                    picture: claims.user_metadata?.picture || claims.picture || '',
+                    email_verified: claims.email_verified !== false
+                };
+                activeUserIdentityEmail = normalizedClaims.email;
+                globalAuthorizationToken = `Bearer ${authData.session_token}`;
+                saveGeminiAccessToken(tokenResponse.access_token, Number(authData.gemini_expires_in || tokenResponse.expires_in || 3600));
+                persistSessionLocally(authData.session_token, normalizedClaims);
+                paintIdentityIntoShell(normalizedClaims);
+                setUnifiedSigninStatus('');
+                enterAppShell();
+            } catch (e) {
+                console.error('[PRATHAM AI][UNIFIED GOOGLE SIGN-IN]', e);
+                const raw = String(e?.message || e || '');
+                let friendly = raw || 'Google sign-in could not be completed.';
+                if (/access_denied|unauthorized|not authorized|testing/i.test(raw)) {
+                    friendly = 'This Google account is not currently authorized for Pratham AI. Add the account as an OAuth test user or publish the Google OAuth app.';
+                } else if (/popup_closed|popup_failed|cancel/i.test(raw)) {
+                    friendly = 'Google sign-in was closed before authorization finished.';
+                }
+                setUnifiedSigninStatus(friendly, true);
+                clearGeminiAccessToken();
+            } finally {
+                geminiTokenRequestInFlight = false;
+                const buttonNow = document.getElementById('prathamUnifiedGoogleSignInButton');
+                if (buttonNow) {
+                    buttonNow.disabled = false;
+                    buttonNow.classList.remove('opacity-60', 'cursor-wait');
+                    const label = buttonNow.querySelector('span');
+                    if (label) label.innerText = 'Sign in with Google';
+                }
+            }
+        }
+        // Backward-compatible name retained for the rest of the UI.
+        window.handleGoogleIdentityCallback = () => {};
         async function connectGeminiToPrathamAI(options = {}) {
-            if (geminiTokenRequestInFlight) return false;
-            if (!globalAuthorizationToken) return false;
+            if (geminiTokenRequestInFlight || !globalAuthorizationToken) return false;
             if (!GEMINI_OAUTH_CLIENT_ID) await loadGeminiOAuthConfig();
             if (!GEMINI_OAUTH_CLIENT_ID || !(window.google?.accounts?.oauth2)) return false;
             geminiTokenRequestInFlight = true;
@@ -1877,23 +1981,32 @@
                         callback: (resp) => resp?.access_token ? resolve(resp) : reject(new Error(resp?.error_description || resp?.error || 'Authorization was not completed.')),
                         error_callback: (err) => reject(new Error(err?.message || err?.type || 'Authorization was not completed.'))
                     });
-                    client.requestAccessToken({ prompt: options.prompt || '' });
+                    client.requestAccessToken({ prompt: options.prompt ?? 'none' });
                 });
-                const response = await smartFetchRequest('/auth/gemini/connect', {
+                const response = await smartFetchRequest('/auth/unified-google-login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': globalAuthorizationToken,
-                        'X-Gemini-Access-Token': tokenResponse.access_token
+                        'Authorization': `Bearer ${tokenResponse.access_token}`
                     },
                     body: '{}'
                 });
                 const data = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(data?.error?.message || 'Workspace authorization failed.');
-                saveGeminiAccessToken(tokenResponse.access_token, Number(data.expires_in || tokenResponse.expires_in || 3600));
+                if (!response.ok || !data?.ok) throw new Error(data?.error?.message || 'Pratham AI authorization refresh failed.');
+                saveGeminiAccessToken(tokenResponse.access_token, Number(data.gemini_expires_in || tokenResponse.expires_in || 3600));
+                if (data.session_token) {
+                    globalAuthorizationToken = `Bearer ${data.session_token}`;
+                    const refreshedClaims = data.user || {};
+                    persistSessionLocally(data.session_token, {
+                        sub: refreshedClaims.sub,
+                        email: refreshedClaims.email,
+                        name: refreshedClaims.user_metadata?.full_name || refreshedClaims.email,
+                        picture: refreshedClaims.user_metadata?.picture || ''
+                    });
+                }
                 return true;
             } catch (e) {
-                console.warn('[PRATHAM AI][SETUP]', e);
+                console.warn('[PRATHAM AI][SILENT AUTH REFRESH]', e);
                 return false;
             } finally {
                 geminiTokenRequestInFlight = false;
@@ -1903,7 +2016,6 @@
             if (!globalAuthorizationToken) return false;
             if (!GEMINI_OAUTH_CLIENT_ID) await loadGeminiOAuthConfig();
             if (restoreGeminiAccessToken()) {
-                // Token may still be bound to this signed-in session; keep going.
                 try {
                     const headers = { 'Authorization': globalAuthorizationToken, 'X-Gemini-Access-Token': geminiAccessToken };
                     const response = await smartFetchRequest('/auth/gemini/status', { method: 'GET', headers });
@@ -1912,25 +2024,19 @@
                 } catch (e) {}
                 clearGeminiAccessToken();
             }
-            return await connectGeminiToPrathamAI(options);
+            // Never create a second interactive popup behind the user's back.
+            // A silent request is allowed during session restoration/normal boot;
+            // if Google refuses it, the user can explicitly use the normal sign-in
+            // button again.
+            return await connectGeminiToPrathamAI({ prompt: 'none' });
         }
         function isPrathamAIEngineReady() {
             return !!(geminiAccessToken && geminiAccessTokenExpiresAt > Date.now() + 30000);
         }
         function initializeGoogleOauthGate() {
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.initialize({
-                    client_id: "352716901368-sp0550kmd9jb9ob4b5adrq6npltq4jht.apps.googleusercontent.com",
-                    callback: window.handleGoogleIdentityCallback,
-                    auto_select: false
-                });
-                google.accounts.id.renderButton(document.getElementById("gsiButtonContainer"), {
-                    type: "standard", shape: "rectangular", theme: "outline",
-                    text: "signin_with", size: "large", logo_alignment: "left", width: 240
-                });
-            } else {
-                setTimeout(initializeGoogleOauthGate, 100);
-            }
+            const button = document.getElementById('prathamUnifiedGoogleSignInButton');
+            if (button) button.disabled = false;
+            loadGeminiOAuthConfig().catch(() => {});
         }
         async function attemptSilentSessionRestore() {
             let stored = null;
@@ -1940,7 +2046,7 @@
             } catch (e) { stored = null; }
             if (!stored || !stored.credential || !stored.claims) return false;
             globalAuthorizationToken = `Bearer ${stored.credential}`;
-            activeUserIdentityEmail = (stored.claims.email || "").toLowerCase();
+            activeUserIdentityEmail = (stored.claims.email || '').toLowerCase();
             try {
                 const response = await smartFetchRequest('/auth/refresh-check', {
                     method: 'POST',
@@ -1948,8 +2054,9 @@
                 });
                 if (!response.ok) {
                     clearPersistedSession();
-                    globalAuthorizationToken = "";
-                    activeUserIdentityEmail = "";
+                    clearGeminiAccessToken();
+                    globalAuthorizationToken = '';
+                    activeUserIdentityEmail = '';
                     return false;
                 }
             } catch (e) {}
@@ -2037,9 +2144,6 @@
             document.getElementById('settings-modal').classList.add('hidden');
             document.getElementById('settings-modal').classList.remove('flex');
             profileDropdownMenu.classList.add('hidden');
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.disableAutoSelect();
-            }
             initializeGoogleOauthGate();
         }
         function resolvePrathamBackendOrigin() {
