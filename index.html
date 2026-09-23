@@ -1878,13 +1878,17 @@
             }
         }
         async function unifiedGoogleAccessTokenExchange(accessToken) {
+            // Send the OAuth token in the JSON body as well as the standard
+            // Authorization header. This avoids edge/proxy layers dropping
+            // Authorization during a cross-origin Vercel request while the
+            // backend still validates the exact Google access token.
             const response = await smartFetchRequest('/auth/unified-google-login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken}`
                 },
-                body: '{}'
+                body: JSON.stringify({ access_token: accessToken })
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok || !data?.ok || !data?.session_token) {
@@ -1895,9 +1899,12 @@
         }
         async function startUnifiedGoogleSignIn() {
             if (geminiTokenRequestInFlight) return;
-            // A login click starts a fresh account selection. Do not reuse an
-            // access token from a previous Google account.
+            // A login click starts a fresh account selection. Never reuse
+            // identity/session state or an OAuth token from a previous account.
             clearGeminiAccessToken();
+            globalAuthorizationToken = '';
+            activeUserIdentityEmail = '';
+            clearPersistedSession();
             const button = document.getElementById('prathamUnifiedGoogleSignInButton');
             if (button) {
                 button.disabled = true;
@@ -3328,11 +3335,13 @@
                     removeTypingIndicator();
                     clearAgentActivity();
                     if (response.status === 401) {
-                        // Never start OAuth from a chat request. An expired/invalid
-                        // authorization simply returns the user to the normal
-                        // Sign in with Google entry point.
+                        // NEVER launch Google authorization from a chat request.
+                        // The only place allowed to open Google is the explicit
+                        // Sign in with Google button. Keep the current shell and
+                        // give the user a normal message instead of triggering a
+                        // second account/popup flow.
                         clearGeminiAccessToken();
-                        triggerIdentitySignout();
+                        cell.innerText = 'Your Pratham AI authorization has expired. Use Sign in with Google to reconnect.';
                     } else {
                         let serverMessage = '';
                         try {
