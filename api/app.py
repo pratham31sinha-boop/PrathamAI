@@ -236,19 +236,6 @@ def agent_job_event_callback(job_id):
         elif status == "WAITING_FOR_USER":
             _agent_event(job, {"type": "clarification", "status": status, "question": body.get("question") or message})
     return jsonify({"ok": True, "jobId": job_id, "status": status})
-@app.route("/api/agent/jobs/<job_id>", methods=["GET", "OPTIONS"])
-@app.route("/api/app/agent/jobs/<job_id>", methods=["GET", "OPTIONS"])
-@require_auth
-def agent_job_status(job_id):
-    if request.method == "OPTIONS":
-        return _cors_preflight()
-    with _PRATHAM_AGENT_LOCK:
-        job = _PRATHAM_AGENT_JOBS.get(job_id)
-        if not job:
-            return jsonify({"error": "Unknown job."}), 404
-        if job["userId"] != _user_id():
-            return jsonify({"error": "Forbidden."}), 403
-        return jsonify({"ok": True, "jobId": job_id, "status": job["status"], "result": job.get("result")})
 _SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "https://prathamai.vercel.app")
 @app.route("/robots.txt")
 def robots_txt():
@@ -1907,6 +1894,20 @@ def require_auth(f):
         request.current_user = user
         return f(*args, **kwargs)
     return wrapper
+@app.route("/api/agent/jobs/<job_id>", methods=["GET", "OPTIONS"])
+@app.route("/api/app/agent/jobs/<job_id>", methods=["GET", "OPTIONS"])
+@require_auth
+def agent_job_status(job_id):
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    with _PRATHAM_AGENT_LOCK:
+        job = _PRATHAM_AGENT_JOBS.get(job_id)
+        if not job:
+            return jsonify({"error": "Unknown job."}), 404
+        if job["userId"] != _user_id():
+            return jsonify({"error": "Forbidden."}), 403
+        return jsonify({"ok": True, "jobId": job_id, "status": job["status"], "result": job.get("result")})
+
 def _clean_token(val: str) -> str:
     if not val:
         return ""
