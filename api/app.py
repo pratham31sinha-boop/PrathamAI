@@ -3759,41 +3759,44 @@ def unified_google_login():
     if not info:
         return jsonify({"error": {"code": "GOOGLE_TOKEN_INVALID", "message": "Google rejected the authorization token."}}), 401
     allowed_audiences = {x for x in [GOOGLE_GEMINI_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID] if x}
-    if allowed_audiences and str(info.get("aud", "")) not in allowed_audiences:
-        return jsonify({"error": {"code": "GOOGLE_CLIENT_MISMATCH", "message": "This Google account authorization was issued for a different Pratham AI client."}}), 403
-    if str(info.get("iss", "")) not in {"accounts.google.com", "https://accounts.google.com"}:
-        return jsonify({"error": {"code": "GOOGLE_ISSUER_INVALID", "message": "Google authorization issuer could not be verified."}}), 401
+    # IMPORTANT: tokeninfo for an OAuth *access token* returns `audience` /
+    # `issued_to`; it is not an ID-token JWT and therefore does not expose an
+    # `iss`, `aud`, or `sub` claim in this response shape.
+    token_audience = str(info.get("audience") or info.get("issued_to") or "").strip()
+    if allowed_audiences and token_audience and token_audience not in allowed_audiences:
+        return jsonify({"error": {"code": "GOOGLE_CLIENT_MISMATCH", "message": "This Google authorization was issued for a different Pratham AI client."}}), 403
     scopes = set(str(info.get("scope", "")).split())
     required_scope = "https://www.googleapis.com/auth/cloud-platform"
     if required_scope not in scopes:
         return jsonify({"error": {"code": "GOOGLE_CLOUD_SCOPE_MISSING", "message": "Google authorization did not include the access required by this Pratham AI workspace."}}), 403
-    email = str(info.get("email", "")).strip().lower()
-    sub = str(info.get("sub", "")).strip()
+
+    # Access-token tokeninfo is used for scope/audience validation. For the
+    # actual Google identity, use the OAuth userinfo endpoint, which returns
+    # the stable `sub`, email, name, and picture fields for the bearer token.
+    try:
+        ureq = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(ureq, timeout=8) as uresp:
+            udata = json.loads(uresp.read().decode("utf-8", errors="replace"))
+    except Exception as exc:
+        print(f"[AUTH][UNIFIED USERINFO] {exc}")
+        return jsonify({"error": {"code": "GOOGLE_USERINFO_FAILED", "message": "Google authorization succeeded, but Pratham AI could not retrieve the signed-in Google account."}}), 401
+
+    email = str(udata.get("email") or info.get("email") or "").strip().lower()
+    sub = str(udata.get("sub") or info.get("user_id") or "").strip()
+    name = str(udata.get("name") or "").strip()
+    picture = str(udata.get("picture") or "").strip()
     if not email or not sub:
         return jsonify({"error": {"code": "GOOGLE_IDENTITY_MISSING", "message": "Google did not return a complete identity for this account."}}), 401
-    name = str(info.get("name", "") or "").strip()
-    picture = str(info.get("picture", "") or "").strip()
-    # Tokeninfo normally includes identity metadata, but userinfo is used as a
-    # best-effort enrichment when the provider does not return name/picture.
-    if not name or not picture:
-        try:
-            ureq = urllib.request.Request(
-                "https://www.googleapis.com/oauth2/v3/userinfo",
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                method="GET",
-            )
-            with urllib.request.urlopen(ureq, timeout=8) as uresp:
-                udata = json.loads(uresp.read().decode("utf-8", errors="replace"))
-                name = name or str(udata.get("name", "") or "").strip()
-                picture = picture or str(udata.get("picture", "") or "").strip()
-        except Exception as exc:
-            print(f"[AUTH][UNIFIED USERINFO] {exc}")
     user = {
         "sub": sub,
         "email": email,
         "role": "standard",
         "user_metadata": {"full_name": name, "picture": picture},
-        "email_verified": str(info.get("email_verified", "true")).lower() == "true",
+        "email_verified": bool(udata.get("verified_email", True)),
     }
     session_token = _issue_session_token(user)
     expires_in = int(info.get("expires_in", 3600) or 3600)
