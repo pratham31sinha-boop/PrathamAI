@@ -3747,9 +3747,12 @@ def unified_google_login():
     if request.method == "OPTIONS":
         return _cors_preflight()
     token = _gemini_access_token_from_request()
-    if not token:
-        body = request.get_json(silent=True) or {}
-        token = str(body.get("access_token") or "").strip()
+    body = request.get_json(silent=True) or {}
+    body_token = str(body.get("access_token") or "").strip()
+    # Accept the token from the body as the canonical path for the unified
+    # browser login. Authorization remains supported for compatibility.
+    if body_token:
+        token = body_token
     if not token:
         return jsonify({"error": {"code": "GOOGLE_ACCESS_TOKEN_REQUIRED", "message": "Google authorization did not return an access token."}}), 401
     info = _gemini_tokeninfo(token)
