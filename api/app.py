@@ -347,6 +347,17 @@ MISTRAL_API_KEY      = os.environ.get("MISTRAL_API_KEY", "").strip()
 SUPABASE_URL         = os.environ.get("SUPABASE_URL", "https://ksroorygbrhwpnqtjbxo.supabase.co").strip()
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 GITHUB_TOKEN         = os.environ.get("GITHUB_TOKEN", "").strip()
+if not GITHUB_TOKEN:
+    _gh_hosts = "/root/.config/gh/hosts.yml"
+    if os.path.exists(_gh_hosts):
+        try:
+            with open(_gh_hosts, "r") as _ghf:
+                for _line in _ghf:
+                    if "oauth_token:" in _line:
+                        GITHUB_TOKEN = _line.split("oauth_token:", 1)[1].strip()
+                        break
+        except Exception:
+            pass
 GITHUB_REPO          = os.environ.get("GITHUB_REPO", "pratham31sinha-boop/PrathamAI").strip()
 VIP_SECRET_CODE      = os.environ.get("VIP_SECRET_CODE", "31082011").strip()
 SESSION_SECRET       = os.environ.get("SESSION_SECRET", "pratham-ai-dev-secret-change-me").strip()
@@ -791,7 +802,18 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverab
                     "app.js" if "javascript" in l_low or "js" in l_low else "code.txt"
                 )
             )
-            if "chess" in assistant_text.lower() or (deliverable_name and "chess" in deliverable_name.lower()):
+            title_m = re.search(r"<title>([^<]+)</title>", code_text, re.IGNORECASE)
+            tmp_m = re.search(r"/tmp/([\w\.\-]+)", assistant_text)
+            if tmp_m and tmp_m.group(1):
+                fname = tmp_m.group(1)
+            elif title_m and title_m.group(1):
+                raw_t = re.sub(r"[^\w\s\-]", "", title_m.group(1)).strip().lower()
+                clean_t = re.sub(r"[\s\-]+", "_", raw_t)[:30]
+                if clean_t:
+                    fname = f"{clean_t}.html"
+            elif any(k in assistant_text.lower() for k in ["stumble", "stumble guys"]):
+                fname = "stumble_guys.html"
+            elif "chess" in assistant_text.lower() or (deliverable_name and "chess" in deliverable_name.lower()):
                 fname = "chess.html" if fname.endswith(".html") else "chess.py" if fname.endswith(".py") else fname
             if fname not in added_names:
                 zf.writestr(fname, code_text)
@@ -3173,7 +3195,7 @@ def _sync_attachment_to_github(target_path: str, raw_bytes: bytes) -> bool:
 def _extract_conversation_files(conv_id: str = None, messages: list = None, user_email: str = "") -> list:
     """
     Extracts all deliverables generated across the conversation (from createfile blocks or code blocks),
-    persisting them into data/<email>/attachments/ so the user and AI have full continuous access.
+    persisting them into session folders and attachments folder so the AI has continuous access.
     """
     found_files = []
     seen_names = set()
@@ -3198,12 +3220,12 @@ def _extract_conversation_files(conv_id: str = None, messages: list = None, user
                 ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
                 found_files.append({
                     "filename": filename,
-                    "rel_path": f"data/{user_email}/attachments/{filename}" if user_email else filename,
+                    "rel_path": f"data/{user_email}/sessions/{conv_id}/files/{filename}" if (user_email and conv_id) else (f"data/{user_email}/attachments/{filename}" if user_email else filename),
                     "size_bytes": len(content.encode("utf-8")),
                     "ext": ext,
                     "content": content
                 })
-        # 2. Markdown code blocks (e.g. 3D chess game, python scripts, html canvas)
+        # 2. Markdown code blocks (e.g. 3D stumble guys, 3D chess game, python scripts, html canvas)
         for lang_match, code_match in _CODE_BLOCK_RE.findall(c):
             if (lang_match or "").lower() == "finaldoc":
                 continue
@@ -3218,31 +3240,45 @@ def _extract_conversation_files(conv_id: str = None, messages: list = None, user
                     "app.js" if "javascript" in l_low or "js" in l_low else "code.txt"
                 )
             )
-            if "chess" in c.lower() or "chess" in code_text.lower():
+            title_m = re.search(r"<title>([^<]+)</title>", code_text, re.IGNORECASE)
+            tmp_m = re.search(r"/tmp/([\w\.\-]+)", c)
+            if tmp_m and tmp_m.group(1):
+                fname = tmp_m.group(1)
+            elif title_m and title_m.group(1):
+                raw_t = re.sub(r"[^\w\s\-]", "", title_m.group(1)).strip().lower()
+                clean_t = re.sub(r"[\s\-]+", "_", raw_t)[:30]
+                if clean_t:
+                    fname = f"{clean_t}.html"
+            elif any(k in c.lower() for k in ["stumble", "stumble guys"]):
+                fname = "stumble_guys.html"
+            elif "chess" in c.lower() or "chess" in code_text.lower():
                 fname = "chess.html" if fname.endswith(".html") else "chess.py" if fname.endswith(".py") else "chess.txt"
             if fname not in seen_names:
                 seen_names.add(fname)
                 found_files.append({
                     "filename": fname,
-                    "rel_path": f"data/{user_email}/attachments/{fname}" if user_email else fname,
+                    "rel_path": f"data/{user_email}/sessions/{conv_id}/files/{fname}" if (user_email and conv_id) else (f"data/{user_email}/attachments/{fname}" if user_email else fname),
                     "size_bytes": len(code_text.encode("utf-8")),
                     "ext": fname.rsplit(".", 1)[-1],
                     "content": code_text
                 })
 
-    # Persist to disk in data/<email>/attachments/ so subsequent tools / API calls see them immediately
+    # Persist to disk in session folder and attachments folder
     if user_email and found_files:
-        attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-        try:
-            os.makedirs(attach_dir, exist_ok=True)
-            for f in found_files:
-                target_disk_path = os.path.join(attach_dir, f["filename"])
-                if not os.path.exists(target_disk_path):
-                    with open(target_disk_path, "w", encoding="utf-8") as wf:
-                        wf.write(f["content"])
-                    _sync_attachment_to_github(f["rel_path"], f["content"].encode("utf-8"))
-        except Exception as e:
-            print(f"[CONV_FILE_PERSIST_FAULT] {e}")
+        targets = []
+        if conv_id:
+            targets.append(os.path.join(WORKSPACE_ROOT, "data", user_email, "sessions", conv_id, "files"))
+        targets.append(os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments"))
+        for tdir in targets:
+            try:
+                os.makedirs(tdir, exist_ok=True)
+                for f in found_files:
+                    target_disk_path = os.path.join(tdir, f["filename"])
+                    if not os.path.exists(target_disk_path):
+                        with open(target_disk_path, "w", encoding="utf-8") as wf:
+                            wf.write(f["content"])
+            except Exception as e:
+                print(f"[CONV_FILE_PERSIST_FAULT] {e}")
 
     return found_files
 
@@ -3250,15 +3286,45 @@ def _get_user_attachments(user_email: str, conv_id: str = None, messages: list =
     files = []
     seen = set()
 
-    # 1. First get conversation deliverables
+    # 1. First get conversation deliverables for this session
     conv_files = _extract_conversation_files(conv_id=conv_id, messages=messages, user_email=user_email)
     for cf in conv_files:
         if cf["filename"] not in seen:
             seen.add(cf["filename"])
             files.append(cf)
 
-    # 2. Then get disk attachments
-    if user_email:
+    # 2. If conv_id is provided, get files specifically uploaded or created for THIS session
+    if user_email and conv_id:
+        sess_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "sessions", conv_id, "files")
+        if os.path.exists(sess_attach_dir):
+            try:
+                for fname in sorted(os.listdir(sess_attach_dir), key=lambda x: os.path.getmtime(os.path.join(sess_attach_dir, x)), reverse=True):
+                    if fname in seen:
+                        continue
+                    fpath = os.path.join(sess_attach_dir, fname)
+                    if os.path.isfile(fpath):
+                        ext = fname.lower().rsplit(".", 1)[-1] if "." in fname else ""
+                        content = ""
+                        if ext in ("html", "js", "css", "py", "txt", "md", "json", "csv", "svg", "xml", "yaml", "yml", "sh", "ts"):
+                            try:
+                                with open(fpath, "r", encoding="utf-8", errors="replace") as rf:
+                                    content = rf.read(120000)
+                            except Exception:
+                                pass
+                        seen.add(fname)
+                        files.append({
+                            "filename": fname,
+                            "path": fpath,
+                            "rel_path": f"data/{user_email}/sessions/{conv_id}/files/{fname}",
+                            "size_bytes": os.path.getsize(fpath),
+                            "ext": ext,
+                            "content": content
+                        })
+            except Exception as exc:
+                print(f"[SESSION_ATTACHMENTS_READ_ERR] {exc}")
+
+    # 3. Only if NO conv_id is given (e.g. global overview), return user's global attachments
+    elif user_email and not conv_id:
         attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
         if os.path.exists(attach_dir):
             try:
@@ -3286,6 +3352,7 @@ def _get_user_attachments(user_email: str, conv_id: str = None, messages: list =
                         })
             except Exception as exc:
                 print(f"[ATTACHMENTS_READ_ERR] {exc}")
+
     return files
 
 def _get_planning_steps_for_prompt(prompt: str, attached_files: list = None) -> list:
@@ -3483,8 +3550,14 @@ def _stream_antigravity_cli(messages, state=None):
 
     prompt_sections = [system_instruction]
 
-    # Vision: Check for attached images
+    # Vision: Check for attached images ONLY if explicitly referenced in THIS prompt
     image_disk_path = None
+    has_image_query = any(w in last_user_prompt.lower() for w in [
+        "in the screenshot", "in this screenshot", "in the image", "in this image",
+        "look at the screenshot", "look at the picture", "look at this image",
+        "what does the screenshot", "what is in this image", "what is in this picture",
+        "analyze this image", "see this screenshot"
+    ])
     path_match = re.search(r"\[(?:DISK_PATH|STORAGE_PATH)[^\]]*:\s*([^\s\]]+)\]", last_user_prompt)
     if path_match:
         cand = path_match.group(1).strip()
@@ -3492,54 +3565,46 @@ def _stream_antigravity_cli(messages, state=None):
             cand = os.path.join(WORKSPACE_ROOT, cand)
         if os.path.exists(cand) and cand.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
             image_disk_path = cand
-    if not image_disk_path and attached_files:
+    elif has_image_query and attached_files:
         for f in attached_files:
             if f.get("ext") in ("png", "jpg", "jpeg", "webp", "gif") or f.get("filename", "").lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
                 fpath = f.get("path") or os.path.join(WORKSPACE_ROOT, f.get("rel_path", ""))
                 if os.path.exists(fpath):
                     image_disk_path = fpath
                     break
-    if not image_disk_path and user_email:
-        user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-        if os.path.exists(user_attach_dir):
-            try:
-                for fn in sorted(os.listdir(user_attach_dir), key=lambda x: os.path.getmtime(os.path.join(user_attach_dir, x)), reverse=True):
-                    if fn.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-                        cand = os.path.join(user_attach_dir, fn)
-                        if (fn.lower() in last_user_prompt.lower()) or any(w in last_user_prompt.lower() for w in ["image", "picture", "photo", "screenshot", "draw", "look at", "see this"]):
-                            image_disk_path = cand
-                            break
-            except Exception:
-                pass
 
     if image_disk_path:
         prompt_sections.append(
-            f"[ATTACHED IMAGE FOR VISION ANALYSIS]\n"
+            f"[ATTACHED IMAGE REFERENCE: {os.path.basename(image_disk_path)}]\n"
             f"Image file on disk: {image_disk_path}\n"
-            f"Please visually inspect and describe this image accurately in detail to answer the user's query."
+            f"If the user asks questions about this image or requests modifications based on it, analyze it carefully. "
+            f"Otherwise, answer the user's primary instructions directly."
         )
 
-    # Target file lookup
+    # Target file lookup for editing or packaging
     p_lower = last_user_prompt.lower()
     target = None
     if attached_files:
-        for f in attached_files:
+        code_deliverables = [f for f in attached_files if f.get("ext") not in ("png", "jpg", "jpeg", "webp", "gif")]
+        search_pool = code_deliverables if code_deliverables else attached_files
+        for f in search_pool:
             fname_lower = f["filename"].lower()
             fname_base = fname_lower.rsplit(".", 1)[0]
-            if (fname_lower in p_lower) or (fname_base in p_lower and len(fname_base) > 2) or (fname_base == "chess" and "chess" in p_lower):
+            if (fname_lower in p_lower) or (fname_base in p_lower and len(fname_base) > 2) or (fname_base in ["chess", "stumble", "game", "guys"] and any(k in p_lower for k in ["chess", "stumble", "game", "guys"])):
                 target = f
                 break
-        if not target and (any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "file", "zip", "game", "code"]) or "chess" in p_lower):
-            target = attached_files[0]
+        if not target and (any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "file", "zip", "game", "code", "that file", "previous", "old file"]) or any(k in p_lower for k in ["chess", "stumble"])):
+            target = search_pool[0]
 
     if target and target.get("content"):
         prompt_sections.append(
-            f"[ATTACHED / CONVERSATION FILE LOADED FROM STORAGE: {target['filename']}]\n"
+            f"[ATTACHED / CONVERSATION FILE LOADED FROM THIS SESSION: {target['filename']}]\n"
             f"Storage Path: {target.get('rel_path', target['filename'])}\n"
             f"--- BEGIN FILE CONTENT ---\n{target['content']}\n--- END FILE CONTENT ---\n"
             f"EDITING & DELIVERABLE INSTRUCTIONS (CLAUDE-LIKE AGENT FREEDOM):\n"
-            f"The user wants modifications or export of '{target['filename']}'. Apply all requested changes while preserving the complete functioning implementation. "
-            f"You can use in-place ```editfile:{target['filename']}\n<<<<<<< SEARCH\n...\n=======\n...\n>>>>>>> REPLACE\n``` to save tokens, or ```createfile:{target['filename']}\n<code here>\n```."
+            f"The user wants to work with '{target['filename']}' created in this conversation. "
+            f"If the user requests changes, output the updated deliverable using ```createfile:{target['filename']}\n<code here>\n``` or in-place ```editfile:{target['filename']}\n<<<<<<< SEARCH\n...\n=======\n...\n>>>>>>> REPLACE\n```. "
+            f"If the user requests a ZIP archive or packaging, confirm the package and present the downloadable deliverable."
         )
 
     recent_msgs = (messages or [])[-6:]
@@ -4568,13 +4633,59 @@ def _find_last_file_content_in_history(history: list, filename: str):
         m = history[i]
         if m.get("role") != "assistant":
             continue
-        for fname, content in _extract_createfile_blocks(m.get("content", "")):
-            if fname == filename:
+        c = m.get("content", "")
+        for fname, content in _extract_createfile_blocks(c):
+            if fname == filename or os.path.basename(fname) == os.path.basename(filename):
                 base_content = content
                 base_index = i
                 break
         if base_content is not None:
             break
+
+    # If not found via createfile, search code blocks in past assistant messages
+    if base_content is None:
+        for i in range(len(history) - 1, -1, -1):
+            m = history[i]
+            if m.get("role") != "assistant":
+                continue
+            c = m.get("content", "")
+            for lang_match, code_match in _CODE_BLOCK_RE.findall(c):
+                code_text = code_match.strip()
+                if len(code_text) < 40:
+                    continue
+                # Match by filename extension or content
+                ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+                if (ext in ("html", "htm") and ("<html" in code_text.lower() or "<!doctype" in code_text.lower())) or \
+                   (ext in ("py", "python") and ("def " in code_text or "import " in code_text)) or \
+                   (ext in ("js", "javascript") and ("function " in code_text or "const " in code_text)) or \
+                   filename.lower() in c.lower() or filename.rsplit(".", 1)[0].lower() in c.lower():
+                    base_content = code_text
+                    base_index = i
+                    break
+            if base_content is not None:
+                break
+
+    # If still not found, check disk for session or user files
+    if base_content is None:
+        user_email = getattr(_do_stream, '_current_user_email', None) or _user_email() or ""
+        conv_id = getattr(_do_stream, '_current_conv_id', None) or ""
+        search_dirs = []
+        if user_email and conv_id:
+            search_dirs.append(os.path.join(WORKSPACE_ROOT, "data", user_email, "sessions", conv_id, "files"))
+        if user_email:
+            search_dirs.append(os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments"))
+        for sdir in search_dirs:
+            if os.path.isdir(sdir):
+                target_f = os.path.join(sdir, filename)
+                if os.path.exists(target_f) and os.path.isfile(target_f):
+                    try:
+                        with open(target_f, "r", encoding="utf-8", errors="replace") as rf:
+                            base_content = rf.read()
+                            base_index = len(history) - 1
+                            break
+                    except Exception:
+                        pass
+
     if base_content is None:
         return None
     content = base_content
@@ -4583,7 +4694,7 @@ def _find_last_file_content_in_history(history: list, filename: str):
         if m.get("role") != "assistant":
             continue
         for fname, pairs in _extract_editfile_blocks(m.get("content", "")):
-            if fname != filename:
+            if fname != filename and os.path.basename(fname) != os.path.basename(filename):
                 continue
             for search_text, replace_text in pairs:
                 if search_text in content:
@@ -6265,15 +6376,27 @@ def upload_pdf():
     except Exception as exc:
         decode_status = f"stored (decode attempt failed: {exc})"
 
-    # Save to user workspace storage: data/{user_email}/attachments/{filename}
+    # Save to user workspace storage: session folder and global attachments
     user_email = _user_email() or "default"
+    conv_id = request.form.get("conversation_id") or request.form.get("conv_id") or request.headers.get("X-Conversation-Id") or ""
     disk_path = ""
     try:
+        if conv_id:
+            sess_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "sessions", conv_id, "files")
+            os.makedirs(sess_dir, exist_ok=True)
+            sess_disk_path = os.path.join(sess_dir, filename)
+            with open(sess_disk_path, "wb") as out_f:
+                out_f.write(raw_bytes)
+            disk_path = sess_disk_path
+
         user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
         os.makedirs(user_attach_dir, exist_ok=True)
-        disk_path = os.path.join(user_attach_dir, filename)
-        with open(disk_path, "wb") as out_f:
+        global_disk_path = os.path.join(user_attach_dir, filename)
+        with open(global_disk_path, "wb") as out_f:
             out_f.write(raw_bytes)
+        if not disk_path:
+            disk_path = global_disk_path
+
         # Asynchronously sync to GitHub repository folder for text files under 1MB
         if len(raw_bytes) <= 1024 * 1024 and ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "sh", "ts"):
             gh_target = f"data/{user_email}/attachments/{filename}"
@@ -6281,13 +6404,14 @@ def upload_pdf():
     except Exception as save_exc:
         print(f"[ATTACHMENT_SAVE_ERR] {save_exc}")
 
+    storage_path = f"data/{user_email}/sessions/{conv_id}/files/{filename}" if conv_id else f"data/{user_email}/attachments/{filename}"
     return jsonify({
         "ok": True,
         "filename": filename,
         "size_bytes": len(raw_bytes),
         "status": decode_status,
         "preview": extracted_preview,
-        "storage_path": f"data/{user_email}/attachments/{filename}",
+        "storage_path": storage_path,
         "disk_path": disk_path
     })
 

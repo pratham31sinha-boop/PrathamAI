@@ -3995,8 +3995,12 @@
             const uploadedFile = selector.files[0];
             const packet = new FormData();
             packet.append("file", uploadedFile);
+            if (currentConversationId) {
+                packet.append("conversation_id", currentConversationId);
+                packet.append("conv_id", currentConversationId);
+            }
             try {
-                const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
+                const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken, 'X-Conversation-Id': currentConversationId || '' }, body: packet });
                 const res = await response.json();
                 if (res.ok) {
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
@@ -4014,9 +4018,13 @@
             const uploadedFile = inputEl.files[0];
             const packet = new FormData();
             packet.append("file", uploadedFile);
+            if (currentConversationId) {
+                packet.append("conversation_id", currentConversationId);
+                packet.append("conv_id", currentConversationId);
+            }
             toggleModal('add-to-chat-sheet');
             try {
-                const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken }, body: packet });
+                const response = await smartFetchRequest(`/upload`, { method: 'POST', headers: { 'Authorization': globalAuthorizationToken, 'X-Conversation-Id': currentConversationId || '' }, body: packet });
                 const res = await response.json();
                 if (res.ok) {
                     pushTerminalLog(`Uploaded ${res.filename} (${res.size_bytes} bytes) — ${res.status}`);
