@@ -1,0 +1,31 @@
+{
+  "name": "pratham-ai-mobile",
+  "version": "1.0.0",
+  "description": "Pratham AI official React Native mobile application, created by Pratham Sinha and team under the supervision of Akriti and Aditi Aishwaryam.",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build:apk": "eas build -p android --profile preview"
+  },
+  "dependencies": {
+    "expo": "~51.0.0",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "react-native-safe-area-context": "4.10.5",
+    "expo-linear-gradient": "~13.0.2",
+    "@expo/vector-icons": "^14.0.0",
+    "expo-clipboard": "~6.0.3",
+    "expo-document-picker": "~12.0.2",
+    "expo-file-system": "~17.0.1",
+    "expo-sharing": "~12.0.1",
+    "expo-image-picker": "~15.0.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
+  },
+  "private": true
+}
