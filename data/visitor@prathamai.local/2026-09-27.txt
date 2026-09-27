@@ -799,3 +799,56 @@ Yes! I can generate high-quality images directly in our session. Whether you nee
 What image would you like me to create next? Just let me know the scene, style, character, or theme you have in mind!
 
 ================================================================================
+
+=== 2026-09-27T10:02:00.899752+00:00 ===
+User: Can u tell what is this image for my class teacher sends me
+
+[Attached Image for Vision Analysis for uploaded file "1000000802.jpg" [DISK_PATH: /workspace/bold-curie/data/visitor@prathamai.local/Hi_2026-09-27_08-54-34/attachments/1000000802.jpg]]
+```text
+JPEG image, 1559x1576px, 3 channel(s), 398.4 KB
+```
+Pratham AI:
+Command accepted. Inspecting and analyzing the uploaded image sent by your teacher.
+
+---
+
+### What This Image Is About
+
+This image is an official announcement and promotional poster for the **IIT Madras School Connect** initiative, offered by the **Centre for Outreach and Digital Education (CODE), IIT Madras**.
+
+Your class teacher shared this because it is an educational career exploration program specifically designed for school students.
+
+---
+
+### Key Information & Breakdown
+
+1. **Program Name**:
+   - **IIT Madras School Connect** (8-Week Online Certificate Courses for Career Exploration).
+
+2. **Target Audience (Eligibility)**:
+   - School students studying in **Classes 9, 10, 11, and 12**.
+
+3. **Key Purpose**:
+   - Designed for high school students who are unsure about their future career path (*"Don't know what you want to do yet? That's okay. Start exploring."*).
+   - Allows students to try out different fields and get certified by IIT Madras before committing to a college major.
+
+4. **Fields / Career Options Offered (15+ courses to explore)**:
+   - **Data Science and AI**
+   - **Law**
+   - **Aerospace**
+   - **Architecture**
+   - And over 15+ other career fields.
+
+5. **Important Dates**:
+   - **Registration Window**: Open from **24 August – 30 September**.
+
+6. **Contact / Inquiries**:
+   - **Email**: `school-connect@study.iitm.ac.in`
+   - Includes a QR code for direct course exploration and registration.
+
+---
+
+### Why Your Teacher Sent It To You:
+Your teacher wants you and your classmates to be aware of this opportunity to take an introductory online course from **IIT Madras**, explore career streams (like AI, Data Science, Aerospace, Law, etc.), and earn a recognized certificate while still in school.
+
+================================================================================
