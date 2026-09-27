@@ -2782,17 +2782,59 @@ def _gemini_generate_image(access_token,prompt_text,reference_image_data_url=Non
             msg=(json.loads(raw).get("error") or {}).get("message") or raw[:1000]
         except Exception:
             msg=raw[:1000]
-        # 401 means the OAuth token is invalid/expired. Do not misclassify
-        # project permissions or billing errors (commonly 402/403) as a
-        # reconnect problem.
+        # 401 means the OAuth token is invalid/expired.
+        if exc.code == 401:
+            print(f"[IMAGE][GEMINI_401] {exc}. Attempting neural image fallback...")
+        else:
+            print(f"[IMAGE][GEMINI_HTTP_{exc.code}] {exc}. Attempting neural image fallback...")
+        try:
+            poll_prompt = urllib.parse.quote(prompt_text[:200])
+            poll_url = f"https://image.pollinations.ai/prompt/{poll_prompt}?width=1024&height=1024&nologo=true"
+            poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "PrathamAI/1.0"})
+            with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+                img_bytes = p_resp.read()
+                if img_bytes:
+                    return {
+                        "mime_type": "image/jpeg",
+                        "data": base64.b64encode(img_bytes).decode("utf-8")
+                    }, f'Generated image for: "{prompt_text}"'
+        except Exception as poll_exc:
+            print(f"[IMAGE][POLLINATIONS_FAILED] {poll_exc}")
         if exc.code == 401:
             raise RuntimeError(f"GEMINI_RECONNECT_REQUIRED: {msg}")
         raise RuntimeError(f"HTTP {exc.code}: {msg}")
     except Exception as exc:
+        print(f"[IMAGE][GEMINI_FAILED] {exc}. Attempting neural image fallback...")
+        try:
+            poll_prompt = urllib.parse.quote(prompt_text[:200])
+            poll_url = f"https://image.pollinations.ai/prompt/{poll_prompt}?width=1024&height=1024&nologo=true"
+            poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "PrathamAI/1.0"})
+            with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+                img_bytes = p_resp.read()
+                if img_bytes:
+                    return {
+                        "mime_type": "image/jpeg",
+                        "data": base64.b64encode(img_bytes).decode("utf-8")
+                    }, f'Generated image for: "{prompt_text}"'
+        except Exception as poll_exc:
+            print(f"[IMAGE][POLLINATIONS_FAILED] {poll_exc}")
         raise RuntimeError(f"Gemini image request failed: {exc}")
 
     image=_extract_interaction_image(payload)
     if not image:
+        try:
+            poll_prompt = urllib.parse.quote(prompt_text[:200])
+            poll_url = f"https://image.pollinations.ai/prompt/{poll_prompt}?width=1024&height=1024&nologo=true"
+            poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "PrathamAI/1.0"})
+            with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+                img_bytes = p_resp.read()
+                if img_bytes:
+                    return {
+                        "mime_type": "image/jpeg",
+                        "data": base64.b64encode(img_bytes).decode("utf-8")
+                    }, f'Generated image for: "{prompt_text}"'
+        except Exception:
+            pass
         raise RuntimeError("Nano Banana 2 returned no image data.")
 
     text=[]
@@ -3236,6 +3278,17 @@ class _WarmAntigravitySession:
                 start_time = time.time()
                 timeout = 25.0
 
+                # Immediate live indicator so user's screen is never blank
+                p_low = (prompt or "").lower()
+                if any(k in p_low for k in ["game", "pokemon", "ash", "rpg", "arcade"]):
+                    yield _sse({"type": "agent_step", "step_type": "writing", "label": "Making game...", "timestamp": time.time()})
+                elif any(k in p_low for k in ["pdf", "document", "report"]):
+                    yield _sse({"type": "agent_step", "step_type": "writing", "label": "Generating PDF document...", "timestamp": time.time()})
+                elif any(k in p_low for k in ["html", "website", "web page", "webpage"]):
+                    yield _sse({"type": "agent_step", "step_type": "writing", "label": "Building web application...", "timestamp": time.time()})
+                else:
+                    yield _sse({"type": "agent_step", "step_type": "planning", "label": "Inspecting project & planning...", "timestamp": time.time()})
+
                 while True:
                     now = time.time()
                     if (now - start_time) > timeout and not got_any_token:
@@ -3268,6 +3321,65 @@ class _WarmAntigravitySession:
 
                         if evt == "step_update":
                             su = data.get("step_update", {})
+                            stype = su.get("step_type")
+                            state_val = su.get("state")
+                            if stype == "tool":
+                                tool_name = su.get("tool_name", "")
+                                tool_info = su.get("tool_info", {}) or {}
+                                params = tool_info.get("parameters", {}) or {}
+                                out = tool_info.get("output", "")
+                                if tool_name == "run_command":
+                                    cmd = params.get("CommandLine", "")
+                                    cmd_clean = cmd.strip()
+                                    cmd_short = cmd_clean.split("\n")[0][:60]
+                                    summary = params.get("toolSummary") or f"Run bash: {cmd_short}"
+                                    detail_txt = f"Command:\n$ {cmd_clean}"
+                                    if state_val == "DONE" and out:
+                                        detail_txt += f"\n\nOutput:\n{str(out)[:2000]}"
+                                    yield _sse({
+                                        "type": "agent_step",
+                                        "step_type": "executing",
+                                        "label": summary,
+                                        "detail": detail_txt,
+                                        "timestamp": time.time()
+                                    })
+                                elif tool_name in ("write_to_file", "replace_file_content"):
+                                    target_file = params.get("TargetFile", "")
+                                    target_name = os.path.basename(target_file) if target_file else "file"
+                                    summary = params.get("toolSummary") or f"Writing {target_name}"
+                                    code_snippet = params.get("CodeContent") or params.get("ReplacementContent") or ""
+                                    detail_txt = f"Target: {target_file}"
+                                    if code_snippet:
+                                        detail_txt += f"\n\nCode Preview:\n{code_snippet[:600]}"
+                                    yield _sse({
+                                        "type": "agent_step",
+                                        "step_type": "writing",
+                                        "label": f"Making {target_name}..." if state_val == "ACTIVE" else f"Saved {target_name}",
+                                        "detail": detail_txt,
+                                        "timestamp": time.time()
+                                    })
+                                elif tool_name in ("view_file", "read_url_content"):
+                                    path = params.get("AbsolutePath") or params.get("Url", "")
+                                    name = os.path.basename(path) if path else "workspace files"
+                                    summary = params.get("toolSummary") or f"Inspecting {name}"
+                                    yield _sse({
+                                        "type": "agent_step",
+                                        "step_type": "thinking",
+                                        "label": summary,
+                                        "detail": f"Inspecting: {path}",
+                                        "timestamp": time.time()
+                                    })
+                                elif tool_name == "search_web":
+                                    q = params.get("query", "")
+                                    summary = params.get("toolSummary") or f"Searching web: {q[:40]}"
+                                    yield _sse({
+                                        "type": "agent_step",
+                                        "step_type": "searching",
+                                        "label": summary,
+                                        "detail": f"Query: {q}",
+                                        "timestamp": time.time()
+                                    })
+
                             delta = su.get("text_delta")
                             if delta:
                                 delta_lower = delta.lower()
@@ -3277,7 +3389,11 @@ class _WarmAntigravitySession:
                                 got_any_token = True
                                 cleaned = _clean_antigravity_text(delta)
                                 if cleaned:
-                                    yield _sse({"type": "token", "text": cleaned})
+                                    # Stream word-by-word with whitespace preserved
+                                    words = re.split(r"(\s+)", cleaned)
+                                    for w in words:
+                                        if w:
+                                            yield _sse({"type": "token", "text": w})
                         elif evt == "result":
                             self._in_turn = False
                             if state is not None:
@@ -3856,14 +3972,11 @@ def _stream_antigravity_cli(messages, state=None):
                 yield chunk
             return
         except AntigravityRateLimitError as rl_err:
-            print(f"[ANTIGRAVITY][INSTANT_FAILOVER] {acc_name} hit rate limit ({rl_err}). Switching to next account in fractions of a second...")
-            if got_tokens:
-                return
+            print(f"[ANTIGRAVITY][INSTANT_FAILOVER] {acc_name} hit rate limit ({rl_err}). Switching to supporter account ({_ANTIGRAVITY_ACCOUNT_2}) in fractions of a second...")
             continue
         except Exception as warm_exc:
-            print(f"[ANTIGRAVITY][SESSION_ERR] {acc_name}: {warm_exc}")
-            if got_tokens:
-                return
+            print(f"[ANTIGRAVITY][SESSION_ERR] {acc_name}: {warm_exc}. Switching to supporter account ({_ANTIGRAVITY_ACCOUNT_2})...")
+            session.mark_rate_limited(cooldown_seconds=120)
             continue
 
     # 2. Fallback to direct CLI invocation across dual accounts if warm sessions were interrupted
@@ -3933,12 +4046,33 @@ def _stream_antigravity_cli(messages, state=None):
                     event = data.get("event")
                     if event == "step_update":
                         su = data.get("step_update", {})
+                        stype = su.get("step_type")
+                        state_val = su.get("state")
+                        if stype == "tool":
+                            tool_name = su.get("tool_name", "")
+                            tool_info = su.get("tool_info", {}) or {}
+                            params = tool_info.get("parameters", {}) or {}
+                            out = tool_info.get("output", "")
+                            if tool_name == "run_command":
+                                cmd_str = params.get("CommandLine", "")
+                                summary = params.get("toolSummary") or f"Run bash: {cmd_str.strip().split(chr(10))[0][:60]}"
+                                detail_txt = f"Command:\n$ {cmd_str.strip()}"
+                                if state_val == "DONE" and out:
+                                    detail_txt += f"\n\nOutput:\n{str(out)[:2000]}"
+                                yield _sse({"type": "agent_step", "step_type": "executing", "label": summary, "detail": detail_txt, "timestamp": time.time()})
+                            elif tool_name in ("write_to_file", "replace_file_content"):
+                                target_file = params.get("TargetFile", "")
+                                target_name = os.path.basename(target_file) if target_file else "file"
+                                yield _sse({"type": "agent_step", "step_type": "writing", "label": f"Making {target_name}...", "detail": f"Target: {target_file}", "timestamp": time.time()})
                         delta = su.get("text_delta")
                         if delta:
                             got_any_token = True
                             cleaned_delta = _clean_antigravity_text(delta)
                             if cleaned_delta:
-                                yield _sse({"type": "token", "text": cleaned_delta})
+                                words = re.split(r"(\s+)", cleaned_delta)
+                                for w in words:
+                                    if w:
+                                        yield _sse({"type": "token", "text": w})
                     elif event == "result":
                         if state is not None:
                             state["finish_reason"] = "stop"
@@ -6259,6 +6393,7 @@ def chat_stream():
     _append_message(conv_id, "user", message)
     _maybe_capture_public_teaching(user_email, message)
     def generate():
+        turn_start_time = time.time()
         yield _sse({"type": "metadata", "conversation_id": conv_id})
         if _emit_searching_step:
             yield _sse({"type": "agent_step", "step_type": "searching",
@@ -6350,16 +6485,7 @@ def chat_stream():
                 _enriched_prompt = _enhance_image_prompt_via_llm(_raw_img_prompt)
                 try:
                     _img_token, _img_err = _require_gemini_connection()
-                    if _img_err:
-                        yield _sse({
-                            "type": "error",
-                            "error": {
-                                "code": "GEMINI_AUTH_REQUIRED",
-                                "message": "Connect Gemini in Settings before generating images."
-                            }
-                        })
-                        continue
-                    _img_info, _img_text = _gemini_generate_image(_img_token, _enriched_prompt)
+                    _img_info, _img_text = _gemini_generate_image(_img_token or "", _enriched_prompt)
                     _img_url = f"data:{_img_info['mime_type']};base64,{_img_info['data']}"
                     yield _sse({
                         "type": "image",
@@ -6377,7 +6503,7 @@ def chat_stream():
                     )
                     yield _sse({
                         "type": "error",
-                        "error": {"code": _img_code, "message": f"Gemini image generation failed: {_img_msg}"}
+                        "error": {"code": _img_code, "message": f"Image generation notice: {_img_msg}"}
                     })
             for filename, content in _extract_createfile_blocks(iteration_reply):
                 try:
@@ -6684,6 +6810,9 @@ def chat_stream():
             
             if cand_path and os.path.isfile(cand_path):
                 try:
+                    # ONLY pick up files modified or created during THIS turn
+                    if os.path.getmtime(cand_path) < turn_start_time - 2.0:
+                        continue
                     with open(cand_path, "rb") as fh:
                         fbytes = fh.read()
                     fmime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
@@ -6701,48 +6830,65 @@ def chat_stream():
 
         try:
             if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
-                zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
-                if not zip_name.endswith(".zip"):
-                    zip_name += ".zip"
-                inner_name = _derive_export_filename(export_intent_check_message, "html", assistant_response)
-                # Pull previous conversation files as extra assets into the zip
-                prev_files = _extract_conversation_files(conv_id=conv_id, user_email=user_email)
-                zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name, extra_files=prev_files)
-                token = _store_generated_file(zip_bytes, zip_name, "application/zip")
-                _produced_files_this_turn.append({
-                    "filename": zip_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                    "size_bytes": len(zip_bytes), "lang": "zip"
-                })
-                # Also persist the zip to attachments so it's always accessible
-                if user_email:
-                    _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
-                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
-            elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
-                pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                if pdf_bytes:
-                    pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
-                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                has_zip_already = any(f.get("filename", "").lower().endswith(".zip") for f in _produced_files_this_turn)
+                if not has_zip_already:
+                    zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
+                    if not zip_name.endswith(".zip"):
+                        zip_name += ".zip"
+                    inner_name = _derive_export_filename(export_intent_check_message, "html", assistant_response)
+                    # Pull previous conversation files as extra assets into the zip
+                    prev_files = _extract_conversation_files(conv_id=conv_id, user_email=user_email)
+                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name, extra_files=prev_files)
+                    token = _store_generated_file(zip_bytes, zip_name, "application/zip")
                     _produced_files_this_turn.append({
-                        "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                        "size_bytes": len(pdf_bytes), "lang": "pdf"
+                        "filename": zip_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": len(zip_bytes), "lang": "zip"
                     })
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                    # Also persist the zip to attachments so it's always accessible
+                    if user_email:
+                        _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
+            elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
+                has_pdf_already = any(f.get("filename", "").lower().endswith(".pdf") for f in _produced_files_this_turn)
+                if not has_pdf_already:
+                    pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                    if pdf_bytes:
+                        pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
+                        token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                        _produced_files_this_turn.append({
+                            "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                            "size_bytes": len(pdf_bytes), "lang": "pdf"
+                        })
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
             else:
                 generic_ext = _detect_generic_extension_intent(export_intent_check_message)
                 if generic_ext and generic_ext.lower() != "txt":
-                    file_bytes, _default_name, file_mime = _build_generic_file_from_response(
-                        assistant_response, generic_ext, workdir=terminal_workdir
-                    )
-                    if file_bytes:
-                        file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
-                        token = _store_generated_file(file_bytes, file_name, file_mime)
-                        _produced_files_this_turn.append({
-                            "filename": file_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                            "size_bytes": len(file_bytes), "lang": generic_ext
-                        })
-                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
+                    has_gen_already = any(f.get("filename", "").lower().endswith(f".{generic_ext.lower()}") for f in _produced_files_this_turn)
+                    if not has_gen_already:
+                        file_bytes, _default_name, file_mime = _build_generic_file_from_response(
+                            assistant_response, generic_ext, workdir=terminal_workdir
+                        )
+                        if file_bytes:
+                            file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
+                            token = _store_generated_file(file_bytes, file_name, file_mime)
+                            _produced_files_this_turn.append({
+                                "filename": file_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                                "size_bytes": len(file_bytes), "lang": generic_ext
+                            })
+                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
         except Exception as exc:
             print(f"[FILEGEN][FAULT] {exc}")
+
+        # Strict deliverable filtering according to user request intent:
+        # If user explicitly asked for PDF, present ONLY PDF files!
+        if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
+            pdf_turn_files = [f for f in _produced_files_this_turn if f.get("filename", "").lower().endswith(".pdf")]
+            if pdf_turn_files:
+                _produced_files_this_turn = pdf_turn_files
+        elif _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
+            zip_turn_files = [f for f in _produced_files_this_turn if f.get("filename", "").lower().endswith(".zip")]
+            if zip_turn_files:
+                _produced_files_this_turn = zip_turn_files
 
         # Finalize and persist assistant message with all produced files
         if assistant_response:

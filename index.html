@@ -4148,11 +4148,13 @@
                                 if (!window._pendingExecRows) window._pendingExecRows = [];
                                 window._pendingExecRows.push(execRow);
                                 window._currentActiveStepRow = execRow;
+                                if (payload.detail) {
+                                    setStepDetail(execRow, payload.detail);
+                                }
                             } else {
                                 const stepRow = addStep(modelWrapper, stepIcon, currentLabel);
                                 if (payload.detail) {
                                     setStepDetail(stepRow, payload.detail);
-                                    stepRow.classList.add('has-detail', 'expanded');
                                 }
                                 window._currentActiveStepRow = stepRow;
                             }
