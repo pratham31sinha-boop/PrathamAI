@@ -5375,55 +5375,174 @@ def _user_id():
     return getattr(request, "current_user", {}).get("sub", "anonymous")
 def _user_email():
     return getattr(request, "current_user", {}).get("email", "anonymous_user@local.domain")
+_CONV_STORAGE_DIR = os.path.join(WORKSPACE_ROOT, "data", "conversations")
+try:
+    os.makedirs(_CONV_STORAGE_DIR, exist_ok=True)
+except Exception:
+    pass
+
+def _read_convo_disk(conv_id: str) -> dict:
+    if not conv_id:
+        return None
+    conv_path = os.path.join(_CONV_STORAGE_DIR, f"{conv_id}.json")
+    if os.path.isfile(conv_path):
+        try:
+            with open(conv_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[CONV_DISK_READ_ERR] {conv_id}: {e}")
+    return None
+
+def _write_convo_disk(conv: dict):
+    if not conv or not conv.get("id"):
+        return
+    conv_id = conv["id"]
+    conv_path = os.path.join(_CONV_STORAGE_DIR, f"{conv_id}.json")
+    try:
+        tmp_path = conv_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(conv, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, conv_path)
+    except Exception as e:
+        print(f"[CONV_DISK_WRITE_ERR] {conv_id}: {e}")
+
 def _get_convo(conv_id):
+    if not conv_id:
+        return None
+    if conv_id in _mem_convos:
+        return _mem_convos[conv_id]
+    disk_data = _read_convo_disk(conv_id)
+    if disk_data:
+        _mem_convos[conv_id] = disk_data
+        return disk_data
     if SUPABASE_CONFIGURED and _supabase:
         try:
             r = _supabase.table("conversations").select("*").eq("id", conv_id).single().execute()
-            return r.data
+            if r.data:
+                _mem_convos[conv_id] = r.data
+                _write_convo_disk(r.data)
+                return r.data
         except Exception:
             pass
-    return _mem_convos.get(conv_id)
+    return None
+
 def _save_convo(conv):
+    if not conv or not conv.get("id"):
+        return
+    conv_id = conv["id"]
+    existing = _get_convo(conv_id) or {}
+    merged = {**existing, **conv}
+    _mem_convos[conv_id] = merged
+    _write_convo_disk(merged)
     if SUPABASE_CONFIGURED and _supabase:
         try:
-            _supabase.table("conversations").upsert(conv).execute()
-            return
+            _supabase.table("conversations").upsert(merged).execute()
         except Exception:
             pass
-    _mem_convos[conv["id"]] = conv
+
 def _list_convos(user_id):
-    if SUPABASE_CONFIGURED and _supabase:
+    convos_by_id = {}
+    if os.path.isdir(_CONV_STORAGE_DIR):
         try:
-            r = _supabase.table("conversations").select("id,title,pinned,created_at,updated_at").eq("user_id", user_id).order("updated_at", desc=True).execute()
-            return r.data or []
+            for fname in os.listdir(_CONV_STORAGE_DIR):
+                if fname.endswith(".json"):
+                    cid = fname[:-5]
+                    data = _read_convo_disk(cid)
+                    if data:
+                        c_uid = data.get("user_id")
+                        if not user_id or user_id in {"anonymous", "visitor", None} or c_uid == user_id or not c_uid:
+                            convos_by_id[cid] = {
+                                "id": cid,
+                                "title": data.get("title", "Untitled"),
+                                "pinned": data.get("pinned", False),
+                                "created_at": data.get("created_at"),
+                                "updated_at": data.get("updated_at")
+                            }
         except Exception:
             pass
-    return [
-        {"id": v["id"], "title": v.get("title", "Untitled"), "pinned": v.get("pinned", False),
-         "created_at": v.get("created_at"), "updated_at": v.get("updated_at")}
-        for v in _mem_convos.values() if v.get("user_id") == user_id
-    ]
+    for v in _mem_convos.values():
+        cid = v.get("id")
+        if cid:
+            c_uid = v.get("user_id")
+            if not user_id or user_id in {"anonymous", "visitor", None} or c_uid == user_id or not c_uid:
+                convos_by_id[cid] = {
+                    "id": cid,
+                    "title": v.get("title", "Untitled"),
+                    "pinned": v.get("pinned", False),
+                    "created_at": v.get("created_at"),
+                    "updated_at": v.get("updated_at")
+                }
+    if SUPABASE_CONFIGURED and _supabase:
+        try:
+            query = _supabase.table("conversations").select("id,title,pinned,created_at,updated_at")
+            if user_id and user_id not in {"anonymous", "visitor"}:
+                query = query.eq("user_id", user_id)
+            r = query.order("updated_at", desc=True).execute()
+            for row in (r.data or []):
+                convos_by_id[row["id"]] = row
+        except Exception:
+            pass
+    result = list(convos_by_id.values())
+    result.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True)
+    return result
+
 def _get_messages(conv_id):
+    if not conv_id:
+        return []
+    conv = _get_convo(conv_id)
+    if conv and "messages" in conv and conv["messages"]:
+        return conv["messages"]
     if SUPABASE_CONFIGURED and _supabase:
         try:
-            r = _supabase.table("messages").select("role,content,created_at").eq("conversation_id", conv_id).order("created_at").execute()
-            return r.data or []
+            r = _supabase.table("messages").select("role,content,created_at,files,thinking_summary").eq("conversation_id", conv_id).order("created_at").execute()
+            if r.data:
+                return r.data
         except Exception:
             pass
-    return _mem_convos.get(conv_id, {}).get("messages", [])
-def _append_message(conv_id, role, content):
+    return []
+
+def _append_message(conv_id, role, content, files=None, thinking_summary=None):
+    if not conv_id:
+        return
+    now_iso = datetime.now(timezone.utc).isoformat()
+    msg = {
+        "id": str(uuid.uuid4()),
+        "role": role,
+        "content": content,
+        "created_at": now_iso
+    }
+    if files:
+        msg["files"] = files
+    if thinking_summary:
+        msg["thinking_summary"] = thinking_summary
+
+    conv = _get_convo(conv_id)
+    if not conv:
+        conv = {
+            "id": conv_id,
+            "user_id": _user_id(),
+            "title": (content[:50] + "...") if role == "user" else "Untitled",
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "messages": []
+        }
+    conv.setdefault("messages", []).append(msg)
+    conv["updated_at"] = now_iso
+    if files:
+        conv.setdefault("files", [])
+        for f in files:
+            if f not in conv["files"]:
+                conv["files"].append(f)
+    _save_convo(conv)
+
     if SUPABASE_CONFIGURED and _supabase:
         try:
             _supabase.table("messages").insert({
-                "id": str(uuid.uuid4()), "conversation_id": conv_id, "role": role,
-                "content": content, "created_at": datetime.now(timezone.utc).isoformat()
+                "id": msg["id"], "conversation_id": conv_id, "role": role,
+                "content": content, "created_at": now_iso
             }).execute()
         except Exception:
             pass
-    conv = _mem_convos.get(conv_id)
-    if conv:
-        conv.setdefault("messages", []).append({"role": role, "content": content})
-        conv["updated_at"] = datetime.now(timezone.utc).isoformat()
 @app.route("/", methods=["GET"])
 @app.route("/api", methods=["GET"])
 @app.route("/api/app", methods=["GET"])
@@ -6173,7 +6292,8 @@ def chat_stream():
         total_blocks_seen = 0
         session_file_contents = {}                                                                
         _images_emitted_this_turn = set()                                                       
-        _produced_filenames_this_turn = set()                                               
+        _produced_filenames_this_turn = set()
+        _produced_files_this_turn = []
         _promise_correction_attempted = False                                             
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
@@ -6298,6 +6418,10 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
+                    _produced_files_this_turn.append({
+                        "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": written["size_bytes"], "line_count": written["line_count"], "lang": file_ext
+                    })
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
 
                     # If this file already existed, compute and yield real diff stats
@@ -6369,6 +6493,10 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
+                    _produced_files_this_turn.append({
+                        "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": written["size_bytes"], "line_count": written["line_count"], "lang": file_ext
+                    })
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
                     yield _sse({
                         "type": "activity_edited",
@@ -6545,8 +6673,91 @@ def chat_stream():
                     "ok": final_task_states.get(task_id, True),
                 })
         assistant_response = "".join(full_reply_parts)
+
+        # Auto-detect ANY files referenced in assistant_response or created in /tmp or terminal_workdir
+        referenced_filenames = set()
+        for m in re.finditer(r"(?:file:///tmp/|/tmp/|```createfile:|\b)([a-zA-Z0-9_\-]+\.(?:zip|html|py|js|json|css|pdf|tar\.gz))\b", assistant_response):
+            referenced_filenames.add(m.group(1))
+
+        for fname in referenced_filenames:
+            if fname.lower() in _produced_filenames_this_turn:
+                continue
+            cand_path = None
+            if terminal_workdir and os.path.isfile(os.path.join(terminal_workdir, fname)):
+                cand_path = os.path.join(terminal_workdir, fname)
+            elif os.path.isfile(os.path.join("/tmp", fname)):
+                cand_path = os.path.join("/tmp", fname)
+                if terminal_workdir and os.path.isdir(terminal_workdir):
+                    try:
+                        shutil.copy2(cand_path, os.path.join(terminal_workdir, fname))
+                    except Exception:
+                        pass
+            
+            if cand_path and os.path.isfile(cand_path):
+                try:
+                    with open(cand_path, "rb") as fh:
+                        fbytes = fh.read()
+                    fmime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                    ftoken = _store_generated_file(fbytes, fname, fmime)
+                    _produced_files_this_turn.append({
+                        "filename": fname, "url": f"/download/{ftoken}", "download_url": f"/download/{ftoken}",
+                        "size_bytes": len(fbytes), "lang": fname.rsplit(".", 1)[-1] if "." in fname else "txt"
+                    })
+                    yield _sse({"type": "file_ready", "url": f"/download/{ftoken}", "filename": fname})
+                    _produced_filenames_this_turn.add(fname.lower())
+                    if user_email:
+                        _save_user_chat_file(user_email, conv_id, fname, fbytes)
+                except Exception as _fe:
+                    print(f"[REFERENCED FILE DISCOVERY FAULT] {fname} -> {_fe}")
+
+        try:
+            if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
+                zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
+                if not zip_name.endswith(".zip"):
+                    zip_name += ".zip"
+                inner_name = _derive_export_filename(export_intent_check_message, "html", assistant_response)
+                # Pull previous conversation files as extra assets into the zip
+                prev_files = _extract_conversation_files(conv_id=conv_id, user_email=user_email)
+                zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name, extra_files=prev_files)
+                token = _store_generated_file(zip_bytes, zip_name, "application/zip")
+                _produced_files_this_turn.append({
+                    "filename": zip_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(zip_bytes), "lang": "zip"
+                })
+                # Also persist the zip to attachments so it's always accessible
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
+            elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
+                pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                if pdf_bytes:
+                    pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
+                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                    _produced_files_this_turn.append({
+                        "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": len(pdf_bytes), "lang": "pdf"
+                    })
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+            else:
+                generic_ext = _detect_generic_extension_intent(export_intent_check_message)
+                if generic_ext and generic_ext.lower() != "txt":
+                    file_bytes, _default_name, file_mime = _build_generic_file_from_response(
+                        assistant_response, generic_ext, workdir=terminal_workdir
+                    )
+                    if file_bytes:
+                        file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
+                        token = _store_generated_file(file_bytes, file_name, file_mime)
+                        _produced_files_this_turn.append({
+                            "filename": file_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                            "size_bytes": len(file_bytes), "lang": generic_ext
+                        })
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
+        except Exception as exc:
+            print(f"[FILEGEN][FAULT] {exc}")
+
+        # Finalize and persist assistant message with all produced files
         if assistant_response:
-            _append_message(conv_id, "assistant", assistant_response)
+            _append_message(conv_id, "assistant", assistant_response, files=_produced_files_this_turn)
             current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
             log_entry = (
@@ -6562,71 +6773,15 @@ def chat_stream():
                 _extract_conversation_files(conv_id=conv_id, messages=[{"role": "assistant", "content": assistant_response}], user_email=user_email)
             except Exception as _cexc:
                 print(f"[CONV_FILES_EXTRACT_ERR] {_cexc}")
+        elif _produced_files_this_turn:
+            convo = _get_convo(conv_id)
+            if convo:
+                convo.setdefault("files", [])
+                for pf in _produced_files_this_turn:
+                    if not any(x.get("filename") == pf.get("filename") for x in convo["files"]):
+                        convo["files"].append(pf)
+                _save_convo(convo)
 
-            # Auto-detect ANY files referenced in assistant_response or created in /tmp or terminal_workdir
-            referenced_filenames = set()
-            for m in re.finditer(r"(?:file:///tmp/|/tmp/|```createfile:|\b)([a-zA-Z0-9_\-]+\.(?:zip|html|py|js|json|css|pdf|tar\.gz))\b", assistant_response):
-                referenced_filenames.add(m.group(1))
-
-            for fname in referenced_filenames:
-                if fname.lower() in _produced_filenames_this_turn:
-                    continue
-                cand_path = None
-                if terminal_workdir and os.path.isfile(os.path.join(terminal_workdir, fname)):
-                    cand_path = os.path.join(terminal_workdir, fname)
-                elif os.path.isfile(os.path.join("/tmp", fname)):
-                    cand_path = os.path.join("/tmp", fname)
-                    if terminal_workdir and os.path.isdir(terminal_workdir):
-                        try:
-                            shutil.copy2(cand_path, os.path.join(terminal_workdir, fname))
-                        except Exception:
-                            pass
-                
-                if cand_path and os.path.isfile(cand_path):
-                    try:
-                        with open(cand_path, "rb") as fh:
-                            fbytes = fh.read()
-                        fmime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
-                        ftoken = _store_generated_file(fbytes, fname, fmime)
-                        yield _sse({"type": "file_ready", "url": f"/download/{ftoken}", "filename": fname})
-                        _produced_filenames_this_turn.add(fname.lower())
-                        if user_email:
-                            _save_user_chat_file(user_email, conv_id, fname, fbytes)
-                    except Exception as _fe:
-                        print(f"[REFERENCED FILE DISCOVERY FAULT] {fname} -> {_fe}")
-
-            try:
-                if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
-                    zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
-                    if not zip_name.endswith(".zip"):
-                        zip_name += ".zip"
-                    inner_name = _derive_export_filename(export_intent_check_message, "html", assistant_response)
-                    # Pull previous conversation files as extra assets into the zip
-                    prev_files = _extract_conversation_files(conv_id=conv_id, user_email=user_email)
-                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name, extra_files=prev_files)
-                    token = _store_generated_file(zip_bytes, zip_name, "application/zip")
-                    # Also persist the zip to attachments so it's always accessible
-                    if user_email:
-                        _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
-                elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
-                    pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                    if pdf_bytes:
-                        pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
-                        token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
-                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
-                else:
-                    generic_ext = _detect_generic_extension_intent(export_intent_check_message)
-                    if generic_ext and generic_ext.lower() != "txt":
-                        file_bytes, _default_name, file_mime = _build_generic_file_from_response(
-                            assistant_response, generic_ext, workdir=terminal_workdir
-                        )
-                        if file_bytes:
-                            file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
-                            token = _store_generated_file(file_bytes, file_name, file_mime)
-                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
-            except Exception as exc:
-                print(f"[FILEGEN][FAULT] {exc}")
         _cleanup_terminal_workdir(terminal_workdir)
         yield _sse({"type": "complete"})
     resp = Response(stream_with_context(generate()), content_type="text/event-stream")
@@ -6677,6 +6832,12 @@ def delete_conversation(conv_id):
     if request.method == "OPTIONS":
         return _cors_preflight()
     _mem_convos.pop(conv_id, None)
+    conv_path = os.path.join(_CONV_STORAGE_DIR, f"{conv_id}.json")
+    if os.path.isfile(conv_path):
+        try:
+            os.remove(conv_path)
+        except Exception:
+            pass
     if SUPABASE_CONFIGURED and _supabase:
         try:
             _supabase.table("messages").delete().eq("conversation_id", conv_id).execute()
@@ -7028,10 +7189,70 @@ def _register_session_file(conv_id: str, filename: str, lang: str, size: int, do
 def list_session_files(conv_id):
     """Real Files-tab data source: files actually produced in this
     conversation (via createfile blocks, code execution that wrote files,
-    or exports), not simulated GitHub activity."""
+    or exports), persisted on disk or in the session files registry."""
     if request.method == "OPTIONS":
         return _cors_preflight()
     files = list(_session_files_registry.get(conv_id, []))
+    seen_filenames = {f["filename"].lower() for f in files if "filename" in f}
+
+    # 1. Check conversation metadata on disk
+    convo = _get_convo(conv_id) or {}
+    for cf in convo.get("files", []):
+        if cf.get("filename") and cf["filename"].lower() not in seen_filenames:
+            seen_filenames.add(cf["filename"].lower())
+            files.append(cf)
+    for m in convo.get("messages", []):
+        for mf in m.get("files", []):
+            if mf.get("filename") and mf["filename"].lower() not in seen_filenames:
+                seen_filenames.add(mf["filename"].lower())
+                files.append(mf)
+
+    # 2. Check disk session directories: data/sessions/{conv_id}/, data/*/sessions/{conv_id}/, etc.
+    session_dirs = [
+        os.path.join(WORKSPACE_ROOT, "data", "sessions", conv_id),
+    ]
+    data_root = os.path.join(WORKSPACE_ROOT, "data")
+    if os.path.isdir(data_root):
+        try:
+            for entry in os.listdir(data_root):
+                cand = os.path.join(data_root, entry, "sessions", conv_id)
+                if os.path.isdir(cand):
+                    session_dirs.append(cand)
+                cand_files = os.path.join(data_root, entry, "sessions", conv_id, "files")
+                if os.path.isdir(cand_files):
+                    session_dirs.append(cand_files)
+        except Exception:
+            pass
+
+    for s_dir in session_dirs:
+        if os.path.isdir(s_dir):
+            try:
+                for fname in os.listdir(s_dir):
+                    if fname.startswith("."):
+                        continue
+                    fpath = os.path.join(s_dir, fname)
+                    if os.path.isfile(fpath) and fname.lower() not in seen_filenames:
+                        seen_filenames.add(fname.lower())
+                        size = os.path.getsize(fpath)
+                        lang = fname.rsplit(".", 1)[-1].lower() if "." in fname else "txt"
+                        line_count = 0
+                        try:
+                            with open(fpath, "r", encoding="utf-8", errors="ignore") as rf:
+                                line_count = sum(1 for _ in rf)
+                        except Exception:
+                            pass
+                        files.append({
+                            "filename": fname,
+                            "lang": lang,
+                            "size_bytes": size,
+                            "line_count": line_count,
+                            "created_at": datetime.fromtimestamp(os.path.getmtime(fpath), tz=timezone.utc).isoformat(),
+                            "download_url": f"/download/{urllib.parse.quote(fname)}"
+                        })
+            except Exception as e:
+                print(f"[SESSION_FILES_DISK_ERR] {conv_id}: {e}")
+
+    # Fallback to code blocks parsing if still empty
     if not files:
         ordinal = 0
         for m in _get_messages(conv_id):
@@ -7046,7 +7267,7 @@ def list_session_files(conv_id):
                         "filename": filename, "lang": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
                         "size_bytes": len(code_match.encode("utf-8")), "line_count": code_match.count("\n") + 1,
                         "created_at": m.get("created_at"),
-                        "download_url": None
+                        "download_url": f"/download/{urllib.parse.quote(filename)}"
                     })
                     continue
                 ordinal += 1
@@ -7056,7 +7277,7 @@ def list_session_files(conv_id):
                     "filename": f"generated_{ordinal}.{ext}", "lang": lang_match or "text",
                     "size_bytes": len(code_match.encode("utf-8")), "line_count": code_match.count("\n") + 1,
                     "created_at": m.get("created_at"),
-                    "download_url": None
+                    "download_url": f"/download/generated_{ordinal}.{ext}"
                 })
     return jsonify({"conversation_id": conv_id, "files": files})
 def _cors_preflight():

@@ -2414,28 +2414,43 @@
             return PRATHAMAI_BACKEND_ORIGIN;
         }
         async function smartFetchRequest(endpointPath, options = {}) {
-            const base = SERVER_CONTEXT_HOST.replace(/\/$/, '');
+            const base = (SERVER_CONTEXT_HOST || '').replace(/\/$/, '');
             const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-            // The uploaded Flask backend exposes the /api/app/* aliases; use
-            // those canonical routes first so production HTML never depends on
-            // the page's own origin or on a manual Sync Hub.
-            const targets = [
-                `${base}/api/app${normalizedPath}`,
-                `${base}/api${normalizedPath}`,
-                `${base}${normalizedPath}`
-            ];
+            const targetSet = new Set();
+            if (base) {
+                targetSet.add(`${base}/api/app${normalizedPath}`);
+                targetSet.add(`${base}/api${normalizedPath}`);
+                targetSet.add(`${base}${normalizedPath}`);
+            }
+            if (typeof window !== 'undefined' && window.location && window.location.origin) {
+                const curOrigin = window.location.origin.replace(/\/$/, '');
+                targetSet.add(`${curOrigin}/api/app${normalizedPath}`);
+                targetSet.add(`${curOrigin}/api${normalizedPath}`);
+                targetSet.add(`${curOrigin}${normalizedPath}`);
+            }
+            targetSet.add(`/api/app${normalizedPath}`);
+            targetSet.add(`/api${normalizedPath}`);
+            targetSet.add(`${normalizedPath}`);
+
+            const targets = Array.from(targetSet);
             let lastResponse = null;
-            for (const targetUrl of targets) {
-                try {
-                    const response = await fetch(targetUrl, {
-                        ...options,
-                        credentials: 'include',
-                        cache: options.cache || 'no-store'
-                    });
-                    if (response.status !== 404) return response;
-                    lastResponse = response;
-                } catch (err) {
-                    lastResponse = null;
+
+            for (let attempt = 0; attempt < 2; attempt++) {
+                for (const targetUrl of targets) {
+                    try {
+                        const response = await fetch(targetUrl, {
+                            ...options,
+                            credentials: 'include',
+                            cache: options.cache || 'no-store'
+                        });
+                        if (response.status !== 404) return response;
+                        lastResponse = response;
+                    } catch (err) {
+                        lastResponse = null;
+                    }
+                }
+                if (attempt === 0) {
+                    await new Promise(r => setTimeout(r, 250));
                 }
             }
             return lastResponse || new Response(
@@ -4060,6 +4075,7 @@
                 _activeChatStoppedByUser = false;
                 const decoder = new TextDecoder();
                 let buffer = '', modelWrapper = null, fullText = '';
+                let _turnFiles = [];
                 let renderQueued = false;
                 // Reset per-response state to prevent leakage from previous messages
                 _pendingTerminalOutputs = {};
@@ -4199,6 +4215,7 @@
                             if (!window._toolCount) window._toolCount = 0;
                             window._toolCount++;
                             pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
+                            _turnFiles.push({ filename: payload.filename, url: payload.url, download_url: payload.url });
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
                         } else if (payload.type === 'terminal_output') {
                             const ok = payload.returncode === 0;
@@ -4417,11 +4434,20 @@
                 exportActionTrigger.classList.remove('hidden');
                 deleteActionTrigger.classList.remove('hidden');
                 if (currentConversationId) {
+                    try { localStorage.setItem('pratham_last_active_conv_id', currentConversationId); } catch (e) {}
                     cacheConversationMeta(currentConversationId, displayMessage.slice(0, 60));
                     const cache = loadConvCache();
                     const existingMsgs = cache.messages[currentConversationId] || [];
                     existingMsgs.push({ role: 'user', content: message });
-                    if (fullText) existingMsgs.push({ role: 'assistant', content: fullText });
+                    const twSummary = _activeThinkingWrap ? (_activeThinkingWrap.querySelector('.tw-summary')?.textContent || '') : '';
+                    if (fullText) {
+                        existingMsgs.push({
+                            role: 'assistant',
+                            content: fullText,
+                            files: _turnFiles.slice(),
+                            thinking_summary: twSummary
+                        });
+                    }
                     cacheConversationMessages(currentConversationId, existingMsgs);
                 }
                 synchronizeConversationsHistoryIndex();
@@ -4495,29 +4521,71 @@
                 historyItemsBox.appendChild(row);
             });
         }
+        function renderAssistantMessageBlock(wrapper, log) {
+            if (!wrapper || !log) return;
+            // Restore thinking wrap if thinking summary is present
+            const summaryText = log.thinking_summary || log.thinkingSummary;
+            if (summaryText) {
+                const wrap = getThinkingWrap(wrapper);
+                wrap.classList.remove('expanded');
+                wrap.classList.add('done');
+                const summary = wrap.querySelector('.tw-summary');
+                if (summary) summary.textContent = summaryText;
+            }
+            // Render markdown text and segments
+            updateAssistantMessageDOM(wrapper, log.content || '');
+            appendAssistantCopyButton(wrapper, log.content || '');
+
+            // Restore deliverable files from message metadata
+            const files = log.files || [];
+            if (Array.isArray(files) && files.length > 0) {
+                files.forEach(f => {
+                    if (f && f.filename) {
+                        const dlUrl = f.download_url || f.url || `/download/${encodeURIComponent(f.filename)}`;
+                        appendDownloadCard(wrapper, dlUrl, f.filename);
+                    }
+                });
+            }
+        }
+
         async function synchronizeConversationsHistoryIndex() {
             const cache = loadConvCache();
             let items = cache.list || [];
             if (items.length) { allHistoryItemsCache = items; renderHistoryRows(items); }
             try {
                 const response = await smartFetchRequest(`/conversations`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (!response.ok) return;
-                const backendItems = await response.json();
-                const mergedById = {};
-                (backendItems || []).forEach(it => { mergedById[it.id] = it; });
-                items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
-                const merged = Object.values(mergedById).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-                allHistoryItemsCache = merged;
-                renderHistoryRows(merged);
-                const nextCache = loadConvCache();
-                nextCache.list = merged;
-                saveConvCache(nextCache);
+                if (response.ok) {
+                    const backendItems = await response.json();
+                    const mergedById = {};
+                    (backendItems || []).forEach(it => { mergedById[it.id] = it; });
+                    items.forEach(it => { if (!mergedById[it.id]) mergedById[it.id] = it; });
+                    const merged = Object.values(mergedById).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+                    allHistoryItemsCache = merged;
+                    renderHistoryRows(merged);
+                    const nextCache = loadConvCache();
+                    nextCache.list = merged;
+                    saveConvCache(nextCache);
+                }
             } catch (err) {}
+
+            // Auto-restore active conversation on refresh or initial open
+            if (!currentConversationId && allHistoryItemsCache.length > 0) {
+                let targetId = null;
+                try { targetId = localStorage.getItem('pratham_last_active_conv_id'); } catch (e) {}
+                if (!targetId || !allHistoryItemsCache.some(it => it.id === targetId)) {
+                    targetId = allHistoryItemsCache[0].id;
+                }
+                if (targetId) {
+                    loadConversationSession(targetId);
+                }
+            }
         }
+
         async function loadConversationSession(conversationId) {
             // Immediately set the conversation ID so any message typed during load
             // goes to the CORRECT conversation, not a new one.
             currentConversationId = conversationId;
+            try { localStorage.setItem('pratham_last_active_conv_id', conversationId); } catch (e) {}
             // Reset stale thinking-wrap from any previous conversation
             _activeThinkingWrap = null;
             _activeStepList = null;
@@ -4526,43 +4594,75 @@
             deleteActionTrigger.classList.remove('hidden');
             workbenchSplitPanel.classList.add('hidden');
             document.getElementById('workbench-toggle-mobile').classList.add('hidden');
+
             // Render from cache immediately so the user sees content instantly
             const cache = loadConvCache();
             const cachedLogs = cache.messages[conversationId] || [];
+            let renderedCount = 0;
             if (cachedLogs.length > 0) {
                 conversationViewportPanel.innerHTML = '';
                 cachedLogs.forEach(log => {
                     if (log.role === 'user') renderUserPromptBubble(log.content);
                     else if (log.role === 'assistant') {
                         const wrapper = mountModelOutputTargetShell();
-                        updateAssistantMessageDOM(wrapper, log.content);
-                        appendAssistantCopyButton(wrapper, log.content);
+                        renderAssistantMessageBlock(wrapper, log);
                     }
                 });
+                renderedCount = cachedLogs.length;
                 pinnedAutoScroll();
             }
             closeMobileSidebar();
+
             // Then refresh from server in the background
             try {
                 const response = await smartFetchRequest(`/conversations/${conversationId}/messages`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (!response.ok) return;
-                const logs = await response.json();
-                if (!logs || logs.length === 0) return;
-                cacheConversationMessages(conversationId, logs);
-                // Only re-render if we got MORE messages than the cache had
-                if (logs.length > cachedLogs.length) {
-                    conversationViewportPanel.innerHTML = '';
-                    logs.forEach(log => {
-                        if (log.role === 'user') renderUserPromptBubble(log.content);
-                        else if (log.role === 'assistant') {
-                            const wrapper = mountModelOutputTargetShell();
-                            updateAssistantMessageDOM(wrapper, log.content);
-                            appendAssistantCopyButton(wrapper, log.content);
+                if (response.ok) {
+                    const logs = await response.json();
+                    if (logs && logs.length > 0) {
+                        cacheConversationMessages(conversationId, logs);
+                        const hasRichData = logs.some(m => m.role === 'assistant' && ((m.files && m.files.length) || m.thinking_summary));
+                        if (renderedCount === 0 || logs.length !== renderedCount || hasRichData) {
+                            conversationViewportPanel.innerHTML = '';
+                            logs.forEach(log => {
+                                if (log.role === 'user') renderUserPromptBubble(log.content);
+                                else if (log.role === 'assistant') {
+                                    const wrapper = mountModelOutputTargetShell();
+                                    renderAssistantMessageBlock(wrapper, log);
+                                }
+                            });
+                            pinnedAutoScroll();
                         }
-                    });
-                    pinnedAutoScroll();
+                    }
                 }
             } catch (err) {}
+
+            // Ensure any deliverables registered on disk or server are mounted
+            try {
+                const fResp = await smartFetchRequest(`/conversations/${conversationId}/files`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
+                if (fResp.ok) {
+                    const fData = await fResp.json();
+                    const sFiles = fData.files || [];
+                    if (sFiles.length > 0) {
+                        const wrappers = conversationViewportPanel.querySelectorAll('.w-full.flex.flex-col.items-start');
+                        let lastAsstWrapper = null;
+                        for (let i = wrappers.length - 1; i >= 0; i--) {
+                            if (wrappers[i].querySelector('.answer-zone')) {
+                                lastAsstWrapper = wrappers[i];
+                                break;
+                            }
+                        }
+                        if (lastAsstWrapper) {
+                            sFiles.forEach(f => {
+                                if (f && f.filename) {
+                                    const dlUrl = f.download_url || f.url || `/download/${encodeURIComponent(f.filename)}`;
+                                    appendDownloadCard(lastAsstWrapper, dlUrl, f.filename);
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (e) {}
+
             synchronizeConversationsHistoryIndex();
         }
         async function triggerSessionDelete() {
