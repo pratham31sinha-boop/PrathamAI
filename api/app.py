@@ -1483,6 +1483,19 @@ def _serve_download_candidate(identifier: str):
         except Exception:
             pass
 
+    # Check mobile directory for APK downloads
+    mobile_apk = os.path.join(WORKSPACE_ROOT, "mobile", safe_name)
+    if os.path.isfile(mobile_apk):
+        try:
+            with open(mobile_apk, "rb") as fh:
+                data = fh.read()
+            resp = Response(data, mimetype="application/vnd.android.package-archive")
+            resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+        except Exception:
+            pass
+
     # 3. Search /tmp subdirectories
     for root, dirs, files in os.walk("/tmp"):
         if safe_name in files:
