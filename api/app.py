@@ -413,7 +413,7 @@ def _save_worker_to_github(entry: dict) -> bool:
     content_str = json.dumps(entry, indent=2)
     b64 = base64.b64encode(content_str.encode('utf-8')).decode('utf-8')
     packet = {
-        "message": f"Pratham AI worker registry: {entry.get('worker_id')} -> {entry.get('endpoint_url')}",
+        "message": f"Pratham AI worker registry: {entry.get('worker_id')} -> {entry.get('endpoint_url')} [skip ci]",
         "content": b64
     }
     if sha:
@@ -599,7 +599,7 @@ def _write_to_github_repository(target_file_path: str, contents_payload: str) ->
     compiled_body_string = existing_content + contents_payload
     encoded_binary_bytes = base64.b64encode(compiled_body_string.encode('utf-8')).decode('utf-8')
     mutation_packet = {
-        "message": f"Pratham AI sync: {target_file_path}",
+        "message": f"Pratham AI sync: {target_file_path} [skip ci]",
         "content": encoded_binary_bytes
     }
     if sha_reference_token:
@@ -3486,7 +3486,7 @@ def _sync_attachment_to_github(target_path: str, raw_bytes: bytes) -> bool:
             pass
 
         body = {
-            "message": f"Pratham AI attachment sync: {target_path}",
+            "message": f"Pratham AI attachment sync: {target_path} [skip ci]",
             "content": base64.b64encode(raw_bytes).decode("utf-8")
         }
         if sha:

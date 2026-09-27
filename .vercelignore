@@ -1,0 +1,8 @@
+data/
+mobile/
+attachments/
+.gemini/
+*.apk
+*.zip
+*.pdf
+*.log
