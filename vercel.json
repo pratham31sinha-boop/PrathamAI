@@ -6,10 +6,10 @@
     { "src": "auth/mobile-callback.html", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api/app.py" },
-    { "src": "/download/(.*)", "dest": "api/app.py" },
-    { "src": "/download_file(.*)", "dest": "api/app.py" },
-    { "src": "/download_temp_file(.*)", "dest": "api/app.py" },
+    { "src": "/api/(.*)", "dest": "/api/app.py" },
+    { "src": "/download/(.*)", "dest": "/api/app.py" },
+    { "src": "/download_file(.*)", "dest": "/api/app.py" },
+    { "src": "/download_temp_file(.*)", "dest": "/api/app.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "headers": [
