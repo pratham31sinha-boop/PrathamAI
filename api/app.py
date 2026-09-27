@@ -710,18 +710,21 @@ def _lookup_vip(email: str):
     return _fetch_vip_directory().get(email.lower())
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600          
-_ZIP_INTENT_RE = re.compile(r"\bzip\b", re.IGNORECASE)
-_PDF_INTENT_RE = re.compile(r"\bpdf\b", re.IGNORECASE)
+_ZIP_INTENT_RE = re.compile(
+    r"\b(?:export|download|save|convert|package|bundle|provide|give\s+me)\b.*\b(?:zip|archive)\b|"
+    r"\b(?:as\s+(?:a\s+)?zip|in\s+(?:a\s+)?zip|into\s+(?:a\s+)?zip|make\s+(?:it\s+)?(?:a\s+)?zip|zip\s+it)\b",
+    re.IGNORECASE
+)
+_PDF_INTENT_RE = re.compile(
+    r"\b(?:export|download|save|convert|provide|give\s+me)\b.*\b(?:pdf|document)\b|"
+    r"\b(?:as\s+(?:a\s+)?pdf|in\s+(?:a\s+)?pdf|into\s+(?:a\s+)?pdf|make\s+(?:it\s+)?(?:a\s+)?pdf|pdf\s+format)\b",
+    re.IGNORECASE
+)
 def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
-    """
-    Loose but practical intent check: true if the keyword ('zip'/'pdf')
-    appears anywhere in the message, UNLESS the message is clearly a
-    question about the format itself (contains '?') rather than a request
-    to package the reply as a file. This intentionally matches phrasings
-    like "zip it", "make it a zip", "as a pdf", "download this as zip",
-    etc. — the earlier stricter pattern missed most of these.
-    """
     if "?" in message:
+        return False
+    # If the user is asking to open/extract/inspect/edit an existing zip, that's an in-place update or inspection, not a new export command
+    if regex == _ZIP_INTENT_RE and re.search(r"\b(?:open|extract|read|unzip|look\s+inside|check|inspect)\b.*\bzip\b", message, re.IGNORECASE):
         return False
     return bool(regex.search(message))
 def _prune_generated_files():
@@ -783,13 +786,25 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverab
     """
     archive_files = {}  # arcname -> bytes
 
-    # 1. Search for existing zip in workdir or extra_files to preserve all prior contents
+    # 1. Search for existing zip in workdir, /tmp, or extra_files to preserve all prior contents
     existing_zip_path = None
     if workdir and os.path.isdir(workdir):
         for fname in os.listdir(workdir):
             if fname.lower().endswith(".zip"):
                 existing_zip_path = os.path.join(workdir, fname)
                 break
+    if not existing_zip_path and deliverable_name and os.path.isfile(os.path.join("/tmp", deliverable_name)):
+        existing_zip_path = os.path.join("/tmp", deliverable_name)
+    elif not existing_zip_path:
+        try:
+            for fname in os.listdir("/tmp"):
+                if fname.lower().endswith(".zip"):
+                    fpath = os.path.join("/tmp", fname)
+                    if zipfile.is_zipfile(fpath):
+                        existing_zip_path = fpath
+                        break
+        except Exception:
+            pass
 
     if existing_zip_path and os.path.isfile(existing_zip_path):
         try:
@@ -808,15 +823,16 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverab
             if ef_name and ef_name.lower().endswith(".zip") and not archive_files:
                 try:
                     ef_raw = ef.get("raw_bytes")
-                    if not ef_raw and isinstance(ef_content, str):
-                        ef_raw = ef_content.encode("utf-8", errors="ignore")
-                    if ef_raw:
+                    if not ef_raw and ef.get("path") and os.path.isfile(ef["path"]):
+                        with open(ef["path"], "rb") as zfh:
+                            ef_raw = zfh.read()
+                    if ef_raw and zipfile.is_zipfile(io.BytesIO(ef_raw)):
                         with zipfile.ZipFile(io.BytesIO(ef_raw), "r") as ezf:
                             for member in ezf.infolist():
                                 if not member.is_dir():
                                     archive_files[member.filename] = ezf.read(member.filename)
-                except Exception:
-                    pass
+                except Exception as ze:
+                    print(f"[ZIP_INPLACE] extra_files read error: {ze}")
             elif ef_name and ef_content:
                 c_bytes = ef_content.encode("utf-8") if isinstance(ef_content, str) else ef_content
                 if ef_name not in archive_files:
@@ -1335,7 +1351,7 @@ def _build_pdf_from_response(assistant_text: str):
         return pdf_bytes, "generated.pdf", "application/pdf"
     except Exception as exc:
         print(f"[PDF][BUILD FAULT] {exc}")
-        return assistant_text.encode("utf-8"), "generated.txt", "text/plain"
+        return None, None, None
 _GENERIC_EXTENSION_RE = re.compile(
     r"\b(?:as\s+an?|make\s+(?:it|this)\s+an?|download\s+(?:as|this\s+as)|export\s+(?:as|to)|"
     r"convert\s+(?:this\s+|it\s+)?to|save\s+(?:this\s+|it\s+)?as)\s+(?:an?\s+)?\.?([a-zA-Z0-9]{1,6})\b",
@@ -3684,13 +3700,20 @@ def _stream_antigravity_cli(messages, state=None):
         "SPOKEN AGENTIC WORKFLOW (CLAUDE-LIKE EXECUTION):\n"
         "- Whenever the user gives a coding, inspection, search, or build task: FIRST speak what you are going to do in 1-2 natural sentences (e.g. 'Command accepted. Inspecting the files first and checking the existing project archive...'), then execute tools (web search, terminal, in-place edits), and then present the completed solution.\n"
         "- You can use web search and background terminal execution anytime dynamically.\n\n"
+        "CRITICAL TERMINAL / BASH RULES:\n"
+        "- Write ONLY clean, executable commands in ```bash blocks (e.g. `zip -j /tmp/game.zip game.html` or `python3 script.py`).\n"
+        "- NEVER prepend commands with '$ ' or '#' shell prompt signs.\n"
+        "- NEVER include simulated outputs, directory listings, or transcript text inside the ```bash block. The server will run the command and capture real terminal stdout/stderr.\n\n"
         "SAME-SESSION PERSISTENT WORKSPACE & IN-PLACE ARCHIVE EDITING:\n"
         "- All files created or modified in this session remain available in the session workspace.\n"
         "- When modifying an existing file or a previously created ZIP archive, do NOT rebuild the entire archive from scratch or delete old files. Open the existing file/archive, perform in-place targeted edits or additions, and preserve all other existing assets.\n"
         "- For in-place file modifications, you can use:\n"
         "```editfile:<filename>\n<<<<<<< SEARCH\n...\n=======\n...\n>>>>>>> REPLACE\n```\n"
         "or ```createfile:<filename>\n<code here>\n``` or run shell/python commands.\n"
-        "Always ensure working deliverables are provided ready to run or download."
+        "Always ensure working deliverables are provided ready to run or download.\n\n"
+        "DELIVERABLES & FILE PRESENTATION:\n"
+        "- Present text and terminal execution steps first. At the very end of your response, present the final files.\n"
+        "- Deliver ONLY the necessary file(s) requested by the user. If the user asks for a game/website, deliver the single clean .html file. If the user asks for a zip, deliver the .zip. Avoid generating extra unneeded files."
     )
 
     prompt_sections = [system_instruction]
@@ -3712,6 +3735,30 @@ def _stream_antigravity_cli(messages, state=None):
                     "You have direct access to all these files. When the user asks to modify an existing file or add a file into a ZIP archive, "
                     "perform in-place updates or additions on the existing archive without deleting previous files."
                 )
+
+    # Inject last HTML deliverable awareness in this chat
+    last_html = _get_last_html_file_in_chat(user_email, conv_id)
+    if last_html:
+        prompt_sections.append(
+            "[ACTIVE CHAT HTML DELIVERABLE]\n"
+            f"The last HTML deliverable created in this chat is: '{last_html['filename']}'.\n"
+            f"When the user asks to update, edit, modify, fix, or add features to the HTML or web game/app:\n"
+            f"You MUST update this exact file ('{last_html['filename']}') rather than inventing a new HTML filename.\n"
+            f"Use ```editfile:{last_html['filename']} with SEARCH/REPLACE or ```createfile:{last_html['filename']} with the complete code."
+        )
+
+    # Search user account files if user asks to find/search across their account
+    is_search_intent = bool(re.search(r"\b(?:find|where is|search for|look for|get|locate|list)\b.*\b(?:file|attachment|zip|html|code|game|app|script)\b", last_user_prompt, re.IGNORECASE))
+    if is_search_intent and user_email:
+        acc_files = _search_user_account_files(user_email)
+        if acc_files:
+            file_summaries = [f"- {af['filename']} (Folder: {af['folder']}, Size: {af['size_bytes']} bytes)" for af in acc_files[:15]]
+            prompt_sections.append(
+                "[USER ACCOUNT FILES ACROSS CHATS]\n"
+                "The user has the following attachments and files across their account chats:\n"
+                + "\n".join(file_summaries) + "\n"
+                "You can inspect, reference, or provide any of these files to the user upon request."
+            )
 
     # Vision: Check for attached images ONLY if explicitly referenced in THIS prompt
     image_disk_path = None
@@ -4955,6 +5002,29 @@ def _run_code_block_remote(lang: str, code: str, cwd: str = None):
     except Exception as exc:
         print(f"[EXECUTOR][REMOTE FAULT] falling back to local exec: {exc}")
         return "", "", -1, False
+def _sanitize_shell_script(code: str) -> str:
+    cleaned = []
+    output_prefixes = (
+        "updating:", "testing:", "no errors detected", "archive:", "length ",
+        "inflating:", "extracting:", "total ", "-rw", "drwx", "exit code",
+        "returncode", "stdout:", "stderr:", "ok", "deflated"
+    )
+    for raw_line in code.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            cleaned.append("")
+            continue
+        line = re.sub(r"^[\$#]\s*", "", line)
+        line = re.sub(r"^root@[^:]+:[^#$]*[#$]\s*", "", line)
+        line_lower = line.lower()
+        if any(line_lower.startswith(p) for p in output_prefixes):
+            cleaned.append(f"# [simulated output skipped]: {raw_line}")
+        elif re.match(r"^[0-9]+\s+[0-9a-zA-Z_\-\.]+", line):
+            cleaned.append(f"# [simulated output skipped]: {raw_line}")
+        else:
+            cleaned.append(line)
+    return "\n".join(cleaned)
+
 def _run_code_block(lang: str, code: str, cwd: str = None):
     """Actually executes one code block in the background terminal and
     returns (stdout, stderr, returncode). This is real execution, not a
@@ -4968,7 +5038,7 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
     would otherwise have no way to work around.
     """
     if EXECUTOR_CONFIGURED:
-        stdout, stderr, rc, ok = _run_code_block_remote(lang, code, cwd)
+        stdout, stderr, rc, ok = _run_code_block_remote(lang, _sanitize_shell_script(code) if lang not in ("python", "py", "web", "websearch", "search") else code, cwd)
         if ok:
             return stdout, stderr, rc
     try:
@@ -4982,8 +5052,9 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
                 cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
             )
         else:                     
+            clean_cmd = _sanitize_shell_script(code)
             shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
-            cmd = [shell_bin, "-c", code]
+            cmd = [shell_bin, "-c", clean_cmd]
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
             )
@@ -5029,6 +5100,132 @@ def _cleanup_terminal_workdir(path: str):
     # Only clean up scratch directories; never delete persistent session directories!
     if path and "/tmp/pratham_ai_terminal_" in path:
         shutil.rmtree(path, ignore_errors=True)
+
+def _get_chat_attachment_dir(user_email: str, conv_id: str = None) -> str:
+    """Returns the dedicated directory for this chat session:
+    data/<user_email>/<chat_title>_<date_time>/attachments/
+    All files created or uploaded in this chat are saved here according to account login.
+    """
+    if not user_email:
+        user_email = "visitor@prathamai.local"
+    if not conv_id:
+        p = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
+        os.makedirs(p, exist_ok=True)
+        return p
+    conv = _get_convo(conv_id) or {}
+    title = conv.get("title") or "Chat"
+    clean_title = re.sub(r'[^a-zA-Z0-9_\-]+', '_', title).strip('_')[:40] or "Chat"
+    created_at = conv.get("created_at") or datetime.now(timezone.utc).isoformat()
+    try:
+        if "T" in str(created_at):
+            dt_part = str(created_at).replace("Z", "").split(".")[0].replace("T", "_").replace(":", "-")
+        else:
+            dt_part = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+    except Exception:
+        dt_part = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+    folder_name = f"{clean_title}_{dt_part}"
+    target_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, folder_name, "attachments")
+    os.makedirs(target_dir, exist_ok=True)
+    return target_dir
+
+def _save_user_chat_file(user_email: str, conv_id: str, filename: str, file_bytes: bytes):
+    """Persists generated or uploaded file across:
+    1. The account's chat-specific folder: data/<email>/<chat_name>_<date_time>/attachments/<filename>
+    2. The account's global attachments: data/<email>/attachments/<filename>
+    3. The session workdir
+    4. GitHub repo sync
+    """
+    if not user_email:
+        user_email = "visitor@prathamai.local"
+    try:
+        chat_dir = _get_chat_attachment_dir(user_email, conv_id)
+        with open(os.path.join(chat_dir, filename), "wb") as cf:
+            cf.write(file_bytes)
+    except Exception as e:
+        print(f"[SAVE_CHAT_FILE_ERR] {e}")
+
+    try:
+        global_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
+        os.makedirs(global_dir, exist_ok=True)
+        with open(os.path.join(global_dir, filename), "wb") as gf:
+            gf.write(file_bytes)
+    except Exception as e:
+        print(f"[SAVE_GLOBAL_FILE_ERR] {e}")
+
+    if conv_id:
+        try:
+            sess_dir = _get_session_workdir(conv_id, user_email)
+            with open(os.path.join(sess_dir, filename), "wb") as sf:
+                sf.write(file_bytes)
+        except Exception:
+            pass
+
+    try:
+        _sync_attachment_to_github(f"data/{user_email}/attachments/{filename}", file_bytes)
+    except Exception:
+        pass
+
+def _search_user_account_files(user_email: str, query: str = "") -> list:
+    """Searches through ALL chat folders under data/<user_email>/ for user attachments."""
+    if not user_email:
+        user_email = "visitor@prathamai.local"
+    user_root = os.path.join(WORKSPACE_ROOT, "data", user_email)
+    results = []
+    seen = set()
+    if not os.path.isdir(user_root):
+        return results
+    for root, dirs, files in os.walk(user_root):
+        if "attachments" in root or "files" in root:
+            rel_folder = os.path.relpath(root, user_root)
+            for fname in files:
+                if fname in seen or fname.startswith("."):
+                    continue
+                fpath = os.path.join(root, fname)
+                if not os.path.isfile(fpath):
+                    continue
+                if query:
+                    q_lower = query.lower().strip()
+                    if q_lower not in fname.lower() and not any(part in fname.lower() for part in q_lower.split() if len(part) > 2):
+                        continue
+                seen.add(fname)
+                try:
+                    size_bytes = os.path.getsize(fpath)
+                    mtime = os.path.getmtime(fpath)
+                except Exception:
+                    size_bytes = 0
+                    mtime = 0
+                results.append({
+                    "filename": fname,
+                    "folder": rel_folder,
+                    "path": fpath,
+                    "size_bytes": size_bytes,
+                    "mtime": mtime
+                })
+    results.sort(key=lambda x: x["mtime"], reverse=True)
+    return results
+
+def _get_last_html_file_in_chat(user_email: str, conv_id: str, session_files: dict = None) -> dict:
+    """Finds the most recent HTML deliverable created in this specific chat."""
+    if session_files:
+        html_keys = [k for k in session_files if k.lower().endswith(".html")]
+        if html_keys:
+            latest_k = html_keys[-1]
+            return {"filename": latest_k, "content": session_files[latest_k]}
+    if user_email and conv_id:
+        chat_dir = _get_chat_attachment_dir(user_email, conv_id)
+        if os.path.isdir(chat_dir):
+            htmls = [f for f in os.listdir(chat_dir) if f.lower().endswith(".html")]
+            if htmls:
+                htmls.sort(key=lambda x: os.path.getmtime(os.path.join(chat_dir, x)), reverse=True)
+                latest_f = htmls[0]
+                latest_path = os.path.join(chat_dir, latest_f)
+                try:
+                    with open(latest_path, "r", encoding="utf-8", errors="replace") as rf:
+                        content = rf.read()
+                    return {"filename": latest_f, "content": content, "path": latest_path}
+                except Exception:
+                    pass
+    return None
 _DIAGNOSTIC_INTENT_RE = re.compile(
     r"\b(system status|diagnostic|terminal (status|working)|is (the )?terminal working|"
     r"memory status|is memory working|check status|health check|status check)\b",
@@ -6134,15 +6331,9 @@ def chat_stream():
                             "detail": f"Ready for download and execution ({written['line_count']} lines, {written['size_bytes']} bytes)."
                         })
 
-                    # Persist deliverable to data/<email>/attachments/
+                    # Persist deliverable to account chat folder and global attachments
                     if user_email:
-                        user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-                        try:
-                            os.makedirs(user_attach_dir, exist_ok=True)
-                            with open(os.path.join(user_attach_dir, filename), "wb") as pf:
-                                pf.write(file_bytes)
-                        except Exception as e:
-                            print(f"[FILE_PERSIST_ERR] {e}")
+                        _save_user_chat_file(user_email, conv_id, filename, file_bytes)
 
                     yield _sse({"type": "verification_started", "filename": filename})
                     val_result = validate_generated_code(file_ext, final_content)
@@ -6193,15 +6384,9 @@ def chat_stream():
                         "detail": f"Applied in-place modifications to {filename} (+{diff_stats['added']} -{diff_stats['removed']} lines)."
                     })
 
-                    # Persist deliverable to data/<email>/attachments/
+                    # Persist deliverable to account chat folder and global attachments
                     if user_email:
-                        user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-                        try:
-                            os.makedirs(user_attach_dir, exist_ok=True)
-                            with open(os.path.join(user_attach_dir, filename), "wb") as pf:
-                                pf.write(file_bytes)
-                        except Exception as e:
-                            print(f"[FILE_PERSIST_ERR] {e}")
+                        _save_user_chat_file(user_email, conv_id, filename, file_bytes)
 
                     if warnings:
                         yield _sse({
@@ -6406,14 +6591,7 @@ def chat_stream():
                         yield _sse({"type": "file_ready", "url": f"/download/{ftoken}", "filename": fname})
                         _produced_filenames_this_turn.add(fname.lower())
                         if user_email:
-                            attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-                            try:
-                                os.makedirs(attach_dir, exist_ok=True)
-                                with open(os.path.join(attach_dir, fname), "wb") as f_out:
-                                    f_out.write(fbytes)
-                                _sync_attachment_to_github(f"data/{user_email}/attachments/{fname}", fbytes)
-                            except Exception:
-                                pass
+                            _save_user_chat_file(user_email, conv_id, fname, fbytes)
                     except Exception as _fe:
                         print(f"[REFERENCED FILE DISCOVERY FAULT] {fname} -> {_fe}")
 
@@ -6429,29 +6607,24 @@ def chat_stream():
                     token = _store_generated_file(zip_bytes, zip_name, "application/zip")
                     # Also persist the zip to attachments so it's always accessible
                     if user_email:
-                        attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-                        try:
-                            os.makedirs(attach_dir, exist_ok=True)
-                            with open(os.path.join(attach_dir, zip_name), "wb") as zf_out:
-                                zf_out.write(zip_bytes)
-                            _sync_attachment_to_github(f"data/{user_email}/attachments/{zip_name}", zip_bytes)
-                        except Exception as _ze:
-                            print(f"[ZIP_PERSIST_FAULT] {_ze}")
+                        _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
                     yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
                 elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
                     pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                    pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
-                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                    if pdf_bytes:
+                        pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
+                        token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
                 else:
                     generic_ext = _detect_generic_extension_intent(export_intent_check_message)
-                    if generic_ext:
+                    if generic_ext and generic_ext.lower() != "txt":
                         file_bytes, _default_name, file_mime = _build_generic_file_from_response(
                             assistant_response, generic_ext, workdir=terminal_workdir
                         )
-                        file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
-                        token = _store_generated_file(file_bytes, file_name, file_mime)
-                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
+                        if file_bytes:
+                            file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
+                            token = _store_generated_file(file_bytes, file_name, file_mime)
+                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
             except Exception as exc:
                 print(f"[FILEGEN][FAULT] {exc}")
         _cleanup_terminal_workdir(terminal_workdir)
@@ -6651,26 +6824,8 @@ def upload_pdf():
     conv_id = request.form.get("conversation_id") or request.form.get("conv_id") or request.headers.get("X-Conversation-Id") or ""
     disk_path = ""
     try:
-        if conv_id:
-            sess_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "sessions", conv_id, "files")
-            os.makedirs(sess_dir, exist_ok=True)
-            sess_disk_path = os.path.join(sess_dir, filename)
-            with open(sess_disk_path, "wb") as out_f:
-                out_f.write(raw_bytes)
-            disk_path = sess_disk_path
-
-        user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-        os.makedirs(user_attach_dir, exist_ok=True)
-        global_disk_path = os.path.join(user_attach_dir, filename)
-        with open(global_disk_path, "wb") as out_f:
-            out_f.write(raw_bytes)
-        if not disk_path:
-            disk_path = global_disk_path
-
-        # Asynchronously sync to GitHub repository folder for text files under 1MB
-        if len(raw_bytes) <= 1024 * 1024 and ext in ("txt", "md", "csv", "json", "html", "css", "js", "py", "xml", "yml", "yaml", "sh", "ts"):
-            gh_target = f"data/{user_email}/attachments/{filename}"
-            threading.Thread(target=_sync_attachment_to_github, args=(gh_target, raw_bytes), daemon=True).start()
+        _save_user_chat_file(user_email, conv_id, filename, raw_bytes)
+        disk_path = os.path.join(_get_chat_attachment_dir(user_email, conv_id), filename)
     except Exception as save_exc:
         print(f"[ATTACHMENT_SAVE_ERR] {save_exc}")
 

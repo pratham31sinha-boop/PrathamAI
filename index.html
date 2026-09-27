@@ -2634,34 +2634,35 @@
             return FILE_ICON_MAP[e] || { icon: e.slice(0, 2).toUpperCase() || '▤', bg: 'var(--accent)' };
         }
         function appendToFileGroup(wrapper, card) {
+            const filesZone = wrapper._filesZone || wrapper._answerZone || wrapper;
             if (!wrapper._fileGroup) {
                 const group = document.createElement('div');
                 group.className = 'file-group-container';
-                group.innerHTML = '<div class="file-group-toggle"></div><div class="file-group-list"></div>';
-                (wrapper._filesZone || wrapper._answerZone || wrapper).appendChild(group);
+                group.innerHTML = `
+                    <div class="deliverables-header" style="display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:0.02em;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        <span class="deliverables-title">Presenting Deliverable</span>
+                    </div>
+                    <div class="file-group-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                `;
+                filesZone.appendChild(group);
                 wrapper._fileGroup = group;
                 wrapper._fileGroupList = group.querySelector('.file-group-list');
-                wrapper._fileGroupToggle = group.querySelector('.file-group-toggle');
+                wrapper._fileGroupTitle = group.querySelector('.deliverables-title');
                 wrapper._fileGroupCount = 0;
             }
-            wrapper._fileGroupCount += 1;
-            // Only the newest file stays visible by default — earlier ones in
-            // this same response collapse behind the toggle below, so a task
-            // that quietly produces several intermediate files doesn't read as
-            // "why are there so many files" to the user.
-            Array.from(wrapper._fileGroupList.children).forEach(c => c.classList.add('fg-collapsed'));
-            wrapper._fileGroupList.appendChild(card);
-            const count = wrapper._fileGroupCount;
-            if (count > 1) {
-                const toggle = wrapper._fileGroupToggle;
-                toggle.style.display = 'block';
-                const others = count - 1;
-                const label = `▸ ${others} other file${others > 1 ? 's' : ''} created`;
-                toggle.textContent = label;
-                toggle.onclick = () => {
-                    const nowExpanded = wrapper._fileGroup.classList.toggle('fg-expanded');
-                    toggle.textContent = nowExpanded ? '▾ Hide other files' : label;
-                };
+            const fn = card.dataset.filename || '';
+            const existingCard = wrapper._fileGroupList.querySelector(`[data-filename="${CSS.escape(fn)}"]`);
+            if (existingCard && existingCard !== card) {
+                existingCard.replaceWith(card);
+                return card;
+            }
+            if (!wrapper._fileGroupList.contains(card)) {
+                wrapper._fileGroupCount += 1;
+                wrapper._fileGroupList.appendChild(card);
+            }
+            if (wrapper._fileGroupTitle) {
+                wrapper._fileGroupTitle.textContent = wrapper._fileGroupCount > 1 ? 'Presenting Deliverables' : 'Presenting Deliverable';
             }
             return card;
         }
@@ -3119,13 +3120,13 @@
             if (closed && card.classList.contains('in-progress')) {
                 card.classList.remove('in-progress');
                 card.classList.add('done');
-                if (statusText) statusText.innerText = 'Ready';
+                if (statusText) statusText.innerText = `Ready (${lineCount} lines) · Available to download`;
                 if (openHint) openHint.innerText = 'Open';
                 const liveLabel = card.querySelector('.fcc-live-label');
                 if (liveLabel) liveLabel.innerText = 'READY';
-                pushTerminalLog(`File created: ${card.dataset.filename} (${lineCount} lines, ${content.length} chars)`);
+                pushTerminalLog(`File ready: ${card.dataset.filename} (${lineCount} lines, ${content.length} chars)`);
             } else if (!closed) {
-                if (statusText) statusText.innerText = `Writing file... (${lineCount} lines)`;
+                if (statusText) statusText.innerText = `Creating ${card.dataset.filename || 'file'}... (${lineCount} lines)`;
             }
 
             // Real-time HTML live rendering
@@ -3583,15 +3584,6 @@
             while (wrapper._segNodes.length > segments.length) {
                 const old = wrapper._segNodes.pop();
                 if (old && old.parentNode) old.parentNode.removeChild(old);
-            }
-            // Auto-mount interactive download cards for any files referenced in fullText (e.g. /tmp/file.zip, `file.zip`, or [file.html])
-            const fileRefRegex = /(?:file:\/\/\/tmp\/|\/tmp\/|\[|`)([a-zA-Z0-9_\-]+\.(?:zip|html|py|js|json|css|pdf|tar\.gz))\b/g;
-            let fmatch;
-            while ((fmatch = fileRefRegex.exec(fullText)) !== null) {
-                const fname = fmatch[1];
-                if (fname && !wrapper._fileCardsByName?.[fname]) {
-                    appendDownloadCard(wrapper, `/api/download_temp_file?name=${encodeURIComponent(fname)}`, fname);
-                }
             }
             pinnedAutoScroll();
         }
