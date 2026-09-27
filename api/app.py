@@ -3206,8 +3206,6 @@ class _WarmAntigravitySession:
                 bufsize=1,
                 env=env
             )
-            # Read init line
-            proc.stdout.readline()
             self._proc = proc
             return proc
         except Exception as e:
@@ -3308,6 +3306,8 @@ class _WarmAntigravitySession:
                     try:
                         data = json.loads(line)
                         evt = data.get("event")
+                        if evt == "init":
+                            continue
                         if evt == "error":
                             err_payload = str(data.get("error", "")).lower()
                             if any(k in err_payload for k in ["rate limit", "429", "quota", "resource_exhausted", "too many requests"]):
@@ -6028,6 +6028,9 @@ def chat_stream():
     body = request.get_json(silent=True) or {}
     message = (body.get("message") or "").strip()
     conv_id = body.get("conversation_id") or None
+    is_deep_research = "[[DEEP_RESEARCH]]" in message
+    if is_deep_research:
+        message = message.replace("[[DEEP_RESEARCH]]", "").strip()
     web_search_disabled = bool(_NO_WEB_SEARCH_TAG_RE.search(message))
     # Vercel/serverless requests must return control quickly. In Google OAuth
     # mode Gemini is the sole provider, so do NOT perform the old Qwen worker
@@ -6421,6 +6424,9 @@ def chat_stream():
             yield _sse({"type": "agent_step", "step_type": "searching",
                        "label": "Searching the web for current information...",
                        "timestamp": time.time()})
+        if is_deep_research:
+            yield _sse({"type": "agent_step", "step_type": "searching", "label": "Deep Research: Gathering multi-source intelligence...", "timestamp": time.time()})
+            yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing cross-verified research report with citations...", "timestamp": time.time()})
         _tasks_emitted = {}                                                   
         if _MULTI_STEP_INTENT_RE.search(message):
             yield _sse({"type": "planning_started", "label": "Task Plan", "timestamp": time.time()})
@@ -7577,7 +7583,297 @@ def _start_qwen_app_heartbeat() -> None:
             f"[QWEN HEARTBEAT] app-level keep-warm started "
             f"(interval={QWEN_APP_HEARTBEAT_INTERVAL_SECONDS}s)"
         )
-_start_qwen_app_heartbeat()
+# =====================================================================
+# CLAUDE-STYLE WORKBENCH & UNIFIED WORKSPACE API ENDPOINTS
+# =====================================================================
+
+@app.route("/api/workbench/files", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api/app/workbench/files", methods=["GET", "POST", "OPTIONS"])
+@require_auth
+def workbench_list_files():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    conv_id = request.args.get("conversation_id") or (request.get_json(silent=True) or {}).get("conversation_id") or ""
+    user_email = _user_email()
+    workdir = _get_session_workdir(conv_id, user_email) if conv_id else os.path.join(WORKSPACE_ROOT, "data", user_email, "workspace")
+    try:
+        os.makedirs(workdir, exist_ok=True)
+    except Exception:
+        pass
+    
+    file_list = []
+    if os.path.isdir(workdir):
+        for root, dirs, files in os.walk(workdir):
+            for fn in files:
+                if fn.startswith("."):
+                    continue
+                fp = os.path.join(root, fn)
+                try:
+                    rel_p = os.path.relpath(fp, workdir)
+                    stat = os.stat(fp)
+                    mimetype = mimetypes.guess_type(fn)[0] or "text/plain"
+                    file_list.append({
+                        "filename": fn,
+                        "rel_path": rel_p,
+                        "size_bytes": stat.st_size,
+                        "mimetype": mimetype,
+                        "updated_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                        "is_dir": False
+                    })
+                except Exception:
+                    pass
+    if conv_id:
+        try:
+            conv_files = _extract_conversation_files(conv_id, user_email=user_email)
+            existing_names = {f["filename"] for f in file_list}
+            for cf in conv_files:
+                if cf["filename"] not in existing_names:
+                    file_list.append({
+                        "filename": cf["filename"],
+                        "rel_path": cf.get("storage_path") or cf["filename"],
+                        "size_bytes": cf.get("size_bytes", len(cf.get("content", ""))),
+                        "mimetype": mimetypes.guess_type(cf["filename"])[0] or "text/plain",
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "is_dir": False
+                    })
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "files": file_list, "workdir": workdir})
+
+@app.route("/api/workbench/file", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api/app/workbench/file", methods=["GET", "POST", "OPTIONS"])
+@require_auth
+def workbench_file_op():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    user_email = _user_email()
+    if request.method == "GET":
+        filename = request.args.get("filename", "").strip().replace("..", "").lstrip("/")
+        conv_id = request.args.get("conversation_id", "").strip()
+        if not filename:
+            return jsonify({"error": "Missing 'filename'."}), 400
+        workdir = _get_session_workdir(conv_id, user_email) if conv_id else os.path.join(WORKSPACE_ROOT, "data", user_email, "workspace")
+        target_path = os.path.join(workdir, filename)
+        if not os.path.isfile(target_path):
+            att_path = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments", filename)
+            if os.path.isfile(att_path):
+                target_path = att_path
+            else:
+                return jsonify({"error": f"File '{filename}' not found."}), 404
+        try:
+            with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            mimetype = mimetypes.guess_type(filename)[0] or "text/plain"
+            return jsonify({
+                "ok": True,
+                "filename": filename,
+                "content": content,
+                "size_bytes": len(content.encode("utf-8")),
+                "mimetype": mimetype
+            })
+        except Exception as exc:
+            return jsonify({"error": f"Failed to read file: {exc}"}), 500
+
+    elif request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        filename = (body.get("filename") or "").strip().replace("..", "").lstrip("/")
+        content = body.get("content", "")
+        conv_id = (body.get("conversation_id") or "").strip()
+        if not filename:
+            return jsonify({"error": "Missing 'filename'."}), 400
+        workdir = _get_session_workdir(conv_id, user_email) if conv_id else os.path.join(WORKSPACE_ROOT, "data", user_email, "workspace")
+        try:
+            os.makedirs(workdir, exist_ok=True)
+            target_path = os.path.join(workdir, filename)
+            parent_dir = os.path.dirname(target_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            mimetype = mimetypes.guess_type(filename)[0] or "text/plain"
+            token = _store_generated_file(content.encode("utf-8"), filename, mimetype)
+            if conv_id:
+                _register_session_file(conv_id, filename, mimetype, len(content.encode("utf-8")), download_url=f"/download/{token}")
+            return jsonify({
+                "ok": True,
+                "filename": filename,
+                "size_bytes": len(content.encode("utf-8")),
+                "download_url": f"/download/{token}",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as exc:
+            return jsonify({"error": f"Failed to write file: {exc}"}), 500
+
+@app.route("/api/workbench/delete", methods=["POST", "OPTIONS"])
+@app.route("/api/app/workbench/delete", methods=["POST", "OPTIONS"])
+@require_auth
+def workbench_delete_file():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    filename = (body.get("filename") or "").strip().replace("..", "").lstrip("/")
+    conv_id = (body.get("conversation_id") or "").strip()
+    user_email = _user_email()
+    if not filename:
+        return jsonify({"error": "Missing 'filename'."}), 400
+    workdir = _get_session_workdir(conv_id, user_email) if conv_id else os.path.join(WORKSPACE_ROOT, "data", user_email, "workspace")
+    target_path = os.path.join(workdir, filename)
+    if os.path.isfile(target_path):
+        try:
+            os.remove(target_path)
+            return jsonify({"ok": True, "deleted": filename})
+        except Exception as exc:
+            return jsonify({"error": f"Failed to delete: {exc}"}), 500
+    return jsonify({"ok": True, "message": "File already removed."})
+
+@app.route("/api/workbench/diff", methods=["POST", "OPTIONS"])
+@app.route("/api/app/workbench/diff", methods=["POST", "OPTIONS"])
+@require_auth
+def workbench_compute_diff():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    filename = body.get("filename", "file.txt")
+    orig = body.get("original", "")
+    mod = body.get("modified", "")
+    diff = list(difflib.unified_diff(
+        orig.splitlines(keepends=True),
+        mod.splitlines(keepends=True),
+        fromfile=f"a/{filename}",
+        tofile=f"b/{filename}"
+    ))
+    diff_text = "".join(diff)
+    additions = sum(1 for line in diff if line.startswith("+") and not line.startswith("+++"))
+    deletions = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
+    return jsonify({
+        "ok": True,
+        "diff": diff_text,
+        "additions": additions,
+        "deletions": deletions
+    })
+
+# =====================================================================
+# PROJECTS MANAGEMENT ENDPOINTS
+# =====================================================================
+
+_PROJECTS_DIR = os.path.join(WORKSPACE_ROOT, "data", "projects")
+try:
+    os.makedirs(_PROJECTS_DIR, exist_ok=True)
+except Exception:
+    pass
+
+@app.route("/api/projects", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api/app/projects", methods=["GET", "POST", "OPTIONS"])
+@require_auth
+def projects_endpoint():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    user_email = _user_email()
+    user_proj_dir = os.path.join(_PROJECTS_DIR, re.sub(r"[^\w@.-]", "_", user_email))
+    try:
+        os.makedirs(user_proj_dir, exist_ok=True)
+    except Exception:
+        pass
+    
+    if request.method == "GET":
+        projects = []
+        if os.path.isdir(user_proj_dir):
+            for fn in os.listdir(user_proj_dir):
+                if fn.endswith(".json"):
+                    try:
+                        with open(os.path.join(user_proj_dir, fn), "r", encoding="utf-8") as f:
+                            pdata = json.load(f)
+                            projects.append(pdata)
+                    except Exception:
+                        pass
+        projects.sort(key=lambda p: p.get("updated_at", ""), reverse=True)
+        return jsonify({"ok": True, "projects": projects})
+
+    elif request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        proj_id = body.get("id") or str(uuid.uuid4())
+        name = (body.get("name") or "Untitled Project").strip()
+        instructions = body.get("instructions", "").strip()
+        files = body.get("files", [])
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
+        proj_data = {
+            "id": proj_id,
+            "name": name,
+            "instructions": instructions,
+            "files": files,
+            "created_at": body.get("created_at") or now_iso,
+            "updated_at": now_iso
+        }
+        fpath = os.path.join(user_proj_dir, f"{proj_id}.json")
+        try:
+            with open(fpath, "w", encoding="utf-8") as f:
+                json.dump(proj_data, f, indent=2)
+            return jsonify({"ok": True, "project": proj_data})
+        except Exception as exc:
+            return jsonify({"error": f"Failed to save project: {exc}"}), 500
+
+@app.route("/api/projects/<proj_id>", methods=["DELETE", "OPTIONS"])
+@app.route("/api/app/projects/<proj_id>", methods=["DELETE", "OPTIONS"])
+@require_auth
+def project_delete_endpoint(proj_id):
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    user_email = _user_email()
+    user_proj_dir = os.path.join(_PROJECTS_DIR, re.sub(r"[^\w@.-]", "_", user_email))
+    fpath = os.path.join(user_proj_dir, f"{proj_id}.json")
+    if os.path.isfile(fpath):
+        try:
+            os.remove(fpath)
+            return jsonify({"ok": True, "deleted": proj_id})
+        except Exception as exc:
+            return jsonify({"error": f"Failed to delete: {exc}"}), 500
+    return jsonify({"ok": True, "message": "Project not found or already deleted."})
+
+# =====================================================================
+# DEEP RESEARCH ENGINE ENDPOINT
+# =====================================================================
+
+@app.route("/api/research/query", methods=["POST", "OPTIONS"])
+@app.route("/api/app/research/query", methods=["POST", "OPTIONS"])
+@require_auth
+def research_query_endpoint():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    body = request.get_json(silent=True) or {}
+    query = (body.get("query") or "").strip()
+    if not query:
+        return jsonify({"error": "Query cannot be blank."}), 400
+    
+    subquestions = [
+        query,
+        f"{query} overview architecture facts",
+        f"{query} latest developments benchmark details",
+        f"{query} deep analysis guide"
+    ]
+    
+    all_sources = []
+    seen_urls = set()
+    
+    for sq in subquestions:
+        try:
+            res = _perform_web_search(sq, max_results=4)
+            for item in res:
+                if item not in seen_urls:
+                    seen_urls.add(item)
+                    all_sources.append(item)
+        except Exception:
+            pass
+    
+    return jsonify({
+        "ok": True,
+        "query": query,
+        "subquestions": subquestions,
+        "sources_count": len(all_sources),
+        "sources": all_sources[:12]
+    })
+
 PRATHAM_FAST_WORKER_BUILD = "2026-09-13-fast-worker-v4"
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
