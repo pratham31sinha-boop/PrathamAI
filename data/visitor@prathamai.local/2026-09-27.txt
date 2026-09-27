@@ -338,3 +338,30 @@ The execution has completed successfully with exit code 0 (`SUCCESS (exit 0)`) r
 All mechanics—including the 2.5D perspective engine, 3-lane horizontal movement, jumping, sliding, procedural obstacle spawning, trains, spinning coins, power-ups (Coin Magnet & Super Sneakers), synthesized sound effects, and HUD—are fully implemented and verified.
 
 ================================================================================
+
+=== 2026-09-27T07:19:41.172895+00:00 ===
+User: [[NO_WEB_SEARCH]]Can u open that zip u had made and add readme.md also
+Pratham AI:
+Command accepted. Inspecting the existing `subway_surfers_25d.zip` archive first and performing an in-place addition of a comprehensive `README.md` while preserving all existing assets.
+
+Let's check the existing contents of `/tmp/subway_surfers_25d.zip`, create `README.md`, and update the archive in-place.
+I have updated [`subway_surfers_25d.zip`](file:///tmp/subway_surfers_25d.zip) in-place and added [`README.md`](file:///tmp/README.md) while preserving the original [`subway_surfers_25d.py`](file:///tmp/subway_surfers_25d.py) script.
+
+### Updated Archive Contents:
+```text
+Archive:  /tmp/subway_surfers_25d.zip
+  Length      Name
+---------     ----
+    30666     subway_surfers_25d.py
+     2845     README.md
+---------     -------
+    33511     2 files
+```
+
+### What `README.md` Covers:
+1. **Overview & Credits**: Documentation of Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
+2. **Features**: 2.5D perspective engine, 3-lane horizontal mechanics, jumping, sliding, procedural obstacle spawning, oncoming trains, spinning gold coins, power-ups (Coin Magnet & Super Sneakers), and mathematically synthesized retro audio.
+3. **Controls Reference**: Complete keyboard mapping (`A`/`D` or `←`/`→`, `W`/`↑`/`Space`, `S`/`↓`, `P`, `Esc`).
+4. **Execution Instructions**: Installation dependencies, standard interactive play command, and automated `--test` benchmark instructions.
+
+================================================================================
