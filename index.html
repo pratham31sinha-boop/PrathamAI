@@ -665,7 +665,7 @@
             display: flex;
             flex-direction: column;
             max-width: 100%;
-            margin: 4px 0 12px 0;
+            margin: 2px 0 10px 0;
             border: none !important;
             background: transparent !important;
             box-shadow: none !important;
@@ -674,13 +674,13 @@
         .thinking-header {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 4px 0;
+            gap: 5px;
+            padding: 2px 0 6px;
             user-select: none;
             cursor: pointer;
-            font-size: 13.5px;
+            font-size: 14px;
             color: var(--text-dim, #94a3b8);
-            font-weight: 500;
+            font-weight: 400;
             width: fit-content;
             transition: color 0.15s ease;
         }
@@ -688,11 +688,12 @@
             color: var(--text, #f8fafc);
         }
         .thinking-header .tw-caret {
-            font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             color: var(--text-dim, #94a3b8);
             transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             transform: rotate(0deg);
-            display: inline-block;
             line-height: 1;
         }
         .thinking-wrap.expanded .thinking-header .tw-caret {
@@ -703,9 +704,9 @@
             display: none !important;
         }
         .thinking-header .tw-summary {
-            font-size: 13.5px;
+            font-size: 14px;
             color: inherit;
-            font-weight: 500;
+            font-weight: 400;
             letter-spacing: -0.01em;
         }
         .thinking-body {
@@ -717,92 +718,72 @@
             transition: max-height .35s cubic-bezier(.4, 0, .2, 1), opacity .25s ease;
         }
         .thinking-wrap.expanded .thinking-body {
-            max-height: 3000px;
+            max-height: 4000px;
             opacity: 1;
             overflow-y: visible;
-            padding: 6px 0 10px 2px;
+            padding: 4px 0 12px 0;
         }
         .step-list {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 6px;
         }
         .step-row {
             display: flex;
-            align-items: baseline;
-            gap: 9px;
-            font-size: 13px;
+            align-items: center;
+            gap: 8px;
+            font-size: 13.5px;
             color: var(--text-dim, #94a3b8);
             line-height: 1.5;
-            animation: stepRowIn .25s ease both;
+            animation: stepRowIn .2s ease both;
         }
         .step-row.head {
-            font-weight: 600;
+            font-weight: 500;
             color: var(--text-dim, #94a3b8);
             font-size: 13.5px;
-            margin-top: 6px;
+            margin-top: 4px;
         }
         @keyframes stepRowIn {
-            from { opacity: 0; transform: translateY(3px); }
+            from { opacity: 0; transform: translateY(2px); }
             to { opacity: 1; transform: translateY(0); }
         }
         .step-row .step-icon {
             flex: none;
             width: 16px;
-            text-align: center;
-            font-size: 13px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
             color: var(--text-dim, #94a3b8);
-            display: inline-block;
         }
         .step-row .step-icon.running {
             color: var(--accent, #38bdf8);
             animation: spin 1s linear infinite;
         }
         .step-row .step-icon.done {
-            color: #22c55e;
+            color: var(--text-dim, #94a3b8);
         }
         .step-row .step-icon.failed {
             color: #ef4444;
         }
         .step-row .step-icon.inspecting,
-        .step-row .step-icon.clock {
-            color: var(--text-dim, #94a3b8);
-        }
-        .step-row .step-icon.search {
-            color: var(--text-dim, #94a3b8);
-            font-weight: 600;
-        }
+        .step-row .step-icon.clock,
+        .step-row .step-icon.search,
         .step-row .step-icon.terminal {
             color: var(--text-dim, #94a3b8);
-            font-family: var(--font-mono, monospace);
         }
         @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-        .step-row .step-elapsed {
-            flex: none;
-            font-size: 11px;
-            color: var(--text-dim, #64748b);
-            opacity: .85;
-            font-variant-numeric: tabular-nums;
-            margin-left: auto;
+        .step-row .step-elapsed,
+        .step-row .step-detail {
+            display: none !important;
         }
-        .step-row.has-detail { cursor: pointer; }
-        .step-row.has-detail:hover .step-text { color: var(--text, #f8fafc); }
-        .step-detail {
-            display: none;
-            margin: 2px 0 6px 24px;
-            padding: 6px 10px;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.03);
-            border-left: 2px solid var(--accent, #38bdf8);
-            font-size: 11.5px;
-            line-height: 1.45;
-            color: var(--text-dim, #94a3b8);
-            white-space: pre-wrap;
-            max-height: 240px;
-            overflow-y: auto;
+        .step-thought {
+            margin: 8px 0 10px 0;
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: var(--text, #f8fafc);
         }
-        .step-row.has-detail + .step-detail,
-        .step-row.expanded + .step-detail { display: block; }
         .thinking-header .tw-caret {
             transition: transform .25s cubic-bezier(.34,1.56,.64,1);
         }
@@ -1292,10 +1273,6 @@
         .process-zone { padding: 4px 0 8px; margin-bottom: 4px; }
         .process-zone:empty { display: none; }
         .answer-zone { padding-top: 4px; }
-        .answer-zone:not(:empty)::before {
-            content: ''; display: block; width: 100%; height: 1px;
-            background: var(--border); border-radius: 1px; margin: 8px 0 12px;
-        }
         .assistant-text-segment {
             display: block !important;
             visibility: visible !important;
@@ -2538,8 +2515,8 @@
             const target = wrapper._processZone || wrapper;
             wrap.innerHTML = `
                 <div class="thinking-header">
-                    <span class="tw-summary">Working...</span>
-                    <span class="tw-caret">&#x25BE;</span>
+                    <span class="tw-summary">Thinking...</span>
+                    <span class="tw-caret"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
                 </div>
                 <div class="thinking-body"></div>
             `;
@@ -2579,36 +2556,31 @@
         }
         function addStep(wrapper, icon, text, isHead) {
             const list = getStepList(wrapper);
+            // Deduplicate consecutive rows with identical text
+            const lastRow = list.querySelector('.step-row:last-of-type');
+            if (lastRow) {
+                const lastText = lastRow.querySelector('.step-text')?.textContent || '';
+                if (lastText.trim() === (text || '').trim()) {
+                    return lastRow;
+                }
+            }
             const row = document.createElement('div');
             row.className = 'step-row' + (isHead ? ' head' : '');
             let displayIcon = icon || '\u25CB';
-            let iconClass = 'running';
+            let iconClass = 'inspect';
             if (displayIcon === 'terminal' || displayIcon === '›_' || displayIcon === '$') {
-                displayIcon = '›_';
+                displayIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>`;
                 iconClass = 'terminal';
-            } else if (displayIcon === 'search' || displayIcon === '🔍') {
-                displayIcon = '🔍';
+            } else if (displayIcon === 'search' || displayIcon === '🔍' || displayIcon === 'AI') {
+                displayIcon = `<span style="font-weight:700;font-size:11px;letter-spacing:-0.5px;">AI</span>`;
                 iconClass = 'search';
-            } else if (displayIcon === 'inspect' || displayIcon === '⏱') {
-                displayIcon = '⏱';
+            } else {
+                displayIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
                 iconClass = 'inspect';
             }
-            row.innerHTML = `<span class="step-icon ${iconClass}">${displayIcon}</span><span class="step-text">${text}</span><span class="step-elapsed"></span>`;
-            const detail = document.createElement('div');
-            detail.className = 'step-detail';
+            row.innerHTML = `<span class="step-icon ${iconClass}">${displayIcon}</span><span class="step-text">${text}</span>`;
             list.appendChild(row);
-            list.appendChild(detail);
-            row._detailEl = detail;
             row._startedAt = performance.now();
-            const elapsedEl = row.querySelector('.step-elapsed');
-            row._elapsedTimer = setInterval(() => {
-                const secs = (performance.now() - row._startedAt) / 1000;
-                elapsedEl.textContent = secs < 1 ? '' : `${secs.toFixed(1)}s`;
-            }, 200);
-            row.onclick = () => {
-                if (!row.classList.contains('has-detail')) return;
-                row.classList.toggle('expanded');
-            };
             _refreshThinkingSummary();
             return row;
         }
@@ -2624,17 +2596,15 @@
             if (!row) return;
             if (row._elapsedTimer) {
                 clearInterval(row._elapsedTimer);
-                const totalSecs = (performance.now() - row._startedAt) / 1000;
-                const elapsedEl = row.querySelector('.step-elapsed');
-                if (elapsedEl) elapsedEl.textContent = totalSecs < 0.3 ? '' : `${totalSecs.toFixed(1)}s`;
             }
             const iconEl = row.querySelector('.step-icon');
-            if (ok) {
-                iconEl.className = 'step-icon done';
-                iconEl.textContent = '\u2713'; // ✓
-            } else {
-                iconEl.className = 'step-icon failed';
-                iconEl.textContent = '\u2715'; // ✕
+            if (iconEl) {
+                iconEl.classList.remove('running');
+                iconEl.classList.add('done');
+                if (!ok) {
+                    iconEl.classList.add('failed');
+                    iconEl.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+                }
             }
             _refreshThinkingSummary();
         }
@@ -2653,14 +2623,8 @@
             // Finish any step rows that never received an explicit finishStep call
             if (_activeStepList) {
                 _activeStepList.querySelectorAll('.step-row').forEach(row => {
-                    if (row.querySelector('.step-icon.running')) finishStep(row, true);
+                    finishStep(row, true);
                 });
-                if (_activeStepList.querySelectorAll('.step-row').length === 0) {
-                    const fallback = addStep(_activeThinkingWrap.closest('.model-output-target-shell') || document.body, '\u25CB', 'Completed analysis & implementation');
-                    setStepDetail(fallback, 'Synthesized solution and verified code deliverables.');
-                    fallback.classList.add('has-detail');
-                    finishStep(fallback, true);
-                }
             }
             // Collapse (don't remove) so the user can still expand it to inspect steps
             _activeThinkingWrap.classList.remove('expanded');
@@ -3142,16 +3106,15 @@
         }
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
-            containerNode.className = 'w-full flex flex-col items-start gap-1.5 msg-enter';
-            containerNode.innerHTML = `<span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>`;
+            containerNode.className = 'w-full flex flex-col items-start gap-1 msg-enter';
             const processZone = document.createElement('div');
             processZone.className = 'process-zone w-full flex flex-col gap-1';
-            processZone.style.maxWidth = '92%';
+            processZone.style.maxWidth = '100%';
             const answerZone = document.createElement('div');
             answerZone.className = 'answer-zone w-full flex flex-col items-start gap-1.5';
             const filesZone = document.createElement('div');
             filesZone.className = 'files-zone w-full flex flex-col gap-2 mt-2';
-            filesZone.style.maxWidth = '92%';
+            filesZone.style.maxWidth = '100%';
             containerNode.appendChild(processZone);
             containerNode.appendChild(answerZone);
             containerNode.appendChild(filesZone);
@@ -3177,7 +3140,6 @@
             row.className = 'w-full flex flex-col items-start gap-1 msg-enter';
             row.id = 'typing-indicator-row';
             row.innerHTML = `
-                <span class="text-[9px] font-bold tracking-wider text-[var(--text-dim)] uppercase px-0.5">PRATHAM AI</span>
                 <div class="glass px-4 py-3 flex items-center gap-1 shadow-xs" style="border-radius:4px 16px 16px 16px;">
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                     <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
@@ -3642,85 +3604,29 @@
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             setAgentActivity('Planning tasks...');
                             pushTerminalLog('Planning started...');
-                            if (!modelWrapper._taskPlanCard) {
-                                const tpc = document.createElement('div');
-                                tpc.className = 'task-plan-card msg-enter';
-                                tpc.innerHTML = `
-                                    <div class="task-plan-header" onclick="this.parentElement.querySelector('.task-plan-body').classList.toggle('hidden')">
-                                        <span class="tph-icon">📋</span>
-                                        <span class="tph-title">${sanitizeOutputText(payload.label || 'Task Plan')}</span>
-                                        <span class="tph-count" style="display:none">0 tasks</span>
-                                    </div>
-                                    <div class="task-plan-body hidden">
-                                        <div class="task-item pending" data-placeholder>
-                                            <span class="ti-icon" style="animation:stepIconSpin .9s linear infinite;color:var(--accent);border-color:var(--accent);"></span>
-                                            <span class="ti-label" style="color:var(--text-dim);font-style:italic;">Analyzing request…</span>
-                                        </div>
-                                    </div>
-                                `;
-                                (modelWrapper._processZone || modelWrapper).appendChild(tpc);
-                                modelWrapper._taskPlanCard = tpc;
-                                modelWrapper._taskItems = {};
-                            }
+                            addStep(modelWrapper, 'inspect', sanitizeOutputText(payload.label || 'Planning architecture & steps...'));
                         } else if (payload.type === 'task_created') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
-                            if (!modelWrapper._taskPlanCard) {
-                                const tpc = document.createElement('div');
-                                tpc.className = 'task-plan-card msg-enter';
-                                tpc.innerHTML = `<div class="task-plan-header" onclick="this.parentElement.querySelector('.task-plan-body').classList.toggle('hidden')"><span class="tph-icon">📋</span><span class="tph-title">Task Plan</span><span class="tph-count" style="display:none">0 tasks</span></div><div class="task-plan-body hidden"></div>`;
-                                (modelWrapper._processZone || modelWrapper).appendChild(tpc);
-                                modelWrapper._taskPlanCard = tpc;
-                                modelWrapper._taskItems = {};
-                            }
-                            // Remove placeholder row on first real task
-                            const placeholder = modelWrapper._taskPlanCard.querySelector('[data-placeholder]');
-                            if (placeholder) placeholder.remove();
                             const taskId = payload.task_id || ('task_' + Date.now());
-                            const tBody = modelWrapper._taskPlanCard.querySelector('.task-plan-body');
-                            const tCount = modelWrapper._taskPlanCard.querySelector('.tph-count');
-                            const ti = document.createElement('div');
-                            ti.className = 'task-item pending';
-                            ti.dataset.taskId = taskId;
-                            ti.innerHTML = `<span class="ti-icon"></span><span class="ti-label">${sanitizeOutputText(payload.label || taskId)}</span><span class="ti-elapsed"></span>`;
-                            tBody.appendChild(ti);
-                            modelWrapper._taskItems[taskId] = ti;
-                            const itemCount = Object.keys(modelWrapper._taskItems).length;
-                            if (tCount) {
-                                tCount.style.display = '';
-                                tCount.textContent = `${itemCount} task${itemCount !== 1 ? 's' : ''}`;
-                            }
-                            pushTerminalLog(`Task created: ${payload.label || taskId}`);
+                            const row = addStep(modelWrapper, 'inspect', sanitizeOutputText(payload.label || taskId));
+                            if (!modelWrapper._taskItems) modelWrapper._taskItems = {};
+                            modelWrapper._taskItems[taskId] = row;
+                            pushTerminalLog(`Task: ${payload.label || taskId}`);
                         } else if (payload.type === 'task_started') {
-                            if (modelWrapper && modelWrapper._taskItems) {
-                                const ti = modelWrapper._taskItems[payload.task_id];
-                                if (ti) {
-                                    ti.className = 'task-item running';
-                                    ti._startedAt = performance.now();
-                                    setAgentActivity(`${payload.label || 'Working'}...`);
-                                    // Start elapsed timer
-                                    const elapsedEl = ti.querySelector('.ti-elapsed');
-                                    ti._timer = setInterval(() => {
-                                        if (!ti._startedAt) return;
-                                        const s = (performance.now() - ti._startedAt) / 1000;
-                                        if (elapsedEl) elapsedEl.textContent = s < 1 ? '' : `${s.toFixed(1)}s`;
-                                    }, 200);
+                            if (modelWrapper && modelWrapper._taskItems && modelWrapper._taskItems[payload.task_id]) {
+                                const row = modelWrapper._taskItems[payload.task_id];
+                                const iconEl = row.querySelector('.step-icon');
+                                if (iconEl) {
+                                    iconEl.classList.remove('done');
+                                    iconEl.classList.add('running');
                                 }
                             }
                             pushTerminalLog(`Task started: ${payload.task_id}`);
                         } else if (payload.type === 'task_completed') {
-                            if (modelWrapper && modelWrapper._taskItems) {
-                                const ti = modelWrapper._taskItems[payload.task_id];
-                                if (ti) {
-                                    if (ti._timer) clearInterval(ti._timer);
-                                    ti.className = 'task-item ' + (payload.ok !== false ? 'done' : 'failed');
-                                    const icon = ti.querySelector('.ti-icon');
-                                    if (icon) icon.textContent = payload.ok !== false ? '✓' : '✕';
-                                    const elapsed = ti._startedAt ? ((performance.now() - ti._startedAt) / 1000) : 0;
-                                    const elapsedEl = ti.querySelector('.ti-elapsed');
-                                    if (elapsedEl && elapsed > 0.3) elapsedEl.textContent = `${elapsed.toFixed(1)}s`;
-                                }
+                            if (modelWrapper && modelWrapper._taskItems && modelWrapper._taskItems[payload.task_id]) {
+                                finishStep(modelWrapper._taskItems[payload.task_id], payload.ok !== false);
                             }
-                            pushTerminalLog(`Task completed: ${payload.task_id} — ${payload.ok !== false ? 'ok' : 'failed'}`);
+                            pushTerminalLog(`Task completed: ${payload.task_id}`);
                         } else if (payload.type === 'prompt_enhancing') {
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             setAgentActivity('Enhancing prompt...');

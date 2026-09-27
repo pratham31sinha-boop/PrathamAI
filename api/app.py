@@ -3569,12 +3569,6 @@ def _stream_antigravity_cli(messages, state=None):
     conv_id = getattr(_do_stream, '_current_conv_id', None) or ""
     attached_files = _get_user_attachments(user_email, conv_id=conv_id, messages=messages)
 
-    # Emit planning steps immediately so the activity trace is immediately visible
-    planning_steps = _get_planning_steps_for_prompt(last_user_prompt, attached_files)
-    for step in planning_steps:
-        yield _sse(step)
-        time.sleep(0.04)
-
     # Build concise, focused prompt with full agentic Claude-like freedom
     system_instruction = (
         "You are Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
@@ -3762,9 +3756,9 @@ def _stream_antigravity_cli(messages, state=None):
             )
             while True:
                 now = time.time()
-                if not got_any_token and (now - last_heartbeat) >= 2.0:
+                if not got_any_token and (now - last_heartbeat) >= 2.5:
                     last_heartbeat = now
-                    yield _sse({"type": "agent_step", "step_type": "thinking", "label": "Processing solution..."})
+                    yield _sse({"type": "heartbeat"})
 
                 wait_sec = 0.5 if not got_any_token else 10.0
                 if not got_any_token and (now - start_time) > first_token_timeout:
