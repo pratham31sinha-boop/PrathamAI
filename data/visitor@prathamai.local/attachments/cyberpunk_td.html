@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pratham AI • Cyberpunk 2.5D Isometric Tower Defense</title>
+<style>
+  :root {
+    --bg: #070913;
+    --neon-cyan: #06b6d4;
+    --neon-pink: #ec4899;
+    --neon-amber: #f59e0b;
+    --neon-green: #10b981;
+    --panel-bg: rgba(13, 19, 33, 0.85);
+    --border-glow: rgba(6, 182, 212, 0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  body {
+    background: radial-gradient(circle at 50% 30%, #151c38, var(--bg));
+    color: #f1f5f9;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #game-wrapper {
+    position: relative;
+    width: 1060px;
+    height: 680px;
+    max-width: 98vw;
+    max-height: 96vh;
+    background: #02040a;
+    border-radius: 20px;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.9), 0 0 50px rgba(6, 182, 212, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+  }
+
+  /* HUD Overlays */
+  .hud-element {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .top-bar {
+    top: 14px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .brand-badge {
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--border-glow);
+    padding: 8px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .brand-badge span { color: var(--neon-cyan); }
+  
+  .stats-cluster {
+    display: flex;
+    gap: 12px;
+  }
+  .stat-pill {
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
+  .stat-pill.credits { color: #fde047; border-color: rgba(253, 224, 71, 0.3); }
+  .stat-pill.lives { color: #f43f5e; border-color: rgba(244, 63, 94, 0.3); }
+  .stat-pill.wave { color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
+
+  /* Control Panel Bottom */
+  .bottom-hud {
+    bottom: 16px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: auto;
+    z-index: 15;
+  }
+  .towers-deck {
+    display: flex;
+    gap: 10px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 10px 14px;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  }
+  .tower-card {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 10px 14px;
+    min-width: 110px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .tower-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 8px 25px rgba(6, 182, 212, 0.35);
+  }
+  .tower-card.selected {
+    background: rgba(6, 182, 212, 0.2);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+  }
+  .tower-card .t-icon { font-size: 20px; }
+  .tower-card .t-name { font-size: 12px; font-weight: 800; color: #f8fafc; }
+  .tower-card .t-cost { font-size: 11px; font-weight: 700; color: #fde047; }
+
+  .actions-cluster {
+    display: flex;
+    gap: 10px;
+  }
+  .btn-action {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: white;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-action:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 8px 30px rgba(14, 165, 233, 0.7);
+  }
+  .btn-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Upgrade / Sell Modal Popup */
+  .inspect-card {
+    position: absolute;
+    top: 75px;
+    right: 20px;
+    width: 220px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-glow);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+    z-index: 25;
+  }
+  .inspect-title { font-weight: 800; font-size: 14px; color: var(--neon-cyan); }
+  .inspect-stats { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .inspect-btns { display: flex; gap: 8px; }
+  .btn-sub {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .btn-upgrade { background: #10b981; color: white; }
+  .btn-sell { background: #ef4444; color: white; }
+  .btn-sub:hover { filter: brightness(1.2); }
+
+  /* Audio Mute Button */
+  .sound-btn {
+    pointer-events: auto;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    transition: 0.2s;
+  }
+  .sound-btn:hover { background: rgba(51, 65, 85, 0.9); }
+
+  /* Game Over Banner */
+  .center-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(11, 17, 32, 0.94);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glow);
+    padding: 30px 45px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 50;
+    pointer-events: auto;
+  }
+  .center-banner.show { display: flex; transform: translate(-50%, -50%) scale(1); }
+  .banner-title { font-size: 32px; font-weight: 900; }
+  .banner-title.defeat { color: #f43f5e; text-shadow: 0 0 20px rgba(244, 63, 94, 0.6); }
+  .banner-title.victory { color: #10b981; text-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
+</style>
+</head>
+<body>
+
+<div id="game-wrapper">
+  <canvas id="tdCanvas" width="1060" height="680"></canvas>
+
+  <!-- Top Bar Stats -->
+  <div class="hud-element top-bar">
+    <div class="brand-badge">
+      ⚡ <span>PRATHAM AI</span> • CYBERPUNK 2.5D TD
+    </div>
+    <div class="stats-cluster">
+      <div class="stat-pill credits">💰 <span id="valCredits">450</span> ₡</div>
+      <div class="stat-pill lives">❤️ <span id="valLives">20</span> LIVES</div>
+      <div class="stat-pill wave">🌊 WAVE <span id="valWave">1</span> / 15</div>
+      <div class="sound-btn" id="btnAudioToggle" title="Toggle Synthesized Audio">🔊</div>
+    </div>
+  </div>
+
+  <!-- Inspect / Upgrade Card -->
+  <div class="inspect-card" id="inspectCard">
+    <div class="inspect-title" id="inspectTitle">Laser Turret (Lv. 1)</div>
+    <div class="inspect-stats" id="inspectStats">
+      Damage: 18 • Range: 140<br>
+      Fire Rate: 3.5/s • Beam DPS
+    </div>
+    <div class="inspect-btns">
+      <button class="btn-sub btn-upgrade" id="btnUpgrade">Upgrade (120₡)</button>
+      <button class="btn-sub btn-sell" id="btnSell">Sell (60₡)</button>
+    </div>
+  </div>
+
+  <!-- Bottom Command Deck -->
+  <div class="bottom-hud">
+    <div class="towers-deck">
+      <div class="tower-card selected" data-type="laser" onclick="selectTowerType('laser')">
+        <div class="t-icon">⚡</div>
+        <div class="t-name">LASER BEAM</div>
+        <div class="t-cost">100 ₡</div>
+      </div>
+      <div class="tower-card" data-type="emp" onclick="selectTowerType('emp')">
+        <div class="t-icon">❄️</div>
+        <div class="t-name">EMP FREEZER</div>
+        <div class="t-cost">160 ₡</div>
+      </div>
+      <div class="tower-card" data-type="plasma" onclick="selectTowerType('plasma')">
+        <div class="t-icon">💥</div>
+        <div class="t-name">PLASMA MORTAR</div>
+        <div class="t-cost">220 ₡</div>
+      </div>
+    </div>
+
+    <div class="actions-cluster">
+      <button class="btn-action" id="btnStartWave" onclick="startNextWave()">
+        <span>▶ START WAVE</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Defeat / Victory Modal -->
+  <div class="center-banner" id="centerBanner">
+    <div class="banner-title defeat" id="bannerTitle">SYSTEM OVERRUN</div>
+    <div style="font-size:14px; color:#94a3b8;" id="bannerDesc">The cyber-core was compromised by enemy drones.</div>
+    <button class="btn-action" style="margin: 10px auto 0;" onclick="restartGame()">
+      <span>🔄 RESTART SIMULATION</span>
+    </button>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   Pratham AI - Cyberpunk 2.5D Isometric Tower Defense Engine
+   Created by Pratham Sinha & team under Akriti & Aditi Aishwaryam's supervision
+   ========================================================================= */
+
+const canvas = document.getElementById('tdCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- Audio Synthesizer (Web Audio API) ---
+let audioCtx = null;
+let soundEnabled = true;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playSynthesizedSound(type) {
+  if (!soundEnabled) return;
+  initAudio();
+  if (!audioCtx) return;
+
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  if (type === 'laser') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.12);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.12);
+  } else if (type === 'emp') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(260, now + 0.25);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  } else if (type === 'plasma') {
+    // Rumble explosion
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.35);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.35);
+  } else if (type === 'build') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.setValueAtTime(659, now + 0.08);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  } else if (type === 'hit') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(120, now);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+}
+
+document.getElementById('btnAudioToggle').addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  document.getElementById('btnAudioToggle').innerText = soundEnabled ? '🔊' : '🔇';
+});
+
+// --- Isometric Grid Configurations ---
+const GRID_COLS = 10;
+const GRID_ROWS = 10;
+const TILE_W = 68;
+const TILE_H = 34;
+const ORIGIN_X = canvas.width / 2;
+const ORIGIN_Y = 140;
+
+function gridToIso(c, r) {
+  const x = ORIGIN_X + (c - r) * (TILE_W / 2);
+  const y = ORIGIN_Y + (c + r) * (TILE_H / 2);
+  return { x, y };
+}
+
+function isoToGrid(screenX, screenY) {
+  const dx = screenX - ORIGIN_X;
+  const dy = screenY - ORIGIN_Y;
+  const col = Math.floor((dx / (TILE_W / 2) + dy / (TILE_H / 2)) / 2);
+  const row = Math.floor((dy / (TILE_H / 2) - dx / (TILE_W / 2)) / 2);
+  return { col, row };
+}
+
+// 0: Build tile, 1: Winding Cyber Path, 2: Cyber Core (End), 3: Portal (Start)
+const PATH_WAYPOINTS = [
+  { c: 0, r: 1 },
+  { c: 6, r: 1 },
+  { c: 6, r: 4 },
+  { c: 2, r: 4 },
+  { c: 2, r: 7 },
+  { c: 8, r: 7 },
+  { c: 8, r: 9 }
+];
+
+let gridMap = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(0));
+
+// Carve path
+function carvePath() {
+  for (let i = 0; i < PATH_WAYPOINTS.length - 1; i++) {
+    const p1 = PATH_WAYPOINTS[i];
+    const p2 = PATH_WAYPOINTS[i + 1];
+    let currC = p1.c;
+    let currR = p1.r;
+    gridMap[currR][currC] = 1;
+    while (currC !== p2.c || currR !== p2.r) {
+      if (currC < p2.c) currC++;
+      else if (currC > p2.c) currC--;
+      else if (currR < p2.r) currR++;
+      else if (currR > p2.r) currR--;
+      gridMap[currR][currC] = 1;
+    }
+  }
+}
+carvePath();
+
+// --- Game State ---
+let credits = 450;
+let lives = 20;
+let wave = 1;
+const MAX_WAVES = 15;
+let waveActive = false;
+let waveSpawnTimer = 0;
+let enemiesToSpawn = [];
+let selectedTowerType = 'laser';
+let hoveredTile = { col: -1, row: -1 };
+let inspectedTower = null;
+
+const TOWERS_DEF = {
+  laser: { name: 'LASER BEAM', cost: 100, range: 135, damage: 1.8, fireRate: 30, color: '#06b6d4', icon: '⚡' },
+  emp: { name: 'EMP FREEZER', cost: 160, range: 110, damage: 0.6, slow: 0.45, fireRate: 40, color: '#38bdf8', icon: '❄️' },
+  plasma: { name: 'PLASMA MORTAR', cost: 220, range: 165, damage: 45, splash: 55, fireRate: 75, color: '#f59e0b', icon: '💥' }
+};
+
+let towers = [];
+let enemies = [];
+let projectiles = [];
+let particles = [];
+let laserBeams = [];
+let animTick = 0;
+
+// UI Selection
+function selectTowerType(type) {
+  selectedTowerType = type;
+  document.querySelectorAll('.tower-card').forEach(c => {
+    c.classList.toggle('selected', c.getAttribute('data-type') === type);
+  });
+  closeInspect();
+}
+
+function updateHUD() {
+  document.getElementById('valCredits').innerText = Math.floor(credits);
+  document.getElementById('valLives').innerText = lives;
+  document.getElementById('valWave').innerText = wave;
+}
+
+// --- Enemy Classes ---
+class Enemy {
+  constructor(type, hpMult=1.0) {
+    this.type = type;
+    this.wpIndex = 0;
+    this.c = PATH_WAYPOINTS[0].c;
+    this.r = PATH_WAYPOINTS[0].r;
+    const pos = gridToIso(this.c, this.r);
+    this.x = pos.x;
+    this.y = pos.y;
+    
+    if (type === 'boss') {
+      this.maxHp = 950 * hpMult;
+      this.speed = 0.55;
+      this.bounty = 140;
+      this.radius = 18;
+      this.color = '#f43f5e';
+    } else if (type === 'speed') {
+      this.maxHp = 120 * hpMult;
+      this.speed = 1.6;
+      this.bounty = 25;
+      this.radius = 9;
+      this.color = '#facc15';
+    } else {
+      this.maxHp = 220 * hpMult;
+      this.speed = 1.0;
+      this.bounty = 35;
+      this.radius = 12;
+      this.color = '#a855f7';
+    }
+    this.hp = this.maxHp;
+    this.slowTimer = 0;
+  }
+
+  update() {
+    if (this.slowTimer > 0) {
+      this.slowTimer--;
+    }
+    const currentSpeed = (this.slowTimer > 0 ? this.speed * 0.5 : this.speed);
+
+    // Waypoint Navigation
+    const targetWp = PATH_WAYPOINTS[this.wpIndex + 1];
+    if (!targetWp) {
+      // Reached core!
+      lives -= (this.type === 'boss' ? 5 : 1);
+      updateHUD();
+      playSynthesizedSound('hit');
+      if (lives <= 0) triggerGameOver(false);
+      return false;
+    }
+
+    const targetPos = gridToIso(targetWp.c, targetWp.r);
+    const dx = targetPos.x - this.x;
+    const dy = targetPos.y - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < currentSpeed) {
+      this.x = targetPos.x;
+      this.y = targetPos.y;
+      this.wpIndex++;
+      if (this.wpIndex >= PATH_WAYPOINTS.length - 1) {
+        lives -= (this.type === 'boss' ? 5 : 1);
+        updateHUD();
+        playSynthesizedSound('hit');
+        if (lives <= 0) triggerGameOver(false);
+        return false;
+      }
+    } else {
+      this.x += (dx / dist) * currentSpeed;
+      this.y += (dy / dist) * currentSpeed;
+    }
+
+    return this.hp > 0;
+  }
+
+  draw() {
+    // 2.5D Drone Body
+    ctx.save();
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y + 4, this.radius * 1.2, this.radius * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hover bob
+    const hover = Math.sin(animTick * 6 + this.x) * 4;
+    const cy = this.y - 12 + hover;
+
+    // Glowing Drone Mesh
+    ctx.fillStyle = this.color;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    if (this.type === 'boss') {
+      // Mecha Boss Box
+      ctx.roundRect(this.x - this.radius, cy - this.radius, this.radius * 2, this.radius * 2, 6);
+    } else {
+      ctx.arc(this.x, cy, this.radius, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // Eye Core
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(this.x, cy, this.radius * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // HP Bar
+    const barW = this.radius * 2.4;
+    const barH = 4;
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(this.x - barW / 2, cy - this.radius - 8, barW, barH);
+    ctx.fillStyle = (this.hp / this.maxHp > 0.4) ? '#10b981' : '#f43f5e';
+    ctx.fillRect(this.x - barW / 2, cy - this.radius - 8, (this.hp / this.maxHp) * barW, barH);
+
+    ctx.restore();
+  }
+}
+
+// --- Tower Class ---
+class Tower {
+  constructor(c, r, type) {
+    this.c = c;
+    this.r = r;
+    const pos = gridToIso(c, r);
+    this.x = pos.x;
+    this.y = pos.y;
+    this.type = type;
+    this.level = 1;
+    this.cooldown = 0;
+    this.barrelAngle = 0;
+
+    const base = TOWERS_DEF[type];
+    this.cost = base.cost;
+    this.range = base.range;
+    this.damage = base.damage;
+    this.fireRate = base.fireRate;
+  }
+
+  upgrade() {
+    this.level++;
+    this.damage *= 1.45;
+    this.range *= 1.12;
+    this.fireRate = Math.max(12, Math.floor(this.fireRate * 0.9));
+  }
+
+  update() {
+    if (this.cooldown > 0) this.cooldown--;
+
+    // Target priority: enemy closest to destination
+    let target = null;
+    let maxProgress = -1;
+
+    for (const e of enemies) {
+      const dist = Math.hypot(e.x - this.x, e.y - (this.y - 15));
+      if (dist <= this.range) {
+        const progress = e.wpIndex * 1000 - Math.hypot(e.x - this.x, e.y - this.y);
+        if (progress > maxProgress) {
+          maxProgress = progress;
+          target = e;
+        }
+      }
+    }
+
+    if (target) {
+      this.barrelAngle = Math.atan2(target.y - this.y, target.x - this.x);
+
+      if (this.cooldown <= 0) {
+        if (this.type === 'laser') {
+          // Continuous laser burst
+          target.hp -= this.damage;
+          laserBeams.push({ x1: this.x, y1: this.y - 20, x2: target.x, y2: target.y - 10, color: '#06b6d4' });
+          playSynthesizedSound('laser');
+          this.cooldown = 4;
+        } else if (this.type === 'emp') {
+          // Pulse shock
+          target.hp -= this.damage;
+          target.slowTimer = 60;
+          for (let i = 0; i < 8; i++) {
+            particles.push(new Particle(target.x, target.y - 10, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, '#38bdf8', 15));
+          }
+          playSynthesizedSound('emp');
+          this.cooldown = this.fireRate;
+        } else if (this.type === 'plasma') {
+          // Mortar projectile
+          projectiles.push(new Projectile(this.x, this.y - 24, target, this.damage, this.range));
+          this.cooldown = this.fireRate;
+        }
+      }
+    }
+  }
+
+  draw() {
+    ctx.save();
+    // 2.5D Isometric Tower Extrusion
+    const twH = 24 + this.level * 4;
+
+    // Platform Base
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.ellipse(this.x, this.y, TILE_W * 0.38, TILE_H * 0.38, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tower Column
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.rect(this.x - 12, this.y - twH, 24, twH);
+    ctx.fill();
+
+    // Neon Accent Struts
+    ctx.fillStyle = TOWERS_DEF[this.type].color;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(this.x - 14, this.y - twH + 4, 3, twH - 4);
+    ctx.fillRect(this.x + 11, this.y - twH + 4, 3, twH - 4);
+
+    // Rotating Turret Head
+    ctx.translate(this.x, this.y - twH);
+    ctx.rotate(this.barrelAngle);
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.arc(0, 0, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Turret Barrel
+    ctx.fillStyle = TOWERS_DEF[this.type].color;
+    ctx.fillRect(0, -3, 16, 6);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+}
+
+// --- Projectiles & FX ---
+class Projectile {
+  constructor(x, y, target, damage) {
+    this.x = x;
+    this.y = y;
+    this.target = target;
+    this.damage = damage;
+    this.speed = 5.5;
+  }
+
+  update() {
+    const dx = this.target.x - this.x;
+    const dy = (this.target.y - 12) - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < this.speed || this.target.hp <= 0) {
+      // Area Blast
+      playSynthesizedSound('plasma');
+      for (const e of enemies) {
+        if (Math.hypot(e.x - this.x, e.y - this.y) < 60) {
+          e.hp -= this.damage;
+        }
+      }
+      for (let i = 0; i < 18; i++) {
+        particles.push(new Particle(this.x, this.y, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, '#f59e0b', 24));
+      }
+      return false;
+    }
+
+    this.x += (dx / dist) * this.speed;
+    this.y += (dy / dist) * this.speed;
+    return true;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.fillStyle = '#f59e0b';
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+class Particle {
+  constructor(x, y, vx, vy, color, life) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.color = color;
+    this.life = life;
+    this.maxLife = life;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life--;
+    return this.life > 0;
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.life / this.maxLife;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// --- Wave Controller ---
+function startNextWave() {
+  if (waveActive) return;
+  waveActive = true;
+  document.getElementById('btnStartWave').disabled = true;
+
+  const count = 8 + wave * 3;
+  const hpMult = 1 + (wave - 1) * 0.35;
+  enemiesToSpawn = [];
+
+  for (let i = 0; i < count; i++) {
+    const isBoss = (wave % 5 === 0 && i === count - 1);
+    const isFast = (!isBoss && i % 4 === 0);
+    const type = isBoss ? 'boss' : (isFast ? 'speed' : 'drone');
+    enemiesToSpawn.push({ type, hpMult, delay: i * 35 });
+  }
+  waveSpawnTimer = 0;
+}
+
+function updateWave() {
+  if (!waveActive) return;
+
+  if (enemiesToSpawn.length > 0) {
+    waveSpawnTimer++;
+    if (waveSpawnTimer >= enemiesToSpawn[0].delay) {
+      const eData = enemiesToSpawn.shift();
+      enemies.push(new Enemy(eData.type, eData.hpMult));
+    }
+  } else if (enemies.length === 0) {
+    // Wave Cleared!
+    waveActive = false;
+    credits += 80 + wave * 25;
+    wave++;
+    updateHUD();
+    document.getElementById('btnStartWave').disabled = false;
+    playSynthesizedSound('build');
+
+    if (wave > MAX_WAVES) {
+      triggerGameOver(true);
+    }
+  }
+}
+
+// --- Canvas Interactions (Mouse & Touch) ---
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  hoveredTile = isoToGrid(mx, my);
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  const { col, row } = isoToGrid(mx, my);
+
+  if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return;
+
+  // Check if tower exists at tile
+  const existing = towers.find(t => t.c === col && t.r === row);
+  if (existing) {
+    inspectTower(existing);
+    return;
+  }
+
+  // Build new tower
+  if (gridMap[row][col] === 0) {
+    const def = TOWERS_DEF[selectedTowerType];
+    if (credits >= def.cost) {
+      credits -= def.cost;
+      towers.push(new Tower(col, row, selectedTowerType));
+      gridMap[row][col] = 4; // Occupied
+      updateHUD();
+      playSynthesizedSound('build');
+      for (let i = 0; i < 15; i++) {
+        const pos = gridToIso(col, row);
+        particles.push(new Particle(pos.x, pos.y, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, def.color, 20));
+      }
+    }
+  }
+});
+
+function inspectTower(t) {
+  inspectedTower = t;
+  const card = document.getElementById('inspectCard');
+  card.style.display = 'flex';
+  const def = TOWERS_DEF[t.type];
+  document.getElementById('inspectTitle').innerText = `${def.name} (Lv. ${t.level})`;
+  document.getElementById('inspectStats').innerHTML = `
+    Damage: ${t.damage.toFixed(1)} • Range: ${Math.floor(t.range)}<br>
+    Speed: ${(60 / t.fireRate).toFixed(1)}/s • Level ${t.level}
+  `;
+  const upCost = Math.round(t.cost * 0.8 * t.level);
+  const sellRefund = Math.round((t.cost + upCost * (t.level - 1)) * 0.6);
+
+  document.getElementById('btnUpgrade').innerText = `Upgrade (${upCost}₡)`;
+  document.getElementById('btnSell').innerText = `Sell (${sellRefund}₡)`;
+
+  document.getElementById('btnUpgrade').onclick = () => {
+    if (credits >= upCost) {
+      credits -= upCost;
+      t.upgrade();
+      updateHUD();
+      inspectTower(t);
+      playSynthesizedSound('build');
+    }
+  };
+
+  document.getElementById('btnSell').onclick = () => {
+    credits += sellRefund;
+    gridMap[t.r][t.c] = 0;
+    towers = towers.filter(tw => tw !== t);
+    updateHUD();
+    closeInspect();
+    playSynthesizedSound('hit');
+  };
+}
+
+function closeInspect() {
+  inspectedTower = null;
+  document.getElementById('inspectCard').style.display = 'none';
+}
+
+function triggerGameOver(victory) {
+  const banner = document.getElementById('centerBanner');
+  const title = document.getElementById('bannerTitle');
+  const desc = document.getElementById('bannerDesc');
+  banner.classList.add('show');
+  if (victory) {
+    title.innerText = 'CYBERSPACE SECURED';
+    title.className = 'banner-title victory';
+    desc.innerText = 'All hostile waves eliminated! Core network restored.';
+  } else {
+    title.innerText = 'SYSTEM OVERRUN';
+    title.className = 'banner-title defeat';
+    desc.innerText = 'Hostile drones penetrated the firewall core.';
+  }
+}
+
+function restartGame() {
+  credits = 450;
+  lives = 20;
+  wave = 1;
+  waveActive = false;
+  enemies = [];
+  towers = [];
+  projectiles = [];
+  particles = [];
+  gridMap = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(0));
+  carvePath();
+  closeInspect();
+  updateHUD();
+  document.getElementById('btnStartWave').disabled = false;
+  document.getElementById('centerBanner').classList.remove('show');
+}
+
+// --- Render Loop ---
+function drawTile(c, r, fill, stroke) {
+  const { x, y } = gridToIso(c, r);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x, y - TILE_H / 2);
+  ctx.lineTo(x + TILE_W / 2, y);
+  ctx.lineTo(x, y + TILE_H / 2);
+  ctx.lineTo(x - TILE_W / 2, y);
+  ctx.closePath();
+
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function render() {
+  animTick += 0.03;
+
+  // Background
+  ctx.fillStyle = '#050711';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Distant glowing matrix grid
+  ctx.strokeStyle = 'rgba(6, 182, 212, 0.06)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  // Draw Isometric Grid
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < GRID_COLS; c++) {
+      const type = gridMap[r][c];
+      let fill = 'rgba(15, 23, 42, 0.7)';
+      let stroke = 'rgba(255, 255, 255, 0.08)';
+
+      if (type === 1) {
+        // Glowing Circuit Path
+        fill = 'rgba(30, 41, 59, 0.9)';
+        stroke = 'rgba(6, 182, 212, 0.4)';
+      }
+
+      // Hover Highlight
+      if (c === hoveredTile.col && r === hoveredTile.row) {
+        fill = (type === 0) ? 'rgba(6, 182, 212, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+        stroke = '#06b6d4';
+      }
+
+      drawTile(c, r, fill, stroke);
+
+      // Pulse line along path
+      if (type === 1) {
+        const { x, y } = gridToIso(c, r);
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.2)';
+        ctx.beginPath();
+        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Draw Range Ring for Hover or Inspected Tower
+  if (inspectedTower) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(inspectedTower.x, inspectedTower.y, inspectedTower.range, inspectedTower.range * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  } else if (hoveredTile.col >= 0 && hoveredTile.col < GRID_COLS && hoveredTile.row >= 0 && hoveredTile.row < GRID_ROWS) {
+    if (gridMap[hoveredTile.row][hoveredTile.col] === 0) {
+      const pos = gridToIso(hoveredTile.col, hoveredTile.row);
+      const def = TOWERS_DEF[selectedTowerType];
+      ctx.save();
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.ellipse(pos.x, pos.y, def.range, def.range * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Update & Draw Towers
+  for (const t of towers) {
+    t.update();
+    t.draw();
+  }
+
+  // Draw Lasers
+  for (const b of laserBeams) {
+    ctx.save();
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(b.x1, b.y1);
+    ctx.lineTo(b.x2, b.y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  laserBeams = [];
+
+  // Update & Draw Enemies (Depth sorted by Y)
+  enemies.sort((a, b) => a.y - b.y);
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    const alive = e.update();
+    if (!alive) {
+      if (e.hp <= 0) {
+        credits += e.bounty;
+        updateHUD();
+        for (let p = 0; p < 12; p++) {
+          particles.push(new Particle(e.x, e.y - 10, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, e.color, 20));
+        }
+      }
+      enemies.splice(i, 1);
+    } else {
+      e.draw();
+    }
+  }
+
+  // Update & Draw Projectiles
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    if (!projectiles[i].update()) projectiles.splice(i, 1);
+    else projectiles[i].draw();
+  }
+
+  // Update & Draw Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    if (!particles[i].update()) particles.splice(i, 1);
+    else particles[i].draw();
+  }
+
+  updateWave();
+  requestAnimationFrame(render);
+}
+
+// Start
+updateHUD();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
