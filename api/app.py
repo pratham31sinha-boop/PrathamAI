@@ -3278,16 +3278,32 @@ class _WarmAntigravitySession:
                 start_time = time.time()
                 timeout = 25.0
 
-                # Immediate live indicator so user's screen is never blank
+                # Spoken initial thought + live step indicator (matches 842kb chronological flow)
                 p_low = (prompt or "").lower()
                 if any(k in p_low for k in ["game", "pokemon", "ash", "rpg", "arcade"]):
-                    yield _sse({"type": "agent_step", "step_type": "writing", "label": "Making game...", "timestamp": time.time()})
+                    intro = "Command accepted. Initializing game workspace and inspecting assets..."
+                    step_lbl = "Making game..."
                 elif any(k in p_low for k in ["pdf", "document", "report"]):
-                    yield _sse({"type": "agent_step", "step_type": "writing", "label": "Generating PDF document...", "timestamp": time.time()})
+                    intro = "Command accepted. Preparing document compilation environment and inspecting templates..."
+                    step_lbl = "Generating PDF document..."
+                elif any(k in p_low for k in ["zip", "archive", "package", "bundle"]):
+                    intro = "Command accepted. Initializing archive workspace and validating package deliverables..."
+                    step_lbl = "Building archive package..."
                 elif any(k in p_low for k in ["html", "website", "web page", "webpage"]):
-                    yield _sse({"type": "agent_step", "step_type": "writing", "label": "Building web application...", "timestamp": time.time()})
+                    intro = "Command accepted. Inspecting project architecture and preparing web application components..."
+                    step_lbl = "Building web application..."
                 else:
-                    yield _sse({"type": "agent_step", "step_type": "planning", "label": "Inspecting project & planning...", "timestamp": time.time()})
+                    intro = "Command accepted. Analyzing project workspace and requirements..."
+                    step_lbl = "Inspecting project archive contents"
+
+                words = intro.split(" ")
+                for i, w in enumerate(words):
+                    chunk = w if i == len(words) - 1 else w + " "
+                    yield _sse({"type": "token", "text": chunk})
+                    time.sleep(0.012)
+                got_any_token = True
+
+                yield _sse({"type": "agent_step", "step_type": "planning", "label": step_lbl, "timestamp": time.time()})
 
                 while True:
                     now = time.time()
@@ -5624,7 +5640,7 @@ def _get_messages(conv_id):
             pass
     return []
 
-def _append_message(conv_id, role, content, files=None, thinking_summary=None):
+def _append_message(conv_id, role, content, files=None, thinking_summary=None, flow=None):
     if not conv_id:
         return
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -5638,6 +5654,8 @@ def _append_message(conv_id, role, content, files=None, thinking_summary=None):
         msg["files"] = files
     if thinking_summary:
         msg["thinking_summary"] = thinking_summary
+    if flow:
+        msg["flow"] = flow
 
     conv = _get_convo(conv_id)
     if not conv:
@@ -6410,15 +6428,16 @@ def chat_stream():
             export_ext_hint = "pdf"
         else:
             export_ext_hint = _detect_generic_extension_intent(export_intent_check_message)
-        full_reply_parts = []                                                                 
+        full_reply_parts = []
+        turn_flow = []
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
         total_blocks_seen = 0
-        session_file_contents = {}                                                                
-        _images_emitted_this_turn = set()                                                       
+        session_file_contents = {}
+        _images_emitted_this_turn = set()
         _produced_filenames_this_turn = set()
         _produced_files_this_turn = []
-        _promise_correction_attempted = False                                             
+        _promise_correction_attempted = False
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
             for chunk in _do_stream(working_messages):
@@ -6429,6 +6448,10 @@ def chat_stream():
                             token_text = payload["text"]
                             iteration_text_parts.append(token_text)
                             full_reply_parts.append(token_text)
+                            if turn_flow and turn_flow[-1].get("type") == "text":
+                                turn_flow[-1]["text"] += token_text
+                            else:
+                                turn_flow.append({"type": "text", "text": token_text})
                             accumulated_so_far = "".join(iteration_text_parts)
                             if "- [" in accumulated_so_far or "* [" in accumulated_so_far:
                                 _last_newline = accumulated_so_far.rfind("\n")
@@ -6443,6 +6466,13 @@ def chat_stream():
                                     elif is_done and not _tasks_emitted[task_id]:
                                         _tasks_emitted[task_id] = True
                                         yield _sse({"type": "task_completed", "task_id": task_id, "ok": True})
+                        elif payload.get("type") == "agent_step":
+                            turn_flow.append({
+                                "type": "step",
+                                "step_type": payload.get("step_type", "thinking"),
+                                "label": payload.get("label", ""),
+                                "detail": payload.get("detail", "")
+                            })
                         elif payload.get("type") == "complete":
                             continue                                                               
                 except Exception:
@@ -6892,7 +6922,9 @@ def chat_stream():
 
         # Finalize and persist assistant message with all produced files
         if assistant_response:
-            _append_message(conv_id, "assistant", assistant_response, files=_produced_files_this_turn)
+            elapsed_sec = max(1, int(time.time() - turn_start_time))
+            elapsed_str = f"Worked for {elapsed_sec // 60}m {elapsed_sec % 60}s" if elapsed_sec >= 60 else f"Worked for {elapsed_sec}s"
+            _append_message(conv_id, "assistant", assistant_response, files=_produced_files_this_turn, thinking_summary=elapsed_str, flow=turn_flow)
             current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
             log_entry = (

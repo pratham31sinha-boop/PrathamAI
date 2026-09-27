@@ -954,6 +954,15 @@
             overflow-y: visible;
             padding: 4px 0 12px 0;
         }
+        .flow-zone {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 6px;
+        }
+        .flow-zone.steps-collapsed .step-row {
+            display: none !important;
+        }
         .step-list {
             display: flex;
             flex-direction: column;
@@ -2547,6 +2556,8 @@
             // Reset thinking-wrap state so stale spinners don't persist
             _activeThinkingWrap = null;
             _activeStepList = null;
+            _activeDurationHeader = null;
+            removeTypingIndicator();
             clearAgentActivity();
             conversationViewportPanel.innerHTML = `
                 <div class="m-auto text-center py-12 space-y-2">
@@ -2965,57 +2976,30 @@
 
         let _activeStepList = null;
         let _activeThinkingWrap = null;
+        let _activeDurationHeader = null;
         function getThinkingWrap(wrapper) {
-            if (_activeThinkingWrap && wrapper.contains(_activeThinkingWrap)) return _activeThinkingWrap;
-            const wrap = document.createElement('div');
-            wrap.className = 'thinking-wrap';
-            const target = wrapper._processZone || wrapper;
-            wrap.innerHTML = `
-                <div class="thinking-header">
-                    <span class="tw-summary">Thinking...</span>
-                    <span class="tw-caret"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
-                </div>
-                <div class="thinking-body"></div>
-            `;
-            wrap.querySelector('.thinking-header').onclick = () => wrap.classList.toggle('expanded');
-            wrap._startedAt = performance.now();
-            wrap._summaryInterval = setInterval(() => {
-                if (wrap.classList.contains('done')) {
-                    clearInterval(wrap._summaryInterval);
-                    return;
-                }
-                const summary = wrap.querySelector('.tw-summary');
-                if (summary) {
-                    const elapsedMs = performance.now() - wrap._startedAt;
-                    summary.textContent = `Worked for ${_formatDuration(elapsedMs)}`;
-                }
-            }, 500);
-            target.appendChild(wrap);
-            _activeThinkingWrap = wrap;
-            _activeStepList = null;
-            return wrap;
+            if (wrapper && wrapper._durationHeader) return wrapper._durationHeader;
+            if (_activeDurationHeader) return _activeDurationHeader;
+            if (_activeThinkingWrap) return _activeThinkingWrap;
+            return wrapper || document.body;
         }
         function getStepList(wrapper) {
-            const wrap = getThinkingWrap(wrapper);
-            if (_activeStepList && wrap.contains(_activeStepList)) return _activeStepList;
-            const list = document.createElement('div');
-            list.className = 'step-list';
-            wrap.querySelector('.thinking-body').appendChild(list);
-            _activeStepList = list;
-            return list;
+            return (wrapper && (wrapper._flowZone || wrapper._processZone)) || wrapper;
         }
-        function _refreshThinkingSummary() {
-            if (!_activeThinkingWrap) return;
-            const summary = _activeThinkingWrap.querySelector('.tw-summary');
+        function _refreshThinkingSummary(wrapper) {
+            const header = (wrapper && wrapper._durationHeader) || _activeDurationHeader || _activeThinkingWrap;
+            if (!header) return;
+            const summary = header.querySelector('.tw-summary');
             if (!summary) return;
-            const elapsedMs = performance.now() - (_activeThinkingWrap._startedAt || performance.now());
+            const elapsedMs = performance.now() - (header._startedAt || performance.now());
             summary.textContent = `Worked for ${_formatDuration(elapsedMs)}`;
         }
         function addStep(wrapper, icon, text, isHead) {
-            const list = getStepList(wrapper);
+            const target = (wrapper && (wrapper._flowZone || wrapper._processZone)) || wrapper;
+            if (wrapper) wrapper._activeTextNode = null;
             // Deduplicate consecutive rows with identical text
-            const lastRow = list.querySelector('.step-row:last-of-type');
-            if (lastRow) {
+            const lastRow = target.querySelector('.step-row:last-of-type');
+            if (lastRow && target.lastElementChild === lastRow) {
                 const lastText = lastRow.querySelector('.step-text')?.textContent || '';
                 if (lastText.trim() === (text || '').trim()) {
                     return lastRow;
@@ -3026,7 +3010,7 @@
             let displayIcon = icon || '\u25CB';
             let iconClass = 'inspect';
             if (displayIcon === 'terminal' || displayIcon === '›_' || displayIcon === '$') {
-                displayIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>`;
+                displayIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
                 iconClass = 'terminal';
             } else if (displayIcon === 'search' || displayIcon === '🔍' || displayIcon === 'AI') {
                 displayIcon = `<span style="font-weight:700;font-size:11px;letter-spacing:-0.5px;">AI</span>`;
@@ -3052,9 +3036,10 @@
                     if (row._caretEl) row._caretEl.textContent = isExp ? '⌃' : '⌄';
                 }
             };
-            list.appendChild(row);
+            target.appendChild(row);
             row._startedAt = performance.now();
-            _refreshThinkingSummary();
+            _refreshThinkingSummary(wrapper);
+            pinnedAutoScroll();
             return row;
         }
         function setStepDetail(row, html) {
@@ -3087,32 +3072,26 @@
             _refreshThinkingSummary();
         }
         // Called once response is fully streamed: finishes any still-spinning step
-        // rows, updates the summary text, and collapses the thinking-wrap.
-        function finalizeThinkingWrap() {
-            if (!_activeThinkingWrap) return;
+        // rows and updates the summary badge.
+        function finalizeThinkingWrap(wrapper) {
             if (window._currentActiveStepRow) {
                 finishStep(window._currentActiveStepRow, true);
                 window._currentActiveStepRow = null;
             }
-            if (_activeThinkingWrap._summaryInterval) {
-                clearInterval(_activeThinkingWrap._summaryInterval);
-                _activeThinkingWrap._summaryInterval = null;
-            }
-            // Finish any step rows that never received an explicit finishStep call
-            if (_activeStepList) {
-                _activeStepList.querySelectorAll('.step-row').forEach(row => {
-                    finishStep(row, true);
-                });
-            }
-            // Collapse (don't remove) so the user can still expand it to inspect steps
-            _activeThinkingWrap.classList.remove('expanded');
-            _activeThinkingWrap.classList.add('done');
-            const summary = _activeThinkingWrap.querySelector('.tw-summary');
-            if (summary) {
-                const elapsedMs = _activeThinkingWrap._startedAt
-                    ? (performance.now() - _activeThinkingWrap._startedAt)
-                    : 1000;
-                summary.textContent = `Worked for ${_formatDuration(elapsedMs)}`;
+            const header = (wrapper && wrapper._durationHeader) || _activeDurationHeader || _activeThinkingWrap;
+            if (header) {
+                if (header._summaryInterval) {
+                    clearInterval(header._summaryInterval);
+                    header._summaryInterval = null;
+                }
+                header.classList.add('done');
+                const summary = header.querySelector('.tw-summary');
+                if (summary) {
+                    const elapsedMs = header._startedAt
+                        ? (performance.now() - header._startedAt)
+                        : 1000;
+                    summary.textContent = `Worked for ${_formatDuration(elapsedMs)}`;
+                }
             }
         }
         function renderUnifiedDiffHtml(unifiedDiff) {
@@ -3726,21 +3705,59 @@
         }
         function mountModelOutputTargetShell() {
             const containerNode = document.createElement('div');
-            containerNode.className = 'w-full flex flex-col items-start gap-1 msg-enter';
-            const processZone = document.createElement('div');
-            processZone.className = 'process-zone w-full flex flex-col gap-1';
-            processZone.style.maxWidth = '100%';
-            const answerZone = document.createElement('div');
-            answerZone.className = 'answer-zone w-full flex flex-col items-start gap-1.5';
+            containerNode.className = 'w-full flex flex-col items-start gap-1.5 msg-enter';
+
+            // Top duration badge: "Worked for 8m 40s ⌄" (matching 842kb header)
+            const durationHeader = document.createElement('div');
+            durationHeader.className = 'thinking-header agent-run-badge';
+            durationHeader.innerHTML = `
+                <span class="tw-summary">Thinking...</span>
+                <span class="tw-caret"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+            `;
+            durationHeader._startedAt = performance.now();
+            durationHeader._summaryInterval = setInterval(() => {
+                if (durationHeader.classList.contains('done')) {
+                    clearInterval(durationHeader._summaryInterval);
+                    return;
+                }
+                const summary = durationHeader.querySelector('.tw-summary');
+                if (summary) {
+                    const elapsedMs = performance.now() - durationHeader._startedAt;
+                    summary.textContent = `Worked for ${_formatDuration(elapsedMs)}`;
+                }
+            }, 500);
+
+            // Flow zone: mixed chronological text and step items (unified flow, no categorization!)
+            const flowZone = document.createElement('div');
+            flowZone.className = 'flow-zone w-full flex flex-col items-start gap-1.5';
+            flowZone.style.maxWidth = '100%';
+
+            durationHeader.onclick = () => {
+                const isCollapsed = flowZone.classList.toggle('steps-collapsed');
+                const caret = durationHeader.querySelector('.tw-caret');
+                if (caret) caret.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+
+            // Files zone: downloadable deliverables at bottom
             const filesZone = document.createElement('div');
             filesZone.className = 'files-zone w-full flex flex-col gap-2 mt-2';
             filesZone.style.maxWidth = '100%';
-            containerNode.appendChild(processZone);
-            containerNode.appendChild(answerZone);
+
+            containerNode.appendChild(durationHeader);
+            containerNode.appendChild(flowZone);
             containerNode.appendChild(filesZone);
-            containerNode._processZone = processZone;
-            containerNode._answerZone = answerZone;
+
+            containerNode._durationHeader = durationHeader;
+            containerNode._flowZone = flowZone;
+            containerNode._processZone = flowZone;
+            containerNode._answerZone = flowZone;
             containerNode._filesZone = filesZone;
+            containerNode._activeTextNode = null;
+            containerNode._streamFlowItems = [];
+
+            _activeDurationHeader = durationHeader;
+            _activeThinkingWrap = durationHeader;
+
             conversationViewportPanel.appendChild(containerNode);
             pinnedAutoScroll();
             return containerNode;
@@ -3753,7 +3770,7 @@
             btn.className = 'copy-msg-btn text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] px-1 cursor-pointer bg-transparent border-none self-start transition-colors';
             btn.innerText = '⧉ Copy';
             btn.onclick = (e) => copyPlainText(fullText, e.currentTarget);
-            (wrapper._answerZone || wrapper).appendChild(btn);
+            (wrapper._flowZone || wrapper._answerZone || wrapper).appendChild(btn);
         }
         function mountTypingIndicator() {
             const row = document.createElement('div');
@@ -4138,6 +4155,17 @@
                                 window._currentActiveStepRow = null;
                             }
 
+                            if (modelWrapper) {
+                                modelWrapper._activeTextNode = null;
+                                if (!modelWrapper._streamFlowItems) modelWrapper._streamFlowItems = [];
+                                modelWrapper._streamFlowItems.push({
+                                    type: 'step',
+                                    step_type: payload.step_type,
+                                    label: currentLabel,
+                                    detail: payload.detail || ''
+                                });
+                            }
+
                             let stepIcon = '\u25CB';
                             if (payload.step_type === 'searching') stepIcon = 'search';
                             else if (payload.step_type === 'executing') stepIcon = 'terminal';
@@ -4169,27 +4197,34 @@
                                 modelWrapper = mountModelOutputTargetShell();
                                 setAgentActivity('Writing response...');
                             }
-                            if (_activeThinkingWrap) {
-                                _activeThinkingWrap.classList.remove('expanded');
-                                _activeThinkingWrap.classList.add('done');
-                                if (_activeThinkingWrap._summaryInterval) {
-                                    clearInterval(_activeThinkingWrap._summaryInterval);
-                                    _activeThinkingWrap._summaryInterval = null;
-                                }
-                                const sm = _activeThinkingWrap.querySelector('.tw-summary');
-                                if (sm) {
-                                    const elapsedMs = performance.now() - (_activeThinkingWrap._startedAt || performance.now());
-                                    sm.textContent = `Worked for ${_formatDuration(elapsedMs)}`;
-                                }
+                            if (modelWrapper._durationHeader && !modelWrapper._durationHeader.classList.contains('done')) {
+                                _refreshThinkingSummary(modelWrapper);
                             }
+
+                            // Interleaved text segment: if no active text segment in flow, start one!
+                            if (!modelWrapper._activeTextNode) {
+                                const textNode = document.createElement('div');
+                                textNode.className = 'assistant-text-segment text-[var(--text)] text-[14px] px-1 py-1 max-w-[92%] sm:max-w-[85%] leading-[1.7] break-words';
+                                textNode._rawText = '';
+                                (modelWrapper._flowZone || modelWrapper).appendChild(textNode);
+                                modelWrapper._activeTextNode = textNode;
+                            }
+
+                            modelWrapper._activeTextNode._rawText += payload.text;
+                            modelWrapper._activeTextNode.innerHTML = renderLightMarkdown(modelWrapper._activeTextNode._rawText);
+                            renderMathIfAvailable(modelWrapper._activeTextNode);
+
                             fullText += payload.text;
                             _streamReceivedOutput = true;
-                            // Paint each SSE delta as soon as it arrives. This keeps the answer visibly
-                            // live while Qwen is still generating instead of waiting for the full response.
-                            if (modelWrapper) {
-                                updateAssistantMessageDOM(modelWrapper, fullText);
-                                pinnedAutoScroll();
+
+                            if (!modelWrapper._streamFlowItems) modelWrapper._streamFlowItems = [];
+                            const lastFlow = modelWrapper._streamFlowItems[modelWrapper._streamFlowItems.length - 1];
+                            if (lastFlow && lastFlow.type === 'text') {
+                                lastFlow.text += payload.text;
+                            } else {
+                                modelWrapper._streamFlowItems.push({ type: 'text', text: payload.text });
                             }
+                            pinnedAutoScroll();
                             renderQueued = false;
                         } else if (payload.type === 'error') {
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
@@ -4442,14 +4477,18 @@
                     const cache = loadConvCache();
                     const existingMsgs = cache.messages[currentConversationId] || [];
                     existingMsgs.push({ role: 'user', content: message });
-                    const twSummary = _activeThinkingWrap ? (_activeThinkingWrap.querySelector('.tw-summary')?.textContent || '') : '';
+                    const twSummary = (modelWrapper && modelWrapper._durationHeader) ? (modelWrapper._durationHeader.querySelector('.tw-summary')?.textContent || '') : (_activeThinkingWrap ? (_activeThinkingWrap.querySelector('.tw-summary')?.textContent || '') : '');
                     if (fullText) {
                         existingMsgs.push({
                             role: 'assistant',
                             content: fullText,
                             files: _turnFiles.slice(),
-                            thinking_summary: twSummary
+                            thinking_summary: twSummary,
+                            flow: (modelWrapper && modelWrapper._streamFlowItems) ? modelWrapper._streamFlowItems.slice() : []
                         });
+                    }
+                    if (modelWrapper && fullText) {
+                        appendAssistantCopyButton(modelWrapper, fullText);
                     }
                     cacheConversationMessages(currentConversationId, existingMsgs);
                 }
@@ -4527,17 +4566,39 @@
         let _hasRunPageBootRestore = false;
         function renderAssistantMessageBlock(wrapper, log) {
             if (!wrapper || !log) return;
-            // Restore thinking wrap if thinking summary is present
+            // Restore thinking badge if thinking summary is present
             const summaryText = log.thinking_summary || log.thinkingSummary;
             if (summaryText) {
                 const wrap = getThinkingWrap(wrapper);
-                wrap.classList.remove('expanded');
                 wrap.classList.add('done');
                 const summary = wrap.querySelector('.tw-summary');
                 if (summary) summary.textContent = summaryText;
             }
-            // Render markdown text and segments
-            updateAssistantMessageDOM(wrapper, log.content || '');
+
+            // If log has saved chronological flow items, render them in exact order!
+            if (Array.isArray(log.flow) && log.flow.length > 0) {
+                const target = wrapper._flowZone || wrapper._answerZone || wrapper;
+                log.flow.forEach(item => {
+                    if (item.type === 'text' && item.text) {
+                        const node = document.createElement('div');
+                        node.className = 'assistant-text-segment text-[var(--text)] text-[14px] px-1 py-1 max-w-[92%] sm:max-w-[85%] leading-[1.7] break-words';
+                        node.innerHTML = renderLightMarkdown(item.text);
+                        renderMathIfAvailable(node);
+                        target.appendChild(node);
+                    } else if (item.type === 'step') {
+                        let stepIcon = '\u25CB';
+                        if (item.step_type === 'searching') stepIcon = 'search';
+                        else if (item.step_type === 'executing') stepIcon = 'terminal';
+                        else stepIcon = 'inspect';
+                        const row = addStep(wrapper, stepIcon, item.label || item.text || '');
+                        finishStep(row, true);
+                        if (item.detail) setStepDetail(row, item.detail);
+                    }
+                });
+            } else {
+                // Fallback for older messages: render markdown text and segments
+                updateAssistantMessageDOM(wrapper, log.content || '');
+            }
             appendAssistantCopyButton(wrapper, log.content || '');
 
             // Restore deliverable files belonging to THIS specific message
