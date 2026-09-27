@@ -251,6 +251,172 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 12px; line-height: 1.5; white-space: pre-wrap; box-sizing: border-box;
         }
+        /* ── Execution Chain Card ── */
+        .execution-chain-card {
+            width: 100%;
+            margin: 6px 0;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--panel);
+            overflow: hidden;
+            transition: border-color .2s ease, box-shadow .2s ease;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+            position: relative;
+        }
+        .dark-mode .execution-chain-card {
+            background: #232220;
+            border-color: rgba(255,255,255,0.08);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .execution-chain-card:hover {
+            border-color: var(--accent);
+        }
+        .execution-chain-card.running {
+            border-color: rgba(194,97,63,0.4);
+        }
+        .dark-mode .execution-chain-card.running {
+            border-color: rgba(217,119,87,0.45);
+        }
+        .ecc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 9px 12px;
+            cursor: pointer;
+            user-select: none;
+            background: var(--panel-2);
+            transition: background .15s ease;
+        }
+        .ecc-header:hover {
+            background: var(--hover);
+        }
+        .ecc-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1;
+        }
+        .ecc-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            background: var(--terminal-bg);
+            color: var(--terminal-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: ui-monospace, monospace;
+            font-weight: 700;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .ecc-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .ecc-title {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ecc-subtitle {
+            font-size: 10.5px;
+            color: var(--text-dim);
+        }
+        .ecc-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .ecc-status-pill {
+            font-size: 10.5px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ecc-status-pill.running {
+            background: rgba(194,97,63,0.12);
+            color: var(--accent);
+            animation: pulseGlow 1.5s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.65; transform: scale(0.97); }
+        }
+        .ecc-status-pill.done {
+            background: rgba(74,222,128,0.12);
+            color: #10b981;
+        }
+        .ecc-status-pill.failed {
+            background: rgba(239,68,68,0.12);
+            color: #ef4444;
+        }
+        .ecc-caret {
+            color: var(--text-dim);
+            transition: transform .2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .execution-chain-card.expanded .ecc-caret {
+            transform: rotate(180deg);
+        }
+        .ecc-body {
+            display: none;
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+            background: var(--terminal-bg);
+            color: var(--terminal-text);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11.5px;
+            line-height: 1.5;
+            max-height: 380px;
+            overflow-y: auto;
+        }
+        .execution-chain-card.expanded .ecc-body {
+            display: block;
+        }
+        .ecc-section-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #83827d;
+            margin-bottom: 4px;
+        }
+        .ecc-cmd-block {
+            margin: 0 0 8px 0;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #e2e8f0;
+            border-left: 2px solid var(--accent);
+        }
+        .ecc-out-block {
+            margin: 0;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #4ade80;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+        .ecc-out-block.has-err {
+            color: #f87171;
+        }
         .md-code-block {
             position: relative; margin: 10px 0;
             border-radius: 10px; overflow: hidden;
@@ -839,9 +1005,41 @@
             color: var(--text-dim, #94a3b8);
         }
         @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-        .step-row .step-elapsed,
-        .step-row .step-detail {
+        .step-row .step-elapsed {
             display: none !important;
+        }
+        .step-row .step-detail {
+            display: none;
+            margin-left: 24px;
+            margin-top: 4px;
+            padding: 8px 10px;
+            background: var(--terminal-bg);
+            color: var(--terminal-text);
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.45;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            border: 1px solid var(--border);
+        }
+        .step-row.expanded .step-detail {
+            display: block !important;
+        }
+        .step-row {
+            cursor: pointer;
+            border-radius: 6px;
+            padding: 3px 6px;
+            transition: background .15s ease;
+        }
+        .step-row:hover {
+            background: var(--hover);
+        }
+        .step-row .step-main {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
         }
         .step-thought {
             margin: 8px 0 10px 0;
@@ -2614,30 +2812,131 @@
             }
             return card;
         }
-        function mountActivityCard(wrapper, kind, label, detailHtml) {
-            const icon = kind === 'terminal' ? '›_' : (kind === 'edited' ? '✎' : '+');
+        function buildExecutionChainCard(lang, code, closed, ordinal) {
             const card = document.createElement('div');
-            card.className = 'activity-card';
+            card.className = `execution-chain-card ${closed ? 'done' : 'running'} msg-enter`;
+            card.dataset.ordinal = ordinal;
+            card.dataset.lang = lang;
+            card._code = code || '';
+            card._lang = lang;
+
+            const langLower = (lang || 'bash').toLowerCase();
+            const isPy = langLower === 'python' || langLower === 'py';
+            const iconText = isPy ? 'py' : '›_';
+
+            const lines = (code || '').trim().split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+            const firstLine = lines.length > 0 ? lines[0].slice(0, 55) : '';
+            const titleText = firstLine ? `$ ${firstLine}` : (isPy ? 'Execute Python script' : 'Run bash command');
+
             card.innerHTML = `
-                <div class="ac-header">
-                    <span class="ac-caret">▶</span>
-                    <span class="ac-icon">${icon}</span>
-                    <span class="ac-label">${label}</span>
-                    <span class="ac-status running">Running…</span>
+                <div class="ecc-header">
+                    <div class="ecc-left">
+                        <span class="ecc-icon">${iconText}</span>
+                        <div class="ecc-info">
+                            <span class="ecc-title">${sanitizeOutputText(titleText)}</span>
+                            <span class="ecc-subtitle">${isPy ? 'Python script' : 'Terminal bash command'} · tap to view cmd & output</span>
+                        </div>
+                    </div>
+                    <div class="ecc-right">
+                        <span class="ecc-status-pill ${closed ? 'done' : 'running'}">
+                            ${closed ? '✓ Completed' : '● Running…'}
+                        </span>
+                        <span class="ecc-caret">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </span>
+                    </div>
                 </div>
-                <div class="ac-body"></div>
+                <div class="ecc-body">
+                    <div class="ecc-section-title">Command:</div>
+                    <pre class="ecc-cmd-block"><code class="ecc-code-text">${sanitizeOutputText(code || '')}</code></pre>
+                    <div class="ecc-output-section" style="display:none;">
+                        <div class="ecc-section-title">Terminal Output:</div>
+                        <pre class="ecc-out-block"><code class="ecc-out-text"></code></pre>
+                    </div>
+                </div>
             `;
-            card.querySelector('.ac-body').innerHTML = detailHtml || '';
-            card.querySelector('.ac-header').onclick = () => card.classList.toggle('expanded');
-            (wrapper._processZone || wrapper).appendChild(card);
+
+            const header = card.querySelector('.ecc-header');
+            if (header) {
+                header.onclick = (e) => {
+                    e.stopPropagation();
+                    card.classList.toggle('expanded');
+                };
+            }
+
             return card;
         }
-        function finishActivityCard(card, ok, detailHtml) {
+
+        function updateExecutionChainCard(card, code, closed) {
             if (!card) return;
-            const status = card.querySelector('.ac-status');
-            status.className = 'ac-status ' + (ok ? 'done' : 'failed');
-            status.innerText = ok ? '✓ Completed' : '✗ Failed';
-            if (detailHtml !== undefined) card.querySelector('.ac-body').innerHTML = detailHtml;
+            card._code = code;
+            const codeElem = card.querySelector('.ecc-code-text');
+            if (codeElem) {
+                codeElem.textContent = code || '';
+            }
+            const lines = (code || '').trim().split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+            const firstLine = lines.length > 0 ? lines[0].slice(0, 55) : '';
+            if (firstLine) {
+                const titleEl = card.querySelector('.ecc-title');
+                if (titleEl) titleEl.textContent = `$ ${firstLine}`;
+            }
+            const pill = card.querySelector('.ecc-status-pill');
+            if (closed && card.classList.contains('running')) {
+                card.classList.remove('running');
+                card.classList.add('done');
+                if (pill && !card._hasOutput) {
+                    pill.className = 'ecc-status-pill done';
+                    pill.textContent = '✓ Executed';
+                }
+            }
+        }
+
+        function finishExecutionChainCard(card, stdout, stderr, returncode, ranCode) {
+            if (!card) return;
+            card._hasOutput = true;
+            card.classList.remove('running');
+            card.classList.add(returncode === 0 ? 'done' : 'failed');
+
+            if (ranCode) {
+                card._code = ranCode;
+                const codeElem = card.querySelector('.ecc-code-text');
+                if (codeElem) codeElem.textContent = ranCode;
+                const lines = ranCode.trim().split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+                const firstLine = lines.length > 0 ? lines[0].slice(0, 55) : '';
+                if (firstLine) {
+                    const titleEl = card.querySelector('.ecc-title');
+                    if (titleEl) titleEl.textContent = `$ ${firstLine}`;
+                }
+            }
+
+            const pill = card.querySelector('.ecc-status-pill');
+            if (pill) {
+                if (returncode === 0) {
+                    pill.className = 'ecc-status-pill done';
+                    pill.textContent = '✓ Exit 0';
+                } else {
+                    pill.className = 'ecc-status-pill failed';
+                    pill.textContent = `✗ Exit ${returncode}`;
+                }
+            }
+
+            const outSection = card.querySelector('.ecc-output-section');
+            const outBlock = card.querySelector('.ecc-out-block');
+            const outText = card.querySelector('.ecc-out-text');
+
+            if (outSection && outBlock && outText) {
+                let output = '';
+                if (stdout) output += stdout;
+                if (stderr) {
+                    output += (output ? '\n' : '') + stderr;
+                    outBlock.classList.add('has-err');
+                } else {
+                    outBlock.classList.remove('has-err');
+                }
+                if (!output) output = '(ran successfully — no output)';
+                outText.textContent = output;
+                outSection.style.display = 'block';
+            }
         }
         function _formatDuration(ms) {
             const totalSec = Math.max(1, Math.round(ms / 1000));
@@ -2719,19 +3018,40 @@
                 displayIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
                 iconClass = 'inspect';
             }
-            row.innerHTML = `<span class="step-icon ${iconClass}">${displayIcon}</span><span class="step-text">${text}</span>`;
+            row.innerHTML = `
+                <div class="step-main">
+                    <span class="step-icon ${iconClass}">${displayIcon}</span>
+                    <span class="step-text">${text}</span>
+                    <span class="step-caret" style="margin-left:auto;font-size:10px;opacity:0.6;display:none;">⌄</span>
+                </div>
+                <div class="step-detail" style="display:none;"></div>
+            `;
+            row._detailEl = row.querySelector('.step-detail');
+            row._caretEl = row.querySelector('.step-caret');
+            row.onclick = () => {
+                if (row._detailEl && row._detailEl.innerHTML.trim()) {
+                    const isExp = row.classList.toggle('expanded');
+                    row._detailEl.style.display = isExp ? 'block' : 'none';
+                    if (row._caretEl) row._caretEl.textContent = isExp ? '⌃' : '⌄';
+                }
+            };
             list.appendChild(row);
             row._startedAt = performance.now();
             _refreshThinkingSummary();
             return row;
         }
-        // Attaches real backend output (actual stdout/stderr from terminal
-        // execution, or a real unified diff for an edit) to a step row so
-        // clicking it reveals genuine data instead of nothing.
         function setStepDetail(row, html) {
-            if (!row || !row._detailEl || !html) return;
+            if (!row || !html) return;
+            if (!row._detailEl) row._detailEl = row.querySelector('.step-detail');
+            if (!row._detailEl) {
+                row._detailEl = document.createElement('div');
+                row._detailEl.className = 'step-detail';
+                row.appendChild(row._detailEl);
+            }
             row._detailEl.innerHTML = html;
             row.classList.add('has-detail');
+            const caret = row.querySelector('.step-caret');
+            if (caret) caret.style.display = 'inline-block';
         }
         function finishStep(row, ok) {
             if (!row) return;
@@ -3118,6 +3438,7 @@
             }
             const target = wrapper._answerZone || wrapper;
             let fileOrdinal = 0;
+            let execOrdinal = 0;
             segments.forEach((seg, i) => {
                 let node = wrapper._segNodes[i];
                 if (seg.type === 'text') {
@@ -3219,12 +3540,17 @@
                     node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
                     renderMathIfAvailable(node);
                 } else if (['python', 'py', 'bash', 'sh', 'shell'].includes((seg.lang || '').toLowerCase())) {
-                    if (!node) {
-                        node = document.createElement('div');
-                        node.style.display = 'none';
-                        node.dataset.segType = 'suppressed-exec';
-                        (wrapper._processZone || wrapper).appendChild(node);
+                    execOrdinal += 1;
+                    if (!node || node.dataset.segType !== 'exec') {
+                        node = buildExecutionChainCard(seg.lang, seg.content, seg.closed, execOrdinal);
+                        node.dataset.segType = 'exec';
+                        (wrapper._answerZone || wrapper).appendChild(node);
                         wrapper._segNodes[i] = node;
+                        setAgentActivity(`Running ${seg.lang}...`);
+                        pushTerminalLog(`Executing ${seg.lang}...`);
+                    } else {
+                        updateExecutionChainCard(node, seg.content, seg.closed);
+                        if (!seg.closed) setAgentActivity(`Running ${seg.lang}...`);
                     }
                 } else {
                     if (!node || node.dataset.segType !== 'code') {
@@ -3896,10 +4222,15 @@
                             // subprocess execution, not simulated text.
                             _pendingTerminalOutputs[payload.ordinal] = payload;
                             if (modelWrapper) {
+                                const execCard = modelWrapper.querySelector(`.execution-chain-card[data-ordinal="${payload.ordinal}"]`)
+                                    || modelWrapper.querySelector(`.execution-chain-card.running`);
+                                if (execCard) {
+                                    finishExecutionChainCard(execCard, payload.stdout, payload.stderr, payload.returncode, payload.code);
+                                }
                                 const matchingCard = modelWrapper.querySelector(`.file-creation-card[data-ordinal="${payload.ordinal}"]`);
                                 if (matchingCard) {
                                     const statusText = matchingCard.querySelector('.fcc-status-text');
-                                    if (statusText) statusText.innerText = ok ? 'Executed ✓ — see background terminal' : 'Executed with errors — see terminal';
+                                    if (statusText) statusText.innerText = ok ? 'Executed ✓' : 'Executed with errors';
                                 }
                             }
                         } else if (payload.type === 'planning_started') {
@@ -4009,11 +4340,18 @@
                             if (realOutput) {
                                 const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
                                 let detailHtml = '';
-                                if (realOutput.code) detailHtml += `<div><strong>ran:</strong>\n${esc(realOutput.code).slice(0, 2000)}</div>`;
-                                if (realOutput.stdout) detailHtml += `<div style="margin-top:6px;"><strong>stdout:</strong>\n${esc(realOutput.stdout).slice(0, 2000)}</div>`;
-                                if (realOutput.stderr) detailHtml += `<div style="margin-top:6px;color:#f87171;"><strong>stderr:</strong>\n${esc(realOutput.stderr).slice(0, 2000)}</div>`;
+                                if (realOutput.code) detailHtml += `<div><strong>Command:</strong>\n${esc(realOutput.code).slice(0, 2000)}</div>`;
+                                if (realOutput.stdout) detailHtml += `<div style="margin-top:6px;"><strong>Stdout:</strong>\n${esc(realOutput.stdout).slice(0, 2000)}</div>`;
+                                if (realOutput.stderr) detailHtml += `<div style="margin-top:6px;color:#f87171;"><strong>Stderr:</strong>\n${esc(realOutput.stderr).slice(0, 2000)}</div>`;
                                 if (!detailHtml) detailHtml = '<span>(no output)</span>';
                                 setStepDetail(row, detailHtml);
+                                if (modelWrapper) {
+                                    const execCard = modelWrapper.querySelector(`.execution-chain-card[data-ordinal="${payload.ordinal}"]`)
+                                        || modelWrapper.querySelector(`.execution-chain-card.running`);
+                                    if (execCard) {
+                                        finishExecutionChainCard(execCard, realOutput.stdout, realOutput.stderr, realOutput.returncode, realOutput.code);
+                                    }
+                                }
                                 delete _pendingTerminalOutputs[payload.ordinal];
                             }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);

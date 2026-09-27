@@ -6253,10 +6253,14 @@ def chat_stream():
                         "timestamp": time.time()
                     })
                 else:
+                    first_line = (code.strip().split("\n")[0] if code.strip() else "").strip()
+                    if len(first_line) > 60:
+                        first_line = first_line[:57] + "..."
+                    label_desc = f": {first_line}" if first_line else "..."
                     yield _sse({
                         "type": "agent_step",
                         "step_type": "executing",
-                        "label": f"Validating & executing in terminal ({lang.upper()})...",
+                        "label": f"Running {lang}{label_desc}",
                         "timestamp": time.time()
                     })
                 _pre_exec_files = set()
