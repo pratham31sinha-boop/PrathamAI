@@ -269,6 +269,14 @@ def serve_index():
         return send_file(index_file)
     return jsonify({"error": "index.html not found"}), 404
 
+@app.route("/PrathamAI.apk", methods=["GET"])
+@app.route("/download/apk", methods=["GET"])
+def serve_apk_download():
+    apk_path = os.path.join(WORKSPACE_ROOT, "mobile", "PrathamAI.apk")
+    if os.path.isfile(apk_path):
+        return send_file(apk_path, as_attachment=True, download_name="PrathamAI.apk", mimetype="application/vnd.android.package-archive")
+    return jsonify({"error": "APK not found"}), 404
+
 @app.route("/<path:filename>", methods=["GET"])
 def serve_static_file(filename):
     if filename.startswith(("api", "auth", "terminal", "conversations", "worker", "education", "config", "chat-stream")):

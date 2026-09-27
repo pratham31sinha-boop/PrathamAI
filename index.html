@@ -497,6 +497,14 @@
             position: fixed; inset: 0; z-index: 70; display: flex; align-items: center;
             justify-content: center; background: var(--bg);
             flex-direction: column; gap: 16px;
+            animation: bootSplashAutoDismiss 1.2s cubic-bezier(.4,0,.2,1) 0.8s forwards;
+            pointer-events: none;
+            transition: opacity .3s ease;
+        }
+        @keyframes bootSplashAutoDismiss {
+            0% { opacity: 1; visibility: visible; }
+            99% { opacity: 0; visibility: hidden; }
+            100% { opacity: 0; visibility: hidden; display: none !important; }
         }
         #boot-splash .boot-spinner {
             width: 34px; height: 34px; border-radius: 999px;
@@ -1573,6 +1581,18 @@
     <div id="cursor-dot"></div>
     <div id="cursor-ring"></div>
     <div id="boot-splash"><div class="boot-logo-reveal">P</div><div class="boot-label">Pratham AI</div></div>
+    <script>
+        (function() {
+            var splash = document.getElementById('boot-splash');
+            window.prathamDismissSplash = function() {
+                if (splash && splash.style.display !== 'none') {
+                    splash.style.opacity = '0';
+                    setTimeout(function() { splash.style.display = 'none'; }, 250);
+                }
+            };
+            setTimeout(window.prathamDismissSplash, 1200);
+        })();
+    </script>
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
         <div class="glass rounded-3xl p-8 max-w-sm w-full text-center premium-card space-y-6" style="border-radius:24px;">
             <div class="w-16 h-16 mx-auto rounded-2xl accent-gradient flex items-center justify-center text-white text-2xl font-bold shadow-lg overflow-hidden" style="box-shadow:0 8px 32px rgba(194,97,63,.3);"><img src="" data-brand-logo style="display:none;" class="w-full h-full object-cover" onerror="this.style.display='none'" alt="Pratham AI"><span data-brand-logo-fallback>P</span></div>
@@ -2261,8 +2281,20 @@
             }
         }
         function enterAppShell() {
-            loginOverlay.style.display = 'none';
-            appShell.style.display = 'flex';
+            if (loginOverlay) {
+                loginOverlay.classList.add('hidden');
+                loginOverlay.style.display = 'none';
+            }
+            if (appShell) {
+                appShell.classList.remove('hidden');
+                appShell.style.display = 'flex';
+            }
+            if (typeof window.prathamDismissSplash === 'function') {
+                window.prathamDismissSplash();
+            } else {
+                const boot = document.getElementById('boot-splash');
+                if (boot) boot.style.display = 'none';
+            }
             synchronizeConversationsHistoryIndex();
             refreshVipBadgeFromBackend();
             // The single Google authorization performed by the sign-in button
@@ -2480,11 +2512,12 @@
             }
             globalAuthorizationToken = `Bearer ${stored.credential}`;
             activeUserIdentityEmail = (stored.claims.email || '').toLowerCase();
-            try {
-                const response = await smartFetchRequest('/auth/refresh-check', {
-                    method: 'POST',
-                    headers: { 'Authorization': globalAuthorizationToken }
-                });
+            paintIdentityIntoShell(stored.claims);
+            enterAppShell();
+            smartFetchRequest('/auth/refresh-check', {
+                method: 'POST',
+                headers: { 'Authorization': globalAuthorizationToken }
+            }).then(async response => {
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.session_token) {
@@ -2492,9 +2525,7 @@
                         persistSessionLocally(data.session_token, stored.claims);
                     }
                 }
-            } catch (e) {}
-            paintIdentityIntoShell(stored.claims);
-            enterAppShell();
+            }).catch(() => {});
             return true;
         }
         function triggerHiddenVipFormPrompt() {
@@ -5794,18 +5825,16 @@
                 setTimeout(() => ripple.remove(), 600);
             });
         })();
-        window.addEventListener('DOMContentLoaded', async () => {
+        async function bootstrapPrathamAI() {
             SERVER_CONTEXT_HOST = resolvePrathamBackendOrigin();
-            try {
-                const health = await smartFetchRequest('/config/public', { method: 'GET', headers: { 'Accept': 'application/json' } });
-                if (health.ok) {
-                    pushTerminalLog('PrathamAI backend connected: ' + SERVER_CONTEXT_HOST);
-                } else {
-                    pushTerminalLog(`PrathamAI backend responded with HTTP ${health.status}`);
-                }
-            } catch (e) {
-                pushTerminalLog('PrathamAI backend connection check failed.');
-            }
+            // Non-blocking backend connectivity check
+            smartFetchRequest('/config/public', { method: 'GET', headers: { 'Accept': 'application/json' } })
+                .then(health => {
+                    if (health.ok) pushTerminalLog('PrathamAI backend connected: ' + SERVER_CONTEXT_HOST);
+                    else pushTerminalLog(`PrathamAI backend responded with HTTP ${health.status}`);
+                })
+                .catch(() => pushTerminalLog('PrathamAI backend connection check failed.'));
+
             const THEME_STORAGE_KEY = "prathamai_theme_pref";
             let savedTheme = null;
             try { savedTheme = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
@@ -5872,14 +5901,16 @@
             });
             setWorkbenchTab('preview');
             initWebSearchPreferenceFromStorage();
-            // ── Boot splash: cap at 1.5 s so logo is never slow to appear.
-            // The actual auth flow hides it normally; this is just a safety net
-            // so users never stare at a spinner if auth is slow.
-            const _bootHideMax = setTimeout(() => { bootSplash.style.display = 'none'; }, 1500);
+            
+            // Immediately restore session or show app shell
             const restored = await attemptSilentSessionRestore();
-            clearTimeout(_bootHideMax);
-            bootSplash.style.display = 'none';
+            if (typeof window.prathamDismissSplash === 'function') {
+                window.prathamDismissSplash();
+            } else if (bootSplash) {
+                bootSplash.style.display = 'none';
+            }
             if (!restored) {
+                loginOverlay.classList.remove('hidden');
                 loginOverlay.style.display = 'flex';
                 initializeGoogleOauthGate();
             }
@@ -5898,7 +5929,12 @@
                 _ham._sidebarWired = true;
                 _ham.addEventListener('click', openMobileSidebar);
             }
-        });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootstrapPrathamAI);
+        } else {
+            bootstrapPrathamAI();
+        }
     </script>
     <script>
     (function () {
