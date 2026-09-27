@@ -1,8 +1,8 @@
 <resources>
-    <style name="Theme.PrathamAI" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#2563eb</item>
-        <item name="colorPrimaryVariant">#1d4ed8</item>
-        <item name="colorOnPrimary">#ffffff</item>
+    <style name="Theme.PrathamAI" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">#2563eb</item>
+        <item name="android:colorPrimaryDark">#1d4ed8</item>
+        <item name="android:colorAccent">#c2613f</item>
         <item name="android:statusBarColor">#090d16</item>
         <item name="android:navigationBarColor">#090d16</item>
         <item name="android:windowBackground">#090d16</item>

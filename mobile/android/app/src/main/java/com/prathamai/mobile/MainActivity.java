@@ -11,36 +11,12 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ProgressBar;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AppCompatActivity;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
+    private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
     private WebView mWebView;
-    private ProgressBar mProgressBar;
     private ValueCallback<Uri[]> mFilePathCallback;
-
-    private final ActivityResultLauncher<Intent> mFilePickerLauncher =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                if (mFilePathCallback != null) {
-                    Uri[] results = null;
-                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        if (result.getData().getClipData() != null) {
-                            int count = result.getData().getClipData().getItemCount();
-                            results = new Uri[count];
-                            for (int i = 0; i < count; i++) {
-                                results[i] = result.getData().getClipData().getItemAt(i).getUri();
-                            }
-                        } else if (result.getData().getData() != null) {
-                            results = new Uri[]{result.getData().getData()};
-                        }
-                    }
-                    mFilePathCallback.onReceiveValue(results);
-                    mFilePathCallback = null;
-                }
-            });
 
     @Override
     @SuppressLint("SetJavaScriptEnabled")
@@ -94,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
 
                 Intent intent = fileChooserParams.createIntent();
                 try {
-                    mFilePickerLauncher.launch(intent);
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
                 } catch (Exception e) {
                     mFilePathCallback = null;
                     return false;
@@ -105,6 +81,27 @@ public class MainActivity extends AppCompatActivity {
 
         // Load bundled standalone offline web application
         mWebView.loadUrl("file:///android_asset/index.html");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE && mFilePathCallback != null) {
+            Uri[] results = null;
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount();
+                    results = new Uri[count];
+                    for (int i = 0; i < count; i++) {
+                        results[i] = data.getClipData().getItemAt(i).getUri();
+                    }
+                } else if (data.getData() != null) {
+                    results = new Uri[]{data.getData()};
+                }
+            }
+            mFilePathCallback.onReceiveValue(results);
+            mFilePathCallback = null;
+        }
     }
 
     @Override

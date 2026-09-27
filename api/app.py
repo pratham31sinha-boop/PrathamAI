@@ -3843,6 +3843,13 @@ def _stream_antigravity_cli(messages, state=None):
         "```editfile:<filename>\n<<<<<<< SEARCH\n...\n=======\n...\n>>>>>>> REPLACE\n```\n"
         "or ```createfile:<filename>\n<code here>\n``` or run shell/python commands.\n"
         "Always ensure working deliverables are provided ready to run or download.\n\n"
+        "CONCISE, WELL-STRUCTURED RESPONSES & ANTI-REPETITION (CRITICAL):\n"
+        "- Keep responses clean, well-structured, concise, and straight to the point.\n"
+        "- DO NOT give unsolicited background essays, long educational lectures, or explanations of basic concepts unless the user explicitly asks for an explanation or tutorial.\n"
+        "- NEVER repeat information. Never recite the same list, manifest, table, or descriptions multiple times in one response.\n"
+        "- When creating or updating files (such as a ZIP archive or code project): briefly confirm what was built/updated in 2-3 lines, run the bash command, and deliver the final file. DO NOT print out multiple duplicate tables of file contents or redundant manifests.\n\n"
+        "LIVE WEB SEARCH CAPABILITY:\n"
+        "- You have full web search capability. If the user asks to search the web, look up latest news, or find current online information, you can use ```search\n<query>\n``` or write clean Python/curl commands to retrieve live web data.\n\n"
         "DELIVERABLES & FILE PRESENTATION:\n"
         "- Present text and terminal execution steps first. At the very end of your response, present the final files.\n"
         "- Deliver ONLY the necessary file(s) requested by the user. If the user asks for a game/website, deliver the single clean .html file. If the user asks for a zip, deliver the .zip. Avoid generating extra unneeded files."
@@ -6351,7 +6358,11 @@ def chat_stream():
                 "data/education library (it may be empty, or the pypdf package may not be installed "
                 "on the server). Say so plainly instead of guessing."
             )
-    elif not web_search_disabled and re.search(r"@web\b", message, flags=re.IGNORECASE):
+    elif not web_search_disabled and (
+        re.search(r"@web\b", message, flags=re.IGNORECASE)
+        or re.search(r"\b(?:search (?:the )?(?:web|online|internet|google)|look up online|browse the web|latest news|today's news|current events|live updates)\b", message, flags=re.IGNORECASE)
+        or _CURRENT_EVENTS_INTENT_RE.search(outgoing_user_message or message)
+    ):
         _emit_searching_step = True
         outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", outgoing_user_message).strip()
         outgoing_user_message = re.sub(r"@web\b", "", outgoing_user_message, flags=re.IGNORECASE).strip()

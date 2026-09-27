@@ -7,4 +7,7 @@ attachments/
 .env
 data/sessions/
 data/*/sessions/
+data/conversations/
+mobile/android/app/build_manual/
+*.idsig
 
