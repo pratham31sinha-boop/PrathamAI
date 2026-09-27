@@ -474,3 +474,32 @@ The ZIP package has been created and verified using Python's native `zipfile` en
 Both the standalone game and the ZIP archive are ready to run or download in your workspace.
 
 ================================================================================
+
+=== 2026-09-27T07:38:31.508215+00:00 ===
+User: Edit this zip file and add readme.md
+Pratham AI:
+Command accepted. Inspecting the existing `pokemon_25d.zip` archive and performing an in-place addition of `README.md` while preserving `pokemon_25d.html`.
+
+Let's check the current archive, create `README.md`, and update the zip file in-place using Python.
+I have updated [`pokemon_25d.zip`](file:///tmp/pokemon_25d.zip) in-place and added `README.md` while preserving the existing `pokemon_25d.html` file.
+
+### Updated Archive Contents:
+```text
+Archive: /tmp/pokemon_25d.zip (Integrity: ALL FILES OK)
+ - pokemon_25d.html (32,111 bytes)
+ - README.md        (3,147 bytes)
+```
+
+### What `README.md` Covers:
+1. **Overview & Credits**: Created by Pratham AI under the supervision of Akriti & Aditi Aishwaryam.
+2. **Visuals & Engine**: 2.5D isometric stadium platforms, procedural lighting, dynamic character shading for Pikachu & Charizard, and real-time elemental particle shaders.
+3. **Gameplay Mechanics**: 
+   - **Battle Mode**: Moves (`Thunderbolt`, `Volt Tackle`, `Quick Attack`, `Iron Tail`), STAB calculation, critical hits, and enemy AI counter-attacks.
+   - **Overworld Mode**: Isometric walking controls (`W`/`A`/`S`/`D` / Arrow keys), companion Pikachu following, and tall grass wild battle triggers.
+4. **Controls Guide & Launch Instructions**: Zero-dependency browser instructions for running the game.
+
+### Deliverables:
+- **Downloadable Archive**: [`pokemon_25d.zip`](file:///tmp/pokemon_25d.zip)
+- **Standalone Game**: [`pokemon_25d.html`](file:///tmp/pokemon_25d.html)
+
+================================================================================
