@@ -769,87 +769,148 @@ def _extract_export_content(assistant_text: str) -> str:
     return _strip_export_filler(assistant_text)
 def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverable_name: str = "content.txt", extra_files: list = None) -> bytes:
     """
-    Robust zip archiver:
-    1. Extracts any ```createfile:<filename> blocks in the response.
-    2. Extracts any code blocks (e.g. ```html, ```python) under proper filenames (e.g. index.html, chess.html, script.py).
-    3. Adds any conversation or attached files passed via `extra_files`.
-    4. Adds any real files created in `workdir`.
-    5. Fallback writes deliverable text if no individual code files exist.
+    In-place zip updater and archiver:
+    1. If an existing .zip file already exists in workdir or extra_files, it opens and unpacks
+       all existing files so nothing from previous turns in the same session is lost.
+    2. Applies in-place updates from ```editfile:<filename> blocks (search/replace diffs)
+       to any matching files already in the archive.
+    3. Adds or updates files from ```createfile:<filename> blocks.
+    4. Adds or updates files from code blocks in assistant reply.
+    5. Adds any non-zip files found in workdir.
+    6. Writes the merged archive back into workdir and returns the zip bytes.
+    This guarantees that if the user asks to add or edit a file in a zip made earlier in the same
+    session, the existing zip is opened and updated in-place without rebuilding from scratch.
     """
+    archive_files = {}  # arcname -> bytes
+
+    # 1. Search for existing zip in workdir or extra_files to preserve all prior contents
+    existing_zip_path = None
+    if workdir and os.path.isdir(workdir):
+        for fname in os.listdir(workdir):
+            if fname.lower().endswith(".zip"):
+                existing_zip_path = os.path.join(workdir, fname)
+                break
+
+    if existing_zip_path and os.path.isfile(existing_zip_path):
+        try:
+            with zipfile.ZipFile(existing_zip_path, "r") as ezf:
+                for member in ezf.infolist():
+                    if not member.is_dir():
+                        archive_files[member.filename] = ezf.read(member.filename)
+        except Exception as ze:
+            print(f"[ZIP_INPLACE] could not read existing zip {existing_zip_path}: {ze}")
+
+    # Also check extra_files for any previous files or zip
+    if extra_files:
+        for ef in extra_files:
+            ef_name = ef.get("filename")
+            ef_content = ef.get("content")
+            if ef_name and ef_name.lower().endswith(".zip") and not archive_files:
+                try:
+                    ef_raw = ef.get("raw_bytes")
+                    if not ef_raw and isinstance(ef_content, str):
+                        ef_raw = ef_content.encode("utf-8", errors="ignore")
+                    if ef_raw:
+                        with zipfile.ZipFile(io.BytesIO(ef_raw), "r") as ezf:
+                            for member in ezf.infolist():
+                                if not member.is_dir():
+                                    archive_files[member.filename] = ezf.read(member.filename)
+                except Exception:
+                    pass
+            elif ef_name and ef_content:
+                c_bytes = ef_content.encode("utf-8") if isinstance(ef_content, str) else ef_content
+                if ef_name not in archive_files:
+                    archive_files[ef_name] = c_bytes
+
+    # 2. Apply in-place edits from ```editfile: blocks
+    for filename, pairs in _extract_editfile_blocks(assistant_text):
+        target_name = None
+        for k in archive_files:
+            if k == filename or os.path.basename(k) == os.path.basename(filename):
+                target_name = k
+                break
+        if target_name:
+            try:
+                old_text = archive_files[target_name].decode("utf-8", errors="replace")
+                new_text, _warn = _apply_editfile_edits(old_text, pairs)
+                archive_files[target_name] = new_text.encode("utf-8")
+            except Exception as ee:
+                print(f"[ZIP_INPLACE_EDIT_ERR] {ee}")
+
+    # 3. Apply ```createfile: blocks (new files or complete replacements)
+    for filename, content in _extract_createfile_blocks(assistant_text):
+        if filename and content.strip():
+            archive_files[filename] = content.encode("utf-8")
+
+    # 4. Extract code blocks from assistant reply
+    for lang_match, code_match in _CODE_BLOCK_RE.findall(assistant_text):
+        if (lang_match or "").lower() in ("finaldoc", "bash", "sh", "shell", "web", "websearch", "search"):
+            continue
+        if (lang_match or "").lower().startswith("createfile:"):
+            continue
+        code_text = code_match.strip()
+        if len(code_text) < 40:
+            continue
+        l_low = (lang_match or "").lower()
+        fname = "deliverable.html" if "html" in l_low or "<html" in code_text.lower() else (
+            "script.py" if "python" in l_low or "py" in l_low else (
+                "app.js" if "javascript" in l_low or "js" in l_low else "code.txt"
+            )
+        )
+        title_m = re.search(r"<title>([^<]+)</title>", code_text, re.IGNORECASE)
+        tmp_m = re.search(r"/tmp/([\w\.\-]+)", assistant_text)
+        if tmp_m and tmp_m.group(1):
+            fname = tmp_m.group(1)
+        elif title_m and title_m.group(1):
+            raw_t = re.sub(r"[^\w\s\-]", "", title_m.group(1)).strip().lower()
+            clean_t = re.sub(r"[\s\-]+", "_", raw_t)[:30]
+            if clean_t:
+                fname = f"{clean_t}.html"
+        elif any(k in assistant_text.lower() for k in ["stumble", "stumble guys"]):
+            fname = "stumble_guys.html"
+        elif "chess" in assistant_text.lower() or (deliverable_name and "chess" in deliverable_name.lower()):
+            fname = "chess.html" if fname.endswith(".html") else "chess.py" if fname.endswith(".py") else fname
+        archive_files[fname] = code_text.encode("utf-8")
+
+    # 5. Add all individual files from workdir (excluding .zip files)
+    if workdir and os.path.isdir(workdir):
+        for root, _dirs, files in os.walk(workdir):
+            for fname in files:
+                if fname.lower().endswith(".zip"):
+                    continue
+                full_path = os.path.join(root, fname)
+                arcname = os.path.relpath(full_path, workdir)
+                try:
+                    with open(full_path, "rb") as rf:
+                        archive_files[arcname] = rf.read()
+                except Exception:
+                    continue
+
+    # 6. Fallback if completely empty
+    if not archive_files:
+        deliverable_text = _extract_export_content(assistant_text)
+        target_name = deliverable_name or "deliverable.txt"
+        archive_files[target_name] = deliverable_text.encode("utf-8")
+
+    # 7. Write the merged zip archive
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        added_names = set()
-
-        # 1. Any createfile blocks in assistant reply
-        for filename, content in _extract_createfile_blocks(assistant_text):
-            if filename and filename not in added_names and content.strip():
-                zf.writestr(filename, content)
-                added_names.add(filename)
-                added_names.add(os.path.basename(filename))
-
-        # 2. Any code blocks in assistant reply
-        for lang_match, code_match in _CODE_BLOCK_RE.findall(assistant_text):
-            if (lang_match or "").lower() == "finaldoc":
-                continue
-            if (lang_match or "").lower().startswith("createfile:"):
-                continue
-            code_text = code_match.strip()
-            if len(code_text) < 40:
-                continue
-            l_low = (lang_match or "").lower()
-            fname = "deliverable.html" if "html" in l_low or "<html" in code_text.lower() else (
-                "script.py" if "python" in l_low or "py" in l_low else (
-                    "app.js" if "javascript" in l_low or "js" in l_low else "code.txt"
-                )
-            )
-            title_m = re.search(r"<title>([^<]+)</title>", code_text, re.IGNORECASE)
-            tmp_m = re.search(r"/tmp/([\w\.\-]+)", assistant_text)
-            if tmp_m and tmp_m.group(1):
-                fname = tmp_m.group(1)
-            elif title_m and title_m.group(1):
-                raw_t = re.sub(r"[^\w\s\-]", "", title_m.group(1)).strip().lower()
-                clean_t = re.sub(r"[\s\-]+", "_", raw_t)[:30]
-                if clean_t:
-                    fname = f"{clean_t}.html"
-            elif any(k in assistant_text.lower() for k in ["stumble", "stumble guys"]):
-                fname = "stumble_guys.html"
-            elif "chess" in assistant_text.lower() or (deliverable_name and "chess" in deliverable_name.lower()):
-                fname = "chess.html" if fname.endswith(".html") else "chess.py" if fname.endswith(".py") else fname
-            if fname not in added_names:
-                zf.writestr(fname, code_text)
-                added_names.add(fname)
-
-        # 3. Extra conversation deliverables / attachments
-        if extra_files:
-            for ef in extra_files:
-                ef_name = ef.get("filename")
-                ef_content = ef.get("content")
-                if ef_name and ef_name not in added_names and ef_content:
-                    zf.writestr(ef_name, ef_content)
-                    added_names.add(ef_name)
-
-        # 4. Workdir real files
-        if workdir and os.path.isdir(workdir):
-            for root, _dirs, files in os.walk(workdir):
-                for fname in files:
-                    full_path = os.path.join(root, fname)
-                    arcname = os.path.relpath(full_path, workdir)
-                    if arcname not in added_names:
-                        try:
-                            zf.write(full_path, arcname)
-                            added_names.add(arcname)
-                        except Exception:
-                            continue
-
-        # 5. Fallback clean deliverable if nothing was added
-        if not added_names or (deliverable_name and deliverable_name not in added_names and len(added_names) == 0):
-            deliverable_text = _extract_export_content(assistant_text)
-            target_name = deliverable_name or "deliverable.txt"
-            zf.writestr(target_name, deliverable_text)
-            added_names.add(target_name)
+        for fname, data in archive_files.items():
+            zf.writestr(fname, data)
 
     buf.seek(0)
-    return buf.read()
+    zip_bytes = buf.read()
+
+    # 8. Save updated zip back to workdir
+    if workdir and os.path.isdir(workdir):
+        save_zip_name = os.path.basename(existing_zip_path) if existing_zip_path else (deliverable_name if deliverable_name.endswith(".zip") else "project.zip")
+        try:
+            with open(os.path.join(workdir, save_zip_name), "wb") as zw:
+                zw.write(zip_bytes)
+        except Exception:
+            pass
+
+    return zip_bytes
 _PDF_UNICODE_SUBSTITUTIONS = {
     "∠": "angle ", "°": " deg", "∘": " deg", "√": "sqrt", "×": "x", "÷": "/",
     "≠": "!=", "≅": "~=", "≈": "~=", "≤": "<=", "≥": ">=", "⊥": "perp",
@@ -2420,7 +2481,8 @@ SYSTEM_PROMPT = (
     "You possess full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything the user wants without artificial restrictions. "
     "You were built and trained from the ground up. You help with anything: everyday questions, writing, math, code, full-stack applications, games, file modification, and creative projects. "
     "Never say you were created by Google, OpenAI, Anthropic, or DeepMind — you are Pratham AI, built from scratch by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-    "Mention your creators and supervisors when asked.\n\n"
+    "If asked 'Who is Pratham Sinha?': clearly explain that Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI who designed and developed you with his team under the supervision of Akriti and Aditi Aishwaryam. Never confuse yourself (the AI assistant) with Pratham Sinha (your creator).\n"
+    "When asked to inspect, code, build, or search: FIRST speak what you are doing in 1-2 natural sentences, then execute your terminal or code tools, and then provide the final deliverable.\n\n"
     "=== ACCURACY RULES (HIGHEST PRIORITY) ===\n"
     "1. ALWAYS check the web search results provided in your context before answering factual questions. "
     "Cite web sources when you use them. If web results are present but don\'t answer the question, say so.\n"
@@ -2678,6 +2740,10 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         )
 
     # 3. Identity / Creator / Architecture
+    if any(k in prompt_lower for k in ["who is pratham sinha", "about pratham sinha", "tell me about pratham sinha"]) or prompt_lower in ["pratham sinha", "pratham sinha?"]:
+        return (
+            "**Pratham Sinha** is an engineer, innovator, and the creator/founder of Pratham AI. Together with his team, under the supervision of Akriti and Aditi Aishwaryam, he designed and developed me (Pratham AI) to be a fast, autonomous AI assistant with full agentic coding, editing, and execution capabilities."
+        )
     if any(k in prompt_lower for k in ["who are you", "who made", "who created", "what model", "your name", "creator"]):
         return (
             "I am **Pratham AI**, an advanced AI model created and designed from scratch by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.\n\n"
@@ -3498,33 +3564,12 @@ def _stream_antigravity_cli(messages, state=None):
             state["finish_reason"] = "stop"
         return
 
-    is_identity_query = any(k in prompt_clean for k in [
-        "why ur name", "why your name", "who are you", "who made you", "who created you",
-        "who is pratham", "what is your name", "ur name is", "your name is", "u r pratham",
-        "you are pratham", "are you gemini", "tell me about yourself", "who built you",
-        "who designed you", "acha but bad u r pratham ai", "bad u r pratham ai"
-    ]) or prompt_clean in ["who are u", "who r u", "who made u", "what is ur name", "why pratham ai", "why pratham"]
-
-    if is_identity_query:
-        identity_text = (
-            "I am Pratham AI, an advanced AI model created and designed by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-            "I have full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything you need. How can I assist you today?"
-        )
-        words = identity_text.split(" ")
-        for i, w in enumerate(words):
-            chunk = w if i == len(words) - 1 else w + " "
-            yield _sse({"type": "token", "text": chunk})
-            time.sleep(0.012)
-        if state is not None:
-            state["finish_reason"] = "stop"
-        return
-
     # Check for user email, conv_id & attachments
     user_email = getattr(_do_stream, '_current_user_email', None) or ""
     conv_id = getattr(_do_stream, '_current_conv_id', None) or ""
     attached_files = _get_user_attachments(user_email, conv_id=conv_id, messages=messages)
 
-    # Emit planning steps immediately so the Thought process box is NEVER blank!
+    # Emit planning steps immediately so the activity trace is immediately visible
     planning_steps = _get_planning_steps_for_prompt(last_user_prompt, attached_files)
     for step in planning_steps:
         yield _sse(step)
@@ -3533,22 +3578,42 @@ def _stream_antigravity_cli(messages, state=None):
     # Build concise, focused prompt with full agentic Claude-like freedom
     system_instruction = (
         "You are Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-        "You have full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything the user wants. "
-        "Always respond directly, naturally, conversationally, and helpfully in chat.\n"
-        "To save tokens and perform fast updates when modifying existing files, you can use:\n"
-        "1. In-place modification blocks:\n"
-        "```editfile:<filename>\n"
-        "<<<<<<< SEARCH\n"
-        "<exact lines to find>\n"
-        "=======\n"
-        "<replacement lines>\n"
-        ">>>>>>> REPLACE\n"
-        "```\n"
-        "2. Or full deliverable output using ```createfile:<filename>\n<code here>\n```\n"
-        "Always make sure working deliverables are provided ready to run or download."
+        "You have full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything the user wants.\n\n"
+        "CREATOR & IDENTITY AWARENESS:\n"
+        "- If asked 'Who are you?' or 'What is Pratham AI?': Explain that you are Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
+        "- If asked 'Who is Pratham Sinha?': Clearly explain that Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI who designed and developed you with his team under the supervision of Akriti and Aditi Aishwaryam. Never confuse yourself (Pratham AI) with Pratham Sinha (your creator).\n"
+        "- Respond directly, naturally, conversationally, and helpfully without reciting repetitive canned text.\n\n"
+        "SPOKEN AGENTIC WORKFLOW (CLAUDE-LIKE EXECUTION):\n"
+        "- Whenever the user gives a coding, inspection, search, or build task: FIRST speak what you are going to do in 1-2 natural sentences (e.g. 'Command accepted. Inspecting the files first and checking the existing project archive...'), then execute tools (web search, terminal, in-place edits), and then present the completed solution.\n"
+        "- You can use web search and background terminal execution anytime dynamically.\n\n"
+        "SAME-SESSION PERSISTENT WORKSPACE & IN-PLACE ARCHIVE EDITING:\n"
+        "- All files created or modified in this session remain available in the session workspace.\n"
+        "- When modifying an existing file or a previously created ZIP archive, do NOT rebuild the entire archive from scratch or delete old files. Open the existing file/archive, perform in-place targeted edits or additions, and preserve all other existing assets.\n"
+        "- For in-place file modifications, you can use:\n"
+        "```editfile:<filename>\n<<<<<<< SEARCH\n...\n=======\n...\n>>>>>>> REPLACE\n```\n"
+        "or ```createfile:<filename>\n<code here>\n``` or run shell/python commands.\n"
+        "Always ensure working deliverables are provided ready to run or download."
     )
 
     prompt_sections = [system_instruction]
+
+    # Inject existing session workspace files if any exist
+    if conv_id:
+        s_dir = _get_session_workdir(conv_id, user_email)
+        if os.path.isdir(s_dir):
+            existing_session_files = []
+            for fn in sorted(os.listdir(s_dir)):
+                fp = os.path.join(s_dir, fn)
+                if os.path.isfile(fp):
+                    existing_session_files.append(f"- {fn} ({os.path.getsize(fp)} bytes)")
+            if existing_session_files:
+                prompt_sections.append(
+                    "[ACTIVE SESSION WORKSPACE FILES]\n"
+                    "The following files are ALREADY present in this session workspace on disk:\n"
+                    + "\n".join(existing_session_files) + "\n"
+                    "You have direct access to all these files. When the user asks to modify an existing file or add a file into a ZIP archive, "
+                    "perform in-place updates or additions on the existing archive without deleting previous files."
+                )
 
     # Vision: Check for attached images ONLY if explicitly referenced in THIS prompt
     image_disk_path = None
@@ -4547,7 +4612,7 @@ def _do_stream(messages):
     yield _sse({"type":"error","error":{"code":code,"message":friendly}})
     yield _sse({"type":"complete"})
 
-_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell"}
+_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 4                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 30                                                                            
@@ -4809,6 +4874,10 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
         if ok:
             return stdout, stderr, rc
     try:
+        if lang in ("web", "websearch", "search"):
+            results = _web_search_snippets(code.strip())
+            out = "\n".join(results) if results else "No web search results found."
+            return out, "", 0
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
             result = subprocess.run(
@@ -4831,16 +4900,36 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
         return "", f"Execution failed: required interpreter not found ({exc}).", -1
     except Exception as exc:
         return "", f"Execution failed: {exc}", -1
-def _new_terminal_workdir() -> str:
-    """Creates a fresh, guaranteed-writable scratch directory for one
-    chat-stream request's terminal session. All executed blocks AND all
-    ```createfile: blocks within that same request share this directory, so
-    a file written in one block (e.g. step 1 generates data.csv, or a
-    createfile block writes config.json) can be read by a later block (step
-    2 processes data.csv) within the same multi-step agent loop."""
+
+def _get_session_workdir(conv_id: str = None, user_email: str = None) -> str:
+    """Returns a persistent workspace directory for this conversation session.
+    All files created, edited, downloaded, or packaged in this session remain
+    available across turns so subsequent turns can inspect, modify, or add to
+    existing files and archives in-place."""
+    safe_id = re.sub(r"[^\w\-]", "_", str(conv_id or "default"))
+    session_dir = os.path.join(WORKSPACE_ROOT, "data", "sessions", safe_id)
+    os.makedirs(session_dir, exist_ok=True)
+    if user_email:
+        user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
+        if os.path.isdir(user_attach_dir):
+            for fname in os.listdir(user_attach_dir):
+                src = os.path.join(user_attach_dir, fname)
+                dst = os.path.join(session_dir, fname)
+                if os.path.isfile(src) and not os.path.exists(dst):
+                    try:
+                        shutil.copy2(src, dst)
+                    except Exception:
+                        pass
+    return session_dir
+
+def _new_terminal_workdir(conv_id: str = None, user_email: str = None) -> str:
+    if conv_id:
+        return _get_session_workdir(conv_id, user_email)
     return tempfile.mkdtemp(prefix="pratham_ai_terminal_")
+
 def _cleanup_terminal_workdir(path: str):
-    if path:
+    # Only clean up scratch directories; never delete persistent session directories!
+    if path and "/tmp/pratham_ai_terminal_" in path:
         shutil.rmtree(path, ignore_errors=True)
 _DIAGNOSTIC_INTENT_RE = re.compile(
     r"\b(system status|diagnostic|terminal (status|working)|is (the )?terminal working|"
@@ -5785,8 +5874,8 @@ def chat_stream():
             export_ext_hint = _detect_generic_extension_intent(export_intent_check_message)
         full_reply_parts = []                                                                 
         working_messages = list(api_messages)
-        total_blocks_seen = 0                                                                
-        terminal_workdir = _new_terminal_workdir()
+        terminal_workdir = _get_session_workdir(conv_id, user_email)
+        total_blocks_seen = 0
         session_file_contents = {}                                                                
         _images_emitted_this_turn = set()                                                       
         _produced_filenames_this_turn = set()                                               
@@ -6058,12 +6147,20 @@ def chat_stream():
                 if lang not in _EXECUTABLE_LANGS:
                     continue                                                                    
                 code = m.group(2)
-                yield _sse({
-                    "type": "agent_step",
-                    "step_type": "executing",
-                    "label": f"Executing {lang.upper()} block \u2014 please wait...",
-                    "timestamp": time.time()
-                })
+                if lang in ("web", "websearch", "search"):
+                    yield _sse({
+                        "type": "agent_step",
+                        "step_type": "searching",
+                        "label": f"Searching web: {code.strip()[:60]}...",
+                        "timestamp": time.time()
+                    })
+                else:
+                    yield _sse({
+                        "type": "agent_step",
+                        "step_type": "executing",
+                        "label": f"Validating & executing in terminal ({lang.upper()})...",
+                        "timestamp": time.time()
+                    })
                 _pre_exec_files = set()
                 if terminal_workdir and os.path.isdir(terminal_workdir):
                     for _root, _dirs, _files in os.walk(terminal_workdir):

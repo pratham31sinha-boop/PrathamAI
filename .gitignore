@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+api/__pycache__/
+server.log
+attachments/
+.env
+data/sessions/
