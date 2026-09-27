@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>VoxelCraft Mobile // Pocket Edition</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Rajdhani', sans-serif;
+    }
+
+    #game-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Crosshair */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 0 2px #000;
+    }
+    #crosshair::before {
+      top: 9px;
+      left: 0;
+      width: 20px;
+      height: 2px;
+    }
+    #crosshair::after {
+      top: 0;
+      left: 9px;
+      width: 2px;
+      height: 20px;
+    }
+
+    /* Hotbar */
+    #hotbar-container {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      padding: 6px;
+      background: rgba(20, 20, 20, 0.75);
+      border: 3px solid #333;
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+      z-index: 20;
+    }
+    .hotbar-slot {
+      width: 50px;
+      height: 50px;
+      background: rgba(60, 60, 60, 0.8);
+      border: 3px solid #555;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
+      transition: transform 0.1s, border-color 0.1s;
+    }
+    .hotbar-slot.active {
+      border-color: #fff;
+      transform: scale(1.1);
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    }
+    .slot-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+    .slot-name {
+      font-size: 9px;
+      font-family: 'Press Start 2P', monospace;
+      color: #ddd;
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: -0.5px;
+    }
+
+    /* Mobile On-Screen D-Pad / Joysticks */
+    #touch-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 15;
+      pointer-events: none;
+    }
+
+    /* Movement Joystick Area (Left) */
+    .joystick-zone {
+      position: absolute;
+      bottom: 25px;
+      left: 20px;
+      width: 140px;
+      height: 140px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, rgba(0, 0, 0, 0.3) 100%);
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .joystick-thumb {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 52px;
+      height: 52px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(180, 180, 180, 0.6) 100%);
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Right Action Buttons (Jump, Mine, Build) */
+    .action-zone {
+      position: absolute;
+      bottom: 25px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+      pointer-events: auto;
+    }
+    .btn-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(30, 30, 30, 0.75);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-shadow: 1px 1px 2px #000;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn-circle:active {
+      transform: scale(0.92);
+      background: rgba(80, 80, 80, 0.85);
+      border-color: #00ffcc;
+    }
+    .btn-jump {
+      background: rgba(34, 197, 94, 0.4);
+      border-color: #22c55e;
+    }
+    .btn-mine {
+      background: rgba(239, 68, 68, 0.4);
+      border-color: #ef4444;
+    }
+    .btn-place {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #3b82f6;
+    }
+
+    /* HUD Top Bar */
+    #top-hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .badge {
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 9px;
+      text-shadow: 1px 1px 1px #000;
+    }
+    .hearts {
+      display: flex;
+      gap: 3px;
+    }
+    .heart {
+      color: #ff3344;
+      font-size: 14px;
+      text-shadow: 0 0 3px #000;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div id="crosshair"></div>
+
+  <!-- Top Status -->
+  <div id="top-hud">
+    <div class="badge">VOXELCRAFT PE</div>
+    <div class="hearts">
+      <span class="heart">❤️</span>
+      <span class="heart">❤️</span>
+      <span class="heart">❤️</span>
+      <span class="heart">❤️</span>
+      <span class="heart">❤️</span>
+    </div>
+    <div id="pos-info" class="badge">X: 0 Y: 6 Z: 0</div>
+  </div>
+
+  <!-- Touch Interface -->
+  <div id="touch-layer">
+    <div id="joystick-zone" class="joystick-zone">
+      <div id="joystick-thumb" class="joystick-thumb"></div>
+    </div>
+    <div class="action-zone">
+      <div id="btn-place" class="btn-circle btn-place">BUILD</div>
+      <div id="btn-mine" class="btn-circle btn-mine">MINE</div>
+      <div id="btn-jump" class="btn-circle btn-jump">JUMP</div>
+    </div>
+  </div>
+
+  <!-- Hotbar -->
+  <div id="hotbar-container">
+    <div class="hotbar-slot active" data-type="grass">
+      <div class="slot-icon" style="background: #4ade80; border-top: 5px solid #22c55e;"></div>
+      <div class="slot-name">GRASS</div>
+    </div>
+    <div class="hotbar-slot" data-type="dirt">
+      <div class="slot-icon" style="background: #78350f;"></div>
+      <div class="slot-name">DIRT</div>
+    </div>
+    <div class="hotbar-slot" data-type="stone">
+      <div class="slot-icon" style="background: #64748b;"></div>
+      <div class="slot-name">STONE</div>
+    </div>
+    <div class="hotbar-slot" data-type="wood">
+      <div class="slot-icon" style="background: #b45309; border-left: 4px solid #78350f;"></div>
+      <div class="slot-name">WOOD</div>
+    </div>
+    <div class="hotbar-slot" data-type="leaves">
+      <div class="slot-icon" style="background: #15803d;"></div>
+      <div class="slot-name">LEAF</div>
+    </div>
+    <div class="hotbar-slot" data-type="brick">
+      <div class="slot-icon" style="background: #b91c1c;"></div>
+      <div class="slot-name">BRICK</div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       SOUND EFFECTS (WEB AUDIO API SYNTHESIZER)
+       ============================================================ */
+    class AudioEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playDig() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        const t = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(140, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.09);
+      }
+      playPlace() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        const t = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(320, t);
+        osc.frequency.exponentialRampToValueAtTime(160, t + 0.07);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.07);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.08);
+      }
+      playJump() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        const t = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(360, t + 0.12);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.13);
+      }
+    }
+    const audio = new AudioEngine();
+
+    /* ============================================================
+       3D VOXEL WORLD ENGINE (THREE.JS)
+       ============================================================ */
+    const container = document.getElementById('game-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x78a7ff);
+    scene.fog = new THREE.Fog(0x78a7ff, 25, 60);
+
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Natural lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfff5e6, 0.85);
+    sunLight.position.set(30, 60, 20);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 1024;
+    sunLight.shadow.mapSize.height = 1024;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 100;
+    const d = 35;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    scene.add(sunLight);
+
+    /* --- PROCEDURAL TEXTURES FOR VOXELS --- */
+    function createBlockTexture(baseColor, noiseColor, border = true) {
+      const cvs = document.createElement('canvas');
+      cvs.width = 32;
+      cvs.height = 32;
+      const ctx = cvs.getContext('2d');
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, 32, 32);
+
+      // Pixel speckles
+      ctx.fillStyle = noiseColor;
+      for (let i = 0; i < 64; i++) {
+        const x = Math.floor(Math.random() * 32);
+        const y = Math.floor(Math.random() * 32);
+        ctx.fillRect(x, y, 2, 2);
+      }
+      if (border) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0.5, 0.5, 31, 31);
+      }
+      const tex = new THREE.CanvasTexture(cvs);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      return tex;
+    }
+
+    const texGrassTop = createBlockTexture('#55c742', '#419e31');
+    const texGrassSide = createBlockTexture('#8b5a2b', '#6d431c');
+    const texDirt = createBlockTexture('#8b5a2b', '#6d431c');
+    const texStone = createBlockTexture('#7b828b', '#5c636c');
+    const texWood = createBlockTexture('#a16207', '#78350f');
+    const texLeaf = createBlockTexture('#22c55e', '#15803d');
+    const texBrick = createBlockTexture('#b91c1c', '#7f1d1d');
+
+    const blockMaterials = {
+      grass: [
+        new THREE.MeshLambertMaterial({ map: texGrassSide }),
+        new THREE.MeshLambertMaterial({ map: texGrassSide }),
+        new THREE.MeshLambertMaterial({ map: texGrassTop }),
+        new THREE.MeshLambertMaterial({ map: texDirt }),
+        new THREE.MeshLambertMaterial({ map: texGrassSide }),
+        new THREE.MeshLambertMaterial({ map: texGrassSide })
+      ],
+      dirt: new THREE.MeshLambertMaterial({ map: texDirt }),
+      stone: new THREE.MeshLambertMaterial({ map: texStone }),
+      wood: new THREE.MeshLambertMaterial({ map: texWood }),
+      leaves: new THREE.MeshLambertMaterial({ map: texLeaf, transparent: true, opacity: 0.92 }),
+      brick: new THREE.MeshLambertMaterial({ map: texBrick })
+    };
+
+    const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+
+    // Voxel storage map (Key: "x,y,z")
+    const worldBlocks = new Map();
+    const blockMeshes = [];
+
+    function addVoxel(x, y, z, type) {
+      const key = `${x},${y},${z}`;
+      if (worldBlocks.has(key)) return;
+
+      const mat = blockMaterials[type] || blockMaterials.stone;
+      const mesh = new THREE.Mesh(blockGeometry, mat);
+      mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { key, x, y, z, type };
+      scene.add(mesh);
+
+      worldBlocks.set(key, mesh);
+      blockMeshes.push(mesh);
+      return mesh;
+    }
+
+    function removeVoxel(x, y, z) {
+      const key = `${x},${y},${z}`;
+      const mesh = worldBlocks.get(key);
+      if (!mesh) return;
+      scene.remove(mesh);
+      worldBlocks.delete(key);
+      const idx = blockMeshes.indexOf(mesh);
+      if (idx !== -1) blockMeshes.splice(idx, 1);
+    }
+
+    /* --- WORLD TERRAIN GENERATION --- */
+    const WORLD_SIZE = 24;
+    for (let x = -WORLD_SIZE/2; x < WORLD_SIZE/2; x++) {
+      for (let z = -WORLD_SIZE/2; z < WORLD_SIZE/2; z++) {
+        // Natural rolling hills using sine waves
+        const height = Math.floor(Math.sin(x * 0.25) * 2 + Math.cos(z * 0.25) * 2 + 3);
+        
+        for (let y = 0; y <= height; y++) {
+          if (y === height) {
+            addVoxel(x, y, z, 'grass');
+          } else if (y >= height - 2) {
+            addVoxel(x, y, z, 'dirt');
+          } else {
+            addVoxel(x, y, z, 'stone');
+          }
+        }
+
+        // Procedural trees
+        if (x % 7 === 0 && z % 7 === 0 && Math.random() > 0.3) {
+          const treeBase = height + 1;
+          for (let ty = 0; ty < 4; ty++) {
+            addVoxel(x, treeBase + ty, z, 'wood');
+          }
+          for (let lx = -1; lx <= 1; lx++) {
+            for (let lz = -1; lz <= 1; lz++) {
+              for (let ly = 2; ly <= 4; ly++) {
+                if (lx !== 0 || lz !== 0 || ly >= 4) {
+                  addVoxel(x + lx, treeBase + ly, z + lz, 'leaves');
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    /* ============================================================
+       PLAYER CONTROLS & FIRST-PERSON DYNAMICS
+       ============================================================ */
+    const player = {
+      pos: new THREE.Vector3(0, 10, 0),
+      vel: new THREE.Vector3(0, 0, 0),
+      yaw: 0,
+      pitch: 0,
+      height: 1.7,
+      onGround: false,
+      speed: 8.5,
+      jumpSpeed: 9.0
+    };
+
+    let selectedBlockType = 'grass';
+
+    // Touch look control (swipe anywhere on right 60% of screen)
+    let lookTouchId = null;
+    let lookLast = { x: 0, y: 0 };
+
+    window.addEventListener('touchstart', (e) => {
+      audio.init();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        // If touch is on right half and not on specific UI buttons
+        if (t.clientX > window.innerWidth * 0.4 && lookTouchId === null) {
+          const target = document.elementFromPoint(t.clientX, t.clientY);
+          if (!target || (!target.classList.contains('btn-circle') && !target.closest('#hotbar-container'))) {
+            lookTouchId = t.identifier;
+            lookLast.x = t.clientX;
+            lookLast.y = t.clientY;
+          }
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === lookTouchId) {
+          const dx = t.clientX - lookLast.x;
+          const dy = t.clientY - lookLast.y;
+          lookLast.x = t.clientX;
+          lookLast.y = t.clientY;
+
+          player.yaw -= dx * 0.005;
+          player.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, player.pitch - dy * 0.005));
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === lookTouchId) {
+          lookTouchId = null;
+        }
+      }
+    });
+
+    // Touch Joystick for Movement
+    const jZone = document.getElementById('joystick-zone');
+    const jThumb = document.getElementById('joystick-thumb');
+    let jActive = false;
+    let jCenter = { x: 0, y: 0 };
+    let moveVector = { x: 0, y: 0 };
+
+    jZone.addEventListener('touchstart', (e) => {
+      audio.init();
+      const rect = jZone.getBoundingClientRect();
+      jCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      jActive = true;
+      handleJoystick(e.touches[0]);
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!jActive) return;
+      for (let i = 0; i < e.touches.length; i++) {
+        const t = e.touches[i];
+        if (t.target === jZone || t.clientX < window.innerWidth * 0.4) {
+          handleJoystick(t);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0 || !Array.from(e.touches).some(t => t.clientX < window.innerWidth * 0.4)) {
+        jActive = false;
+        moveVector.x = 0;
+        moveVector.y = 0;
+        jThumb.style.transform = 'translate(-50%, -50%)';
+      }
+    });
+
+    function handleJoystick(touch) {
+      const dx = touch.clientX - jCenter.x;
+      const dy = touch.clientY - jCenter.y;
+      const dist = Math.hypot(dx, dy);
+      const maxR = 48;
+      const angle = Math.atan2(dy, dx);
+      const clampedDist = Math.min(dist, maxR);
+      moveVector.x = (Math.cos(angle) * clampedDist) / maxR;
+      moveVector.y = (Math.sin(angle) * clampedDist) / maxR;
+      jThumb.style.transform = `translate(calc(-50% + ${Math.cos(angle) * clampedDist}px), calc(-50% + ${Math.sin(angle) * clampedDist}px))`;
+    }
+
+    // Keyboard support (WASD + Space)
+    const keys = { w: false, a: false, s: false, d: false, space: false };
+    window.addEventListener('keydown', (e) => {
+      audio.init();
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = true;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = true;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = true;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.d = true;
+      if (e.code === 'Space') {
+        if (player.onGround) {
+          player.vel.y = player.jumpSpeed;
+          player.onGround = false;
+          audio.playJump();
+        }
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = false;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = false;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = false;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.d = false;
+    });
+
+    // Jump button
+    document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      audio.init();
+      if (player.onGround) {
+        player.vel.y = player.jumpSpeed;
+        player.onGround = false;
+        audio.playJump();
+      }
+    });
+
+    /* --- MINING & BUILDING RAYCASTER --- */
+    const raycaster = new THREE.Raycaster();
+    const screenCenter = new THREE.Vector2(0, 0);
+
+    function getTargetVoxel() {
+      raycaster.setFromCamera(screenCenter, camera);
+      const intersects = raycaster.intersectObjects(blockMeshes, false);
+      if (intersects.length > 0 && intersects[0].distance < 6.5) {
+        return intersects[0];
+      }
+      return null;
+    }
+
+    function mineBlock() {
+      audio.init();
+      const hit = getTargetVoxel();
+      if (hit && hit.object && hit.object.userData) {
+        audio.playDig();
+        const { x, y, z } = hit.object.userData;
+        removeVoxel(x, y, z);
+      }
+    }
+
+    function placeBlock() {
+      audio.init();
+      const hit = getTargetVoxel();
+      if (hit && hit.face) {
+        const { x, y, z } = hit.object.userData;
+        const placeX = x + hit.face.normal.x;
+        const placeY = y + hit.face.normal.y;
+        const placeZ = z + hit.face.normal.z;
+
+        // Prevent placing inside player hitbox
+        const px = Math.floor(player.pos.x);
+        const py = Math.floor(player.pos.y);
+        const pyHead = Math.floor(player.pos.y + player.height - 0.2);
+        const pz = Math.floor(player.pos.z);
+        if (placeX === px && (placeY === py || placeY === pyHead) && placeZ === pz) {
+          return;
+        }
+
+        audio.playPlace();
+        addVoxel(placeX, placeY, placeZ, selectedBlockType);
+      }
+    }
+
+    document.getElementById('btn-mine').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      mineBlock();
+    });
+    document.getElementById('btn-place').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      placeBlock();
+    });
+
+    // Desktop Mouse click mining & building
+    window.addEventListener('mousedown', (e) => {
+      audio.init();
+      if (e.target.closest('#hotbar-container') || e.target.closest('#touch-layer')) return;
+      if (e.button === 0) mineBlock();
+      if (e.button === 2) placeBlock();
+    });
+    window.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Hotbar selection
+    const slots = document.querySelectorAll('.hotbar-slot');
+    slots.forEach(slot => {
+      slot.addEventListener('click', () => {
+        slots.forEach(s => s.classList.remove('active'));
+        slot.classList.add('active');
+        selectedBlockType = slot.getAttribute('data-type');
+      });
+    });
+
+    /* ============================================================
+       COLLISION RESOLUTION & PHYSICS LOOP
+       ============================================================ */
+    function checkVoxelCollision(x, y, z) {
+      const bx = Math.floor(x);
+      const by = Math.floor(y);
+      const bz = Math.floor(z);
+      return worldBlocks.has(`${bx},${by},${bz}`);
+    }
+
+    let lastTime = performance.now();
+    const posInfo = document.getElementById('pos-info');
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      // 1. Calculate input movement
+      let moveForward = -moveVector.y;
+      let moveStrafe = moveVector.x;
+      if (keys.w) moveForward += 1;
+      if (keys.s) moveForward -= 1;
+      if (keys.d) moveStrafe += 1;
+      if (keys.a) moveStrafe -= 1;
+
+      // Rotate movement with player yaw
+      const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+      const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+      const inputDir = new THREE.Vector3()
+        .addScaledVector(forward, moveForward)
+        .addScaledVector(right, moveStrafe);
+
+      if (inputDir.lengthSq() > 0.001) {
+        inputDir.normalize();
+        player.vel.x = inputDir.x * player.speed;
+        player.vel.z = inputDir.z * player.speed;
+      } else {
+        player.vel.x *= 0.7;
+        player.vel.z *= 0.7;
+      }
+
+      // Gravity
+      player.vel.y -= 24.0 * dt;
+
+      // 2. Physics & Simple Box Collision
+      // Move X
+      const newX = player.pos.x + player.vel.x * dt;
+      if (!checkVoxelCollision(newX + (player.vel.x > 0 ? 0.3 : -0.3), player.pos.y, player.pos.z) &&
+          !checkVoxelCollision(newX + (player.vel.x > 0 ? 0.3 : -0.3), player.pos.y + 1.2, player.pos.z)) {
+        player.pos.x = newX;
+      }
+
+      // Move Z
+      const newZ = player.pos.z + player.vel.z * dt;
+      if (!checkVoxelCollision(player.pos.x, player.pos.y, newZ + (player.vel.z > 0 ? 0.3 : -0.3)) &&
+          !checkVoxelCollision(player.pos.x, player.pos.y + 1.2, newZ + (player.vel.z > 0 ? 0.3 : -0.3))) {
+        player.pos.z = newZ;
+      }
+
+      // Move Y
+      const newY = player.pos.y + player.vel.y * dt;
+      if (player.vel.y < 0) {
+        // Falling
+        if (checkVoxelCollision(player.pos.x, newY, player.pos.z)) {
+          player.pos.y = Math.floor(newY) + 1.0;
+          player.vel.y = 0;
+          player.onGround = true;
+        } else {
+          player.pos.y = newY;
+          player.onGround = false;
+        }
+      } else {
+        // Jumping
+        if (checkVoxelCollision(player.pos.x, newY + player.height, player.pos.z)) {
+          player.vel.y = 0;
+        } else {
+          player.pos.y = newY;
+        }
+      }
+
+      // Void reset
+      if (player.pos.y < -10) {
+        player.pos.set(0, 15, 0);
+        player.vel.set(0, 0, 0);
+      }
+
+      // 3. Update Camera
+      camera.position.set(player.pos.x, player.pos.y + player.height - 0.2, player.pos.z);
+      const euler = new THREE.Euler(player.pitch, player.yaw, 0, 'YXZ');
+      camera.quaternion.setFromEuler(euler);
+
+      // Update coordinates badge
+      posInfo.innerText = `X: ${Math.floor(player.pos.x)} Y: ${Math.floor(player.pos.y)} Z: ${Math.floor(player.pos.z)}`;
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
