@@ -365,3 +365,14 @@ Archive:  /tmp/subway_surfers_25d.zip
 4. **Execution Instructions**: Installation dependencies, standard interactive play command, and automated `--test` benchmark instructions.
 
 ================================================================================
+
+=== 2026-09-27T07:20:35.843764+00:00 ===
+User: Tell where is dharmendra pradhan
+Pratham AI:
+**Dharmendra Pradhan** is an Indian politician and senior leader of the Bharatiya Janata Party (BJP). He serves as the **Union Minister of Education** in the Government of India (Cabinet of India).
+
+### Key Details & Locations:
+- **Official Office & Residence**: Primarily based in **New Delhi**, operating out of the Ministry of Education at Shastri Bhawan, Dr. Rajendra Prasad Road.
+- **Home State & Parliamentary Constituency**: He hails from **Odisha** and represents the **Sambalpur** Lok Sabha constituency in Odisha in the Parliament of India (previously having represented Madhya Pradesh and Bihar in the Rajya Sabha).
+
+================================================================================
