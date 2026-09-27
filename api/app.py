@@ -68,35 +68,6 @@ import zipfile
 import urllib.request
 import urllib.parse
 import sys
-
-class _SafeStream:
-    def __init__(self, fallback_path):
-        self._fallback_path = fallback_path
-        self._f = None
-    def write(self, s):
-        try:
-            sys.__stdout__.write(s)
-            sys.__stdout__.flush()
-        except Exception:
-            try:
-                if self._f is None:
-                    self._f = open(self._fallback_path, "a", encoding="utf-8", buffering=1)
-                self._f.write(s)
-            except Exception:
-                pass
-    def flush(self):
-        try:
-            sys.__stdout__.flush()
-        except Exception:
-            pass
-
-try:
-    sys.stdout.write("")
-    sys.stdout.flush()
-except Exception:
-    sys.stdout = _SafeStream("/workspace/bold-curie/server.log")
-    sys.stderr = _SafeStream("/workspace/bold-curie/server.log")
-
 import subprocess
 import tempfile
 import shutil
@@ -140,16 +111,12 @@ try:
 except ImportError:
     _supabase_sdk = False
 app = Flask(__name__)
+handler = app
 
 import traceback
 @app.errorhandler(Exception)
 def _handle_global_exception(e):
     err_tb = traceback.format_exc()
-    try:
-        with open("/workspace/bold-curie/server.log", "a", encoding="utf-8") as lf:
-            lf.write(f"\n[GLOBAL ERROR 500] {datetime.now(timezone.utc).isoformat()}\n{err_tb}\n")
-    except Exception:
-        pass
     print(f"[GLOBAL ERROR 500]: {err_tb}")
     return jsonify({"error": {"code": "INTERNAL_SERVER_ERROR", "message": f"Server error: {str(e)}"}}), 500
 
