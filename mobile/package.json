@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:apk": "eas build -p android --profile preview"
+    "build:apk": "npx --yes eas-cli build -p android --profile preview",
+    "build:local": "cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "expo": "~51.0.0",

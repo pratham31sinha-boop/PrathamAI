@@ -1,53 +1,49 @@
-# Pratham AI Mobile (React Native / Android APK)
+# Pratham AI Mobile (Android APK & React Native)
 
-Official React Native mobile application for **Pratham AI**, created by **Pratham Sinha and team** under the supervision of **Akriti & Aditi Aishwaryam**.
-
-## Features
-
-- **Full Mobile Optimization**: Native look and feel, responsive layout, safe-area inset management for notches and edge-to-edge displays.
-- **Thinking / Planning Accordion**: Interactive, collapsible thought process indicator with dynamic step-by-step progress cards.
-- **Syntax-Highlighted Code Blocks**: Built-in copy-to-clipboard, language badges, and direct file export.
-- **Interactive Deliverables**: Dedicated download and export cards for generated HTML games, Python scripts, archives, and documents.
-- **Multi-Modal Attachment Suite**:
-  - 📷 Camera capture
-  - 🖼️ Photo gallery picker
-  - 📄 Document and code file picker
-- **Dual Antigravity Account Badge**: Real-time status display showing Primary (`manojkumarsinha1972@gmail.com`) and Failover Standby (`pratham31sinha@gmail.com`) with sub-second `<0.1s` failover indicator.
-- **Web Search Toggle**: Toggle live web search on or off directly from the composer.
-- **Configurable Backend Host**: Seamlessly connect to your production Vercel deployment or local Flask instance.
+Official mobile application for **Pratham AI**, created by **Pratham Sinha and team** under the supervision of **Akriti & Aditi Aishwaryam**.
 
 ---
 
-## Building the Standalone Android APK
+## Quick Start & APK Building
 
-### Option 1: Cloud Build with EAS (Recommended & Fastest)
+### Method 1: Local Android APK Build (Ready Instantly)
+The native Android project is fully pre-configured in `mobile/android/` with Java 17 and Android SDK 35 support.
 
-1. Install EAS CLI:
+1. Navigate to the `mobile/android` directory:
    ```bash
-   npm install -g eas-cli
+   cd /workspace/bold-curie/mobile/android
    ```
-2. Log in to your Expo account:
+2. Build the APK using the Gradle wrapper:
    ```bash
-   eas login
+   ./gradlew assembleDebug
    ```
-3. Run the APK build:
+   *(Or from `mobile/`, run: `npm run build:local`)*
+
+3. Your compiled APK will be at:
+   ```
+   mobile/android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+---
+
+### Method 2: EAS Cloud APK Build (Recommended for Standalone Release)
+We have updated `package.json` with `npx --yes eas-cli` so you do **not** need to install `eas` globally.
+
+1. Navigate to `mobile/`:
+   ```bash
+   cd /workspace/bold-curie/mobile
+   ```
+2. Run the build script:
    ```bash
    npm run build:apk
    ```
-   *EAS will compile a standalone `.apk` installable on any Android phone and provide a direct download link.*
+3. Follow the Expo prompt to log in and EAS will build an installable release `.apk` in the cloud with a direct download link.
 
 ---
 
-### Option 2: Local Gradle Build (Local Machine)
-
-1. Prebuild the native Android project:
-   ```bash
-   npx expo prebuild --platform android
-   ```
-2. Navigate to `android/` and assemble the release APK:
-   ```bash
-   cd android
-   ./gradlew assembleRelease
-   ```
-3. Your output APK will be ready at:
-   `android/app/build/outputs/apk/release/app-release.apk`
+## App Features
+- **Collapsible Thought Process**: Detailed thinking steps (*Analyzing*, *Planning*, *Executing*, *Presenting*).
+- **Deliverables Engine**: Dedicated interactive cards to download generated HTML games (e.g. 3D Stumble Guys, Chess), Python scripts, and ZIP packages.
+- **Dual Antigravity Accounts**: Real-time status badge showing Primary (`manojkumarsinha1972@gmail.com`) and Standby (`pratham31sinha@gmail.com`) with sub-second `<0.1s` failover.
+- **Multi-Modal Attachments**: Integrated document, camera, and gallery pickers.
+- **Offline + Online Resilience**: Bundled standalone assets with dynamic backend connectivity.

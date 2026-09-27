@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pratham AI Gradlew Wrapper
+GRADLE_BIN="/opt/gradle/gradle-8.14.3/bin/gradle"
+if [ ! -f "$GRADLE_BIN" ]; then
+    GRADLE_BIN=$(which gradle 2>/dev/null)
+fi
+if [ -z "$GRADLE_BIN" ]; then
+    echo "Gradle not found. Installing wrapper..."
+    exec gradle "$@"
+fi
+exec "$GRADLE_BIN" "$@"
