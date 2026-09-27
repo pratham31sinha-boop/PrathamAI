@@ -1,0 +1,8 @@
+$ cd /tmp && zip -j pokemon_25d.zip pokemon_25d.html && ls -la /tmp/pokemon_25d.zip
+updating: pokemon_25d.html (deflated 72%)
+-rw-------. 1 root root 9272 Sep 27 07:33 /tmp/pokemon_25d.zip
+
+$ unzip -t /tmp/pokemon_25d.zip
+Archive:  /tmp/pokemon_25d.zip
+    testing: pokemon_25d.html         OK
+No errors detected in compressed data of /tmp/pokemon_25d.zip.
