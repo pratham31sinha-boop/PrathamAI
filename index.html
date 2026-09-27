@@ -2968,6 +2968,15 @@
                 const old = wrapper._segNodes.pop();
                 if (old && old.parentNode) old.parentNode.removeChild(old);
             }
+            // Auto-mount interactive download cards for any files referenced in fullText (e.g. /tmp/file.zip or file:///tmp/file.html)
+            const fileRefRegex = /(?:file:\/\/\/tmp\/|\/tmp\/|\[)([a-zA-Z0-9_\-]+\.(?:zip|html|py|js|json|css|pdf|tar\.gz))\b/g;
+            let fmatch;
+            while ((fmatch = fileRefRegex.exec(fullText)) !== null) {
+                const fname = fmatch[1];
+                if (fname && !wrapper._fileCardsByName?.[fname]) {
+                    appendDownloadCard(wrapper, `/api/download_temp_file?name=${encodeURIComponent(fname)}`, fname);
+                }
+            }
             pinnedAutoScroll();
         }
         function appendGeneratedImage(wrapper, url, promptText) {
@@ -3215,7 +3224,23 @@
             const inlineFormat = (s) => s
                 .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                 .replace(/(?<!\*)\*(?!\*)(.+?)\*(?!\*)/g, '<em>$1</em>')
-                .replace(/`([^`]+?)`/g, '<code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:0.9em;">$1</code>');
+                .replace(/`([^`]+?)`/g, '<code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:0.9em;">$1</code>')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, href) => {
+                    let cleanHref = href.trim();
+                    let downloadAttr = '';
+                    if (cleanHref.startsWith('file:///tmp/') || cleanHref.startsWith('/tmp/') || cleanHref.startsWith('file:///')) {
+                        const fname = cleanHref.split('/').pop();
+                        cleanHref = `/api/download_temp_file?name=${encodeURIComponent(fname)}`;
+                        downloadAttr = ` download="${fname}"`;
+                    } else if (cleanHref.endsWith('.zip') || cleanHref.endsWith('.html') || cleanHref.endsWith('.py') || cleanHref.endsWith('.js') || cleanHref.endsWith('.json') || cleanHref.endsWith('.css') || cleanHref.endsWith('.pdf')) {
+                        if (!cleanHref.startsWith('http://') && !cleanHref.startsWith('https://') && !cleanHref.startsWith('/')) {
+                            const fname = cleanHref;
+                            cleanHref = `/api/download_temp_file?name=${encodeURIComponent(fname)}`;
+                            downloadAttr = ` download="${fname}"`;
+                        }
+                    }
+                    return `<a href="${cleanHref}"${downloadAttr} target="_blank" rel="noopener" class="md-link" style="color:var(--accent);text-decoration:underline;font-weight:600;">${label}</a>`;
+                });
             while (i < lines.length) {
                 const line = lines[i];
                 const trimmed = line.trim();

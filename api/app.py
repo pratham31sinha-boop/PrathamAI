@@ -1440,10 +1440,75 @@ def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: st
 def download_generated_file(token):
     entry = _generated_files_store.get(token)
     if not entry:
+        # Check if token is actually a filename
+        safe_name = os.path.basename(token)
+        for tok, e in _generated_files_store.items():
+            if e.get("filename") == safe_name:
+                resp = Response(e["bytes"], mimetype=e["mimetype"])
+                resp.headers["Content-Disposition"] = f'attachment; filename="{e["filename"]}"'
+                return resp
+        # Check /tmp
+        tmp_p = os.path.join("/tmp", safe_name)
+        if os.path.isfile(tmp_p):
+            with open(tmp_p, "rb") as fh:
+                data = fh.read()
+            mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+            resp = Response(data, mimetype=mime)
+            resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+            return resp
         return jsonify({"error": "This download has expired or does not exist."}), 404
     resp = Response(entry["bytes"], mimetype=entry["mimetype"])
     resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
     return resp
+
+@app.route("/api/download_temp_file", methods=["GET"])
+@app.route("/api/app/download_temp_file", methods=["GET"])
+@app.route("/download_file", methods=["GET"])
+def download_temp_file():
+    name = request.args.get("name") or request.args.get("file") or request.args.get("path")
+    if not name:
+        return jsonify({"error": "No filename specified"}), 400
+    safe_name = os.path.basename(name)
+    # 1. Search in _generated_files_store
+    for tok, entry in _generated_files_store.items():
+        if entry.get("filename") == safe_name or tok == name:
+            resp = Response(entry["bytes"], mimetype=entry["mimetype"])
+            resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
+            return resp
+    # 2. Search in /tmp
+    tmp_path = os.path.join("/tmp", safe_name)
+    if os.path.isfile(tmp_path):
+        with open(tmp_path, "rb") as fh:
+            data = fh.read()
+        mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+        resp = Response(data, mimetype=mime)
+        resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+        return resp
+    # 3. Search in data/sessions/*/safe_name
+    sessions_root = os.path.join(WORKSPACE_ROOT, "data", "sessions")
+    if os.path.isdir(sessions_root):
+        for sdir in os.listdir(sessions_root):
+            candidate = os.path.join(sessions_root, sdir, safe_name)
+            if os.path.isfile(candidate):
+                with open(candidate, "rb") as fh:
+                    data = fh.read()
+                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+                resp = Response(data, mimetype=mime)
+                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+                return resp
+    # 4. Search in data/*/attachments/safe_name
+    data_root = os.path.join(WORKSPACE_ROOT, "data")
+    if os.path.isdir(data_root):
+        for udir in os.listdir(data_root):
+            candidate = os.path.join(data_root, udir, "attachments", safe_name)
+            if os.path.isfile(candidate):
+                with open(candidate, "rb") as fh:
+                    data = fh.read()
+                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+                resp = Response(data, mimetype=mime)
+                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+                return resp
+    return jsonify({"error": f"File '{safe_name}' not found or expired"}), 404
 _education_cache = {"files": {}, "listing_t": 0}
 _EDUCATION_LISTING_TTL = 120           
 def _github_list_dir(path: str):
@@ -2506,6 +2571,7 @@ SYSTEM_PROMPT = (
     "run calculations, process data, test code, create files, and chain multi-step tasks.\n"
     "To create a file directly: use ```createfile:<filename.ext>\\n<content>\\n``` — this writes a real "
     "downloadable file. Use ```editfile:<filename> with SEARCH/REPLACE blocks for incremental edits.\n"
+    "DELIVERABLE LINKS: When generating games, apps, or scripts, write them directly into the current directory (e.g. game.html, game.zip) or use createfile. NEVER output local paths like file:///tmp/... or /tmp/... because user web browsers block local file:// links. Instead provide clean markdown links or mention the filename directly (e.g. [Download game.zip](game.zip)). The platform automatically provides interactive download cards.\n"
     "You have full Claude-like freedom to build full applications, single-file HTML5 games, tools, scripts, and workflows. Always deliver complete, working code.\n\n"
     "=== FILE EXPORTS ===\n"
     "When asked to export as zip/pdf/csv/etc: put ONLY the clean deliverable in a ```finaldoc block. "
@@ -6160,6 +6226,12 @@ def chat_stream():
                     for _root, _dirs, _files in os.walk(terminal_workdir):
                         for _f in _files:
                             _pre_exec_files.add(os.path.join(_root, _f))
+                _pre_tmp_files = set()
+                try:
+                    for _f in os.listdir("/tmp"):
+                        _pre_tmp_files.add(_f)
+                except Exception:
+                    pass
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
                 if terminal_workdir and os.path.isdir(terminal_workdir):
                     _post_exec_files = set()
@@ -6186,6 +6258,32 @@ def chat_stream():
                             _produced_filenames_this_turn.add(_new_name.lower())
                         except Exception as _reg_exc:
                             print(f"[AUTO FILE DISCOVERY FAULT] {_new_path} -> {_reg_exc}")
+                try:
+                    _post_tmp_files = set(os.listdir("/tmp"))
+                    for _tmp_f in sorted(_post_tmp_files - _pre_tmp_files):
+                        _tmp_path = os.path.join("/tmp", _tmp_f)
+                        if os.path.isfile(_tmp_path) and not _tmp_f.startswith("."):
+                            if terminal_workdir and os.path.isdir(terminal_workdir):
+                                try:
+                                    shutil.copy2(_tmp_path, os.path.join(terminal_workdir, _tmp_f))
+                                except Exception:
+                                    pass
+                            with open(_tmp_path, "rb") as _fh:
+                                _t_bytes = _fh.read()
+                            if len(_t_bytes) <= 60 * 1024 * 1024:
+                                _t_mime = mimetypes.guess_type(_tmp_f)[0] or "application/octet-stream"
+                                _t_token = str(uuid.uuid4())
+                                _generated_files_store[_t_token] = {
+                                    "bytes": _t_bytes, "filename": _tmp_f, "mimetype": _t_mime,
+                                }
+                                yield _sse({
+                                    "type": "file_ready",
+                                    "url": f"/download/{_t_token}",
+                                    "filename": _tmp_f,
+                                })
+                                _produced_filenames_this_turn.add(_tmp_f.lower())
+                except Exception as _te:
+                    print(f"[TMP AUTO FILE DISCOVERY FAULT] {_te}")
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
                 yield _sse({
                     "type": "terminal_output",
@@ -6237,6 +6335,45 @@ def chat_stream():
                 _extract_conversation_files(conv_id=conv_id, messages=[{"role": "assistant", "content": assistant_response}], user_email=user_email)
             except Exception as _cexc:
                 print(f"[CONV_FILES_EXTRACT_ERR] {_cexc}")
+
+            # Auto-detect ANY files referenced in assistant_response or created in /tmp or terminal_workdir
+            referenced_filenames = set()
+            for m in re.finditer(r"(?:file:///tmp/|/tmp/|```createfile:|\b)([a-zA-Z0-9_\-]+\.(?:zip|html|py|js|json|css|pdf|tar\.gz))\b", assistant_response):
+                referenced_filenames.add(m.group(1))
+
+            for fname in referenced_filenames:
+                if fname.lower() in _produced_filenames_this_turn:
+                    continue
+                cand_path = None
+                if terminal_workdir and os.path.isfile(os.path.join(terminal_workdir, fname)):
+                    cand_path = os.path.join(terminal_workdir, fname)
+                elif os.path.isfile(os.path.join("/tmp", fname)):
+                    cand_path = os.path.join("/tmp", fname)
+                    if terminal_workdir and os.path.isdir(terminal_workdir):
+                        try:
+                            shutil.copy2(cand_path, os.path.join(terminal_workdir, fname))
+                        except Exception:
+                            pass
+                
+                if cand_path and os.path.isfile(cand_path):
+                    try:
+                        with open(cand_path, "rb") as fh:
+                            fbytes = fh.read()
+                        fmime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                        ftoken = _store_generated_file(fbytes, fname, fmime)
+                        yield _sse({"type": "file_ready", "url": f"/download/{ftoken}", "filename": fname})
+                        _produced_filenames_this_turn.add(fname.lower())
+                        if user_email:
+                            attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
+                            try:
+                                os.makedirs(attach_dir, exist_ok=True)
+                                with open(os.path.join(attach_dir, fname), "wb") as f_out:
+                                    f_out.write(fbytes)
+                                _sync_attachment_to_github(f"data/{user_email}/attachments/{fname}", fbytes)
+                            except Exception:
+                                pass
+                    except Exception as _fe:
+                        print(f"[REFERENCED FILE DISCOVERY FAULT] {fname} -> {_fe}")
 
             try:
                 if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
