@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pratham AI • Pokémon 2.5D Battle Arena</title>
+<style>
+  :root {
+    --bg-dark: #090d16;
+    --neon-blue: #06b6d4;
+    --neon-yellow: #facc15;
+    --neon-red: #f43f5e;
+    --neon-green: #10b981;
+    --panel-bg: rgba(15, 23, 42, 0.88);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  body {
+    background: radial-gradient(circle at 50% 20%, #1e1b4b, var(--bg-dark));
+    color: #f8fafc;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #game-container {
+    position: relative;
+    width: 1000px;
+    height: 640px;
+    max-width: 98vw;
+    max-height: 92vh;
+    border-radius: 20px;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(99, 102, 241, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+    background: #000;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  /* Overlay HUD */
+  .hud-panel {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .header-bar {
+    top: 16px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .brand-badge {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 8px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
+  .brand-badge span { color: var(--neon-yellow); }
+  .mode-switch-btn {
+    pointer-events: auto;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 25px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+    transition: all 0.2s ease;
+  }
+  .mode-switch-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(99, 102, 241, 0.8);
+  }
+
+  /* Battle HUD */
+  .battle-hud {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    gap: 16px;
+    z-index: 20;
+    pointer-events: auto;
+  }
+  .dialog-box {
+    flex: 1.2;
+    background: var(--panel-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 18px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 110px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  }
+  .dialog-text {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: #e2e8f0;
+  }
+  .dialog-subtext {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 6px;
+  }
+  .moves-grid {
+    flex: 1.8;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .move-btn {
+    background: rgba(30, 41, 59, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .move-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+  }
+  .move-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .move-btn.fire { border-left: 5px solid #ef4444; }
+  .move-btn.electric { border-left: 5px solid #eab308; }
+  .move-btn.water { border-left: 5px solid #3b82f6; }
+  .move-btn.grass { border-left: 5px solid #22c55e; }
+  .move-btn.dragon { border-left: 5px solid #a855f7; }
+  .move-btn.normal { border-left: 5px solid #94a3b8; }
+  .move-title { font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; }
+  .move-info { font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; margin-top: 4px; }
+
+  /* Pokemon Status Plates */
+  .pokemon-card {
+    position: absolute;
+    width: 250px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    padding: 12px 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    pointer-events: none;
+    z-index: 15;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .enemy-card { top: 75px; left: 50px; }
+  .player-card { bottom: 150px; right: 50px; }
+
+  .poke-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .poke-name { font-weight: 800; font-size: 15px; }
+  .poke-lvl { font-size: 12px; color: var(--neon-yellow); font-weight: 700; }
+  .hp-bar-bg {
+    width: 100%;
+    height: 9px;
+    background: #1e293b;
+    border-radius: 6px;
+    margin: 8px 0 4px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .hp-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    width: 100%;
+    border-radius: 6px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+  }
+  .hp-text { font-size: 11px; color: #94a3b8; text-align: right; font-weight: 600; }
+
+  /* Notification overlay */
+  .crit-banner {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-size: 32px;
+    font-weight: 900;
+    color: #fef08a;
+    text-shadow: 0 0 20px #eab308, 0 0 40px #ca8a04;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 50;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .crit-banner.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+
+  /* Control Hint */
+  .controls-tip {
+    position: absolute;
+    top: 75px;
+    right: 25px;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px 14px;
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="1000" height="640"></canvas>
+
+  <!-- Top Bar -->
+  <div class="hud-panel header-bar">
+    <div class="brand-badge">
+      ⚡ <span>PRATHAM AI</span> • POKÉMON 2.5D ARENA
+    </div>
+    <div style="display:flex; gap:10px; pointer-events:auto;">
+      <button class="mode-switch-btn" id="roamBtn">🗺️ Overworld / Battle</button>
+      <button class="mode-switch-btn" id="soundToggle" style="background:#334155;">🔊 SFX: ON</button>
+    </div>
+  </div>
+
+  <div class="controls-tip" id="controlsTip">
+    🎮 <b>Overworld Keys:</b> [W/A/S/D] or [Arrows] Walk<br>
+    ⚔️ Walk into tall grass to trigger wild battles!
+  </div>
+
+  <!-- Enemy Health Card -->
+  <div class="pokemon-card enemy-card" id="enemyCard">
+    <div class="poke-header">
+      <span class="poke-name" id="enemyName">Charizard</span>
+      <span class="poke-lvl" id="enemyLvl">Lv. 50</span>
+    </div>
+    <div class="hp-bar-bg">
+      <div class="hp-bar-fill" id="enemyHpBar"></div>
+    </div>
+    <div class="hp-text" id="enemyHpText">180 / 180 HP</div>
+  </div>
+
+  <!-- Player Health Card -->
+  <div class="pokemon-card player-card" id="playerCard">
+    <div class="poke-header">
+      <span class="poke-name" id="playerName">Pikachu</span>
+      <span class="poke-lvl" id="playerLvl">Lv. 52</span>
+    </div>
+    <div class="hp-bar-bg">
+      <div class="hp-bar-fill" id="playerHpBar"></div>
+    </div>
+    <div class="hp-text" id="playerHpText">145 / 145 HP</div>
+  </div>
+
+  <!-- Battle Action Menu -->
+  <div class="battle-hud" id="battleHud">
+    <div class="dialog-box">
+      <div class="dialog-text" id="dialogText">A wild Charizard swooped down from the fiery crags! What will Pikachu do?</div>
+      <div class="dialog-subtext" id="dialogSub">Choose an attack to unleash.</div>
+    </div>
+    <div class="moves-grid" id="movesGrid">
+      <button class="move-btn electric" onclick="castMove(0)">
+        <div class="move-title"><span>⚡ Thunderbolt</span><span>PWR 90</span></div>
+        <div class="move-info"><span>Electric</span><span>PP 15/15</span></div>
+      </button>
+      <button class="move-btn electric" onclick="castMove(1)">
+        <div class="move-title"><span>💥 Volt Tackle</span><span>PWR 120</span></div>
+        <div class="move-info"><span>Electric</span><span>PP 5/5</span></div>
+      </button>
+      <button class="move-btn normal" onclick="castMove(2)">
+        <div class="move-title"><span>💨 Quick Attack</span><span>PWR 40</span></div>
+        <div class="move-info"><span>Priority +1</span><span>PP 30/30</span></div>
+      </button>
+      <button class="move-btn dragon" onclick="castMove(3)">
+        <div class="move-title"><span>🛡️ Iron Tail</span><span>PWR 100</span></div>
+        <div class="move-info"><span>Steel / Defense-</span><span>PP 10/10</span></div>
+      </button>
+    </div>
+  </div>
+
+  <div class="crit-banner" id="critBanner">CRITICAL HIT!</div>
+</div>
+
+<script>
+/* =========================================================================
+   Pratham AI - 2.5D Pokémon Engine
+   Created by Pratham Sinha & team under Akriti & Aditi Aishwaryam's supervision
+   ========================================================================= */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let soundEnabled = true;
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function playTone(freq, type, duration, vol=0.15) {
+  if (!soundEnabled) return;
+  initAudio();
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function sfxAttack(type) {
+  if (type === 'electric') {
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => playTone(500 + Math.random() * 800, 'sawtooth', 0.08, 0.15), i * 45);
+    }
+  } else if (type === 'fire') {
+    playTone(180, 'square', 0.35, 0.2);
+  } else if (type === 'hit') {
+    playTone(120, 'triangle', 0.25, 0.25);
+  } else if (type === 'heal') {
+    playTone(523, 'sine', 0.1, 0.15);
+    setTimeout(() => playTone(659, 'sine', 0.15, 0.15), 100);
+    setTimeout(() => playTone(784, 'sine', 0.25, 0.15), 200);
+  }
+}
+
+document.getElementById('soundToggle').addEventListener('click', (e) => {
+  soundEnabled = !soundEnabled;
+  e.target.innerText = soundEnabled ? '🔊 SFX: ON' : '🔇 SFX: OFF';
+  e.target.style.background = soundEnabled ? '#334155' : '#7f1d1d';
+});
+
+// Game State
+let currentMode = 'battle'; // 'battle' or 'overworld'
+let animTick = 0;
+let particles = [];
+let floatingTexts = [];
+
+// Pokemon Data
+const playerPoke = {
+  name: 'Pikachu',
+  lvl: 52,
+  maxHp: 145,
+  hp: 145,
+  x: 280,
+  y: 440,
+  scale: 1.0,
+  shaking: 0,
+  moves: [
+    { name: 'Thunderbolt', type: 'electric', power: 90, acc: 100 },
+    { name: 'Volt Tackle', type: 'electric', power: 120, acc: 95 },
+    { name: 'Quick Attack', type: 'normal', power: 40, acc: 100 },
+    { name: 'Iron Tail', type: 'dragon', power: 100, acc: 85 }
+  ]
+};
+
+const enemyPoke = {
+  name: 'Charizard',
+  lvl: 50,
+  maxHp: 180,
+  hp: 180,
+  x: 720,
+  y: 220,
+  scale: 1.15,
+  shaking: 0,
+  moves: [
+    { name: 'Flamethrower', type: 'fire', power: 90 },
+    { name: 'Air Slash', type: 'normal', power: 75 },
+    { name: 'Dragon Claw', type: 'dragon', power: 80 },
+    { name: 'Fire Blast', type: 'fire', power: 110 }
+  ]
+};
+
+let turnBusy = false;
+
+// Overworld Player Position
+const overworld = {
+  x: 500,
+  y: 350,
+  speed: 4,
+  facing: 'down',
+  isWalking: false,
+  grassPatches: []
+};
+
+// Seed Grass Patches
+for (let i = 0; i < 28; i++) {
+  overworld.grassPatches.push({
+    x: 150 + Math.random() * 700,
+    y: 120 + Math.random() * 400,
+    w: 60 + Math.random() * 40,
+    h: 50 + Math.random() * 30
+  });
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+document.getElementById('roamBtn').addEventListener('click', () => {
+  if (currentMode === 'battle') {
+    switchMode('overworld');
+  } else {
+    switchMode('battle');
+  }
+});
+
+function switchMode(newMode) {
+  currentMode = newMode;
+  const battleHud = document.getElementById('battleHud');
+  const enemyCard = document.getElementById('enemyCard');
+  const playerCard = document.getElementById('playerCard');
+  const controlsTip = document.getElementById('controlsTip');
+
+  if (newMode === 'overworld') {
+    battleHud.style.display = 'none';
+    enemyCard.style.display = 'none';
+    playerCard.style.display = 'none';
+    controlsTip.innerHTML = `🎮 <b>Overworld Exploration:</b><br>[W/A/S/D] or [Arrows] Walk<br>Enter lush tall grass to encounter wild Pokémon!`;
+    document.getElementById('roamBtn').innerText = '⚔️ Enter Battle';
+  } else {
+    battleHud.style.display = 'flex';
+    enemyCard.style.display = 'block';
+    playerCard.style.display = 'block';
+    controlsTip.innerHTML = `⚔️ <b>Battle Arena Active:</b><br>Select your moves below.<br>Features true 2.5D perspective & particle shaders!`;
+    document.getElementById('roamBtn').innerText = '🗺️ Overworld Mode';
+  }
+}
+
+// Particle System
+function spawnParticle(x, y, vx, vy, color, radius, life, shape='circle') {
+  particles.push({ x, y, vx, vy, color, radius, life, maxLife: life, shape });
+}
+
+function spawnAttackFX(type, startX, startY, targetX, targetY) {
+  sfxAttack(type);
+  const count = type === 'electric' ? 55 : 45;
+  for (let i = 0; i < count; i++) {
+    const t = Math.random();
+    const bx = startX + (targetX - startX) * t;
+    const by = startY + (targetY - startY) * t;
+    const spread = (Math.random() - 0.5) * 40;
+    const color = type === 'electric' ? ['#fef08a', '#eab308', '#67e8f9'][Math.floor(Math.random()*3)]
+                : type === 'fire' ? ['#f87171', '#ef4444', '#fbbf24'][Math.floor(Math.random()*3)]
+                : ['#e2e8f0', '#94a3b8', '#38bdf8'][Math.floor(Math.random()*3)];
+    spawnParticle(bx + spread, by + spread, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, color, Math.random() * 5 + 3, 30);
+  }
+}
+
+function addFloatingText(text, x, y, color='#fff') {
+  floatingTexts.push({ text, x, y, vy: -1.2, life: 60, color });
+}
+
+// Turn Based Combat Mechanics
+function updateHpDisplay() {
+  const pPct = Math.max(0, (playerPoke.hp / playerPoke.maxHp) * 100);
+  const ePct = Math.max(0, (enemyPoke.hp / enemyPoke.maxHp) * 100);
+
+  const pHpBar = document.getElementById('playerHpBar');
+  const eHpBar = document.getElementById('enemyHpBar');
+
+  pHpBar.style.width = pPct + '%';
+  eHpBar.style.width = ePct + '%';
+
+  pHpBar.style.background = pPct > 50 ? 'linear-gradient(90deg, #10b981, #34d399)'
+                          : pPct > 25 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                          : 'linear-gradient(90deg, #ef4444, #f87171)';
+
+  eHpBar.style.background = ePct > 50 ? 'linear-gradient(90deg, #10b981, #34d399)'
+                          : ePct > 25 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                          : 'linear-gradient(90deg, #ef4444, #f87171)';
+
+  document.getElementById('playerHpText').innerText = `${Math.ceil(playerPoke.hp)} / ${playerPoke.maxHp} HP`;
+  document.getElementById('enemyHpText').innerText = `${Math.ceil(enemyPoke.hp)} / ${enemyPoke.maxHp} HP`;
+}
+
+function castMove(moveIndex) {
+  if (turnBusy || currentMode !== 'battle') return;
+  turnBusy = true;
+  disableMoveButtons(true);
+
+  const move = playerPoke.moves[moveIndex];
+  const dialog = document.getElementById('dialogText');
+  const sub = document.getElementById('dialogSub');
+
+  dialog.innerText = `Pikachu used ${move.name.toUpperCase()}!`;
+  sub.innerText = 'Unleashing powerful 2.5D elemental surge...';
+
+  // Animate attack
+  setTimeout(() => {
+    spawnAttackFX(move.type, playerPoke.x, playerPoke.y - 40, enemyPoke.x, enemyPoke.y - 40);
+    enemyPoke.shaking = 20;
+
+    // Damage Calculation
+    const isCrit = Math.random() < 0.22;
+    const stab = move.type === 'electric' ? 1.5 : 1.0;
+    const typeAdv = (move.type === 'electric') ? 2.0 : 1.0; // Electric beats Flying Charizard
+    const critMult = isCrit ? 1.8 : 1.0;
+
+    const baseDmg = ((2 * playerPoke.lvl / 5 + 2) * move.power * (115 / 100) / 50 + 2);
+    const finalDamage = Math.round(baseDmg * stab * typeAdv * critMult * (0.85 + Math.random() * 0.3));
+
+    enemyPoke.hp = Math.max(0, enemyPoke.hp - finalDamage);
+    updateHpDisplay();
+    addFloatingText(`-${finalDamage}`, enemyPoke.x, enemyPoke.y - 90, isCrit ? '#facc15' : '#f87171');
+
+    if (isCrit) {
+      showCrit();
+    }
+
+    if (enemyPoke.hp <= 0) {
+      setTimeout(() => {
+        dialog.innerText = `Enemy ${enemyPoke.name} fainted! You won the battle!`;
+        sub.innerText = 'Gained 1,840 EXP Points!';
+        sfxAttack('heal');
+        setTimeout(resetEncounter, 3500);
+      }, 1000);
+    } else {
+      // Enemy Counter Attack
+      setTimeout(enemyTurn, 1600);
+    }
+  }, 500);
+}
+
+function enemyTurn() {
+  const dialog = document.getElementById('dialogText');
+  const sub = document.getElementById('dialogSub');
+  const enemyMove = enemyPoke.moves[Math.floor(Math.random() * enemyPoke.moves.length)];
+
+  dialog.innerText = `Foe ${enemyPoke.name} unleashed ${enemyMove.name.toUpperCase()}!`;
+  sub.innerText = 'Brace for impact!';
+
+  setTimeout(() => {
+    spawnAttackFX(enemyMove.type, enemyPoke.x, enemyPoke.y - 40, playerPoke.x, playerPoke.y - 40);
+    playerPoke.shaking = 22;
+
+    const dmg = Math.round(enemyMove.power * 0.42 * (0.9 + Math.random() * 0.25));
+    playerPoke.hp = Math.max(0, playerPoke.hp - dmg);
+    updateHpDisplay();
+    addFloatingText(`-${dmg}`, playerPoke.x, playerPoke.y - 80, '#ef4444');
+
+    if (playerPoke.hp <= 0) {
+      setTimeout(() => {
+        dialog.innerText = `Pikachu fainted! Reviving Pikachu with a Max Revive...`;
+        sub.innerText = 'Pratham AI Field Restoration activated.';
+        sfxAttack('heal');
+        setTimeout(resetEncounter, 3000);
+      }, 1000);
+    } else {
+      setTimeout(() => {
+        dialog.innerText = `What will Pikachu do next?`;
+        sub.innerText = 'Select your next strategic command.';
+        turnBusy = false;
+        disableMoveButtons(false);
+      }, 1100);
+    }
+  }, 600);
+}
+
+function showCrit() {
+  const banner = document.getElementById('critBanner');
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 900);
+}
+
+function disableMoveButtons(disabled) {
+  document.querySelectorAll('.move-btn').forEach(btn => btn.disabled = disabled);
+}
+
+function resetEncounter() {
+  playerPoke.hp = playerPoke.maxHp;
+  enemyPoke.hp = enemyPoke.maxHp;
+  updateHpDisplay();
+  turnBusy = false;
+  disableMoveButtons(false);
+  document.getElementById('dialogText').innerText = `A fresh wild Pokémon stepped into the 2.5D arena!`;
+  document.getElementById('dialogSub').innerText = 'Pikachu is ready for battle!';
+}
+
+// 2.5D RENDERING ENGINE
+function drawPerspectiveArena() {
+  // Deep space / Stadium background
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bgGrad.addColorStop(0, '#060814');
+  bgGrad.addColorStop(0.4, '#0f172a');
+  bgGrad.addColorStop(0.7, '#1e1b4b');
+  bgGrad.addColorStop(1, '#020617');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Stadium Neon Arch Lines
+  ctx.save();
+  ctx.strokeStyle = 'rgba(99, 102, 241, 0.22)';
+  ctx.lineWidth = 2;
+  for (let r = 80; r < 600; r += 70) {
+    ctx.beginPath();
+    ctx.ellipse(canvas.width / 2, 200, r * 1.5, r * 0.45, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Floating ambient motes
+  if (Math.random() < 0.25) {
+    spawnParticle(Math.random() * canvas.width, canvas.height, (Math.random() - 0.5) * 0.5, -Math.random() * 1.2 - 0.5, 'rgba(129, 140, 248, 0.6)', Math.random() * 2.5 + 1, 150);
+  }
+
+  // 2.5D ISOMETRIC BATTLE PLATFORMS
+  // Enemy Platform (Distant, smaller scale)
+  draw3DPlatform(enemyPoke.x, enemyPoke.y + 40, 190, 70, 26, '#334155', '#475569', '#f97316');
+
+  // Player Platform (Foreground, larger scale)
+  draw3DPlatform(playerPoke.x, playerPoke.y + 45, 270, 95, 34, '#1e293b', '#334155', '#38bdf8');
+}
+
+function draw3DPlatform(cx, cy, rx, ry, depth, faceColor, topColor, glowColor) {
+  ctx.save();
+  // Ambient floor glow
+  const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, rx * 1.2);
+  glow.addColorStop(0, glowColor + '55');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx * 1.15, ry * 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3D Depth Extrusion
+  ctx.fillStyle = faceColor;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + depth, rx, ry, 0, 0, Math.PI);
+  ctx.lineTo(cx - rx, cy);
+  ctx.ellipse(cx, cy, rx, ry, 0, Math.PI, 0, true);
+  ctx.lineTo(cx + rx, cy + depth);
+  ctx.fill();
+
+  // Platform Top Face
+  ctx.fillStyle = topColor;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // High-Tech Cyber Ring on Platform
+  ctx.strokeStyle = glowColor;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx * 0.75, ry * 0.75, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner Pokéball Motif
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx * 0.35, ry * 0.35, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// 2.5D PROCEDURAL POKEMON RENDERING
+function drawCharizard(x, y, scale, shake) {
+  ctx.save();
+  ctx.translate(x + (Math.sin(animTick * 8) * shake), y);
+  ctx.scale(scale, scale);
+
+  // Floating breathing bob
+  const bob = Math.sin(animTick * 3) * 6;
+  ctx.translate(0, bob);
+
+  // Shadow on platform
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(0, 35 - bob, 55, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wings (Back)
+  ctx.fillStyle = '#1e3a8a';
+  ctx.strokeStyle = '#c2410c';
+  ctx.lineWidth = 5;
+
+  // Left Wing
+  ctx.beginPath();
+  ctx.moveTo(-20, -50);
+  ctx.quadraticCurveTo(-90, -110, -85, -40);
+  ctx.quadraticCurveTo(-50, -25, -15, -30);
+  ctx.fill();
+  ctx.stroke();
+
+  // Right Wing
+  ctx.beginPath();
+  ctx.moveTo(20, -50);
+  ctx.quadraticCurveTo(90, -110, 85, -40);
+  ctx.quadraticCurveTo(50, -25, 15, -30);
+  ctx.fill();
+  ctx.stroke();
+
+  // Charizard Body (Orange Gradient)
+  const bodyGrad = ctx.createLinearGradient(-35, -70, 35, 20);
+  bodyGrad.addColorStop(0, '#fb923c');
+  bodyGrad.addColorStop(1, '#ea580c');
+  ctx.fillStyle = bodyGrad;
+
+  // Tail with Animated Flame
+  ctx.beginPath();
+  ctx.moveTo(-25, 0);
+  ctx.quadraticCurveTo(-85, 20, -95, -20);
+  ctx.quadraticCurveTo(-80, 5, -15, 12);
+  ctx.fill();
+
+  // Flame Particle on Tail Tip
+  const flamePulse = Math.sin(animTick * 12) * 5;
+  const flameGrad = ctx.createRadialGradient(-95, -20, 2, -95, -20, 22 + flamePulse);
+  flameGrad.addColorStop(0, '#fef08a');
+  flameGrad.addColorStop(0.4, '#f97316');
+  flameGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = flameGrad;
+  ctx.beginPath();
+  ctx.arc(-95, -20, 22 + flamePulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Main Torso
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, -10, 32, 42, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cream Belly Patch
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath();
+  ctx.ellipse(4, -5, 18, 28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head and Snout
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, -68, 22, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Horns
+  ctx.beginPath();
+  ctx.moveTo(-10, -78);
+  ctx.lineTo(-26, -100);
+  ctx.lineTo(-4, -82);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(10, -78);
+  ctx.lineTo(26, -100);
+  ctx.lineTo(4, -82);
+  ctx.fill();
+
+  // Glowing Cyan Dragon Eyes
+  ctx.fillStyle = '#22d3ee';
+  ctx.shadowColor = '#06b6d4';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.ellipse(-7, -70, 4, 3, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(9, -70, 4, 3, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+function drawPikachu(x, y, scale, shake) {
+  ctx.save();
+  ctx.translate(x + (Math.sin(animTick * 8) * shake), y);
+  ctx.scale(scale, scale);
+
+  // Ready bounce animation
+  const bounce = Math.sin(animTick * 6) * 5;
+  ctx.translate(0, bounce);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(0, 32 - bounce, 50, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lightning Bolt Tail
+  ctx.fillStyle = '#eab308';
+  ctx.strokeStyle = '#854d0e';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(25, -10);
+  ctx.lineTo(45, -35);
+  ctx.lineTo(35, -45);
+  ctx.lineTo(65, -70);
+  ctx.lineTo(85, -100);
+  ctx.lineTo(65, -85);
+  ctx.lineTo(75, -65);
+  ctx.lineTo(50, -45);
+  ctx.lineTo(55, -30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Pikachu Body (Electric Yellow)
+  const pikaGrad = ctx.createLinearGradient(-30, -50, 30, 20);
+  pikaGrad.addColorStop(0, '#fde047');
+  pikaGrad.addColorStop(1, '#eab308');
+  ctx.fillStyle = pikaGrad;
+
+  // Chubby Torso
+  ctx.beginPath();
+  ctx.ellipse(0, -5, 34, 38, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Brown Back Stripes
+  ctx.fillStyle = '#78350f';
+  ctx.beginPath();
+  ctx.ellipse(-8, -12, 18, 4, -0.15, 0, Math.PI * 2);
+  ctx.ellipse(-6, 2, 20, 4.5, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head
+  ctx.fillStyle = pikaGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, -48, 28, 26, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ears
+  // Left Ear
+  ctx.beginPath();
+  ctx.moveTo(-16, -65);
+  ctx.quadraticCurveTo(-45, -115, -35, -120);
+  ctx.quadraticCurveTo(-15, -110, -5, -70);
+  ctx.fill();
+  // Black Tip
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.moveTo(-45, -115);
+  ctx.lineTo(-35, -120);
+  ctx.lineTo(-24, -100);
+  ctx.lineTo(-38, -98);
+  ctx.fill();
+
+  // Right Ear
+  ctx.fillStyle = pikaGrad;
+  ctx.beginPath();
+  ctx.moveTo(16, -65);
+  ctx.quadraticCurveTo(45, -115, 35, -120);
+  ctx.quadraticCurveTo(15, -110, 5, -70);
+  ctx.fill();
+  // Black Tip
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.moveTo(45, -115);
+  ctx.lineTo(35, -120);
+  ctx.lineTo(24, -100);
+  ctx.lineTo(38, -98);
+  ctx.fill();
+
+  // Cheeks (Glowing Red Sacs)
+  ctx.fillStyle = '#ef4444';
+  ctx.shadowColor = '#f87171';
+  ctx.shadowBlur = Math.sin(animTick * 10) * 10 + 10;
+  ctx.beginPath();
+  ctx.arc(-20, -42, 8, 0, Math.PI * 2);
+  ctx.arc(20, -42, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Eyes & Sparkles
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(-11, -52, 4.5, 0, Math.PI * 2);
+  ctx.arc(11, -52, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(-12, -54, 1.8, 0, Math.PI * 2);
+  ctx.arc(10, -54, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// OVERWORLD RENDERING
+function drawOverworld() {
+  // 2.5D Isometric Grass Tiles Grid
+  ctx.fillStyle = '#14532d';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Checkerboard stylized 2.5D terrain
+  const tw = 64;
+  const th = 32;
+  ctx.save();
+  for (let gx = -2; gx < canvas.width / tw + 2; gx++) {
+    for (let gy = -2; gy < canvas.height / th + 2; gy++) {
+      const isAlt = (gx + gy) % 2 === 0;
+      ctx.fillStyle = isAlt ? '#15803d' : '#166534';
+      ctx.beginPath();
+      const px = gx * tw + (gy % 2 === 0 ? 0 : tw / 2);
+      const py = gy * th;
+      ctx.rect(px, py, tw, th);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // Waving Tall Grass Patches
+  overworld.grassPatches.forEach(g => {
+    ctx.save();
+    ctx.fillStyle = '#22c55e';
+    ctx.beginPath();
+    ctx.ellipse(g.x, g.y, g.w, g.h, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Blades of grass
+    ctx.strokeStyle = '#15803d';
+    ctx.lineWidth = 3;
+    for (let bx = g.x - g.w + 10; bx < g.x + g.w - 10; bx += 14) {
+      const sway = Math.sin(animTick * 4 + bx) * 6;
+      ctx.beginPath();
+      ctx.moveTo(bx, g.y + 10);
+      ctx.quadraticCurveTo(bx + sway, g.y - 15, bx + sway * 1.5, g.y - 25);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  // Trainer Character in Overworld
+  ctx.save();
+  ctx.translate(overworld.x, overworld.y);
+
+  // Character Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(0, 16, 20, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Walking Bob
+  const wBob = overworld.isWalking ? Math.sin(animTick * 14) * 4 : 0;
+  ctx.translate(0, wBob);
+
+  // Cap / Hat (Red)
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.arc(0, -22, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(0, -20, 10, 0, Math.PI);
+  ctx.fill();
+
+  // Blue Jacket
+  ctx.fillStyle = '#2563eb';
+  ctx.beginPath();
+  ctx.roundRect(-10, -10, 20, 18, 5);
+  ctx.fill();
+
+  // Jeans
+  ctx.fillStyle = '#1e3a8a';
+  ctx.fillRect(-8, 8, 6, 12);
+  ctx.fillRect(2, 8, 6, 12);
+
+  // Pikachu Companion Following Trainer!
+  drawPikachu(32, 4, 0.45, 0);
+
+  ctx.restore();
+}
+
+function updateOverworld() {
+  overworld.isWalking = false;
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup']) dy -= overworld.speed;
+  if (keys['s'] || keys['arrowdown']) dy += overworld.speed;
+  if (keys['a'] || keys['arrowleft']) dx -= overworld.speed;
+  if (keys['d'] || keys['arrowright']) dx += overworld.speed;
+
+  if (dx !== 0 || dy !== 0) {
+    overworld.isWalking = true;
+    overworld.x += dx;
+    overworld.y += dy;
+
+    // Boundaries
+    overworld.x = Math.max(50, Math.min(canvas.width - 50, overworld.x));
+    overworld.y = Math.max(80, Math.min(canvas.height - 60, overworld.y));
+
+    // Encounter Check inside Tall Grass
+    overworld.grassPatches.forEach(g => {
+      const dist = Math.hypot(overworld.x - g.x, overworld.y - g.y);
+      if (dist < g.w && Math.random() < 0.018) {
+        // Trigger Wild Encounter!
+        switchMode('battle');
+        resetEncounter();
+        sfxAttack('electric');
+        document.getElementById('dialogText').innerText = `Wild Pokémon jumped from the tall grass!`;
+      }
+    });
+  }
+}
+
+// MAIN RENDER LOOP
+function gameLoop() {
+  animTick += 0.04;
+
+  if (enemyPoke.shaking > 0) enemyPoke.shaking--;
+  if (playerPoke.shaking > 0) playerPoke.shaking--;
+
+  if (currentMode === 'battle') {
+    drawPerspectiveArena();
+    drawCharizard(enemyPoke.x, enemyPoke.y, enemyPoke.scale, enemyPoke.shaking);
+    drawPikachu(playerPoke.x, playerPoke.y, playerPoke.scale, playerPoke.shaking);
+  } else {
+    updateOverworld();
+    drawOverworld();
+  }
+
+  // Draw & Update Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    const alpha = p.life / p.maxLife;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Draw Floating Damage Texts
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y += ft.vy;
+    ft.life--;
+    ctx.save();
+    ctx.font = 'bold 22px Segoe UI, sans-serif';
+    ctx.fillStyle = ft.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 6;
+    ctx.fillText(ft.text, ft.x - 20, ft.y);
+    ctx.restore();
+
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Init
+updateHpDisplay();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
