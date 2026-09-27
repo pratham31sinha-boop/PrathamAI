@@ -4,7 +4,7 @@
   "user_id": "visitor",
   "pinned": false,
   "created_at": "2026-09-27T08:00:00.000Z",
-  "updated_at": "2026-09-27T08:04:20.000Z",
+  "updated_at": "2026-09-27T08:50:57.506404+00:00",
   "messages": [
     {
       "id": "user_msg_1",
@@ -28,6 +28,36 @@
         }
       ],
       "created_at": "2026-09-27T08:04:20.000Z"
+    },
+    {
+      "id": "506026e0-bcb6-4991-8060-c8d9250b7aa5",
+      "role": "user",
+      "content": "Hi",
+      "created_at": "2026-09-27T08:48:05.268794+00:00"
+    },
+    {
+      "id": "04c90662-96ad-49e7-b4a2-3f057ff7bdb0",
+      "role": "assistant",
+      "content": "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your project, coding, or tasks today?",
+      "created_at": "2026-09-27T08:48:06.174790+00:00"
+    },
+    {
+      "id": "878c3b6c-f00f-4f73-a43d-5a7b4240e026",
+      "role": "user",
+      "content": "Make a pokemon full ash journey game with high end graphics ake 2.5 d with high end graphics use 3d models",
+      "created_at": "2026-09-27T08:48:39.755034+00:00"
+    },
+    {
+      "id": "468c9dda-d567-404c-b241-fb7feba187c1",
+      "role": "assistant",
+      "content": "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?",
+      "created_at": "2026-09-27T08:50:21.907807+00:00"
+    },
+    {
+      "id": "23612b88-30f0-4b46-b43f-91ca45ca39c3",
+      "role": "user",
+      "content": "Make a pokemon full ash journey game with high end graphics ake 2.5 d with high end graphics use 3d models",
+      "created_at": "2026-09-27T08:50:57.506404+00:00"
     }
   ],
   "files": [

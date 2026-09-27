@@ -5078,17 +5078,6 @@ def _get_session_workdir(conv_id: str = None, user_email: str = None) -> str:
     safe_id = re.sub(r"[^\w\-]", "_", str(conv_id or "default"))
     session_dir = os.path.join(WORKSPACE_ROOT, "data", "sessions", safe_id)
     os.makedirs(session_dir, exist_ok=True)
-    if user_email:
-        user_attach_dir = os.path.join(WORKSPACE_ROOT, "data", user_email, "attachments")
-        if os.path.isdir(user_attach_dir):
-            for fname in os.listdir(user_attach_dir):
-                src = os.path.join(user_attach_dir, fname)
-                dst = os.path.join(session_dir, fname)
-                if os.path.isfile(src) and not os.path.exists(dst):
-                    try:
-                        shutil.copy2(src, dst)
-                    except Exception:
-                        pass
     return session_dir
 
 def _new_terminal_workdir(conv_id: str = None, user_email: str = None) -> str:

@@ -2537,6 +2537,7 @@
         }
         function createNewConversation() {
             currentConversationId = null;
+            try { localStorage.removeItem('pratham_last_active_conv_id'); } catch (e) {}
             activeChatTitleHeader.innerText = "New conversation";
             exportActionTrigger.classList.add('hidden');
             deleteActionTrigger.classList.add('hidden');
@@ -2554,7 +2555,7 @@
                     <p class="text-xs text-[var(--text-dim)] max-w-xs mx-auto">Submit queries or request structured file components code execution frames.</p>
                 </div>
             `;
-            synchronizeConversationsHistoryIndex();
+            renderHistoryRows(allHistoryItemsCache);
             closeMobileSidebar();
         }
         function copyPlainText(text, triggerEl) {
@@ -4521,6 +4522,7 @@
                 historyItemsBox.appendChild(row);
             });
         }
+        let _hasRunPageBootRestore = false;
         function renderAssistantMessageBlock(wrapper, log) {
             if (!wrapper || !log) return;
             // Restore thinking wrap if thinking summary is present
@@ -4536,7 +4538,7 @@
             updateAssistantMessageDOM(wrapper, log.content || '');
             appendAssistantCopyButton(wrapper, log.content || '');
 
-            // Restore deliverable files from message metadata
+            // Restore deliverable files belonging to THIS specific message
             const files = log.files || [];
             if (Array.isArray(files) && files.length > 0) {
                 files.forEach(f => {
@@ -4545,6 +4547,19 @@
                         appendDownloadCard(wrapper, dlUrl, f.filename);
                     }
                 });
+            } else if (log.content && typeof log.content === 'string') {
+                // If log.files wasn't explicitly saved, check for filenames explicitly mentioned in this message's text
+                const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:html|py|js|css|zip|pdf|json|txt))\b/gi;
+                let m;
+                const seen = new Set();
+                while ((m = fileRefRegex.exec(log.content)) !== null) {
+                    const fn = m[1];
+                    const fnLower = fn.toLowerCase();
+                    if (!seen.has(fnLower) && !['index.html', 'readme.md', 'package.json'].includes(fnLower)) {
+                        seen.add(fnLower);
+                        appendDownloadCard(wrapper, `/download/${encodeURIComponent(fn)}`, fn);
+                    }
+                }
             }
         }
 
@@ -4568,14 +4583,12 @@
                 }
             } catch (err) {}
 
-            // Auto-restore active conversation on refresh or initial open
-            if (!currentConversationId && allHistoryItemsCache.length > 0) {
+            // Auto-restore active conversation ONCE on initial page boot ONLY if the user was actively inside a conversation
+            if (!_hasRunPageBootRestore) {
+                _hasRunPageBootRestore = true;
                 let targetId = null;
                 try { targetId = localStorage.getItem('pratham_last_active_conv_id'); } catch (e) {}
-                if (!targetId || !allHistoryItemsCache.some(it => it.id === targetId)) {
-                    targetId = allHistoryItemsCache[0].id;
-                }
-                if (targetId) {
+                if (targetId && allHistoryItemsCache.some(it => it.id === targetId)) {
                     loadConversationSession(targetId);
                 }
             }
@@ -4636,34 +4649,7 @@
                 }
             } catch (err) {}
 
-            // Ensure any deliverables registered on disk or server are mounted
-            try {
-                const fResp = await smartFetchRequest(`/conversations/${conversationId}/files`, { method: 'GET', headers: { 'Authorization': globalAuthorizationToken } });
-                if (fResp.ok) {
-                    const fData = await fResp.json();
-                    const sFiles = fData.files || [];
-                    if (sFiles.length > 0) {
-                        const wrappers = conversationViewportPanel.querySelectorAll('.w-full.flex.flex-col.items-start');
-                        let lastAsstWrapper = null;
-                        for (let i = wrappers.length - 1; i >= 0; i--) {
-                            if (wrappers[i].querySelector('.answer-zone')) {
-                                lastAsstWrapper = wrappers[i];
-                                break;
-                            }
-                        }
-                        if (lastAsstWrapper) {
-                            sFiles.forEach(f => {
-                                if (f && f.filename) {
-                                    const dlUrl = f.download_url || f.url || `/download/${encodeURIComponent(f.filename)}`;
-                                    appendDownloadCard(lastAsstWrapper, dlUrl, f.filename);
-                                }
-                            });
-                        }
-                    }
-                }
-            } catch (e) {}
-
-            synchronizeConversationsHistoryIndex();
+            renderHistoryRows(allHistoryItemsCache);
         }
         async function triggerSessionDelete() {
             if (!currentConversationId) return;
