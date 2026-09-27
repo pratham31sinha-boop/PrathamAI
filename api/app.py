@@ -3423,21 +3423,28 @@ _ANTIGRAVITY_HOME_1 = "/root/.gemini/antigravity_accounts/primary"
 _ANTIGRAVITY_ACCOUNT_2 = "pratham31sinha@gmail.com"
 _ANTIGRAVITY_HOME_2 = "/root/.gemini/antigravity_accounts/secondary"
 
-# Ensure directories exist and have token files
-for _h in (_ANTIGRAVITY_HOME_1, _ANTIGRAVITY_HOME_2):
-    os.makedirs(f"{_h}/.gemini/antigravity-cli", exist_ok=True)
-    _tpath = f"{_h}/.gemini/antigravity-cli/antigravity-oauth-token"
-    if not os.path.exists(_tpath) and os.path.exists("/root/.gemini/antigravity-cli/antigravity-oauth-token"):
-        try:
-            shutil.copy2("/root/.gemini/antigravity-cli/antigravity-oauth-token", _tpath)
-        except Exception:
-            pass
+# Ensure directories exist and have token files safely without raising in unprivileged/serverless envs
+try:
+    if os.path.exists("/root") and os.access("/root", os.W_OK):
+        for _h in (_ANTIGRAVITY_HOME_1, _ANTIGRAVITY_HOME_2):
+            os.makedirs(f"{_h}/.gemini/antigravity-cli", exist_ok=True)
+            _tpath = f"{_h}/.gemini/antigravity-cli/antigravity-oauth-token"
+            if not os.path.exists(_tpath) and os.path.exists("/root/.gemini/antigravity-cli/antigravity-oauth-token"):
+                try:
+                    shutil.copy2("/root/.gemini/antigravity-cli/antigravity-oauth-token", _tpath)
+                except Exception:
+                    pass
+except Exception:
+    pass
 
 _WARM_ANTIGRAVITY_ACC1 = _WarmAntigravitySession(_ANTIGRAVITY_ACCOUNT_1, _ANTIGRAVITY_HOME_1)
 _WARM_ANTIGRAVITY_ACC2 = _WarmAntigravitySession(_ANTIGRAVITY_ACCOUNT_2, _ANTIGRAVITY_HOME_2)
 _WARM_ANTIGRAVITY = _WARM_ANTIGRAVITY_ACC1  # Backwards-compatibility alias
 
 def _prewarm_dual_antigravity():
+    # Only prewarm if agy is present in path or root
+    if not (shutil.which("agy") or os.path.exists("/root/.local/bin/agy")):
+        return
     def _pw1():
         try:
             _WARM_ANTIGRAVITY_ACC1._ensure_proc()
@@ -3448,10 +3455,16 @@ def _prewarm_dual_antigravity():
             _WARM_ANTIGRAVITY_ACC2._ensure_proc()
         except Exception:
             pass
-    threading.Thread(target=_pw1, daemon=True, name="prewarm-antigravity-1").start()
-    threading.Thread(target=_pw2, daemon=True, name="prewarm-antigravity-2").start()
+    try:
+        threading.Thread(target=_pw1, daemon=True, name="prewarm-antigravity-1").start()
+        threading.Thread(target=_pw2, daemon=True, name="prewarm-antigravity-2").start()
+    except Exception:
+        pass
 
-_prewarm_dual_antigravity()
+try:
+    _prewarm_dual_antigravity()
+except Exception:
+    pass
 
 def _sync_attachment_to_github(target_path: str, raw_bytes: bytes) -> bool:
     if not GITHUB_TOKEN:
