@@ -1434,81 +1434,119 @@ def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: st
     content = _extract_export_content(assistant_text)
     mimetype = mimetypes.guess_type("generated." + ext)[0] or "application/octet-stream"
     return content.encode("utf-8", "replace"), f"generated.{ext}", mimetype
-@app.route("/download/<token>", methods=["GET"])
-@app.route("/api/download/<token>", methods=["GET"])
-@app.route("/api/app/download/<token>", methods=["GET"])
-def download_generated_file(token):
-    entry = _generated_files_store.get(token)
-    if not entry:
-        # Check if token is actually a filename
-        safe_name = os.path.basename(token)
-        for tok, e in _generated_files_store.items():
-            if e.get("filename") == safe_name:
-                resp = Response(e["bytes"], mimetype=e["mimetype"])
-                resp.headers["Content-Disposition"] = f'attachment; filename="{e["filename"]}"'
-                return resp
-        # Check /tmp
-        tmp_p = os.path.join("/tmp", safe_name)
-        if os.path.isfile(tmp_p):
-            with open(tmp_p, "rb") as fh:
+def _serve_download_candidate(identifier: str):
+    if not identifier:
+        return jsonify({"error": "No filename or token specified"}), 400
+    safe_name = os.path.basename(identifier).strip()
+
+    # 1. Exact match or token match in _generated_files_store
+    if identifier in _generated_files_store:
+        entry = _generated_files_store[identifier]
+        resp = Response(entry["bytes"], mimetype=entry["mimetype"])
+        resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    for tok, entry in _generated_files_store.items():
+        if entry.get("filename") == safe_name:
+            resp = Response(entry["bytes"], mimetype=entry["mimetype"])
+            resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+
+    # 2. Check /tmp directly
+    tmp_path = os.path.join("/tmp", safe_name)
+    if os.path.isfile(tmp_path):
+        try:
+            with open(tmp_path, "rb") as fh:
                 data = fh.read()
             mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
             resp = Response(data, mimetype=mime)
             resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+            resp.headers["Access-Control-Allow-Origin"] = "*"
             return resp
-        return jsonify({"error": "This download has expired or does not exist."}), 404
-    resp = Response(entry["bytes"], mimetype=entry["mimetype"])
-    resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
-    return resp
+        except Exception:
+            pass
 
+    # 3. Search /tmp subdirectories
+    for root, dirs, files in os.walk("/tmp"):
+        if safe_name in files:
+            try:
+                candidate = os.path.join(root, safe_name)
+                with open(candidate, "rb") as fh:
+                    data = fh.read()
+                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+                resp = Response(data, mimetype=mime)
+                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return resp
+            except Exception:
+                pass
+
+    # 4. Search workspace data directory (sessions, attachments, user files)
+    data_root = os.path.join(WORKSPACE_ROOT, "data")
+    if os.path.isdir(data_root):
+        for root, dirs, files in os.walk(data_root):
+            if safe_name in files:
+                try:
+                    candidate = os.path.join(root, safe_name)
+                    with open(candidate, "rb") as fh:
+                        data = fh.read()
+                    mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+                    resp = Response(data, mimetype=mime)
+                    resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+                    resp.headers["Access-Control-Allow-Origin"] = "*"
+                    return resp
+                except Exception:
+                    pass
+
+    # 5. Check if it's a zip request where components exist on disk or in _generated_files_store
+    if safe_name.lower().endswith(".zip"):
+        base_stem = safe_name[:-4].lower()
+        bundle_candidates = []
+        for check_root in ["/tmp", data_root]:
+            if os.path.isdir(check_root):
+                for root, dirs, files in os.walk(check_root):
+                    for f in files:
+                        if f.lower().startswith(base_stem) and not f.lower().endswith(".zip"):
+                            bundle_candidates.append(os.path.join(root, f))
+        if bundle_candidates:
+            try:
+                zip_buf = io.BytesIO()
+                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for cf in bundle_candidates:
+                        arcname = os.path.basename(cf)
+                        zf.write(cf, arcname)
+                zip_data = zip_buf.getvalue()
+                _store_generated_file(zip_data, safe_name, "application/zip")
+                try:
+                    with open(os.path.join("/tmp", safe_name), "wb") as wf:
+                        wf.write(zip_data)
+                except Exception:
+                    pass
+                resp = Response(zip_data, mimetype="application/zip")
+                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return resp
+            except Exception as ze:
+                print(f"[ON_THE_FLY_ZIP_ERR] {ze}")
+
+    return jsonify({"error": f"File '{safe_name}' not found or expired"}), 404
+
+@app.route("/download/<path:token>", methods=["GET"])
+@app.route("/api/download/<path:token>", methods=["GET"])
+@app.route("/api/app/download/<path:token>", methods=["GET"])
+def download_generated_file(token):
+    return _serve_download_candidate(token)
+
+@app.route("/download_temp_file", methods=["GET"])
 @app.route("/api/download_temp_file", methods=["GET"])
 @app.route("/api/app/download_temp_file", methods=["GET"])
 @app.route("/download_file", methods=["GET"])
+@app.route("/api/download_file", methods=["GET"])
+@app.route("/api/app/download_file", methods=["GET"])
 def download_temp_file():
-    name = request.args.get("name") or request.args.get("file") or request.args.get("path")
-    if not name:
-        return jsonify({"error": "No filename specified"}), 400
-    safe_name = os.path.basename(name)
-    # 1. Search in _generated_files_store
-    for tok, entry in _generated_files_store.items():
-        if entry.get("filename") == safe_name or tok == name:
-            resp = Response(entry["bytes"], mimetype=entry["mimetype"])
-            resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
-            return resp
-    # 2. Search in /tmp
-    tmp_path = os.path.join("/tmp", safe_name)
-    if os.path.isfile(tmp_path):
-        with open(tmp_path, "rb") as fh:
-            data = fh.read()
-        mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-        resp = Response(data, mimetype=mime)
-        resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-        return resp
-    # 3. Search in data/sessions/*/safe_name
-    sessions_root = os.path.join(WORKSPACE_ROOT, "data", "sessions")
-    if os.path.isdir(sessions_root):
-        for sdir in os.listdir(sessions_root):
-            candidate = os.path.join(sessions_root, sdir, safe_name)
-            if os.path.isfile(candidate):
-                with open(candidate, "rb") as fh:
-                    data = fh.read()
-                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-                resp = Response(data, mimetype=mime)
-                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-                return resp
-    # 4. Search in data/*/attachments/safe_name
-    data_root = os.path.join(WORKSPACE_ROOT, "data")
-    if os.path.isdir(data_root):
-        for udir in os.listdir(data_root):
-            candidate = os.path.join(data_root, udir, "attachments", safe_name)
-            if os.path.isfile(candidate):
-                with open(candidate, "rb") as fh:
-                    data = fh.read()
-                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-                resp = Response(data, mimetype=mime)
-                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-                return resp
-    return jsonify({"error": f"File '{safe_name}' not found or expired"}), 404
+    name = request.args.get("name") or request.args.get("file") or request.args.get("path") or request.args.get("token")
+    return _serve_download_candidate(name)
 _education_cache = {"files": {}, "listing_t": 0}
 _EDUCATION_LISTING_TTL = 120           
 def _github_list_dir(path: str):
