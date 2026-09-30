@@ -7,9 +7,13 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/app.py" },
+    { "src": "/auth/(.*)", "dest": "/api/app.py" },
+    { "src": "/config/(.*)", "dest": "/api/app.py" },
+    { "src": "/chat-stream", "dest": "/api/app.py" },
     { "src": "/download/(.*)", "dest": "/api/app.py" },
     { "src": "/download_file(.*)", "dest": "/api/app.py" },
     { "src": "/download_temp_file(.*)", "dest": "/api/app.py" },
+    { "src": "/PrathamAI.apk", "dest": "/api/app.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "headers": [
