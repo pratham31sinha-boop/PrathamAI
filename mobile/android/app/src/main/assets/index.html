@@ -2238,8 +2238,8 @@
         function setTheme(mode) {
             if (mode === 'dark') document.documentElement.classList.add('dark-mode');
             else document.documentElement.classList.remove('dark-mode');
-            document.getElementById('theme-btn-light').classList.toggle('selected', mode === 'light');
-            document.getElementById('theme-btn-dark').classList.toggle('selected', mode === 'dark');
+            document.getElementById('theme-btn-light')?.classList.toggle('selected', mode === 'light');
+            document.getElementById('theme-btn-dark')?.classList.toggle('selected', mode === 'dark');
         }
         function setThemeManual(mode) {
             setTheme(mode);
@@ -2821,11 +2821,22 @@
         function pushTerminalLog(message) {
             const stamp = new Date().toLocaleTimeString([], { hour12: false });
             const line = `[${stamp}] ${message}\n`;
-            if (agentBackgroundTerminalLogger.textContent === 'System waiting for generation directives...') {
-                agentBackgroundTerminalLogger.textContent = '';
+            const logger = document.getElementById('agent-background-terminal-logger');
+            if (logger) {
+                if (logger.textContent === 'System waiting for generation directives...') {
+                    logger.textContent = '';
+                }
+                logger.textContent += line;
+                logger.scrollTop = logger.scrollHeight;
             }
-            agentBackgroundTerminalLogger.textContent += line;
-            agentBackgroundTerminalLogger.scrollTop = agentBackgroundTerminalLogger.scrollHeight;
+            const termOut = document.getElementById('active-terminal-output');
+            if (termOut) {
+                const row = document.createElement('div');
+                row.className = 'text-neutral-400 font-mono text-[11px] leading-tight';
+                row.textContent = line.trim();
+                termOut.appendChild(row);
+                termOut.scrollTop = termOut.scrollHeight;
+            }
         }
         function setAgentActivity(text) {
             agentActivityStripText.innerText = text;
@@ -5656,14 +5667,29 @@
         let activeWorkbenchTab = 'preview';
         function setWorkbenchTab(tab) {
             activeWorkbenchTab = tab;
-            document.getElementById('workbench-tab-preview').classList.toggle('wb-tab-active', tab === 'preview');
-            document.getElementById('workbench-tab-files').classList.toggle('wb-tab-active', tab === 'files');
-            document.getElementById('interactive-render-canvas-mount').classList.toggle('hidden', tab !== 'preview');
-            document.getElementById('interactive-render-canvas-mount').classList.toggle('flex', tab === 'preview');
-            document.getElementById('workbench-files-panel').classList.toggle('hidden', tab !== 'files');
-            document.getElementById('workbench-files-panel').classList.toggle('flex', tab === 'files');
-            document.getElementById('workbench-files-panel').classList.toggle('flex-col', tab === 'files');
-            if (tab === 'files') loadWorkbenchFiles();
+            if (typeof switchWorkspaceTab === 'function') {
+                switchWorkspaceTab(tab);
+                return;
+            }
+            const tabPrev = document.getElementById('workbench-tab-preview');
+            if (tabPrev) tabPrev.classList.toggle('wb-tab-active', tab === 'preview');
+            const tabFiles = document.getElementById('workbench-tab-files');
+            if (tabFiles) tabFiles.classList.toggle('wb-tab-active', tab === 'files');
+            const canvasMount = document.getElementById('interactive-render-canvas-mount');
+            if (canvasMount) {
+                canvasMount.classList.toggle('hidden', tab !== 'preview');
+                canvasMount.classList.toggle('flex', tab === 'preview');
+            }
+            const filesPanel = document.getElementById('workbench-files-panel');
+            if (filesPanel) {
+                filesPanel.classList.toggle('hidden', tab !== 'files');
+                filesPanel.classList.toggle('flex', tab === 'files');
+                filesPanel.classList.toggle('flex-col', tab === 'files');
+            }
+            if (tab === 'files') {
+                if (typeof refreshWorkbenchFiles === 'function') refreshWorkbenchFiles();
+                else if (typeof loadWorkbenchFiles === 'function') loadWorkbenchFiles();
+            }
         }
         function formatByteSize(n) {
             if (n < 1024) return `${n} B`;
@@ -5671,7 +5697,8 @@
             return `${(n / (1024 * 1024)).toFixed(1)} MB`;
         }
         async function loadWorkbenchFiles() {
-            const listEl = document.getElementById('workbench-files-list');
+            const listEl = document.getElementById('workbench-files-list') || document.getElementById('workbench-file-tree');
+            if (!listEl) return;
             if (!currentConversationId) {
                 listEl.innerHTML = `<p class="text-xs text-[var(--text-dim)] text-center py-6">Start a conversation to see generated files here.</p>`;
                 return;
@@ -5899,21 +5926,45 @@
                 }
                 dispatchChatMessage();
             });
-            setWorkbenchTab('preview');
+            if (typeof switchWorkspaceTab === 'function') {
+                switchWorkspaceTab('preview');
+            } else if (typeof setWorkbenchTab === 'function') {
+                setWorkbenchTab('preview');
+            }
             initWebSearchPreferenceFromStorage();
             
-            // Immediately restore session or show app shell
-            const restored = await attemptSilentSessionRestore();
-            if (typeof window.prathamDismissSplash === 'function') {
-                window.prathamDismissSplash();
-            } else if (bootSplash) {
-                bootSplash.style.display = 'none';
+            // Immediately restore session or show app shell with full error protection
+            try {
+                const restored = await attemptSilentSessionRestore();
+                if (typeof window.prathamDismissSplash === 'function') {
+                    window.prathamDismissSplash();
+                } else if (bootSplash) {
+                    bootSplash.style.display = 'none';
+                }
+                if (!restored) {
+                    if (loginOverlay) {
+                        loginOverlay.classList.remove('hidden');
+                        loginOverlay.style.display = 'flex';
+                    }
+                    initializeGoogleOauthGate();
+                }
+            } catch (bootErr) {
+                console.error('[PrathamAI Boot Fault] Restoring app shell fallback:', bootErr);
+                enterAppShell();
             }
-            if (!restored) {
-                loginOverlay.classList.remove('hidden');
-                loginOverlay.style.display = 'flex';
-                initializeGoogleOauthGate();
-            }
+
+            // Universal Watchdog: Under no circumstances should the screen stay blank
+            setTimeout(() => {
+                const app = document.getElementById('app-shell');
+                const login = document.getElementById('login-overlay');
+                const appVisible = app && !app.classList.contains('hidden') && app.style.display !== 'none';
+                const loginVisible = login && !login.classList.contains('hidden') && login.style.display !== 'none';
+                if (!appVisible && !loginVisible) {
+                    console.warn('[PrathamAI] Watchdog activated: force-revealing app shell.');
+                    enterAppShell();
+                }
+            }, 1000);
+
             // ── Mobile sidebar: wire hamburger buttons with addEventListener
             // so they work reliably regardless of when HTML was parsed.
             document.querySelectorAll('[data-open-sidebar]').forEach(btn => {
