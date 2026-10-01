@@ -16,3 +16,17 @@ User: [[NO_WEB_SEARCH]]Hi
 Pratham AI:
 Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?
 ================================================================================
+
+=== 2026-10-01T09:37:29.347395+00:00 ===
+User: [[NO_WEB_SEARCH]]Why
+Pratham AI:
+I am **Pratham AI**, an advanced AI model created and designed from scratch by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.
+
+### Architecture & Capabilities
+1. **Blazing Speed & Real-Time Throughput:** Built with an ultra-low latency real-time streaming pipeline delivering instantaneous word-by-word responses.
+2. **Agentic Code & Reasoning:** High-precision engineering across full-stack web applications, Python, JavaScript, HTML5 Canvas games, and complex logic.
+3. **Persistent File Editing:** Direct integration with your GitHub storage folder (`data/<email>/attachments/`), allowing you to attach files and have Pratham AI modify and rebuild them with Claude-like freedom.
+4. **Complete Deliverables:** Automatic creation of ready-to-run files and interactive previews directly in chat.
+
+Pratham Sinha and his team engineered Pratham AI to provide you with the fastest, most capable coding companion.
+================================================================================
