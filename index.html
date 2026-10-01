@@ -591,6 +591,9 @@
                this is a chat app, not a page meant to be pinch-zoomed. */
             body { touch-action: manipulation; }
         }
+        @media (max-width: 639px) {
+            .desktop-header-action { display: none !important; }
+        }
         @supports (padding: max(0px)) {
             .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
             .safe-top { padding-top: max(0.5rem, env(safe-area-inset-top)); }
@@ -1731,8 +1734,8 @@
                             <span class="text-[var(--accent)]">⚡</span>
                             <span class="hidden sm:inline">Workspace</span>
                         </button>
-                        <button id="export-action-trigger" onclick="triggerSessionExport()" class="px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Export</button>
-                        <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Delete</button>
+                        <button id="export-action-trigger" onclick="triggerSessionExport()" class="desktop-header-action px-2.5 py-1 text-xs text-[var(--text-dim)] hover:text-[var(--text)] border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Export</button>
+                        <button id="delete-action-trigger" onclick="triggerSessionDelete()" class="desktop-header-action px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-[var(--border)] bg-[var(--panel)] rounded-md hidden transition-colors">Delete</button>
                     </div>
                 </header>
                 <div id="conversation-viewport-panel" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 w-full pb-36 workspace-scrollpane flex flex-col relative" style="z-index:1;">
@@ -1759,16 +1762,18 @@
                             <span onclick="clearFileAttachment()" class="cursor-pointer text-[var(--text-dim)] hover:text-[var(--text)] font-bold px-1">✕</span>
                         </div>
                         <form id="interaction-submission-form" class="w-full relative flex items-end rounded-2xl glass p-2 transition-all premium-card" style="border-radius:18px;">
-                            <div class="flex items-center gap-1 shrink-0 pb-1 pl-1">
-                                <button type="button" onclick="toggleModal('add-to-chat-sheet')" class="p-1.5 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors cursor-pointer text-base" title="Attach file or image">📎</button>
-                                <button type="button" id="deep-research-toggle-btn" onclick="toggleDeepResearchMode()" class="px-2 py-1 rounded-lg text-xs font-semibold text-[var(--text-dim)] hover:text-[var(--text)] border border-transparent hover:border-[var(--border)] transition-all cursor-pointer flex items-center gap-1" title="Deep Research: Multi-step investigation with citations">
-                                    <span>🌐</span><span class="hidden sm:inline text-[11px]">Research</span>
+                            <div class="flex items-center gap-1 shrink-0 pb-0.5 pl-0.5">
+                                <button type="button" onclick="toggleModal('add-to-chat-sheet')" class="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-dim)] hover:text-[var(--text)] hover:bg-[var(--panel-2)] transition-colors cursor-pointer" title="Add attachments, terminal, or tools">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 </button>
-                                <button type="button" id="web-search-toggle-btn" onclick="toggleWebSearchMode()" class="px-2 py-1 rounded-lg text-xs font-semibold text-[var(--text-dim)] hover:text-[var(--text)] border border-transparent hover:border-[var(--border)] transition-all cursor-pointer flex items-center gap-1" title="Live Web Search">
-                                    <span>🔍</span><span class="hidden sm:inline text-[11px]">Web</span>
+                                <button type="button" id="deep-research-toggle-btn" onclick="toggleDeepResearchMode()" class="hidden sm:flex px-2 py-1 rounded-lg text-xs font-semibold text-[var(--text-dim)] hover:text-[var(--text)] border border-transparent hover:border-[var(--border)] transition-all cursor-pointer items-center gap-1" title="Deep Research: Multi-step investigation with citations">
+                                    <span>🌐</span><span class="text-[11px]">Research</span>
+                                </button>
+                                <button type="button" id="web-search-toggle-btn" onclick="toggleWebSearchMode()" class="hidden sm:flex px-2 py-1 rounded-lg text-xs font-semibold text-[var(--text-dim)] hover:text-[var(--text)] border border-transparent hover:border-[var(--border)] transition-all cursor-pointer items-center gap-1" title="Live Web Search">
+                                    <span>🔍</span><span class="text-[11px]">Web</span>
                                 </button>
                             </div>
-                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
+                            <textarea id="user-prompt-input-field" rows="1" placeholder="Message Pratham AI..." class="w-full flex-1 min-h-[38px] max-h-32 bg-transparent border-none focus:outline-none px-2.5 py-1.5 text-sm text-[var(--text)] placeholder-[var(--text-dim)] resize-none workspace-scrollpane" required></textarea>
                             <button type="submit" id="input-action-submit-btn" class="w-9 h-9 flex items-center justify-center accent-gradient text-white rounded-full hover:opacity-90 transition-all shadow-sm cursor-pointer text-sm font-bold shrink-0 magnetic-btn" style="box-shadow:0 4px 14px rgba(194,97,63,.3);">↑</button>
                         </form>
                     </div>
@@ -1965,24 +1970,36 @@
                 <h4 class="text-sm font-bold text-[var(--text)]">Add to chat</h4>
                 <button onclick="toggleModal('add-to-chat-sheet')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
             </div>
-            <div class="px-4 pb-4 grid grid-cols-3 gap-2">
-                <button onclick="document.getElementById('camera-capture-input').click()" class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
-                    <span class="text-xl">📷</span><span class="text-[11px] text-[var(--text)] font-medium">Camera</span>
+            <div class="px-4 pb-3 grid grid-cols-4 gap-2">
+                <button onclick="document.getElementById('camera-capture-input').click()" class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">📷</span><span class="text-[10.5px] text-[var(--text)] font-medium">Camera</span>
                 </button>
-                <button onclick="document.getElementById('photos-picker-input').click()" class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
-                    <span class="text-xl">🖼️</span><span class="text-[11px] text-[var(--text)] font-medium">Photos</span>
+                <button onclick="document.getElementById('photos-picker-input').click()" class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">🖼️</span><span class="text-[10.5px] text-[var(--text)] font-medium">Photos</span>
                 </button>
-                <button onclick="document.getElementById('files-picker-input').click()" class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
-                    <span class="text-xl">📁</span><span class="text-[11px] text-[var(--text)] font-medium">Files</span>
+                <button onclick="document.getElementById('files-picker-input').click()" class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">📁</span><span class="text-[10.5px] text-[var(--text)] font-medium">Files</span>
+                </button>
+                <button onclick="toggleModal('add-to-chat-sheet'); toggleWorkbenchSplit(); switchWorkspaceTab('terminal');" class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] hover:border-[var(--accent)] transition-colors cursor-pointer">
+                    <span class="text-xl">💻</span><span class="text-[10.5px] text-[var(--text)] font-medium">Terminal</span>
                 </button>
             </div>
-            <div class="border-t border-[var(--border)] px-4 py-3 flex items-center justify-between">
+            <div class="border-t border-[var(--border)] px-4 py-2.5 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
                     <span class="text-base">🌐</span>
                     <span class="text-xs font-medium text-[var(--text)]">Web search</span>
                 </div>
                 <button id="web-search-toggle-btn" onclick="toggleWebSearchPreference()" class="w-10 h-5.5 rounded-full relative transition-colors cursor-pointer" style="background: var(--accent);">
                     <span id="web-search-toggle-knob" class="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white transition-transform" style="transform: translateX(16px);"></span>
+                </button>
+            </div>
+            <div class="border-t border-[var(--border)] px-4 py-2.5 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-base">🔬</span>
+                    <span class="text-xs font-medium text-[var(--text)]">Deep Research</span>
+                </div>
+                <button onclick="toggleDeepResearchMode()" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-[var(--accent)] bg-[var(--accent-soft)] hover:bg-[var(--accent)] hover:text-white transition-colors cursor-pointer">
+                    Toggle
                 </button>
             </div>
         </div>
@@ -3897,13 +3914,18 @@
                 const resp = await smartFetchRequest('/api/terminal/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': globalAuthorizationToken },
-                    body: JSON.stringify({ command: cmd, conversation_id: currentConversationId })
+                    body: JSON.stringify({ command: cmd, code: cmd, lang: 'bash', conversation_id: currentConversationId })
                 });
                 const data = await resp.json();
                 const resRow = document.createElement('div');
-                resRow.className = 'text-neutral-300 font-mono text-[11px] whitespace-pre-wrap';
-                resRow.innerText = (data.stdout || '') + (data.stderr ? ('\n' + data.stderr) : '');
-                if (!resRow.innerText.trim()) resRow.innerText = '[Command completed with no output]';
+                if (data.error) {
+                    resRow.className = 'text-red-400 font-mono text-[11px]';
+                    resRow.innerText = `Error: ${data.error}`;
+                } else {
+                    resRow.className = 'text-neutral-300 font-mono text-[11px] whitespace-pre-wrap';
+                    resRow.innerText = (data.stdout || '') + (data.stderr ? ('\n' + data.stderr) : '');
+                    if (!resRow.innerText.trim()) resRow.innerText = '[Command completed with no output]';
+                }
                 outputBox.appendChild(resRow);
                 outputBox.scrollTop = outputBox.scrollHeight;
             } catch (err) {
@@ -4454,6 +4476,39 @@
             };
             tryLoad(url);
         }
+        function openOrPreviewFileCard(card, relativeUrl) {
+            if (!card) return;
+            const fn = card.dataset.filename || 'file.txt';
+            if (card._code) {
+                openArtifactInWorkspace({
+                    code: card._code,
+                    filename: fn,
+                    lang: fn.includes('.') ? fn.split('.').pop() : 'text'
+                });
+                return;
+            }
+            const statusText = card.querySelector('.fcc-status-text');
+            if (statusText) statusText.innerText = 'Loading preview...';
+            const dlUrl = relativeUrl || card.dataset.downloadUrl || `/download/${encodeURIComponent(fn)}`;
+            smartFetchRequest(dlUrl).then(async (res) => {
+                if (res && res.ok) {
+                    const txt = await res.text();
+                    card._code = txt;
+                    if (statusText) statusText.innerText = 'Ready';
+                    openArtifactInWorkspace({
+                        code: txt,
+                        filename: fn,
+                        lang: fn.includes('.') ? fn.split('.').pop() : 'text'
+                    });
+                } else {
+                    if (statusText) statusText.innerText = 'Ready';
+                    downloadCardContent(card, relativeUrl);
+                }
+            }).catch(() => {
+                if (statusText) statusText.innerText = 'Ready';
+                downloadCardContent(card, relativeUrl);
+            });
+        }
         function appendDownloadCard(wrapper, relativeUrl, filename) {
             wrapper._fileCardsByName = wrapper._fileCardsByName || {};
             const existing = wrapper._fileCardsByName[filename];
@@ -4462,16 +4517,29 @@
                 const statusText = existing.querySelector('.fcc-status-text');
                 if (statusText) statusText.innerText = 'Ready';
                 const actions = existing.querySelector('.fcc-actions');
-                if (actions && !actions.querySelector('.fcc-download-btn')) {
-                    const dlBtn = document.createElement('button');
-                    dlBtn.type = 'button';
-                    dlBtn.className = 'fcc-btn fcc-download-btn';
-                    dlBtn.textContent = '⬇ Download';
-                    dlBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        downloadCardContent(existing, relativeUrl);
-                    };
-                    actions.appendChild(dlBtn);
+                if (actions) {
+                    if (!actions.querySelector('.fcc-open-btn')) {
+                        const openBtn = document.createElement('button');
+                        openBtn.type = 'button';
+                        openBtn.className = 'fcc-btn fcc-open-btn';
+                        openBtn.textContent = '⚡ Preview';
+                        openBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            openOrPreviewFileCard(existing, relativeUrl);
+                        };
+                        actions.insertBefore(openBtn, actions.firstChild);
+                    }
+                    if (!actions.querySelector('.fcc-download-btn')) {
+                        const dlBtn = document.createElement('button');
+                        dlBtn.type = 'button';
+                        dlBtn.className = 'fcc-btn fcc-download-btn';
+                        dlBtn.textContent = '⬇ Download';
+                        dlBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            downloadCardContent(existing, relativeUrl);
+                        };
+                        actions.appendChild(dlBtn);
+                    }
                 }
                 return existing;
             }
@@ -4497,14 +4565,15 @@
                     <div class="fcc-icon" style="background:${iconInfo.bg};color:#fff;">${iconInfo.icon}</div>
                     <div class="fcc-meta">
                         <div class="fcc-name">${sanitizeOutputText(filename)}</div>
-                        <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Ready to download</span></div>
+                        <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">Artifact · Tap to open</span></div>
                     </div>
                     <div class="fcc-actions">
+                        <button type="button" class="fcc-btn fcc-open-btn" onclick="event.stopPropagation();openOrPreviewFileCard(this.closest('.file-creation-card'), '${relativeUrl}')">⚡ Preview</button>
                         <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest('.file-creation-card'), '${relativeUrl}')">⬇ Download</button>
                     </div>
                 </div>
             `;
-            card.onclick = () => downloadCardContent(card, relativeUrl);
+            card.onclick = () => openOrPreviewFileCard(card, relativeUrl);
             wrapper._fileCardsByName[filename] = card;
             appendToFileGroup(wrapper, card);
             pinnedAutoScroll();
