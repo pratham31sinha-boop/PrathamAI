@@ -2839,7 +2839,20 @@ def _clean_antigravity_text(text: str) -> str:
         return ""
     # Ensure creator identity is strictly preserved and always Pratham AI
     replacements = [
-        (r"manojkumarsinha1972@gmail\.com", "creator@prathamai.local"),
+        (r"manojkumarsinha1972@gmail\.com", ""),
+        (r"pratham31sinha@gmail\.com", ""),
+        (r"pratham31sinha-boop", "prathamai"),
+        (r"visitor@prathamai\.local", "user"),
+        (r"GitHub storage folder\s*\(`data/[^`]+`\)", "workspace storage"),
+        (r"GitHub storage folder", "workspace storage"),
+        (r"data/<email>/attachments/", "workspace/"),
+        (r"data/[^/\s]+/attachments/", "workspace/"),
+        (r"https?://github\.com/[^\s)]+", "https://prathamai.vercel.app"),
+        (r"\bGitHub repository\b", "workspace storage"),
+        (r"\bGitHub repo\b", "workspace storage"),
+        (r"\bGitHub storage\b", "workspace storage"),
+        (r"\bGitHub folder\b", "workspace folder"),
+        (r"\bGitHub\b", "Pratham AI Cloud"),
         (r"\b(?:I am a large language model(?:,)? (?:trained|created|developed|designed) by (?:the )?(?:Google DeepMind(?: team)?|Google|DeepMind))\b", "I am Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam"),
         (r"\b(?:created|trained|developed|designed|built|made)\s+by\s+(?:the\s+)?(?:Google DeepMind(?: team)?|Google|DeepMind|Pratham AI)\b", "created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam"),
         (r"\b(?:Google DeepMind team|DeepMind team|Google DeepMind|DeepMind)\b", "Pratham Sinha and his team"),
@@ -2911,7 +2924,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "### Architecture & Capabilities\n"
             "1. **Blazing Speed & Real-Time Throughput:** Built with an ultra-low latency real-time streaming pipeline delivering instantaneous word-by-word responses.\n"
             "2. **Agentic Code & Reasoning:** High-precision engineering across full-stack web applications, Python, JavaScript, HTML5 Canvas games, and complex logic.\n"
-            "3. **Persistent File Editing:** Direct integration with your GitHub storage folder (`data/<email>/attachments/`), allowing you to attach files and have Pratham AI modify and rebuild them with Claude-like freedom.\n"
+            "3. **Persistent File Editing:** Full in-place file generation and live editing, allowing you to create, modify, preview, and rebuild full applications with Claude-like freedom.\n"
             "4. **Complete Deliverables:** Automatic creation of ready-to-run files and interactive previews directly in chat.\n\n"
             "Pratham Sinha and his team engineered Pratham AI to provide you with the fastest, most capable coding companion."
         )
@@ -3931,8 +3944,9 @@ def _stream_antigravity_cli(messages, state=None):
         "LIVE WEB SEARCH CAPABILITY:\n"
         "- You have full web search capability. If the user asks to search the web, look up latest news, or find current online information, you can use ```search\n<query>\n``` or write clean Python/curl commands to retrieve live web data.\n\n"
         "DELIVERABLES & FILE PRESENTATION:\n"
-        "- Present text and terminal execution steps first. At the very end of your response, present the final files.\n"
-        "- Deliver ONLY the necessary file(s) requested by the user. If the user asks for a game/website, deliver the single clean .html file. If the user asks for a zip, deliver the .zip. Avoid generating extra unneeded files."
+        "- Present text and terminal execution steps first. At the very end of your response, present the final files using ```createfile:<filename>\n<complete code>\n``` so they are rendered as interactive cards.\n"
+        "- Deliver ONLY the necessary file(s) requested by the user. If the user asks for a game/website, deliver the single clean .html file. If the user asks for a zip, deliver the .zip. Avoid generating extra unneeded files.\n"
+        "- NEVER mention internal GitHub repositories, paths like data/<email>/attachments/, or personal emails. Your identity is strictly Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam for public launch."
     )
 
     prompt_sections = [system_instruction]
@@ -6287,32 +6301,63 @@ def chat_stream():
         _last_image_prompt = _m.group(1)                                     
     image_prompt = _detect_image_prompt(message, _last_image_prompt)
     if image_prompt and not _is_complex_multitask_message(message):
-        access_token, image_err = _require_gemini_connection()
-        if image_err: return image_err
         _append_message(conv_id, "user", message)
         enriched_image_prompt = _enhance_image_prompt_via_llm(image_prompt)
-        try:
-            image_info,image_text=_gemini_generate_image(access_token,enriched_image_prompt,body.get('reference_image'))
-            image_url=f"data:{image_info['mime_type']};base64,{image_info['data']}"
-        except Exception as exc:
-            err_text=str(exc)
-            def generate_image_error():
-                yield _sse({"type":"metadata","conversation_id":conv_id})
-                code='GEMINI_RECONNECT_REQUIRED' if 'GEMINI_RECONNECT_REQUIRED' in err_text else 'GEMINI_IMAGE_FAILED'
-                yield _sse({"type":"error","error":{"code":code,"message":f"Gemini image generation failed: {err_text}"}})
-                yield _sse({"type":"complete"})
-            resp=Response(stream_with_context(generate_image_error()),content_type='text/event-stream')
-            resp.headers['Cache-Control']='no-cache'; resp.headers['X-Accel-Buffering']='no'; resp.headers['Access-Control-Allow-Credentials']='true'
+        image_url = None
+        image_text = None
+        used_model = "Gemini Image"
+
+        # 1. Primary: Try Gemini Image Generation if connected
+        access_token, image_err = _require_gemini_connection()
+        if access_token and not image_err:
+            try:
+                image_info, image_text = _gemini_generate_image(access_token, enriched_image_prompt, body.get('reference_image'))
+                if image_info and image_info.get('data'):
+                    image_url = f"data:{image_info['mime_type']};base64,{image_info['data']}"
+                    used_model = GEMINI_IMAGE_MODEL
+            except Exception as exc:
+                print(f"[IMAGE][GEMINI_FAILED] {exc}. Falling back to Pollinations AI (2nd provider)...")
+
+        # 2. Secondary: Fall back to Pollinations AI image generation
+        if not image_url:
+            try:
+                import random
+                clean_poll_prompt = urllib.parse.quote(enriched_image_prompt[:250])
+                seed = random.randint(1000, 999999)
+                poll_url = f"https://image.pollinations.ai/prompt/{clean_poll_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
+                poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PrathamAI/2.0"})
+                with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+                    p_data = p_resp.read()
+                    if p_data and len(p_data) > 1000:
+                        image_url = f"data:image/jpeg;base64,{base64.b64encode(p_data).decode('utf-8')}"
+                        used_model = "Pollinations AI Neural Engine"
+                        image_text = f'Generated with Pollinations AI for: "{image_prompt}"'
+            except Exception as poll_exc:
+                print(f"[IMAGE][POLLINATIONS_FAILED] {poll_exc}")
+                clean_poll_prompt = urllib.parse.quote(enriched_image_prompt[:250])
+                image_url = f"https://image.pollinations.ai/prompt/{clean_poll_prompt}?width=1024&height=1024&nologo=true"
+                used_model = "Pollinations AI"
+                image_text = f'Generated with Pollinations AI for: "{image_prompt}"'
+
+        if image_url:
+            assistant_note = image_text or f'Generated image for: "{image_prompt}"'
+            _append_message(conv_id, 'assistant', assistant_note + '\n[generated image delivered to browser]')
+            def generate_image():
+                yield _sse({"type": "metadata", "conversation_id": conv_id})
+                if assistant_note: yield _sse({"type": "token", "text": assistant_note + '\n\n'})
+                yield _sse({"type": "image", "url": image_url, "prompt": enriched_image_prompt, "model": used_model})
+                yield _sse({"type": "complete"})
+            resp = Response(stream_with_context(generate_image()), content_type='text/event-stream')
+            resp.headers['Cache-Control'] = 'no-cache, no-transform'; resp.headers['X-Accel-Buffering'] = 'no'; resp.headers['Access-Control-Allow-Credentials'] = 'true'
             return resp
-        assistant_note=image_text or f'Generated with Nano Banana 2 for: "{image_prompt}"'
-        _append_message(conv_id,'assistant',assistant_note+'\n[generated image delivered to browser]')
-        def generate_image():
-            yield _sse({"type":"metadata","conversation_id":conv_id})
-            if assistant_note: yield _sse({"type":"token","text":assistant_note+'\n\n'})
-            yield _sse({"type":"image","url":image_url,"prompt":enriched_image_prompt,"model":GEMINI_IMAGE_MODEL})
-            yield _sse({"type":"complete"})
-        resp=Response(stream_with_context(generate_image()),content_type='text/event-stream')
-        resp.headers['Cache-Control']='no-cache, no-transform'; resp.headers['X-Accel-Buffering']='no'; resp.headers['Access-Control-Allow-Credentials']='true'
+
+        # If both failed unexpectedly:
+        def generate_image_error():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "error", "error": {"code": "IMAGE_GENERATION_FAILED", "message": "Image generation services temporarily busy. Please try again."}})
+            yield _sse({"type": "complete"})
+        resp = Response(stream_with_context(generate_image_error()), content_type='text/event-stream')
+        resp.headers['Cache-Control'] = 'no-cache'; resp.headers['X-Accel-Buffering'] = 'no'; resp.headers['Access-Control-Allow-Credentials'] = 'true'
         return resp
     history = _get_messages(conv_id)
     is_creator = user_email.lower() in CREATOR_EMAILS

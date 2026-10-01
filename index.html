@@ -188,7 +188,7 @@
         .file-creation-card.in-progress .fcc-progress-fill { animation: fccShimmer 1.1s ease-in-out infinite; }
         .file-creation-card.done .fcc-progress-track { display: none; }
         .fcc-openhint { font-size: 11px; color: var(--accent); font-weight: 600; white-space: nowrap; }
-        .fcc-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+        .fcc-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
         .fcc-btn {
             font-size: 11px; font-weight: 600; padding: 6px 11px; border-radius: 8px;
             border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
@@ -196,6 +196,10 @@
         }
         .fcc-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
         .fcc-btn:active { transform: scale(.96); }
+        .fcc-claude-btn { background: rgba(217, 119, 6, 0.12); color: #d97706; border-color: rgba(217, 119, 6, 0.35); font-weight: 700; }
+        .fcc-claude-btn:hover { background: #d97706; color: #ffffff; }
+        .fcc-prompt-btn { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+        .fcc-prompt-btn:hover { background: var(--accent); color: #ffffff; }
         .fcc-download-btn {
             background: var(--accent-soft); color: var(--accent); border-color: transparent;
         }
@@ -573,7 +577,10 @@
             .katex-display, table, pre, code { max-width: 100%; overflow-x: auto; }
             [data-seg-type="text"], [data-seg-type="finaldoc"] { max-width: 96% !important; }
             /* Disable heavy animations on phones for performance */
-            .file-creation-card { animation: msgEnterFlat .25s ease both !important; }
+            .file-creation-card { animation: msgEnterFlat .25s ease both !important; padding: 12px !important; border-radius: 12px !important; }
+            .file-creation-card .fcc-row { flex-wrap: wrap; gap: 8px; }
+            .file-creation-card .fcc-actions { width: 100%; justify-content: flex-start; gap: 5px; margin-top: 4px; }
+            .file-creation-card .fcc-btn { min-height: 32px !important; padding: 4px 8px !important; font-size: 11px !important; }
             .msg-enter { animation: msgEnterFlat .25s ease both !important; }
             /* iOS Safari auto-zooms the page when a focused input's font-size
                is under 16px — this is what causes the jarring "zoom in when I
@@ -2900,7 +2907,19 @@
             while (idx < text.length) {
                 fenceOpenRe.lastIndex = idx;
                 const m = fenceOpenRe.exec(text);
-                if (!m) { segments.push({ type: 'text', content: text.slice(idx) }); break; }
+                if (!m) {
+                    const tail = text.slice(idx);
+                    const partialFence = tail.match(/```((?:createfile|editfile):[^\n`]+|\w+)?$/);
+                    if (partialFence) {
+                        const before = tail.slice(0, partialFence.index);
+                        if (before) segments.push({ type: 'text', content: before });
+                        const partialLang = (partialFence[1] || 'text').toLowerCase();
+                        segments.push({ type: 'code', lang: partialLang, content: '', closed: false });
+                    } else {
+                        segments.push({ type: 'text', content: tail });
+                    }
+                    break;
+                }
                 if (m.index > idx) segments.push({ type: 'text', content: text.slice(idx, m.index) });
                 const lang = (m[1] || 'text').toLowerCase();
                 const codeStart = m.index + m[0].length;
@@ -3014,16 +3033,65 @@
             btn.classList.add('active');
             const frame = card.querySelector('.fcc-preview-frame');
             const codeView = card.querySelector('.fcc-preview-code-view');
+            const editView = card.querySelector('.fcc-preview-edit-view');
             if (mode === 'preview') {
                 if (frame) frame.style.display = 'block';
                 if (codeView) codeView.style.display = 'none';
-            } else {
+                if (editView) editView.style.display = 'none';
+            } else if (mode === 'code') {
                 if (frame) frame.style.display = 'none';
+                if (editView) editView.style.display = 'none';
                 if (codeView) {
                     codeView.style.display = 'block';
                     const codeElem = codeView.querySelector('.fcc-code-elem');
                     if (codeElem && card._code) codeElem.textContent = card._code;
                 }
+            } else if (mode === 'edit') {
+                if (frame) frame.style.display = 'none';
+                if (codeView) codeView.style.display = 'none';
+                if (editView) {
+                    editView.style.display = 'flex';
+                    const textarea = editView.querySelector('.fcc-live-edit-textarea');
+                    if (textarea && textarea.value !== card._code) {
+                        textarea.value = card._code || '';
+                    }
+                }
+            }
+        }
+        function applyCardLiveEdit(card) {
+            if (!card) return;
+            const editView = card.querySelector('.fcc-preview-edit-view');
+            const textarea = editView ? editView.querySelector('.fcc-live-edit-textarea') : null;
+            if (!textarea) return;
+            const newCode = textarea.value;
+            card._code = newCode;
+            const frame = card.querySelector('.fcc-preview-frame');
+            if (frame) {
+                try { frame.srcdoc = newCode; } catch (e) {}
+            }
+            const codeElem = card.querySelector('.fcc-code-elem');
+            if (codeElem) codeElem.textContent = newCode;
+            const statusText = card.querySelector('.fcc-status-text');
+            const lines = countLines(newCode);
+            if (statusText) statusText.innerText = `Edited (${lines} lines) · Ready`;
+            const previewTabBtn = card.querySelector('.fcc-ptab[data-tab="preview"]') || card.querySelector('.fcc-ptab');
+            if (previewTabBtn) switchCardPreviewTab(previewTabBtn, 'preview');
+            pushTerminalLog(`Applied live edits to ${card.dataset.filename || 'file'} (${lines} lines)`);
+        }
+        function openClaudeEditModal(card) {
+            if (!card) return;
+            openFilePreviewFromCard(card);
+            switchWorkspaceTab('code');
+        }
+        function promptAiToEditCard(card) {
+            if (!card) return;
+            const filename = card.dataset.filename || 'file';
+            const input = document.getElementById('user-prompt-input-field') || document.querySelector('textarea');
+            if (input) {
+                input.value = `Please edit ${filename} to `;
+                input.focus();
+                input.selectionStart = input.selectionEnd = input.value.length;
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
         function toggleCardPreviewView(card) {
@@ -3056,7 +3124,7 @@
                 ? (filename.includes('.') ? filename.split('.').pop() : 'txt')
                 : (LANG_EXT_MAP[lang] || 'txt');
             const iconInfo = fileIconFor(extForBadge);
-            const inProgressLabel = isEdit ? 'Applying edits...' : (isDirect ? 'Writing file to terminal...' : 'Writing file...');
+            const inProgressLabel = isEdit ? 'Applying edits...' : (isDirect ? 'Writing file...' : 'Writing file...');
 
             if (isHtml) {
                 card.innerHTML = `
@@ -3067,6 +3135,8 @@
                             <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready' : inProgressLabel}</span></div>
                         </div>
                         <div class="fcc-actions">
+                            <button type="button" class="fcc-btn fcc-claude-btn" onclick="event.stopPropagation();openClaudeEditModal(this.closest('.file-creation-card'))" title="Open in Claude-style Workbench">✏️ Claude Edit</button>
+                            <button type="button" class="fcc-btn fcc-prompt-btn" onclick="event.stopPropagation();promptAiToEditCard(this.closest('.file-creation-card'))" title="Prompt AI to edit this file">💬 Prompt Edit</button>
                             <button type="button" class="fcc-btn fcc-toggle-preview-btn" onclick="event.stopPropagation();toggleCardPreviewView(this.closest('.file-creation-card'))">Hide Preview</button>
                             <button type="button" class="fcc-btn fcc-open-btn" onclick="event.stopPropagation();openFilePreviewFromCard(this.closest('.file-creation-card'))">Fullscreen</button>
                             <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest('.file-creation-card'))">⬇ Download</button>
@@ -3075,8 +3145,9 @@
                     <div class="fcc-live-preview-container">
                         <div class="fcc-preview-bar">
                             <div class="fcc-preview-tabs">
-                                <button type="button" class="fcc-ptab active" onclick="event.stopPropagation();switchCardPreviewTab(this, 'preview')">🌐 Live Canvas</button>
-                                <button type="button" class="fcc-ptab" onclick="event.stopPropagation();switchCardPreviewTab(this, 'code')">💻 Code</button>
+                                <button type="button" class="fcc-ptab active" data-tab="preview" onclick="event.stopPropagation();switchCardPreviewTab(this, 'preview')">🌐 Live Canvas</button>
+                                <button type="button" class="fcc-ptab" data-tab="code" onclick="event.stopPropagation();switchCardPreviewTab(this, 'code')">💻 Code</button>
+                                <button type="button" class="fcc-ptab" data-tab="edit" onclick="event.stopPropagation();switchCardPreviewTab(this, 'edit')">✏️ Live Edit</button>
                             </div>
                             <div class="fcc-preview-indicators">
                                 <span class="fcc-live-pulse"></span>
@@ -3086,6 +3157,13 @@
                         <div class="fcc-viewport-wrap">
                             <iframe class="fcc-preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
                             <pre class="fcc-preview-code-view" style="display:none;"><code class="fcc-code-elem"></code></pre>
+                            <div class="fcc-preview-edit-view" style="display:none; flex-direction:column; height:340px; background:var(--panel-2); padding:10px; gap:8px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="font-size:11px; color:var(--text-dim); font-weight:600;">Claude In-Card Live Editor</span>
+                                    <button type="button" class="fcc-btn" style="background:var(--accent); color:#fff; border:none; padding:4px 10px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="event.stopPropagation();applyCardLiveEdit(this.closest('.file-creation-card'))">⚡ Apply & Refresh</button>
+                                </div>
+                                <textarea class="fcc-live-edit-textarea" style="width:100%; flex:1; background:var(--bg); color:var(--text); font-family:monospace; font-size:12px; border:1px solid var(--border); border-radius:8px; padding:10px; resize:none; outline:none;" spellcheck="false"></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
@@ -3104,6 +3182,8 @@
                         </div>
                         <div class="fcc-actions">
                             ${closed && (card.dataset.lang === 'python' || card.dataset.lang === 'py') ? '<button type="button" class="fcc-btn fcc-run-btn" onclick="event.stopPropagation();runFileCard(this)">Run</button>' : ''}
+                            <button type="button" class="fcc-btn fcc-claude-btn" onclick="event.stopPropagation();openClaudeEditModal(this.closest('.file-creation-card'))" title="Open in Claude-style Workbench">✏️ Claude Edit</button>
+                            <button type="button" class="fcc-btn fcc-prompt-btn" onclick="event.stopPropagation();promptAiToEditCard(this.closest('.file-creation-card'))" title="Prompt AI to edit this file">💬 Prompt Edit</button>
                             <button type="button" class="fcc-btn fcc-open-btn" onclick="event.stopPropagation();openFilePreviewFromCard(this.closest(\'.file-creation-card\'))">Open</button>
                             <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest(\'.file-creation-card\'))">⬇ Download</button>
                         </div>
@@ -3407,6 +3487,10 @@
             const codeElem = card.querySelector('.fcc-code-elem');
             if (codeElem && content) {
                 codeElem.textContent = content;
+            }
+            const editArea = card.querySelector('.fcc-live-edit-textarea');
+            if (editArea && document.activeElement !== editArea && content) {
+                editArea.value = content;
             }
         }
 
@@ -4462,8 +4546,9 @@
                 preload.onerror = () => {
                     if (_imgRetryCount < 1) {
                         _imgRetryCount += 1;
-                        const retryUrl = loadUrl + (loadUrl.includes('?') ? '&' : '?') + 'retry=' + Date.now();
-                        setTimeout(() => tryLoad(retryUrl), 800);
+                        const cleanPrompt = encodeURIComponent(promptText || 'futuristic creative visualization');
+                        const fallbackUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${Date.now()}`;
+                        setTimeout(() => tryLoad(fallbackUrl), 500);
                         return;
                     }
                     clearInterval(labelTimer);
@@ -5080,40 +5165,19 @@
                                 _refreshThinkingSummary(modelWrapper);
                             }
 
-                            // Interleaved text segment: if no active text segment in flow, start one!
-                            if (!modelWrapper._activeTextNode) {
-                                const textNode = document.createElement('div');
-                                textNode.className = 'assistant-text-segment text-[var(--text)] text-[14px] px-1 py-1 max-w-[92%] sm:max-w-[85%] leading-[1.7] break-words';
-                                textNode._rawText = '';
-                                (modelWrapper._flowZone || modelWrapper).appendChild(textNode);
-                                modelWrapper._activeTextNode = textNode;
-                            }
-
-                            modelWrapper._activeTextNode._rawText += payload.text;
-                            const tNode = modelWrapper._activeTextNode;
-                            if (!tNode._renderFrameScheduled) {
-                                tNode._renderFrameScheduled = true;
-                                requestAnimationFrame(() => {
-                                    tNode._renderFrameScheduled = false;
-                                    tNode.innerHTML = renderLightMarkdown(tNode._rawText);
-                                    if (tNode._rawText.includes('$') || tNode._rawText.includes('\\(')) {
-                                        renderMathIfAvailable(tNode);
-                                    }
-                                });
-                            }
-
                             fullText += payload.text;
                             _streamReceivedOutput = true;
 
-                            if (!modelWrapper._streamFlowItems) modelWrapper._streamFlowItems = [];
-                            const lastFlow = modelWrapper._streamFlowItems[modelWrapper._streamFlowItems.length - 1];
-                            if (lastFlow && lastFlow.type === 'text') {
-                                lastFlow.text += payload.text;
-                            } else {
-                                modelWrapper._streamFlowItems.push({ type: 'text', text: payload.text });
+                            if (!renderQueued) {
+                                renderQueued = true;
+                                requestAnimationFrame(() => {
+                                    renderQueued = false;
+                                    if (modelWrapper) {
+                                        updateAssistantMessageDOM(modelWrapper, fullText);
+                                    }
+                                });
                             }
                             pinnedAutoScroll();
-                            renderQueued = false;
                         } else if (payload.type === 'error') {
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (!modelWrapper) {
@@ -5295,16 +5359,11 @@
                             _streamFinishedByProtocol = true;
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (modelWrapper) {
-                                if (modelWrapper._activeTextNode) {
-                                    modelWrapper._activeTextNode.innerHTML = renderLightMarkdown(modelWrapper._activeTextNode._rawText);
-                                }
+                                updateAssistantMessageDOM(modelWrapper, fullText);
                                 modelWrapper.querySelectorAll('[data-seg-type="text"], .assistant-text-segment').forEach(n => {
                                     n._katexDone = false;
                                     renderMathIfAvailable(n);
                                 });
-                                if (!_streamReceivedOutput && !modelWrapper._activeTextNode && (!modelWrapper._streamFlowItems || modelWrapper._streamFlowItems.length === 0)) {
-                                    updateAssistantMessageDOM(modelWrapper, fullText);
-                                }
                                 appendAssistantCopyButton(modelWrapper, fullText);
                                 // Inject activity summary: "Executed code X times · Used Y tools"
                                 if (window._execCount > 0 || window._toolCount > 0) {
