@@ -3157,11 +3157,15 @@ class _WarmAntigravitySession:
         self._last_rate_limited = 0.0
 
     def is_available(self) -> bool:
+        if not os.path.exists(self._agy_bin):
+            return False
         if self._last_rate_limited and (time.time() - self._last_rate_limited) < self._cooldown_seconds:
             return False
         return True
 
-    def mark_rate_limited(self):
+    def mark_rate_limited(self, cooldown_seconds: float = None):
+        if cooldown_seconds is not None:
+            self._cooldown_seconds = float(cooldown_seconds)
         self._last_rate_limited = time.time()
         print(f"[ANTIGRAVITY][RATE_LIMIT] Account {self._account_email} hit rate limit. Cool-down active for {self._cooldown_seconds}s.")
         if self._proc:
@@ -3793,6 +3797,10 @@ def _stream_antigravity_cli(messages, state=None):
     Created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
     """
     import select
+    agy_bin = shutil.which("agy") or "/root/.local/bin/agy"
+    if not os.path.exists(agy_bin):
+        raise RuntimeError("Antigravity CLI binary not installed in this environment")
+
     user_msgs = [m.get("content", "") for m in (messages or []) if m.get("role") == "user"]
     if not user_msgs:
         return
@@ -5234,9 +5242,23 @@ def _get_session_workdir(conv_id: str = None, user_email: str = None) -> str:
     available across turns so subsequent turns can inspect, modify, or add to
     existing files and archives in-place."""
     safe_id = re.sub(r"[^\w\-]", "_", str(conv_id or "default"))
-    session_dir = os.path.join(WORKSPACE_ROOT, "data", "sessions", safe_id)
-    os.makedirs(session_dir, exist_ok=True)
-    return session_dir
+    for base in [os.path.join(WORKSPACE_ROOT, "data", "sessions"), os.path.join(tempfile.gettempdir(), "pratham_sessions")]:
+        try:
+            session_dir = os.path.join(base, safe_id)
+            os.makedirs(session_dir, exist_ok=True)
+            test_path = os.path.join(session_dir, ".write_test")
+            with open(test_path, "w") as f:
+                f.write("ok")
+            os.remove(test_path)
+            return session_dir
+        except Exception:
+            continue
+    fallback = os.path.join(tempfile.gettempdir(), "pratham_sessions", safe_id)
+    try:
+        os.makedirs(fallback, exist_ok=True)
+    except Exception:
+        pass
+    return fallback
 
 def _new_terminal_workdir(conv_id: str = None, user_email: str = None) -> str:
     if conv_id:
@@ -5525,8 +5547,16 @@ def _user_email():
 _CONV_STORAGE_DIR = os.path.join(WORKSPACE_ROOT, "data", "conversations")
 try:
     os.makedirs(_CONV_STORAGE_DIR, exist_ok=True)
+    test_path = os.path.join(_CONV_STORAGE_DIR, ".write_test")
+    with open(test_path, "w") as f:
+        f.write("ok")
+    os.remove(test_path)
 except Exception:
-    pass
+    _CONV_STORAGE_DIR = os.path.join(tempfile.gettempdir(), "pratham_conversations")
+    try:
+        os.makedirs(_CONV_STORAGE_DIR, exist_ok=True)
+    except Exception:
+        pass
 
 def _read_convo_disk(conv_id: str) -> dict:
     if not conv_id:
@@ -6967,7 +6997,11 @@ def chat_stream():
                         convo["files"].append(pf)
                 _save_convo(convo)
 
-        _cleanup_terminal_workdir(terminal_workdir)
+        if terminal_workdir:
+            try:
+                _cleanup_terminal_workdir(terminal_workdir)
+            except Exception:
+                pass
         yield _sse({"type": "complete"})
     resp = Response(stream_with_context(generate()), content_type="text/event-stream")
     resp.headers["Cache-Control"] = "no-cache"
