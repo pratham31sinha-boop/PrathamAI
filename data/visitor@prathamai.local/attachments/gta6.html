@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GTA 6: Vice City Hustle — Pratham AI</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+    body, html { width:100%; height:100%; overflow:hidden; background:#0b0f19; font-family:'Segoe UI', system-ui, sans-serif; }
+    #game-container { position:relative; width:100vw; height:100vh; overflow:hidden; background:#0b0f19; }
+    canvas { display:block; width:100%; height:100%; }
+    #hud { position:absolute; top:16px; left:16px; right:16px; display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; z-index:10; }
+    .badge { background:rgba(15,23,42,0.85); backdrop-filter:blur(8px); padding:8px 16px; border-radius:18px; font-weight:800; font-size:14px; color:#fff; border:2px solid rgba(255,255,255,0.15); box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+    .stars { color:#fbbf24; font-size:18px; letter-spacing:2px; }
+    #mobile-controls { position:absolute; bottom:20px; left:0; right:0; height:140px; display:flex; justify-content:space-between; align-items:center; padding:0 24px; pointer-events:none; z-index:20; }
+    .touch-btn { pointer-events:auto; width:68px; height:68px; border-radius:50%; background:rgba(255,255,255,0.25); border:3px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; font-weight:900; box-shadow:0 6px 16px rgba(0,0,0,0.4); }
+    .touch-btn:active { transform:scale(0.92); background:rgba(255,255,255,0.45); }
+    #dpad { display:grid; grid-template-columns:repeat(3, 44px); grid-template-rows:repeat(3, 44px); gap:4px; pointer-events:auto; }
+    .dpad-btn { width:44px; height:44px; border-radius:10px; background:rgba(255,255,255,0.25); border:2px solid #fff; color:#fff; font-size:16px; display:flex; align-items:center; justify-content:center; }
+    .dpad-btn:active { background:rgba(255,255,255,0.5); }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="hud">
+      <div>
+        <div class="badge">💵 CASH: $<span id="cash">2500</span></div>
+        <div style="margin-top:6px;" class="stars" id="starContainer">★★★★★</div>
+      </div>
+    </div>
+    <canvas id="cv"></canvas>
+    <div id="mobile-controls">
+      <div id="dpad">
+        <div></div><button class="dpad-btn" id="up">▲</button><div></div>
+        <button class="dpad-btn" id="left">◀</button><div></div><button class="dpad-btn" id="right">▶</button>
+        <div></div><button class="dpad-btn" id="down">▼</button><div></div>
+      </div>
+      <div style="display:flex; gap:14px;">
+        <button class="touch-btn" id="btnDrive" style="background:#0284c7;">🚗</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+    let W, H;
+    function resize() { W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+
+    const player = { x: 1200, y: 1200, angle: 0, speed: 4.5, inVehicle: false };
+    const car = { x: 1240, y: 1200, angle: 0, speed: 0, maxSpeed: 10.5 };
+    const keys = {};
+
+    window.addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyF') toggleDrive(); });
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function setupTouch(id, code) {
+      const b = document.getElementById(id);
+      b.addEventListener('pointerdown', e => { e.preventDefault(); keys[code] = true; });
+      b.addEventListener('pointerup', e => { e.preventDefault(); keys[code] = false; });
+      b.addEventListener('pointercancel', e => { keys[code] = false; });
+    }
+    setupTouch('up', 'KeyW'); setupTouch('down', 'KeyS'); setupTouch('left', 'KeyA'); setupTouch('right', 'KeyD');
+    document.getElementById('btnDrive').onclick = toggleDrive;
+
+    function toggleDrive() {
+      const d = Math.hypot(player.x - car.x, player.y - car.y);
+      if (player.inVehicle) {
+        player.inVehicle = false;
+        player.x = car.x + Math.cos(car.angle + Math.PI/2) * 35;
+        player.y = car.y + Math.sin(car.angle + Math.PI/2) * 35;
+      } else if (d < 60) {
+        player.inVehicle = true;
+      }
+    }
+
+    function update() {
+      if (player.inVehicle) {
+        if (keys['KeyW'] || keys['ArrowUp']) car.speed = Math.min(car.maxSpeed, car.speed + 0.35);
+        else if (keys['KeyS'] || keys['ArrowDown']) car.speed = Math.max(-4.5, car.speed - 0.25);
+        else car.speed *= 0.96;
+        if (keys['KeyA'] || keys['ArrowLeft']) car.angle -= 0.05 * (car.speed / car.maxSpeed);
+        if (keys['KeyD'] || keys['ArrowRight']) car.angle += 0.05 * (car.speed / car.maxSpeed);
+        car.x += Math.cos(car.angle) * car.speed;
+        car.y += Math.sin(car.angle) * car.speed;
+        player.x = car.x; player.y = car.y;
+      } else {
+        let dx = 0, dy = 0;
+        if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
+        if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
+        if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
+        if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+        if (dx !== 0 || dy !== 0) {
+          player.angle = Math.atan2(dy, dx);
+          player.x += dx * player.speed;
+          player.y += dy * player.speed;
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      const camX = player.x - W / 2, camY = player.y - H / 2;
+      const gridSize = 400, roadWidth = 100;
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#334155';
+      const startX = Math.floor(camX / gridSize) * gridSize;
+      const startY = Math.floor(camY / gridSize) * gridSize;
+      for (let x = startX - gridSize; x < startX + W + gridSize; x += gridSize) ctx.fillRect(x - camX, 0, roadWidth, H);
+      for (let y = startY - gridSize; y < startY + H + gridSize; y += gridSize) ctx.fillRect(0, y - camY, W, roadWidth);
+
+      ctx.save();
+      ctx.translate(car.x - camX, car.y - camY);
+      ctx.rotate(car.angle);
+      ctx.fillStyle = '#f43f5e'; ctx.fillRect(-28, -14, 56, 28);
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(-10, -12, 24, 24);
+      ctx.fillStyle = '#fef08a'; ctx.fillRect(28, -12, 4, 8); ctx.fillRect(28, 4, 4, 8);
+      ctx.restore();
+
+      if (!player.inVehicle) {
+        ctx.save();
+        ctx.translate(player.x - camX, player.y - camY);
+        ctx.rotate(player.angle);
+        ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    loop();
+  </script>
+</body>
+</html>
