@@ -2888,6 +2888,14 @@ except Exception:
     except Exception:
         synthesize_project = None
 
+try:
+    from api.edit_synth import handle_file_edit
+except Exception:
+    try:
+        from edit_synth import handle_file_edit
+    except Exception:
+        handle_file_edit = None
+
 def _generate_pratham_response(prompt: str, messages: list) -> str:
     prompt_lower = (prompt or "").lower().strip()
     
@@ -2935,6 +2943,23 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         return (
             "I'm ready to continue! Please let me know what you'd like to work on next, or if there's any file or task you'd like me to extend."
         )
+
+    # 4.5 Agentic File Editing & Refinement ("make it 3d", "make that file 3d", "edit the game", etc.)
+    if handle_file_edit:
+        edit_res = handle_file_edit(prompt, messages)
+        if edit_res:
+            feats = "\n".join([f"- **{f}**" for f in edit_res.get("features", [])])
+            tag = "editfile" if edit_res.get("action") == "edit" else "createfile"
+            return (
+                f"I have edited and updated **{edit_res['filename']}** for you with full agentic freedom!\n\n"
+                f"```{tag}:{edit_res['filename']}\n"
+                + edit_res["code"] + "\n"
+                "```\n\n"
+                f"### ✨ {edit_res['title']} — Architecture & Features:\n"
+                + feats + "\n\n"
+                f"Click the `{edit_res['filename']}` file card below to preview your updated changes!"
+            )
+
 
     # 5. Dynamic Game & Interactive Application Creation (Claude-like agentic generation)
     is_game_intent = any(k in prompt_lower for k in [
@@ -3207,7 +3232,11 @@ def _stream_pratham_fast_engine(messages, state=None):
     the entire response appears smoothly in real time within ~2 seconds.
     Created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
     """
-    user_msgs = [m.get("content", "") for m in (messages or []) if m.get("role") == "user"]
+    user_msgs = [
+        m.get("content", "") for m in (messages or [])
+        if m.get("role") == "user"
+        and not m.get("content", "").strip().startswith(("[VERIFICATION CHECK", "[BLOCK VALIDATION", "[SYSTEM", "System:"))
+    ]
     last_user_prompt = user_msgs[-1].strip() if user_msgs else ""
 
     response_text = _generate_pratham_response(last_user_prompt, messages)
@@ -4941,8 +4970,12 @@ def _validate_fenced_blocks(text: str) -> list:
             except json.JSONDecodeError as e:
                 block_issues.append(f"invalid JSON: {str(e)[:100]}")
         if filename.endswith(('.html', '.htm')):
-            open_tags = re.findall(r'<(?!/)(\w+)[^>]*>', content)
-            close_tags = re.findall(r'</(\w+)>', content)
+            # Strip scripts, styles, and comments so JavaScript comparisons (e.g. i < 5) aren't treated as HTML tags
+            html_no_scripts = re.sub(r'<script[\s\S]*?</script>', '', content, flags=re.IGNORECASE)
+            html_no_scripts = re.sub(r'<style[\s\S]*?</style>', '', html_no_scripts, flags=re.IGNORECASE)
+            html_no_scripts = re.sub(r'<!--[\s\S]*?-->', '', html_no_scripts)
+            open_tags = re.findall(r'<(?!/)(\w+)[^>]*>', html_no_scripts)
+            close_tags = re.findall(r'</(\w+)>', html_no_scripts)
             self_closing = {'br', 'img', 'input', 'meta', 'link', 'hr', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
             open_tags = [t for t in open_tags if t.lower() not in self_closing]
             if len(open_tags) != len(close_tags):
@@ -6736,7 +6769,7 @@ def chat_stream():
                 if not is_comp:
                     yield chunk
             iteration_reply = "".join(iteration_text_parts)
-            if iteration == 0 and len(iteration_reply) > 50:
+            if iteration == 0 and len(iteration_reply) > 50 and not ("```createfile:" in iteration_reply or "```editfile:" in iteration_reply):
                 _web_results_for_check = results if 'results' in dir() else []
                 _verification_feedback = _build_verification_feedback(iteration_reply, _web_results_for_check)
                 _block_feedback = _build_block_validation_feedback(iteration_reply)
