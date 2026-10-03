@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroCast Weather Dashboard — Pratham AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+      min-height: 100vh; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 flex justify-center items-center">
+  <div class="w-full max-w-4xl space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center glass-card p-5 rounded-2xl">
+      <div>
+        <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-pink-400">AeroCast Live</h1>
+        <p class="text-xs text-gray-400">San Francisco, California • Today, 2:30 PM</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="unitBtn" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold border border-white/10 transition">°C / °F</button>
+      </div>
+    </div>
+
+    <!-- Main Temp Hero -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="md:col-span-2 glass-card p-8 rounded-3xl flex flex-col justify-between">
+        <div class="flex justify-between items-start">
+          <div>
+            <span class="text-xs font-bold tracking-widest text-blue-400 uppercase">Current Weather</span>
+            <h2 class="text-7xl font-extrabold mt-2 tracking-tighter" id="tempMain">22°C</h2>
+            <p class="text-lg font-medium text-gray-300 mt-1">Partly Cloudy & Breeze</p>
+          </div>
+          <div class="text-6xl animate-bounce">⛅</div>
+        </div>
+        <div class="grid grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/10 text-center">
+          <div><p class="text-xs text-gray-400">Wind</p><p class="text-sm font-bold mt-1">14 km/h</p></div>
+          <div><p class="text-xs text-gray-400">Humidity</p><p class="text-sm font-bold mt-1">62%</p></div>
+          <div><p class="text-xs text-gray-400">UV Index</p><p class="text-sm font-bold mt-1">4 of 10</p></div>
+          <div><p class="text-xs text-gray-400">Visibility</p><p class="text-sm font-bold mt-1">10 km</p></div>
+        </div>
+      </div>
+
+      <!-- Weekly Mini -->
+      <div class="glass-card p-6 rounded-3xl flex flex-col justify-between space-y-3">
+        <h3 class="text-sm font-bold text-gray-300">7-Day Outlook</h3>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between items-center py-1"><span>Mon</span><span>☀️ 24°</span></div>
+          <div class="flex justify-between items-center py-1"><span>Tue</span><span>⛅ 22°</span></div>
+          <div class="flex justify-between items-center py-1"><span>Wed</span><span>🌧️ 19°</span></div>
+          <div class="flex justify-between items-center py-1"><span>Thu</span><span>⛈️ 18°</span></div>
+          <div class="flex justify-between items-center py-1"><span>Fri</span><span>⛅ 21°</span></div>
+          <div class="flex justify-between items-center py-1"><span>Sat</span><span>☀️ 25°</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isC = true;
+    document.getElementById('unitBtn').addEventListener('click', () => {
+      isC = !isC;
+      document.getElementById('tempMain').textContent = isC ? '22°C' : '72°F';
+    });
+  </script>
+</body>
+</html>
