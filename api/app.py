@@ -5230,6 +5230,7 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         summary_text = "\n".join(summary_parts)
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
+    return [{"role": "system", "content": summary_text}] + recent_msgs
 _PROVIDER_CHAIN = [
     ("antigravity_cli", _stream_antigravity_cli),
     ("gemini_api_key", _stream_gemini_api_key),
@@ -6705,7 +6706,7 @@ def chat_stream():
                     })
     else:
         _summarized_history = _summarize_old_messages(history, conv_id)
-        for m in _summarized_history:
+        for m in (_summarized_history or []):
             api_messages.append({"role": m["role"], "content": m["content"]})
     _emit_searching_step = False
     outgoing_user_message = _NO_WEB_SEARCH_TAG_RE.sub("", message).strip()
