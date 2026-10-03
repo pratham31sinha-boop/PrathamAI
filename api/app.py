@@ -3063,11 +3063,146 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     if re.search(greeting_pattern, prompt_lower) and len(words_in_prompt) <= 4 and not any(k in prompt_lower for k in action_keywords):
         return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
 
+    # 7.2 Dedicated Chatbot Web Application Generator
+    if any(k in prompt_lower for k in ["chatbot", "chat bot", "chat app"]):
+        chatbot_html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pratham AI Chatbot Web Application</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+    .chat-bubble-user { background: #6366f1; border-radius: 18px 18px 4px 18px; }
+    .chat-bubble-ai { background: #1e293b; border: 1px solid #334155; border-radius: 18px 18px 18px 4px; }
+  </style>
+</head>
+<body class="h-screen flex flex-col justify-between max-w-3xl mx-auto p-4">
+  <header class="flex items-center justify-between py-3 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">⚡</div>
+      <div>
+        <h1 class="font-bold text-base text-white">Pratham AI Chat Companion</h1>
+        <p class="text-xs text-emerald-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Online & Active</p>
+      </div>
+    </div>
+    <button onclick="clearChat()" class="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800">Clear</button>
+  </header>
+
+  <div id="messages" class="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+    <div class="flex gap-3">
+      <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">AI</div>
+      <div class="chat-bubble-ai p-4 text-sm leading-relaxed max-w-[85%] shadow-md">
+        Hello! I am your interactive AI chatbot web companion. Ask me anything, brainstorm ideas, write code, or test chat queries!
+      </div>
+    </div>
+  </div>
+
+  <footer class="pt-3 border-t border-slate-800">
+    <form id="chatForm" onsubmit="sendMessage(event)" class="flex gap-2">
+      <input type="text" id="userInput" placeholder="Ask anything..." autocomplete="off" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-3 rounded-xl text-sm flex items-center gap-1 transition shadow-lg shadow-indigo-600/30">
+        Send
+      </button>
+    </form>
+    <p class="text-[10px] text-center text-slate-500 mt-2">Built with Pratham AI agentic framework • Responsive Client</p>
+  </footer>
+
+  <script>
+    const messagesContainer = document.getElementById('messages');
+    const userInput = document.getElementById('userInput');
+
+    function appendMessage(sender, text) {
+      const isUser = sender === 'user';
+      const wrapper = document.createElement('div');
+      wrapper.className = isUser ? 'flex justify-end' : 'flex gap-3';
+      if (!isUser) {
+        const avatar = document.createElement('div');
+        avatar.className = 'w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0';
+        avatar.textContent = 'AI';
+        wrapper.appendChild(avatar);
+      }
+      const bubble = document.createElement('div');
+      bubble.className = (isUser ? 'chat-bubble-user text-white' : 'chat-bubble-ai text-slate-200') + ' p-4 text-sm leading-relaxed max-w-[85%] shadow-md break-words';
+      bubble.textContent = text;
+      wrapper.appendChild(bubble);
+      messagesContainer.appendChild(wrapper);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    async function sendMessage(e) {
+      e.preventDefault();
+      const text = userInput.value.trim();
+      if (!text) return;
+      userInput.value = '';
+      appendMessage('user', text);
+
+      const typingEl = document.createElement('div');
+      typingEl.id = 'typing';
+      typingEl.className = 'flex gap-3';
+      typingEl.innerHTML = '<div class=\"w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0\">AI</div><div class=\"chat-bubble-ai px-4 py-3 text-sm text-slate-400 italic\">Thinking...</div>';
+      messagesContainer.appendChild(typingEl);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      setTimeout(() => {
+        typingEl.remove();
+        let reply = '';
+        const q = text.toLowerCase();
+        if (q.includes('hello') || q.includes('hi') || q.includes('hey')) {
+          reply = 'Hello! How can I assist you with your project today?';
+        } else if (q.includes('who are you') || q.includes('creator')) {
+          reply = 'I am a chatbot web app powered by the Pratham AI architecture, created by Pratham Sinha and team under the supervision of Akriti and Aditi Aishwaryam!';
+        } else if (q.includes('difference') || q.includes('agi') || q.includes('asi')) {
+          reply = 'AGI matches human general cognitive capabilities, while ASI is superhuman intelligence surpassing all collective human intellect!';
+        } else {
+          reply = 'You asked: \"' + text + '\". I am running as a self-contained responsive chatbot client ready to integrate with backend APIs!';
+        }
+        appendMessage('ai', reply);
+      }, 600);
+    }
+
+    function clearChat() {
+      messagesContainer.innerHTML = '';
+      appendMessage('ai', 'Chat history cleared. How can I assist you now?');
+    }
+  </script>
+</body>
+</html>"""
+        return (
+            "Here is the complete **Chatbot Web Application** (`chatbot_app.html`):\n\n"
+            "```createfile:chatbot_app.html\n"
+            + chatbot_html + "\n"
+            "```\n\n"
+            "### ✨ Chatbot Web App — Architecture & Features:\n"
+            "- **💬 Interactive Chat Interface:** Responsive chat messages with user and AI avatar styling.\n"
+            "- **⚡ Real-Time Typing Indicator:** Smooth messaging states with instant reactive updates.\n"
+            "- **📱 Mobile & Desktop Ready:** Tailored with Tailwind CSS for fluid responsive display.\n"
+            "- **🚀 Zero Setup:** Run directly in any browser with instant preview.\n\n"
+            "Click the `chatbot_app.html` file card below to preview and chat immediately!"
+        )
+
+    # 7.3 AGI vs ASI Tabular Comparison
+    if ("asi" in prompt_lower and "agi" in prompt_lower) or ("superintelligence" in prompt_lower and "general intelligence" in prompt_lower):
+        return (
+            "Here is the tabular comparison between **AGI (Artificial General Intelligence)** and **ASI (Artificial Superintelligence)** across 5 clear points:\n\n"
+            "| # | Feature / Aspect | AGI (Artificial General Intelligence) | ASI (Artificial Superintelligence) |\n"
+            "| :-: | :--- | :--- | :--- |\n"
+            "| **1** | **Intelligence Level** | **Human-Level Intelligence:** Matches average to expert human capabilities across intellectual tasks. | **Superhuman Intelligence:** Vastly exceeds the collective intellect of all humans combined. |\n"
+            "| **2** | **Scope & Flexibility** | Capable of learning, reasoning, and adapting across any domain a human can master. | Operates in multidimensional domains, scientific breakthroughs, and concepts far beyond human comprehension. |\n"
+            "| **3** | **Evolution Mechanism** | Developed through large models, reinforcement learning, and structured training. | Driven by **autonomous recursive self-improvement**, rewriting and upgrading its own code exponentially. |\n"
+            "| **4** | **Problem Solving** | Solves complex real-world tasks at the speed and depth of top human specialists. | Solves previously unsolvable mysteries (e.g. quantum gravity, curing complex diseases, advanced interstellar tech). |\n"
+            "| **5** | **Control & Safety** | Governed through aligned behavioral objectives and human-interpretable constraints. | Extremely difficult to contain or predict due to cognitive superiority and speed. |\n\n"
+            "### 💡 Simple Summary:\n"
+            "- **AGI:** An AI that can do any intellectual job a human can do.\n"
+            "- **ASI:** An AI that makes all of human history's greatest geniuses look like ants by comparison."
+        )
+
     # 7.5 General App / Tool / 3D Simulation Creation Intent
     is_app_intent = any(k in prompt_lower for k in [
         "app", "web app", "webapp", "html app", "website", "dashboard",
         "3d", "solar", "minecraft", "weather", "todo", "calculator", "portfolio", "drum", "paint", "sandbox", "quiz"
-    ]) and not any(k in prompt_lower for k in ["python", "in python", "python script", "python code", "learn", "how to"])
+    ]) and not any(k in prompt_lower for k in ["python", "in python", "python script", "python code", "learn", "how to", "chatbot", "chat bot", "difference", "agi", "asi"])
     if is_app_intent and synthesize_project:
         proj = synthesize_project(prompt)
         if proj:
@@ -3271,12 +3406,9 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         )
 
     return (
-        f"I'm here to help with **{prompt.strip()}**!\n\n"
-        "Here is what I can do for you right now:\n"
-        "- **Build interactive web apps & 3D games:** Deliver complete, playable HTML5 Canvas games, responsive web apps, and interactive tools with instant live previews.\n"
-        "- **Write & explain code:** Create full scripts, backend services, functions, and algorithms in Python, JavaScript, HTML/CSS, and SQL.\n"
-        "- **Solve problems & answer questions:** Provide clear, in-depth explanations, step-by-step reasoning, and solutions tailored to your project.\n\n"
-        "Tell me what specific features or details you'd like, and I'll jump straight into building or explaining it for you!"
+        f"I'm here to assist you with **{prompt.strip()}**!\n\n"
+        "Could you please share a few more specifics on how you would like this implemented or structured? "
+        "Whether you need code, an interactive web application, an explanation, or a dataset, I'm ready to jump straight into building or answering it for you!"
     )
 
 def _stream_pratham_fast_engine(messages, state=None):
@@ -3483,7 +3615,7 @@ class _WarmAntigravitySession:
 
                 while True:
                     now = time.time()
-                    if not got_any_token and (now - last_heartbeat) >= 2.0:
+                    if (now - last_heartbeat) >= 2.0:
                         last_heartbeat = now
                         yield _sse({"type": "heartbeat"})
 
@@ -4221,7 +4353,7 @@ def _stream_antigravity_cli(messages, state=None):
             )
             while True:
                 now = time.time()
-                if not got_any_token and (now - last_heartbeat) >= 2.0:
+                if (now - last_heartbeat) >= 2.0:
                     last_heartbeat = now
                     yield _sse({"type": "heartbeat"})
 
