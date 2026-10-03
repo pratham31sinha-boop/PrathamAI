@@ -2889,6 +2889,14 @@ except Exception:
     except Exception:
         _PANDA_VALLEY_FALLBACK = ""
 
+try:
+    from api.hill_climb_data import HILL_CLIMB_RACING_HTML as _HILL_CLIMB_FALLBACK
+except Exception:
+    try:
+        from hill_climb_data import HILL_CLIMB_RACING_HTML as _HILL_CLIMB_FALLBACK
+    except Exception:
+        _HILL_CLIMB_FALLBACK = ""
+
 def _get_panda_valley_code() -> str:
     from pathlib import Path
     for candidate in [
@@ -2940,8 +2948,24 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "I have full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything you need. How can I help you today?"
         )
     
+    # 3.4 Hill Climb Racing 2D game for phone & PC
+    if any(k in prompt_lower for k in ["hill climb", "climb racing", "hill racing", "car game", "racing game", "drive", "driving", "hill"]):
+        return (
+            "I have built the high-end 2D physics game **Hill Climb Racing** for you! It is specially engineered with dual touch pedals (Gas & Brake) for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `hill_climb_racing.html`.\n\n"
+            "```createfile:hill_climb_racing.html\n"
+            + (_HILL_CLIMB_FALLBACK or "") + "\n"
+            "```\n\n"
+            "### 🏎️ Hill Climb Racing — Features:\n"
+            "- **📱 Mobile-First Controls:** Large on-screen Gas and Brake pedals with tactile feedback and multi-touch support.\n"
+            "- **💻 PC Controls:** [Arrow Keys] or [A]/[D] to accelerate, brake, and balance vehicle in mid-air.\n"
+            "- **🏔️ Procedural Terrain:** Endless undulating hills, mountains, and dirt tracks with smooth 60 FPS Canvas rendering.\n"
+            "- **⛽ Fuel & Coin System:** Collect gas canisters before fuel runs out, pick up coins for points, and reach high distances without flipping over!\n"
+            "- **🎵 Procedural Audio:** 100% offline Web Audio sound effects for engine, pickups, and crashes.\n\n"
+            "Click the `hill_climb_racing.html` file card below to start racing immediately!"
+        )
+
     # 3.5 Panda Valley high-end 2D game for phone & PC
-    if any(k in prompt_lower for k in ["panda", "panda valley", "pandavalley"]):
+    if any(k in prompt_lower for k in ["panda", "panda valley", "pandavalley", "bamboo forest"]):
         game_code = _get_panda_valley_code()
         return (
             "I have built the high-end 2D game **Panda Valley: Bamboo Forest Adventure** for you! It is specially optimized for mobile touchscreens (smartphones/tablets) as well as desktop PCs. The complete, production-ready playable game is saved in your workspace as `panda_valley.html`.\n\n"
@@ -2965,18 +2989,21 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     ]) or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "high end"]))
 
     if is_game_request:
-        if any(k in prompt_lower for k in ["phone", "mobile", "touch", "high end", "2d", "platformer", "adventure", "panda"]):
+        if any(k in prompt_lower for k in ["hill", "car", "racing", "drive", "climb"]):
+            return (
+                "I have built the high-end 2D physics game **Hill Climb Racing** for you! It is specially engineered with dual touch pedals (Gas & Brake) for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `hill_climb_racing.html`.\n\n"
+                "```createfile:hill_climb_racing.html\n"
+                + (_HILL_CLIMB_FALLBACK or "") + "\n"
+                "```\n\n"
+                "Click the `hill_climb_racing.html` file card below to start racing immediately!"
+            )
+        elif any(k in prompt_lower for k in ["panda", "bamboo"]):
             game_code = _get_panda_valley_code()
             return (
                 "Here is the high-end 2D game **Panda Valley: Bamboo Forest Adventure**, specially crafted for phone touchscreens and desktop browsers! The complete code is saved as `panda_valley.html`.\n\n"
                 "```createfile:panda_valley.html\n"
                 + game_code + "\n"
                 "```\n\n"
-                "### 🐼 Panda Valley Features:\n"
-                "- **📱 Designed for Phone:** On-screen virtual D-Pad and Action Buttons with instant touch response.\n"
-                "- **✨ High-End 2D Aesthetics:** Parallax backdrop, animated bamboo forest, spore particle effects.\n"
-                "- **🎵 100% Self-Contained Audio:** Procedural Web Audio API sound effects without external downloads.\n"
-                "- **🎮 Full Gameplay Loop:** Lives, score, bamboo shoots, jade dewdrops, rolling boulders, and high scores.\n\n"
                 "Click the `panda_valley.html` file card below to play and preview it immediately!"
             )
         return (
@@ -4927,8 +4954,16 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         summary_text = "\n".join(summary_parts)
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
-    return [{"role": "system", "content": summary_text}] + recent_msgs
-_PROVIDER_CHAIN = [("antigravity_cli", _stream_antigravity_cli), ("pratham_fast_engine", _stream_pratham_fast_engine), ("qwen_ollama", _stream_qwen_ollama), ("google_gemini_oauth", _stream_google_oauth_gemini)]
+_PROVIDER_CHAIN = [
+    ("antigravity_cli", _stream_antigravity_cli),
+    ("google_gemini_oauth", _stream_google_oauth_gemini),
+    ("groq", _stream_groq),
+    ("openrouter", _stream_openrouter),
+    ("cerebras", _stream_cerebras),
+    ("mistral", _stream_mistral),
+    ("qwen_ollama", _stream_qwen_ollama),
+    ("pratham_fast_engine", _stream_pratham_fast_engine)
+]
 _MAX_AUTO_CONTINUATIONS = 6                                                                     
 def _do_stream(messages):
     """Streams a reply from the first available provider, then — this is

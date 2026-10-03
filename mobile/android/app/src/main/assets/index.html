@@ -2952,6 +2952,15 @@
             const e = (ext || '').toLowerCase().replace(/^\./, '');
             return FILE_ICON_MAP[e] || { icon: e.slice(0, 2).toUpperCase() || '▤', bg: 'var(--accent)' };
         }
+        function downloadAllFilesFromGroup(wrapper) {
+            if (!wrapper || !wrapper._fileGroupList) return;
+            const cards = wrapper._fileGroupList.querySelectorAll('.file-creation-card');
+            cards.forEach((card, idx) => {
+                setTimeout(() => {
+                    downloadCardContent(card);
+                }, idx * 300);
+            });
+        }
         function appendToFileGroup(wrapper, card) {
             const filesZone = wrapper._filesZone || wrapper._answerZone || wrapper;
             if (!wrapper._fileGroup) {
@@ -2960,7 +2969,7 @@
                 group.innerHTML = `
                     <div class="deliverables-header" style="display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:0.02em;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                        <span class="deliverables-title">Presenting Deliverable</span>
+                        <span class="deliverables-title">Presented 1 file</span>
                     </div>
                     <div class="file-group-list" style="display:flex;flex-direction:column;gap:8px;"></div>
                 `;
@@ -2981,7 +2990,22 @@
                 wrapper._fileGroupList.appendChild(card);
             }
             if (wrapper._fileGroupTitle) {
-                wrapper._fileGroupTitle.textContent = wrapper._fileGroupCount > 1 ? 'Presenting Deliverables' : 'Presenting Deliverable';
+                wrapper._fileGroupTitle.textContent = wrapper._fileGroupCount > 1 ? `Presented ${wrapper._fileGroupCount} files` : 'Presented 1 file';
+            }
+            if (wrapper._fileGroupCount > 1) {
+                let dlAllBtn = wrapper._fileGroup.querySelector('.claude-dl-all-btn');
+                if (!dlAllBtn) {
+                    dlAllBtn = document.createElement('button');
+                    dlAllBtn.type = 'button';
+                    dlAllBtn.className = 'claude-dl-all-btn fcc-btn';
+                    dlAllBtn.innerHTML = `<span>⬇</span><span>Download all</span>`;
+                    dlAllBtn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:10px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;margin-top:6px;align-self:flex-start;';
+                    dlAllBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        downloadAllFilesFromGroup(wrapper);
+                    };
+                    wrapper._fileGroup.appendChild(dlAllBtn);
+                }
             }
             return card;
         }
@@ -3124,25 +3148,32 @@
                 ? (filename.includes('.') ? filename.split('.').pop() : 'txt')
                 : (LANG_EXT_MAP[lang] || 'txt');
             const iconInfo = fileIconFor(extForBadge);
-            const inProgressLabel = isEdit ? 'Applying edits...' : (isDirect ? 'Writing file...' : 'Writing file...');
+            const inProgressLabel = isEdit ? 'Applying edits...' : 'Writing file...';
+
+            card.onclick = (e) => {
+                if (!e.target.closest('button') && !e.target.closest('textarea')) {
+                    openFilePreviewFromCard(card);
+                }
+            };
 
             if (isHtml) {
+                const cleanName = filename.replace(/\.(html|htm)$/i, '').replace(/[_-]/g, ' ');
+                const displayTitle = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+                const subLabel = closed ? 'Code · HTML' : inProgressLabel;
                 card.innerHTML = `
                     <div class="fcc-row">
                         <div class="fcc-icon" style="background:${iconInfo.bg};color:#fff;">${iconInfo.icon}</div>
                         <div class="fcc-meta">
-                            <div class="fcc-name">${sanitizeOutputText(filename)}</div>
-                            <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready' : inProgressLabel}</span></div>
+                            <div class="fcc-name">${sanitizeOutputText(displayTitle)}</div>
+                            <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${subLabel}</span></div>
                         </div>
                         <div class="fcc-actions">
-                            <button type="button" class="fcc-btn fcc-claude-btn" onclick="event.stopPropagation();openClaudeEditModal(this.closest('.file-creation-card'))" title="Open in Claude-style Workbench">✏️ Claude Edit</button>
-                            <button type="button" class="fcc-btn fcc-prompt-btn" onclick="event.stopPropagation();promptAiToEditCard(this.closest('.file-creation-card'))" title="Prompt AI to edit this file">💬 Prompt Edit</button>
-                            <button type="button" class="fcc-btn fcc-toggle-preview-btn" onclick="event.stopPropagation();toggleCardPreviewView(this.closest('.file-creation-card'))">Hide Preview</button>
-                            <button type="button" class="fcc-btn fcc-open-btn" onclick="event.stopPropagation();openFilePreviewFromCard(this.closest('.file-creation-card'))">Fullscreen</button>
-                            <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest('.file-creation-card'))">⬇ Download</button>
+                            <button type="button" class="fcc-btn fcc-open-btn" onclick="event.stopPropagation();openFilePreviewFromCard(this.closest('.file-creation-card'))" title="Open in Artifact Canvas">⚡ Preview</button>
+                            <button type="button" class="fcc-btn fcc-claude-btn" onclick="event.stopPropagation();openClaudeEditModal(this.closest('.file-creation-card'))" title="Open in Claude-style Workbench">✏️ Edit</button>
+                            <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest('.file-creation-card'))" title="Download">⬇</button>
                         </div>
                     </div>
-                    <div class="fcc-live-preview-container">
+                    <div class="fcc-live-preview-container" style="display:none;">
                         <div class="fcc-preview-bar">
                             <div class="fcc-preview-tabs">
                                 <button type="button" class="fcc-ptab active" data-tab="preview" onclick="event.stopPropagation();switchCardPreviewTab(this, 'preview')">🌐 Live Canvas</button>
@@ -3173,19 +3204,18 @@
                     iframe.srcdoc = content;
                 }
             } else {
+                const nonHtmlSub = closed ? (extForBadge === 'zip' ? 'ZIP' : (extForBadge === 'py' ? 'Code · Python' : extForBadge.toUpperCase())) : inProgressLabel;
                 card.innerHTML = `
                     <div class="fcc-row">
                         <div class="fcc-icon" style="background:${iconInfo.bg};color:#fff;">${iconInfo.icon}</div>
                         <div class="fcc-meta">
                             <div class="fcc-name">${sanitizeOutputText(filename)}</div>
-                            <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${closed ? 'Ready' : inProgressLabel}</span></div>
+                            <div class="fcc-sub"><span class="fcc-status-dot"></span><span class="fcc-status-text">${nonHtmlSub}</span></div>
                         </div>
                         <div class="fcc-actions">
                             ${closed && (card.dataset.lang === 'python' || card.dataset.lang === 'py') ? '<button type="button" class="fcc-btn fcc-run-btn" onclick="event.stopPropagation();runFileCard(this)">Run</button>' : ''}
-                            <button type="button" class="fcc-btn fcc-claude-btn" onclick="event.stopPropagation();openClaudeEditModal(this.closest('.file-creation-card'))" title="Open in Claude-style Workbench">✏️ Claude Edit</button>
-                            <button type="button" class="fcc-btn fcc-prompt-btn" onclick="event.stopPropagation();promptAiToEditCard(this.closest('.file-creation-card'))" title="Prompt AI to edit this file">💬 Prompt Edit</button>
                             <button type="button" class="fcc-btn fcc-open-btn" onclick="event.stopPropagation();openFilePreviewFromCard(this.closest(\'.file-creation-card\'))">Open</button>
-                            <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest(\'.file-creation-card\'))">⬇ Download</button>
+                            <button type="button" class="fcc-btn fcc-download-btn" onclick="event.stopPropagation();downloadCardContent(this.closest(\'.file-creation-card\'))">⬇</button>
                         </div>
                     </div>
                     <div class="fcc-progress-track"><div class="fcc-progress-fill"></div></div>
