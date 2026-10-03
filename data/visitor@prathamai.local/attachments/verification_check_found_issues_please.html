@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Verification Check Found Issues  Please  — Pratham AI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: 'Segoe UI', system-ui, sans-serif; }
+    #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; z-index: 10; }
+    .badge { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); padding: 8px 16px; border-radius: 20px; font-weight: 800; font-size: 14px; color: #fff; border: 2px solid rgba(255, 255, 255, 0.15); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+    .badge span { color: #38bdf8; }
+    #mobile-controls { position: absolute; bottom: 24px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 24px; pointer-events: none; z-index: 20; }
+    .ctrl-btn { pointer-events: auto; width: 68px; height: 68px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.6); color: #fff; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+    .ctrl-btn:active { background: rgba(56, 189, 248, 0.5); transform: scale(0.92); }
+    #game-over { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 30; color: #fff; text-align: center; }
+    #game-over.active { display: flex; }
+    #game-over h2 { font-size: 40px; font-weight: 900; color: #f43f5e; margin-bottom: 12px; }
+    #game-over button { padding: 12px 28px; font-size: 16px; font-weight: 800; border-radius: 25px; border: none; background: #38bdf8; color: #0f172a; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="hud">
+      <div class="badge">SCORE: <span id="score-val">0</span></div>
+      <div class="badge">SHIELD: <span id="shield-val">100%</span></div>
+    </div>
+    <canvas id="cv"></canvas>
+    <div id="mobile-controls">
+      <div style="display:flex; gap:12px;">
+        <button class="ctrl-btn" id="btn-left">◀</button>
+        <button class="ctrl-btn" id="btn-right">▶</button>
+      </div>
+      <button class="ctrl-btn" id="btn-action" style="background:rgba(56,189,248,0.3); border-color:#38bdf8;">⚡</button>
+    </div>
+    <div id="game-over">
+      <h2>GAME OVER</h2>
+      <p style="margin-bottom: 20px; color:#cbd5e1;">Final Score: <span id="final-score">0</span></p>
+      <button onclick="restart()">Play Again</button>
+    </div>
+  </div>
+  <script>
+    const cv = document.getElementById('cv');
+    const ctx = cv.getContext('2d');
+    let W, H;
+    function resize() { W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let score = 0, shield = 100, isDead = false;
+    const player = { x: W/2, y: H - 120, r: 20, vx: 0 };
+    let items = [], particles = [];
+
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    const bLeft = document.getElementById('btn-left');
+    const bRight = document.getElementById('btn-right');
+    const bAct = document.getElementById('btn-action');
+    let touchLeft = false, touchRight = false;
+    bLeft.ontouchstart = () => touchLeft = true; bLeft.ontouchend = () => touchLeft = false;
+    bRight.ontouchstart = () => touchRight = true; bRight.ontouchend = () => touchRight = false;
+    bAct.ontouchstart = () => triggerAction();
+
+    function triggerAction() {
+      for(let i=0; i<items.length; i++) {
+        if(items[i].y > H - 250) {
+          items[i].y = -100;
+          score += 50;
+          document.getElementById('score-val').textContent = score;
+        }
+      }
+    }
+
+    function spawnItem() {
+      items.push({
+        x: Math.random() * (W - 60) + 30,
+        y: -40,
+        vy: 3 + Math.random() * 4,
+        r: 16,
+        color: Math.random() > 0.3 ? '#f43f5e' : '#38bdf8'
+      });
+    }
+
+    function loop() {
+      if (isDead) return;
+      ctx.clearRect(0, 0, W, H);
+
+      // Player Movement
+      if (keys['ArrowLeft'] || keys['KeyA'] || touchLeft) player.vx -= 0.8;
+      if (keys['ArrowRight'] || keys['KeyD'] || touchRight) player.vx += 0.8;
+      player.vx *= 0.88;
+      player.x += player.vx;
+      if (player.x < player.r) player.x = player.r;
+      if (player.x > W - player.r) player.x = W - player.r;
+
+      // Draw Player
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.arc(0, 0, player.r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.restore();
+
+      // Items
+      if (Math.random() < 0.04 && items.length < 12) spawnItem();
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        it.y += it.vy;
+        ctx.fillStyle = it.color;
+        ctx.beginPath(); ctx.arc(it.x, it.y, it.r, 0, Math.PI*2); ctx.fill();
+
+        // Collision
+        if (Math.hypot(player.x - it.x, player.y - it.y) < player.r + it.r) {
+          if (it.color === '#38bdf8') {
+            score += 100;
+            document.getElementById('score-val').textContent = score;
+          } else {
+            shield -= 25;
+            document.getElementById('shield-val').textContent = Math.max(0, shield) + '%';
+            if (shield <= 0) {
+              isDead = true;
+              document.getElementById('final-score').textContent = score;
+              document.getElementById('game-over').classList.add('active');
+            }
+          }
+          items.splice(i, 1);
+          continue;
+        }
+        if (it.y > H + 50) items.splice(i, 1);
+      }
+
+      score += 1;
+      document.getElementById('score-val').textContent = score;
+      requestAnimationFrame(loop);
+    }
+
+    function restart() {
+      score = 0; shield = 100; isDead = false; items = [];
+      document.getElementById('score-val').textContent = '0';
+      document.getElementById('shield-val').textContent = '100%';
+      document.getElementById('game-over').classList.remove('active');
+      player.x = W/2;
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
