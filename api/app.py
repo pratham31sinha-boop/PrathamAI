@@ -2990,13 +2990,27 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             )
 
 
+    # 4.8 Senior Quantitative Risk & Financial Intelligence Agent Handler
+    try:
+        from api.quant_synth import is_quant_portfolio_request, generate_quant_portfolio_suite
+    except Exception:
+        try:
+            from quant_synth import is_quant_portfolio_request, generate_quant_portfolio_suite
+        except Exception:
+            is_quant_portfolio_request = None
+            generate_quant_portfolio_suite = None
+
+    if is_quant_portfolio_request and is_quant_portfolio_request(prompt):
+        q_res = generate_quant_portfolio_suite(target_dir="/workspace/bold-curie")
+        return q_res["markdown_response"]
+
     # 5. Dynamic Game & Interactive Application Creation (Claude-like agentic generation)
-    is_game_intent = any(k in prompt_lower for k in [
-        "game", "play", "ludo", "cricket", "chess", "arcade", "racing", "car", "drive",
-        "stumble", "fall guys", "panda", "flappy", "snake", "platformer", "2d game", "3d game",
-        "phone game", "mobile game", "html game", "canvas game", "make a game", "build a game",
-        "create a game", "code a game", "gta", "vice city", "hill climb"
-    ]) or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "3d"]))
+    game_keywords_pattern = r"\b(game|games|play|ludo|cricket|chess|arcade|racing|stumble|fall guys|panda|flappy|snake|platformer|2d game|3d game|rpg|dungeon|gta|vice city|hill climb)\b"
+    is_game_intent = (
+        bool(re.search(game_keywords_pattern, prompt_lower))
+        or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "3d"]))
+        or any(k in prompt_lower for k in ["car game", "driving game", "racing game"])
+    ) and not any(k in prompt_lower for k in ["quant", "monte carlo", "portfolio", "sharpe", "sortino", "var 95"])
 
     if is_game_intent and synthesize_project:
         proj = synthesize_project(prompt)
@@ -3281,6 +3295,24 @@ def _stream_pratham_fast_engine(messages, state=None):
         chunk = word if i == total_words - 1 else word + " "
         yield _sse({"type": "token", "text": chunk})
         time.sleep(sleep_time)
+
+    # Auto-emit file_ready events for generated downloadables (PDF, ZIP, CSV)
+    referenced_files = set(re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:pdf|zip|tar\.gz|csv))\b", response_text))
+    for fname in referenced_files:
+        cand_path = None
+        for base in ["/workspace/bold-curie", "/tmp"]:
+            p = os.path.join(base, fname)
+            if os.path.isfile(p):
+                cand_path = p
+                break
+        if cand_path:
+            try:
+                with open(cand_path, "rb") as fh:
+                    fbytes = fh.read()
+                token = _store_generated_file(fbytes, fname, mimetypes.guess_type(fname)[0] or "application/octet-stream")
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fname})
+            except Exception as _fe:
+                print(f"[FAST ENGINE FILE READY FAULT] {fname} -> {_fe}")
 
     if state is not None:
         state["finish_reason"] = "stop"

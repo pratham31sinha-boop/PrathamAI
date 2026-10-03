@@ -45,6 +45,31 @@ def synthesize_project(prompt: str) -> dict:
         if game_res:
             return game_res
 
+    # Priority 0.5: Senior Quant & Financial Intelligence Suite
+    try:
+        from api.quant_synth import is_quant_portfolio_request, generate_quant_portfolio_suite
+    except Exception:
+        try:
+            from quant_synth import is_quant_portfolio_request, generate_quant_portfolio_suite
+        except Exception:
+            is_quant_portfolio_request = None
+            generate_quant_portfolio_suite = None
+
+    if is_quant_portfolio_request and is_quant_portfolio_request(prompt):
+        q_res = generate_quant_portfolio_suite()
+        return {
+            "filename": q_res["script_filename"],
+            "title": "Quantitative Risk & Portfolio Allocation Suite",
+            "description": "A comprehensive multi-asset algorithmic portfolio risk engine featuring 5-year Monte Carlo simulation, Sharpe/Sortino KPIs, ReportLab executive PDF report, and zip archive.",
+            "features": [
+                "📈 5-Year Monte Carlo Simulation: 1,000 algorithmic iterations evaluating 60/40 benchmark vs. Tech & Gold growth",
+                "📊 Key Risk Metrics: Sharpe Ratio, Sortino Ratio, Maximum Drawdown, Value at Risk (VaR 95%), and Beta",
+                "📄 Publication-Grade PDF: Styled executive report (financial_intelligence_report.pdf) with KPI tables and recommendations",
+                "📦 Bundled Zip Archive: Full package (portfolio_risk_suite.zip) containing script, raw datasets, charts, and report"
+            ],
+            "code": q_res["script_code"]
+        }
+
     # 0. Stumble Guys / Knockout Obstacle Royale
     if any(k in p_lower for k in ["stumble", "stumble guys", "stumbleguys", "fall guys", "fallguys", "knockout", "obstacle royale", "wipeout"]):
         return {
@@ -882,7 +907,14 @@ def synthesize_project(prompt: str) -> dict:
         }
 
     # 4. Modern Weather Dashboard
-    if any(k in p_lower for k in ["weather", "forecast", "climate", "temperature"]):
+    is_finance_context = any(k in p_lower for k in [
+        "portfolio", "finance", "financial", "quant", "stock", "equity", "bond",
+        "asset", "crypto", "trading", "investment", "sharpe", "sortino", "monte carlo"
+    ])
+    is_weather_intent = any(k in p_lower for k in ["weather", "climate", "temperature", "rain", "meteorolog", "aerocast"]) or (
+        "forecast" in p_lower and not is_finance_context
+    )
+    if is_weather_intent and not is_finance_context:
         return {
             "filename": "weather_dashboard.html",
             "title": "AeroCast Glassmorphic Weather Dashboard",
