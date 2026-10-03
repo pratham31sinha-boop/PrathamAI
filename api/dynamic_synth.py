@@ -16,7 +16,21 @@ def synthesize_project(prompt: str) -> dict:
     application deliverable matching their request.
     Returns: {"filename": str, "title": str, "description": str, "code": str, "features": list}
     """
-    p_lower = prompt.lower()
+    p_lower = (prompt or "").lower().strip()
+
+    # Priority 0: Dedicated Games Synthesizer (Ludo 3D, Cricket, Hill Climb, GTA 6, Chess, etc.)
+    try:
+        from api.games_synth import synthesize_game
+    except Exception:
+        try:
+            from games_synth import synthesize_game
+        except Exception:
+            synthesize_game = None
+
+    if synthesize_game:
+        game_res = synthesize_game(prompt)
+        if game_res:
+            return game_res
 
     # 0. Stumble Guys / Knockout Obstacle Royale
     if any(k in p_lower for k in ["stumble", "stumble guys", "stumbleguys", "fall guys", "fallguys", "knockout", "obstacle royale", "wipeout"]):
@@ -1033,27 +1047,6 @@ def synthesize_project(prompt: str) -> dict:
 </html>"""
         }
 
-    # 5.5 GTA 6: Vice City Hustle (Open World)
-    if any(k in p_lower for k in ["gta", "grand theft auto", "vice city", "open world", "heist", "crime"]):
-        try:
-            from api.gta6_data import GTA6_GAME_HTML
-        except Exception:
-            try:
-                from gta6_data import GTA6_GAME_HTML
-            except Exception:
-                GTA6_GAME_HTML = ""
-        return {
-            "filename": "gta6.html",
-            "title": "GTA 6: Vice City Hustle",
-            "description": "A high-end open-world 2D action game featuring drivable sports cars, neon Vice City streets, pedestrian AI, wanted star levels, and dual mobile touch + desktop keyboard controls!",
-            "features": [
-                "🚗 High-Speed Sports Car: Vector acceleration, drift skidding, and reverse steering",
-                "🌆 Vice City Map: Neon cityscape, asphalt roads, pedestrian sidewalks, and building footprints",
-                "⭐ Wanted System: Dynamic police chase mechanics escalating from 1 to 5 stars",
-                "📱 Multi-Platform Controls: On-screen virtual joystick & pedals for touchscreens, WASD for PC"
-            ],
-            "code": GTA6_GAME_HTML
-        }
 
     # 6. Default Dynamic Application Synthesizer (Catches any other request!)
     clean_title = re.sub(r"[^\w\s]", "", prompt).strip()[:40].title() or "Custom Web Application"

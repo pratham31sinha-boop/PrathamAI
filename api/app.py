@@ -2880,32 +2880,6 @@ def _clean_antigravity_text(text: str) -> str:
         cleaned = re.sub(pattern, repl, cleaned, flags=re.IGNORECASE)
     return cleaned
 
-_CHESS_HTML_CODE = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Grandmaster 2D Chess AI</title>\n  <style>\n    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }\n    body {\n      font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif;\n      background: #18181b;\n      color: #f4f4f5;\n      display: flex;\n      flex-direction: column;\n      align-items: center;\n      min-height: 100vh;\n      padding: 12px;\n    }\n    .header {\n      width: 100%;\n      max-width: 520px;\n      display: flex;\n      align-items: center;\n      justify-content: space-between;\n      margin-bottom: 12px;\n    }\n    .title-box { display: flex; align-items: center; gap: 8px; }\n    .title-box h1 { font-size: 1.15rem; font-weight: 700; color: #fff; }\n    .badge {\n      background: #27272a;\n      border: 1px solid #3f3f46;\n      padding: 2px 8px;\n      border-radius: 999px;\n      font-size: 0.72rem;\n      color: #a1a1aa;\n    }\n    .game-container {\n      width: 100%;\n      max-width: 520px;\n      display: flex;\n      flex-direction: column;\n      gap: 10px;\n      align-items: center;\n    }\n    .player-card {\n      width: 100%;\n      display: flex;\n      align-items: center;\n      justify-content: space-between;\n      background: #27272a;\n      border: 1px solid #3f3f46;\n      border-radius: 10px;\n      padding: 8px 12px;\n      font-size: 0.85rem;\n    }\n    .player-info { display: flex; align-items: center; gap: 8px; font-weight: 600; }\n    .captured-pieces { font-size: 1rem; color: #d4d4d8; letter-spacing: 1px; min-height: 20px; }\n    .board-wrapper {\n      position: relative;\n      width: min(92vw, 440px);\n      height: min(92vw, 440px);\n      border-radius: 8px;\n      overflow: hidden;\n      box-shadow: 0 10px 30px rgba(0,0,0,0.5);\n      border: 3px solid #3f3f46;\n    }\n    #chessboard {\n      width: 100%;\n      height: 100%;\n      display: grid;\n      grid-template-columns: repeat(8, 1fr);\n      grid-template-rows: repeat(8, 1fr);\n    }\n    .square {\n      position: relative;\n      display: flex;\n      align-items: center;\n      justify-content: center;\n      cursor: pointer;\n      font-size: min(10vw, 44px);\n      line-height: 1;\n      transition: background 0.15s ease;\n    }\n    .square.light { background: #eeeed2; color: #1c1917; }\n    .square.dark { background: #769656; color: #1c1917; }\n    .square.selected { background: #baca44 !important; }\n    .square.last-move { background: #f7ec7d !important; }\n    .square.in-check { background: #e06c75 !important; }\n    .square.move-target::after {\n      content: \'\';\n      position: absolute;\n      width: 28%;\n      height: 28%;\n      border-radius: 50%;\n      background: rgba(0, 0, 0, 0.22);\n      pointer-events: none;\n    }\n    .square.capture-target::after {\n      content: \'\';\n      position: absolute;\n      width: 82%;\n      height: 82%;\n      border-radius: 50%;\n      border: 4px solid rgba(0, 0, 0, 0.25);\n      pointer-events: none;\n    }\n    .piece {\n      text-shadow: 0 1px 3px rgba(0,0,0,0.3);\n      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25));\n      pointer-events: none;\n      transition: transform 0.12s ease;\n    }\n    .piece.white { color: #ffffff; text-shadow: 0 0 1px #000, 0 1px 3px rgba(0,0,0,0.8); }\n    .piece.black { color: #18181b; text-shadow: 0 0 1px #fff, 0 1px 2px rgba(255,255,255,0.2); }\n    .status-bar {\n      width: 100%;\n      padding: 8px 12px;\n      border-radius: 8px;\n      background: #27272a;\n      border: 1px solid #3f3f46;\n      font-size: 0.85rem;\n      text-align: center;\n      font-weight: 600;\n      color: #38bdf8;\n    }\n    .controls {\n      width: 100%;\n      display: flex;\n      gap: 8px;\n      justify-content: space-between;\n    }\n    .btn {\n      flex: 1;\n      padding: 8px 12px;\n      border-radius: 8px;\n      border: 1px solid #3f3f46;\n      background: #27272a;\n      color: #f4f4f5;\n      font-size: 0.8rem;\n      font-weight: 600;\n      cursor: pointer;\n      transition: background 0.15s ease, border-color 0.15s ease;\n      text-align: center;\n    }\n    .btn:hover { background: #3f3f46; border-color: #71717a; }\n    .btn-primary { background: #2563eb; border-color: #3b82f6; }\n    .btn-primary:hover { background: #1d4ed8; }\n    select.btn { outline: none; }\n    .history-card {\n      width: 100%;\n      background: #1e1e24;\n      border: 1px solid #3f3f46;\n      border-radius: 8px;\n      padding: 8px 12px;\n      font-size: 0.78rem;\n      max-height: 70px;\n      overflow-y: auto;\n      color: #a1a1aa;\n      font-family: monospace;\n    }\n  </style>\n</head>\n<body>\n  <div class="header">\n    <div class="title-box">\n      <h1>Chess 2D</h1>\n      <span class="badge">Pratham AI</span>\n    </div>\n    <select id="difficulty" class="btn" style="max-width: 130px; padding: 4px 8px;">\n      <option value="1">Casual Bot</option>\n      <option value="2" selected>Challenger</option>\n      <option value="3">Grandmaster</option>\n    </select>\n  </div>\n\n  <div class="game-container">\n    <div class="player-card">\n      <div class="player-info">\n        <span>🤖</span>\n        <span>Bot (Black)</span>\n      </div>\n      <div id="black-captured" class="captured-pieces"></div>\n    </div>\n\n    <div class="board-wrapper">\n      <div id="chessboard"></div>\n    </div>\n\n    <div class="player-card">\n      <div class="player-info">\n        <span>👤</span>\n        <span>You (White)</span>\n      </div>\n      <div id="white-captured" class="captured-pieces"></div>\n    </div>\n\n    <div id="status" class="status-bar">Your turn • Play as White</div>\n\n    <div class="controls">\n      <button class="btn btn-primary" onclick="resetGame()">New Game</button>\n      <button class="btn" onclick="undoMove()">Undo</button>\n      <button class="btn" onclick="flipTheme()">Theme</button>\n    </div>\n\n    <div id="history" class="history-card">Moves: none yet</div>\n  </div>\n\n  <script>\n    const INITIAL_BOARD = [\n      [\'r\',\'n\',\'b\',\'q\',\'k\',\'b\',\'n\',\'r\'],\n      [\'p\',\'p\',\'p\',\'p\',\'p\',\'p\',\'p\',\'p\'],\n      [\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\'],\n      [\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\'],\n      [\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\'],\n      [\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\',\'.\'],\n      [\'P\',\'P\',\'P\',\'P\',\'P\',\'P\',\'P\',\'P\'],\n      [\'R\',\'N\',\'B\',\'Q\',\'K\',\'B\',\'N\',\'R\']\n    ];\n\n    const PIECE_SYMBOLS = {\n      \'P\': \'♙\', \'N\': \'♘\', \'B\': \'♗\', \'R\': \'♖\', \'Q\': \'♕\', \'K\': \'♔\',\n      \'p\': \'♟\', \'n\': \'♞\', \'b\': \'♝\', \'r\': \'♜\', \'q\': \'♛\', \'k\': \'♚\'\n    };\n\n    const PIECE_VALUES = {\n      \'P\': 100, \'N\': 320, \'B\': 330, \'R\': 500, \'Q\': 900, \'K\': 20000,\n      \'p\': 100, \'n\': 320, \'b\': 330, \'r\': 500, \'q\': 900, \'k\': 20000\n    };\n\n    let board = [];\n    let turn = \'w\';\n    let selectedSquare = null;\n    let validMoves = [];\n    let moveHistory = [];\n    let stateHistory = [];\n    let lastMove = null;\n    let isBotThinking = false;\n    let currentTheme = 0;\n\n    const THEMES = [\n      { light: \'#eeeed2\', dark: \'#769656\' },\n      { light: \'#e2e8f0\', dark: \'#475569\' },\n      { light: \'#fde047\', dark: \'#ca8a04\' },\n      { light: \'#fbcfe8\', dark: \'#db2777\' }\n    ];\n\n    function cloneBoard(b) {\n      return b.map(row => [...row]);\n    }\n\n    function initGame() {\n      board = cloneBoard(INITIAL_BOARD);\n      turn = \'w\';\n      selectedSquare = null;\n      validMoves = [];\n      moveHistory = [];\n      stateHistory = [];\n      lastMove = null;\n      isBotThinking = false;\n      renderBoard();\n      updateStatus();\n    }\n\n    function isWhite(piece) {\n      return piece !== \'.\' && piece === piece.toUpperCase();\n    }\n\n    function isBlack(piece) {\n      return piece !== \'.\' && piece === piece.toLowerCase();\n    }\n\n    function getMovesForPiece(b, r, c) {\n      const piece = b[r][c];\n      if (piece === \'.\') return [];\n      const white = isWhite(piece);\n      const moves = [];\n\n      function addMove(nr, nc) {\n        if (nr < 0 || nr > 7 || nc < 0 || nc > 7) return false;\n        const target = b[nr][nc];\n        if (target === \'.\') {\n          moves.push({ from: [r, c], to: [nr, nc] });\n          return true;\n        } else if (white ? isBlack(target) : isWhite(target)) {\n          moves.push({ from: [r, c], to: [nr, nc], capture: true });\n          return false;\n        }\n        return false;\n      }\n\n      const pType = piece.toUpperCase();\n\n      if (pType === \'P\') {\n        const dir = white ? -1 : 1;\n        const startRow = white ? 6 : 1;\n        if (r + dir >= 0 && r + dir <= 7 && b[r + dir][c] === \'.\') {\n          moves.push({ from: [r, c], to: [r + dir, c] });\n          if (r === startRow && b[r + 2 * dir][c] === \'.\') {\n            moves.push({ from: [r, c], to: [r + 2 * dir, c] });\n          }\n        }\n        for (let dc of [-1, 1]) {\n          let nc = c + dc;\n          let nr = r + dir;\n          if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {\n            const target = b[nr][nc];\n            if (target !== \'.\' && (white ? isBlack(target) : isWhite(target))) {\n              moves.push({ from: [r, c], to: [nr, nc], capture: true });\n            }\n          }\n        }\n      } else if (pType === \'N\') {\n        const jumps = [\n          [-2, -1], [-2, 1], [-1, -2], [-1, 2],\n          [1, -2], [1, 2], [2, -1], [2, 1]\n        ];\n        for (let [dr, dc] of jumps) addMove(r + dr, c + dc);\n      } else if (pType === \'B\') {\n        const dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];\n        for (let [dr, dc] of dirs) {\n          let nr = r + dr, nc = c + dc;\n          while (addMove(nr, nc)) { nr += dr; nc += dc; }\n        }\n      } else if (pType === \'R\') {\n        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];\n        for (let [dr, dc] of dirs) {\n          let nr = r + dr, nc = c + dc;\n          while (addMove(nr, nc)) { nr += dr; nc += dc; }\n        }\n      } else if (pType === \'Q\') {\n        const dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]];\n        for (let [dr, dc] of dirs) {\n          let nr = r + dr, nc = c + dc;\n          while (addMove(nr, nc)) { nr += dr; nc += dc; }\n        }\n      } else if (pType === \'K\') {\n        const dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]];\n        for (let [dr, dc] of dirs) addMove(r + dr, c + dc);\n      }\n      return moves;\n    }\n\n    function getAllMoves(b, color) {\n      const all = [];\n      for (let r = 0; r < 8; r++) {\n        for (let c = 0; c < 8; c++) {\n          const piece = b[r][c];\n          if (piece !== \'.\' && (color === \'w\' ? isWhite(piece) : isBlack(piece))) {\n            all.push(...getMovesForPiece(b, r, c));\n          }\n        }\n      }\n      return all;\n    }\n\n    function applyMove(b, m) {\n      const next = cloneBoard(b);\n      const piece = next[m.from[0]][m.from[1]];\n      next[m.from[0]][m.from[1]] = \'.\';\n      if (piece === \'P\' && m.to[0] === 0) next[m.to[0]][m.to[1]] = \'Q\';\n      else if (piece === \'p\' && m.to[0] === 7) next[m.to[0]][m.to[1]] = \'q\';\n      else next[m.to[0]][m.to[1]] = piece;\n      return next;\n    }\n\n    function evaluateBoard(b) {\n      let score = 0;\n      for (let r = 0; r < 8; r++) {\n        for (let c = 0; c < 8; c++) {\n          const p = b[r][c];\n          if (p === \'.\') continue;\n          const val = PIECE_VALUES[p] || 0;\n          const centerBonus = (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 15 : 0;\n          if (isWhite(p)) score += (val + centerBonus);\n          else score -= (val + centerBonus);\n        }\n      }\n      return score;\n    }\n\n    function minimax(b, depth, alpha, beta, maximizing) {\n      if (depth === 0) return { score: evaluateBoard(b) };\n      const color = maximizing ? \'w\' : \'b\';\n      const moves = getAllMoves(b, color);\n      if (moves.length === 0) {\n        return { score: maximizing ? -99999 : 99999 };\n      }\n      moves.sort((a, bMove) => (bMove.capture ? 1 : 0) - (a.capture ? 1 : 0));\n\n      let bestMove = null;\n      if (maximizing) {\n        let maxEval = -Infinity;\n        for (let m of moves) {\n          const nb = applyMove(b, m);\n          const ev = minimax(nb, depth - 1, alpha, beta, false).score;\n          if (ev > maxEval) { maxEval = ev; bestMove = m; }\n          alpha = Math.max(alpha, ev);\n          if (beta <= alpha) break;\n        }\n        return { score: maxEval, move: bestMove };\n      } else {\n        let minEval = Infinity;\n        for (let m of moves) {\n          const nb = applyMove(b, m);\n          const ev = minimax(nb, depth - 1, alpha, beta, true).score;\n          if (ev < minEval) { minEval = ev; bestMove = m; }\n          beta = Math.min(beta, ev);\n          if (beta <= alpha) break;\n        }\n        return { score: minEval, move: bestMove };\n      }\n    }\n\n    function makeBotMove() {\n      if (turn !== \'b\') return;\n      isBotThinking = true;\n      document.getElementById(\'status\').innerText = \'Bot is analyzing...\';\n      const depth = parseInt(document.getElementById(\'difficulty\').value, 10) || 2;\n\n      setTimeout(() => {\n        const result = minimax(board, depth, -Infinity, Infinity, false);\n        const botMove = result.move;\n        if (!botMove) {\n          document.getElementById(\'status\').innerText = \'Checkmate! You won!\';\n          isBotThinking = false;\n          return;\n        }\n        executeMove(botMove);\n        isBotThinking = false;\n      }, 280);\n    }\n\n    function executeMove(m) {\n      stateHistory.push({ board: cloneBoard(board), turn, lastMove });\n      const captured = board[m.to[0]][m.to[1]];\n      board = applyMove(board, m);\n      lastMove = m;\n      turn = (turn === \'w\') ? \'b\' : \'w\';\n\n      const cols = [\'a\',\'b\',\'c\',\'d\',\'e\',\'f\',\'g\',\'h\'];\n      const fromStr = cols[m.from[1]] + (8 - m.from[0]);\n      const toStr = cols[m.to[1]] + (8 - m.to[0]);\n      const moveNote = fromStr + \'-\' + toStr + (captured !== \'.\' ? \'x\' : \'\');\n      moveHistory.push(moveNote);\n\n      selectedSquare = null;\n      validMoves = [];\n      renderBoard();\n      updateStatus();\n      updateCapturedPieces();\n\n      if (turn === \'b\') {\n        makeBotMove();\n      }\n    }\n\n    function updateStatus() {\n      const statusEl = document.getElementById(\'status\');\n      const whiteMoves = getAllMoves(board, \'w\');\n      const blackMoves = getAllMoves(board, \'b\');\n\n      if (turn === \'w\' && whiteMoves.length === 0) {\n        statusEl.innerText = \'Game Over: Bot won!\';\n        statusEl.style.color = \'#ef4444\';\n      } else if (turn === \'b\' && blackMoves.length === 0) {\n        statusEl.innerText = \'Game Over: You won!\';\n        statusEl.style.color = \'#22c55e\';\n      } else if (turn === \'w\') {\n        statusEl.innerText = \'Your turn (White)\';\n        statusEl.style.color = \'#38bdf8\';\n      } else {\n        statusEl.innerText = \'Bot thinking (Black)...\';\n        statusEl.style.color = \'#fbbf24\';\n      }\n\n      const histEl = document.getElementById(\'history\');\n      if (moveHistory.length > 0) {\n        histEl.innerText = \'Moves: \' + moveHistory.slice(-8).join(\'  \');\n      } else {\n        histEl.innerText = \'Moves: none yet\';\n      }\n    }\n\n    function updateCapturedPieces() {\n      let wCap = \'\', bCap = \'\';\n      let counts = { p:0, n:0, b:0, r:0, q:0, P:0, N:0, B:0, R:0, Q:0 };\n      const currentPieces = {};\n      for (let r=0; r<8; r++) {\n        for (let c=0; c<8; c++) {\n          const p = board[r][c];\n          if (p !== \'.\') currentPieces[p] = (currentPieces[p] || 0) + 1;\n        }\n      }\n      const initialCounts = { P:8, N:2, B:2, R:2, Q:1, p:8, n:2, b:2, r:2, q:1 };\n      for (let k in initialCounts) {\n        const lost = initialCounts[k] - (currentPieces[k] || 0);\n        if (lost > 0) {\n          const sym = PIECE_SYMBOLS[k];\n          if (isWhite(k)) bCap += sym.repeat(lost);\n          else wCap += sym.repeat(lost);\n        }\n      }\n      document.getElementById(\'white-captured\').innerText = wCap;\n      document.getElementById(\'black-captured\').innerText = bCap;\n    }\n\n    function handleSquareClick(r, c) {\n      if (turn !== \'w\' || isBotThinking) return;\n\n      if (selectedSquare) {\n        const found = validMoves.find(m => m.to[0] === r && m.to[1] === c);\n        if (found) {\n          executeMove(found);\n          return;\n        }\n      }\n\n      const piece = board[r][c];\n      if (piece !== \'.\' && isWhite(piece)) {\n        selectedSquare = [r, c];\n        validMoves = getMovesForPiece(board, r, c);\n      } else {\n        selectedSquare = null;\n        validMoves = [];\n      }\n      renderBoard();\n    }\n\n    function renderBoard() {\n      const boardEl = document.getElementById(\'chessboard\');\n      boardEl.innerHTML = \'\';\n      const theme = THEMES[currentTheme];\n\n      for (let r = 0; r < 8; r++) {\n        for (let c = 0; c < 8; c++) {\n          const sq = document.createElement(\'div\');\n          const isLight = (r + c) % 2 === 0;\n          sq.className = \'square \' + (isLight ? \'light\' : \'dark\');\n          sq.style.background = isLight ? theme.light : theme.dark;\n\n          if (selectedSquare && selectedSquare[0] === r && selectedSquare[1] === c) {\n            sq.classList.add(\'selected\');\n          }\n          if (lastMove && ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c))) {\n            sq.classList.add(\'last-move\');\n          }\n\n          const moveTarget = validMoves.find(m => m.to[0] === r && m.to[1] === c);\n          if (moveTarget) {\n            sq.classList.add(moveTarget.capture ? \'capture-target\' : \'move-target\');\n          }\n\n          const p = board[r][c];\n          if (p !== \'.\') {\n            const span = document.createElement(\'span\');\n            span.className = \'piece \' + (isWhite(p) ? \'white\' : \'black\');\n            span.innerText = PIECE_SYMBOLS[p] || \'\';\n            sq.appendChild(span);\n          }\n\n          sq.onclick = () => handleSquareClick(r, c);\n          boardEl.appendChild(sq);\n        }\n      }\n    }\n\n    function undoMove() {\n      if (stateHistory.length >= 2 && !isBotThinking) {\n        stateHistory.pop();\n        const prev = stateHistory.pop();\n        board = prev.board;\n        turn = prev.turn;\n        lastMove = prev.lastMove;\n        moveHistory.pop();\n        moveHistory.pop();\n        selectedSquare = null;\n        validMoves = [];\n        renderBoard();\n        updateStatus();\n        updateCapturedPieces();\n      }\n    }\n\n    function resetGame() {\n      initGame();\n    }\n\n    function flipTheme() {\n      currentTheme = (currentTheme + 1) % THEMES.length;\n      renderBoard();\n    }\n\n    initGame();\n  </script>\n</body>\n</html>'
-
-try:
-    from api.panda_valley_data import PANDA_VALLEY_HTML as _PANDA_VALLEY_FALLBACK
-except Exception:
-    try:
-        from panda_valley_data import PANDA_VALLEY_HTML as _PANDA_VALLEY_FALLBACK
-    except Exception:
-        _PANDA_VALLEY_FALLBACK = ""
-
-try:
-    from api.hill_climb_data import HILL_CLIMB_RACING_HTML as _HILL_CLIMB_FALLBACK
-except Exception:
-    try:
-        from hill_climb_data import HILL_CLIMB_RACING_HTML as _HILL_CLIMB_FALLBACK
-    except Exception:
-        _HILL_CLIMB_FALLBACK = ""
-
-try:
-    from api.gta6_data import GTA6_GAME_HTML as _GTA6_FALLBACK
-except Exception:
-    try:
-        from gta6_data import GTA6_GAME_HTML as _GTA6_FALLBACK
-    except Exception:
-        _GTA6_FALLBACK = ""
-
 try:
     from api.dynamic_synth import synthesize_project
 except Exception:
@@ -2913,40 +2887,6 @@ except Exception:
         from dynamic_synth import synthesize_project
     except Exception:
         synthesize_project = None
-
-def _get_panda_valley_code() -> str:
-    from pathlib import Path
-    for candidate in [
-        Path(__file__).resolve().parent / "panda_valley.html",
-        Path(__file__).resolve().parent.parent / "panda_valley.html",
-        Path.cwd() / "panda_valley.html",
-        Path("panda_valley.html"),
-    ]:
-        try:
-            if candidate.is_file():
-                txt = candidate.read_text(encoding="utf-8")
-                if len(txt) > 500:
-                    return txt
-        except Exception:
-            pass
-    return _PANDA_VALLEY_FALLBACK
-
-def _get_gta6_code() -> str:
-    from pathlib import Path
-    for candidate in [
-        Path(__file__).resolve().parent / "gta6.html",
-        Path(__file__).resolve().parent.parent / "gta6.html",
-        Path.cwd() / "gta6.html",
-        Path("gta6.html"),
-    ]:
-        try:
-            if candidate.is_file():
-                txt = candidate.read_text(encoding="utf-8")
-                if len(txt) > 500:
-                    return txt
-        except Exception:
-            pass
-    return _GTA6_FALLBACK or ""
 
 def _generate_pratham_response(prompt: str, messages: list) -> str:
     prompt_lower = (prompt or "").lower().strip()
@@ -2996,262 +2936,27 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "I'm ready to continue! Please let me know what you'd like to work on next, or if there's any file or task you'd like me to extend."
         )
 
-    # 5. GTA 6 / Grand Theft Auto / Vice City open-world game for phone & PC
-    if any(k in prompt_lower for k in ["gta", "grand theft auto", "vice city", "open world", "car theft", "police chase", "heist game", "gta 6", "gta6"]):
-        return (
-            "I have built the high-end open-world 2D game **GTA 6: Vice City Hustle** for you! It is specially engineered with dual touch controls for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `gta6.html`.\n\n"
-            "```createfile:gta6.html\n"
-            + (_GTA6_FALLBACK or "") + "\n"
-            "```\n\n"
-            "### 🌴 GTA 6: Vice City Hustle — Features:\n"
-            "- **🚗 High-End Vehicle Mechanics:** Walk on foot or hijack supercars and police cruisers with [F] or on-screen [DRIVE] button.\n"
-            "- **⭐ Police Pursuit AI (1-5 Wanted Stars):** Flashing police cruisers chase you with sirens as your wanted level rises.\n"
-            "- **🗺️ Minimap Radar & City Map:** Asphalt boulevards, Ocean Drive, palm trees, sidewalks, and cash pickups.\n"
-            "- **📱 Mobile-First Controls:** On-screen virtual D-pad, Drive/Exit, Horn, Gas & Brake pedals with tactile feedback.\n"
-            "- **💻 PC Controls:** [WASD] or [Arrow Keys] to move/drive, [F] to enter/exit vehicles, [Space] to drift, [H] for horn.\n"
-            "- **🎵 Procedural Audio:** 100% offline Web Audio sound effects for engine revs, tire screeching, sirens, and horns.\n\n"
-            "Click the `gta6.html` file card below to start exploring Vice City immediately!"
-        )
-    
-    # 3.4 Hill Climb Racing 2D game for phone & PC
-    if any(k in prompt_lower for k in ["hill climb", "climb racing", "hill racing", "car game", "racing game", "drive", "driving", "hill"]):
-        return (
-            "I have built the high-end 2D physics game **Hill Climb Racing** for you! It is specially engineered with dual touch pedals (Gas & Brake) for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `hill_climb_racing.html`.\n\n"
-            "```createfile:hill_climb_racing.html\n"
-            + (_HILL_CLIMB_FALLBACK or "") + "\n"
-            "```\n\n"
-            "### 🏎️ Hill Climb Racing — Features:\n"
-            "- **📱 Mobile-First Controls:** Large on-screen Gas and Brake pedals with tactile feedback and multi-touch support.\n"
-            "- **💻 PC Controls:** [Arrow Keys] or [A]/[D] to accelerate, brake, and balance vehicle in mid-air.\n"
-            "- **🏔️ Procedural Terrain:** Endless undulating hills, mountains, and dirt tracks with smooth 60 FPS Canvas rendering.\n"
-            "- **⛽ Fuel & Coin System:** Collect gas canisters before fuel runs out, pick up coins for points, and reach high distances without flipping over!\n"
-            "- **🎵 Procedural Audio:** 100% offline Web Audio sound effects for engine, pickups, and crashes.\n\n"
-            "Click the `hill_climb_racing.html` file card below to start racing immediately!"
-        )
+    # 5. Dynamic Game & Interactive Application Creation (Claude-like agentic generation)
+    is_game_intent = any(k in prompt_lower for k in [
+        "game", "play", "ludo", "cricket", "chess", "arcade", "racing", "car", "drive",
+        "stumble", "fall guys", "panda", "flappy", "snake", "platformer", "2d game", "3d game",
+        "phone game", "mobile game", "html game", "canvas game", "make a game", "build a game",
+        "create a game", "code a game", "gta", "vice city", "hill climb"
+    ]) or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "3d"]))
 
-    # 3.5 Panda Valley high-end 2D game for phone & PC
-    if any(k in prompt_lower for k in ["panda", "panda valley", "pandavalley", "bamboo forest"]):
-        game_code = _get_panda_valley_code()
-        return (
-            "I have built the high-end 2D game **Panda Valley: Bamboo Forest Adventure** for you! It is specially optimized for mobile touchscreens (smartphones/tablets) as well as desktop PCs. The complete, production-ready playable game is saved in your workspace as `panda_valley.html`.\n\n"
-            "```createfile:panda_valley.html\n"
-            + game_code + "\n"
-            "```\n\n"
-            "### 🐼 Panda Valley: Bamboo Forest Adventure — Features:\n"
-            "- **📱 Phone & Mobile Optimized:** Virtual on-screen touch D-Pad (◀ / ▶) and high-response Action Buttons (🔺 Jump / 💨 Dash Roll) with tactile glow feedback.\n"
-            "- **💻 PC Keyboard Support:** Arrow Keys / [A][D] to walk/run, [W]/[Spacebar]/[Up] to jump & double-jump, [Shift]/[K] to roll-dash.\n"
-            "- **✨ High-End Visual Engine:** Multi-layer parallax scrolling misty mountain horizons, bamboo groves, drifting spore & leaf particles, and smooth 60 FPS physics.\n"
-            "- **🎵 Synthesized Web Audio API:** 100% offline, zero-asset audio effects for jumps, rolling dashes, golden bamboo pickups, jade dewdrop bonuses, and game over stings.\n"
-            "- **⚔️ Engaging Mechanics:** Double-jumping, rolling through hazards, crumbling wooden bridges, rolling boulders, spike pits, stamina recharge gauge, and persistent high-score tracking.\n\n"
-            "Click the `panda_valley.html` file card below to play and preview it immediately!"
-        )
-
-    # 4. Game creation (Make a game / build a game / 2d game / phone game)
-    is_game_request = any(k in prompt_lower for k in [
-        "make a game", "build a game", "create a game", "code a game", "make game",
-        "create game", "write a game", "generate a game", "play a game", "2d game",
-        "phone game", "mobile game", "high end game"
-    ]) or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "high end"]))
-
-    if is_game_request:
-        if any(k in prompt_lower for k in ["gta", "grand theft auto", "vice city", "open world", "heist", "crime"]):
-            gta_code = _get_gta6_code()
+    if is_game_intent and synthesize_project:
+        proj = synthesize_project(prompt)
+        if proj:
+            feats = "\n".join([f"- **{f}**" for f in proj.get("features", [])])
             return (
-                "I have built the high-end open-world 2D game **GTA 6: Vice City Hustle** for you! It is specially engineered with dual touch controls for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `gta6.html`.\n\n"
-                "```createfile:gta6.html\n"
-                + (gta_code or _GTA6_FALLBACK or "") + "\n"
+                f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `{proj['filename']}`.\n\n"
+                f"```createfile:{proj['filename']}\n"
+                + proj["code"] + "\n"
                 "```\n\n"
-                "Click the `gta6.html` file card below to start playing immediately!"
+                f"### ✨ {proj['title']} — Architecture & Features:\n"
+                + feats + "\n\n"
+                f"Click the `{proj['filename']}` file card below to preview and play it immediately!"
             )
-        elif any(k in prompt_lower for k in ["stumble", "stumble guys", "knockout", "obstacle royale", "fall guys"]):
-            if synthesize_project:
-                proj = synthesize_project("stumble guys")
-                if proj:
-                    return (
-                        f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `{proj['filename']}`.\n\n"
-                        f"```createfile:{proj['filename']}\n"
-                        + proj["code"] + "\n"
-                        "```\n\n"
-                        f"Click the `{proj['filename']}` file card below to preview and play it immediately!"
-                    )
-        elif any(k in prompt_lower for k in ["hill", "car", "racing", "drive", "climb"]):
-            return (
-                "I have built the high-end 2D physics game **Hill Climb Racing** for you! It is specially engineered with dual touch pedals (Gas & Brake) for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `hill_climb_racing.html`.\n\n"
-                "```createfile:hill_climb_racing.html\n"
-                + (_HILL_CLIMB_FALLBACK or "") + "\n"
-                "```\n\n"
-                "Click the `hill_climb_racing.html` file card below to start racing immediately!"
-            )
-        elif any(k in prompt_lower for k in ["panda", "bamboo"]):
-            game_code = _get_panda_valley_code()
-            return (
-                "Here is the high-end 2D game **Panda Valley: Bamboo Forest Adventure**, specially crafted for phone touchscreens and desktop browsers! The complete code is saved as `panda_valley.html`.\n\n"
-                "```createfile:panda_valley.html\n"
-                + game_code + "\n"
-                "```\n\n"
-                "Click the `panda_valley.html` file card below to play and preview it immediately!"
-            )
-        if synthesize_project:
-            proj = synthesize_project(prompt)
-            if proj:
-                feats = "\n".join([f"- **{f}**" for f in proj["features"]])
-                return (
-                    f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `{proj['filename']}`.\n\n"
-                    f"```createfile:{proj['filename']}\n"
-                    + proj["code"] + "\n"
-                    "```\n\n"
-                    f"### ✨ {proj['title']} — Architecture & Features:\n"
-                    + feats + "\n\n"
-                    f"Click the `{proj['filename']}` file card below to preview and play it immediately!"
-                )
-        return (
-            "Here is a complete, self-contained single-file HTML5 Canvas game: **Neon Asteroids Survival**! You can save this code as `game.html` and open it directly in any browser.\n\n"
-            "```createfile:game.html\n"
-            "<!DOCTYPE html>\n"
-            "<html lang=\"en\">\n"
-            "<head>\n"
-            "  <meta charset=\"UTF-8\">\n"
-            "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-            "  <title>Neon Asteroids Survival</title>\n"
-            "  <style>\n"
-            "    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }\n"
-            "    body {\n"
-            "      background: #0b0c10;\n"
-            "      color: #66fcf1;\n"
-            "      font-family: 'Segoe UI', Tahoma, sans-serif;\n"
-            "      display: flex;\n"
-            "      flex-direction: column;\n"
-            "      justify-content: center;\n"
-            "      align-items: center;\n"
-            "      min-height: 100vh;\n"
-            "      overflow: hidden;\n"
-            "    }\n"
-            "    #ui { margin-bottom: 10px; font-size: 18px; font-weight: bold; letter-spacing: 2px; }\n"
-            "    canvas {\n"
-            "      background: radial-gradient(circle at center, #1f2833 0%, #0b0c10 100%);\n"
-            "      border: 2px solid #45a29e;\n"
-            "      border-radius: 8px;\n"
-            "      box-shadow: 0 0 25px rgba(102, 252, 241, 0.3);\n"
-            "    }\n"
-            "    #hint { margin-top: 8px; font-size: 13px; color: #c5c6c7; }\n"
-            "  </style>\n"
-            "</head>\n"
-            "<body>\n"
-            "  <div id=\"ui\">SCORE: <span id=\"score\">0</span> | SHIELD: <span id=\"shield\">100%</span></div>\n"
-            "  <canvas id=\"canvas\" width=\"640\" height=\"480\"></canvas>\n"
-            "  <div id=\"hint\">Controls: [Arrow Left/Right] Rotate | [Arrow Up] Thrust | [Spacebar] Fire Laser</div>\n"
-            "  <script>\n"
-            "    const canvas = document.getElementById('canvas');\n"
-            "    const ctx = canvas.getContext('2d');\n"
-            "    const scoreEl = document.getElementById('score');\n"
-            "    const shieldEl = document.getElementById('shield');\n\n"
-            "    let score = 0, shield = 100, gameOver = false;\n"
-            "    const keys = {};\n"
-            "    window.addEventListener('keydown', e => keys[e.code] = true);\n"
-            "    window.addEventListener('keyup', e => keys[e.code] = false);\n\n"
-            "    const ship = { x: 320, y: 240, r: 12, a: -Math.PI/2, rot: 0, thrust: { x: 0, y: 0 } };\n"
-            "    let lasers = [], asteroids = [], particles = [];\n\n"
-            "    function spawnAsteroid(x, y, r) {\n"
-            "      asteroids.push({\n"
-            "        x: x ?? (Math.random() < 0.5 ? 0 : 640),\n"
-            "        y: y ?? Math.random() * 480,\n"
-            "        r: r || 30,\n"
-            "        vx: (Math.random() - 0.5) * 2,\n"
-            "        vy: (Math.random() - 0.5) * 2\n"
-            "      });\n"
-            "    }\n"
-            "    for (let i = 0; i < 5; i++) spawnAsteroid();\n\n"
-            "    function loop() {\n"
-            "      if (gameOver) {\n"
-            "        ctx.fillStyle = 'rgba(11, 12, 16, 0.85)';\n"
-            "        ctx.fillRect(0, 0, 640, 480);\n"
-            "        ctx.fillStyle = '#ff0055';\n"
-            "        ctx.font = 'bold 36px sans-serif';\n"
-            "        ctx.textAlign = 'center';\n"
-            "        ctx.fillText('GAME OVER', 320, 230);\n"
-            "        ctx.fillStyle = '#66fcf1';\n"
-            "        ctx.font = '18px sans-serif';\n"
-            "        ctx.fillText('Press [Space] to Restart', 320, 270);\n"
-            "        if (keys['Space']) { score = 0; shield = 100; gameOver = false; asteroids = []; for (let i = 0; i < 5; i++) spawnAsteroid(); }\n"
-            "        requestAnimationFrame(loop);\n"
-            "        return;\n"
-            "      }\n\n"
-            "      ctx.clearRect(0, 0, 640, 480);\n"
-            "      if (keys['ArrowLeft']) ship.a -= 0.07;\n"
-            "      if (keys['ArrowRight']) ship.a += 0.07;\n"
-            "      if (keys['ArrowUp']) {\n"
-            "        ship.thrust.x += Math.cos(ship.a) * 0.15;\n"
-            "        ship.thrust.y += Math.sin(ship.a) * 0.15;\n"
-            "      }\n"
-            "      ship.thrust.x *= 0.985; ship.thrust.y *= 0.985;\n"
-            "      ship.x = (ship.x + ship.thrust.x + 640) % 640;\n"
-            "      ship.y = (ship.y + ship.thrust.y + 480) % 480;\n\n"
-            "      // Ship\n"
-            "      ctx.save();\n"
-            "      ctx.translate(ship.x, ship.y); ctx.rotate(ship.a);\n"
-            "      ctx.strokeStyle = '#66fcf1'; ctx.lineWidth = 2.5;\n"
-            "      ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(-10, -8); ctx.lineTo(-5, 0); ctx.lineTo(-10, 8); ctx.closePath();\n"
-            "      ctx.stroke(); ctx.restore();\n\n"
-            "      // Lasers\n"
-            "      if (keys['Space'] && lasers.length < 5) {\n"
-            "        lasers.push({ x: ship.x + Math.cos(ship.a)*15, y: ship.y + Math.sin(ship.a)*15, vx: Math.cos(ship.a)*7, vy: Math.sin(ship.a)*7, life: 50 });\n"
-            "        keys['Space'] = false;\n"
-            "      }\n"
-            "      for (let i = lasers.length - 1; i >= 0; i--) {\n"
-            "        let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.life--;\n"
-            "        ctx.fillStyle = '#ff007f'; ctx.fillRect(l.x - 2, l.y - 2, 4, 4);\n"
-            "        if (l.life <= 0) lasers.splice(i, 1);\n"
-            "      }\n\n"
-            "      // Asteroids\n"
-            "      for (let i = asteroids.length - 1; i >= 0; i--) {\n"
-            "        let a = asteroids[i]; a.x = (a.x + a.vx + 640) % 640; a.y = (a.y + a.vy + 480) % 480;\n"
-            "        ctx.strokeStyle = '#45a29e'; ctx.lineWidth = 2;\n"
-            "        ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.stroke();\n"
-            "        // Laser hit\n"
-            "        for (let j = lasers.length - 1; j >= 0; j--) {\n"
-            "          let l = lasers[j];\n"
-            "          if (Math.hypot(l.x - a.x, l.y - a.y) < a.r) {\n"
-            "            score += 100; scoreEl.textContent = score;\n"
-            "            if (a.r > 15) { spawnAsteroid(a.x, a.y, a.r / 2); spawnAsteroid(a.x, a.y, a.r / 2); }\n"
-            "            asteroids.splice(i, 1); lasers.splice(j, 1); break;\n"
-            "          }\n"
-            "        }\n"
-            "        // Ship hit\n"
-            "        if (Math.hypot(ship.x - a.x, ship.y - a.y) < ship.r + a.r) {\n"
-            "          shield -= 25; shieldEl.textContent = Math.max(0, shield) + '%';\n"
-            "          if (shield <= 0) gameOver = true;\n"
-            "          asteroids.splice(i, 1); break;\n"
-            "        }\n"
-            "      }\n"
-            "      if (asteroids.length < 4) spawnAsteroid();\n"
-            "      requestAnimationFrame(loop);\n"
-            "    }\n"
-            "    loop();\n"
-            "  </script>\n"
-            "</body>\n"
-            "</html>\n"
-            "```\n\n"
-            "### 🎮 Features Included:\n"
-            "- **Zero Setup:** Self-contained HTML5 Canvas + vanilla JavaScript.\n"
-            "- **Inertial Flight Physics:** Smooth rotation, vector thrust acceleration, and screen wrap.\n"
-            "- **Particle & Laser Combat:** High-speed laser cannon, asteroid splitting mechanics, shield damage, and live scoreboard."
-        )
-
-    # 5. Chess studio
-    if any(k in prompt_lower for k in ["chess", "chess.html", "grandmaster"]):
-        return (
-            "I have built the **Grandmaster 2D Chess Studio with Bot** for you! The complete playable game is saved in your workspace as `chess.html`.\n\n"
-            "```createfile:chess.html\n"
-            + _CHESS_HTML_CODE + "\n"
-            "```\n\n"
-            "### ♟️ Key Features:\n"
-            "- **Intelligent Engine:** Minimax AI with alpha-beta pruning and 3 difficulty tiers (Casual, Challenger, Grandmaster).\n"
-            "- **Tournament Rules:** Full legal move validation, piece captures, turn management, and check detection.\n"
-            "- **Move Notation & History:** Real-time log of every move played.\n"
-            "- **Theme Studio:** Emerald, Classical Wood, Slate, and High-Contrast piece sets.\n"
-            "- **Mobile & Touch Friendly:** Responsive 8x8 board designed for phone, tablet, and PC.\n\n"
-            "Click the `chess.html` file card below to play and preview it immediately!"
-        )
     
     # 6. Math / Arithmetic
     math_match = re.search(r"(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)", prompt)
