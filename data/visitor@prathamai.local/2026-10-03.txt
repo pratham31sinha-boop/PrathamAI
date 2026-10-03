@@ -320,3 +320,16 @@ User: [[NO_WEB_SEARCH]]Hi
 Pratham AI:
 Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?
 ================================================================================
+
+=== 2026-10-03T03:21:35.681394+00:00 ===
+User: [[NO_WEB_SEARCH]]Why
+Pratham AI:
+I'm here to help with **Why**!
+
+Here is what I can do for you right now:
+- **Build games or web applications:** Deliver complete, playable HTML5 Canvas games, responsive web apps, and interactive tools with instant live previews.
+- **Write and edit code:** Create full scripts, backend services, functions, and tests in Python, JavaScript, and HTML/CSS.
+- **Solve problems & brainstorm:** Provide clear, in-depth explanations, step-by-step reasoning, and solutions tailored to your project.
+
+Tell me what specific features or details you'd like, and I'll jump straight into building it for you!
+================================================================================
