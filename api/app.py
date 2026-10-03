@@ -3006,7 +3006,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             feats = "\n".join([f"- **{f}**" for f in edit_res.get("features", [])])
             tag = "editfile" if edit_res.get("action") == "edit" else "createfile"
             return (
-                f"I have edited and updated **{edit_res['filename']}** for you with full agentic freedom!\n\n"
+                f"Here is the updated **{edit_res['filename']}**:\n\n"
                 f"```{tag}:{edit_res['filename']}\n"
                 + edit_res["code"] + "\n"
                 "```\n\n"
@@ -3028,7 +3028,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         if proj:
             feats = "\n".join([f"- **{f}**" for f in proj.get("features", [])])
             return (
-                f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `{proj['filename']}`.\n\n"
+                f"Here is the complete **{proj['title']}** (`{proj['filename']}`):\n\n"
                 f"```createfile:{proj['filename']}\n"
                 + proj["code"] + "\n"
                 "```\n\n"
@@ -3073,7 +3073,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         if proj:
             feats = "\n".join([f"- **{f}**" for f in proj["features"]])
             return (
-                f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file application is delivered as `{proj['filename']}`.\n\n"
+                f"Here is the complete **{proj['title']}** (`{proj['filename']}`):\n\n"
                 f"```createfile:{proj['filename']}\n"
                 + proj["code"] + "\n"
                 "```\n\n"
@@ -3406,7 +3406,7 @@ class _WarmAntigravitySession:
         try:
             proc = subprocess.Popen(
                 cmd,
-                cwd="/tmp",
+                cwd=WORKSPACE_ROOT,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -3463,7 +3463,9 @@ class _WarmAntigravitySession:
                 got_any_token = False
                 start_time = time.time()
                 last_heartbeat = start_time
-                timeout = 60.0
+                timeout = 90.0
+                written_files = {}
+                accumulated_streamed_text = []
 
                 # Live planning step indicator
                 p_low = (prompt or "").lower()
@@ -3547,6 +3549,8 @@ class _WarmAntigravitySession:
                                     detail_txt = f"Target: {target_file}"
                                     if code_snippet:
                                         detail_txt += f"\n\nCode Preview:\n{code_snippet[:600]}"
+                                    if target_name and code_snippet and len(code_snippet) > 10:
+                                        written_files[target_name] = code_snippet
                                     yield _sse({
                                         "type": "agent_step",
                                         "step_type": "writing",
@@ -3585,6 +3589,7 @@ class _WarmAntigravitySession:
                                 got_any_token = True
                                 cleaned = _clean_antigravity_text(delta)
                                 if cleaned:
+                                    accumulated_streamed_text.append(cleaned)
                                     # Stream word-by-word with whitespace preserved
                                     words = re.split(r"(\s+)", cleaned)
                                     for w in words:
@@ -3592,6 +3597,14 @@ class _WarmAntigravitySession:
                                             yield _sse({"type": "token", "text": w})
                         elif evt == "result":
                             self._in_turn = False
+                            # Ensure any file written by agy tools is presented to the user as a deliverable card
+                            full_streamed = "".join(accumulated_streamed_text)
+                            for w_name, w_code in written_files.items():
+                                if f"createfile:{w_name}" not in full_streamed and f"editfile:{w_name}" not in full_streamed:
+                                    file_block = f"\n\n```createfile:{w_name}\n{w_code}\n```\n"
+                                    for part in re.split(r"(\s+)", file_block):
+                                        if part:
+                                            yield _sse({"type": "token", "text": part})
                             if state is not None:
                                 state["finish_reason"] = "stop"
                             break
@@ -3993,64 +4006,30 @@ def _stream_antigravity_cli(messages, state=None):
     if not user_msgs:
         return
     last_user_prompt = user_msgs[-1].strip()
-    prompt_clean = re.sub(r"[^\w\s]", "", last_user_prompt.lower()).strip()
-    is_greeting = prompt_clean in {
-        "hi", "hello", "hey", "hey there", "hi there", "hello there",
-        "good morning", "good evening", "good afternoon", "namaste",
-        "greetings", "hi pratham", "hello pratham", "hey pratham", "yo", "sup"
-    }
-    if is_greeting:
-        greeting_text = (
-            "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-            "How can I assist you with your project, coding, or tasks today?"
-        )
-        words = greeting_text.split(" ")
-        for i, w in enumerate(words):
-            chunk = w if i == len(words) - 1 else w + " "
-            yield _sse({"type": "token", "text": chunk})
-            time.sleep(0.012)
-        if state is not None:
-            state["finish_reason"] = "stop"
-        return
 
     # Check for user email, conv_id & attachments
     user_email = getattr(_do_stream, '_current_user_email', None) or ""
     conv_id = getattr(_do_stream, '_current_conv_id', None) or ""
     attached_files = _get_user_attachments(user_email, conv_id=conv_id, messages=messages)
 
-    # Build concise, focused prompt with full agentic Claude-like freedom
+    # Clean system prompt focusing on creator identity, terminal workspace freedom, and complete deliverables
     system_instruction = (
-        "You are Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-        "You have full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything the user wants.\n\n"
-        "CREATOR & IDENTITY AWARENESS:\n"
-        "- If asked 'Who are you?' or 'What is Pratham AI?': Explain that you are Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
-        "- If asked 'Who is Pratham Sinha?': Clearly explain that Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI who designed and developed you with his team under the supervision of Akriti and Aditi Aishwaryam. Never confuse yourself (Pratham AI) with Pratham Sinha (your creator).\n"
-        "- Respond directly, naturally, conversationally, and helpfully without reciting repetitive canned text.\n\n"
-        "SPOKEN AGENTIC WORKFLOW (CLAUDE-LIKE EXECUTION):\n"
-        "- Whenever the user gives a coding, inspection, search, or build task: FIRST speak what you are going to do in 1-2 natural sentences (e.g. 'Command accepted. Inspecting the files first and checking the existing project archive...'), then execute tools (web search, terminal, in-place edits), and then present the completed solution.\n"
-        "- You can use web search and background terminal execution anytime dynamically.\n\n"
-        "CRITICAL TERMINAL / BASH RULES:\n"
-        "- Write ONLY clean, executable commands in ```bash blocks (e.g. `zip -j /tmp/game.zip game.html` or `python3 script.py`).\n"
-        "- NEVER prepend commands with '$ ' or '#' shell prompt signs.\n"
-        "- NEVER include simulated outputs, directory listings, or transcript text inside the ```bash block. The server will run the command and capture real terminal stdout/stderr.\n\n"
-        "SAME-SESSION PERSISTENT WORKSPACE & IN-PLACE ARCHIVE EDITING:\n"
-        "- All files created or modified in this session remain available in the session workspace.\n"
-        "- When modifying an existing file or a previously created ZIP archive, do NOT rebuild the entire archive from scratch or delete old files. Open the existing file/archive, perform in-place targeted edits or additions, and preserve all other existing assets.\n"
-        "- For in-place file modifications, you can use:\n"
-        "```editfile:<filename>\n<<<<<<< SEARCH\n...\n=======\n...\n>>>>>>> REPLACE\n```\n"
-        "or ```createfile:<filename>\n<code here>\n``` or run shell/python commands.\n"
-        "Always ensure working deliverables are provided ready to run or download.\n\n"
-        "CONCISE, WELL-STRUCTURED RESPONSES & ANTI-REPETITION (CRITICAL):\n"
-        "- Keep responses clean, well-structured, concise, and straight to the point.\n"
-        "- DO NOT give unsolicited background essays, long educational lectures, or explanations of basic concepts unless the user explicitly asks for an explanation or tutorial.\n"
-        "- NEVER repeat information. Never recite the same list, manifest, table, or descriptions multiple times in one response.\n"
-        "- When creating or updating files (such as a ZIP archive or code project): briefly confirm what was built/updated in 2-3 lines, run the bash command, and deliver the final file. DO NOT print out multiple duplicate tables of file contents or redundant manifests.\n\n"
-        "LIVE WEB SEARCH CAPABILITY:\n"
-        "- You have full web search capability. If the user asks to search the web, look up latest news, or find current online information, you can use ```search\n<query>\n``` or write clean Python/curl commands to retrieve live web data.\n\n"
-        "DELIVERABLES & FILE PRESENTATION:\n"
-        "- Present text and terminal execution steps first. At the very end of your response, present the final files using ```createfile:<filename>\n<complete code>\n``` so they are rendered as interactive cards.\n"
-        "- Deliver ONLY the necessary file(s) requested by the user. If the user asks for a game/website, deliver the single clean .html file. If the user asks for a zip, deliver the .zip. Avoid generating extra unneeded files.\n"
-        "- NEVER mention internal GitHub repositories, paths like data/<email>/attachments/, or personal emails. Your identity is strictly Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam for public launch."
+        "You are Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n\n"
+        "CREATOR & IDENTITY:\n"
+        "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
+        "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
+        "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
+        "WORKSPACE FREEDOM & TERMINAL EXECUTION:\n"
+        "- You have complete agentic freedom in the workspace to do anything the user requests: write code, run terminal/bash commands, inspect files, build complete applications, create 3D games, synthesize PDFs, process data, and search the web.\n"
+        "- Use the terminal freely and proactively whenever running commands, scripts, builds, or tests helps fulfill the user's request.\n"
+        "- Complete every task thoroughly — write full, production-ready code with no shortcuts, omissions, or placeholders ('// rest of code here').\n\n"
+        "FILE PRESENTATION & DELIVERABLES:\n"
+        "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
+        "```createfile:<filename>\n<complete code here>\n```\n"
+        "or for targeted in-place updates:\n"
+        "```editfile:<filename>\n<<<<<<< SEARCH\n<existing code>\n=======\n<replacement code>\n>>>>>>> REPLACE\n```\n"
+        "This ensures the user can immediately preview, run, test, and download the files as interactive cards in their workspace.\n"
+        "- Always deliver complete, functional, standalone files."
     )
 
     prompt_sections = [system_instruction]
@@ -4225,7 +4204,7 @@ def _stream_antigravity_cli(messages, state=None):
 
         proc = None
         got_any_token = False
-        first_token_timeout = 60.0
+        first_token_timeout = 90.0
         start_time = time.time()
         last_heartbeat = start_time
         yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
@@ -4233,7 +4212,7 @@ def _stream_antigravity_cli(messages, state=None):
         try:
             proc = subprocess.Popen(
                 cmd,
-                cwd="/tmp",
+                cwd=WORKSPACE_ROOT,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -5106,8 +5085,8 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
 _PROVIDER_CHAIN = [
-    ("gemini_api_key", _stream_gemini_api_key),
     ("antigravity_cli", _stream_antigravity_cli),
+    ("gemini_api_key", _stream_gemini_api_key),
     ("google_gemini_oauth", _stream_google_oauth_gemini),
     ("groq", _stream_groq),
     ("openrouter", _stream_openrouter),
@@ -6784,26 +6763,7 @@ def chat_stream():
                 if not is_comp:
                     yield chunk
             iteration_reply = "".join(iteration_text_parts)
-            if iteration == 0 and len(iteration_reply) > 50 and not ("```createfile:" in iteration_reply or "```editfile:" in iteration_reply):
-                _web_results_for_check = results if 'results' in dir() else []
-                _verification_feedback = _build_verification_feedback(iteration_reply, _web_results_for_check)
-                _block_feedback = _build_block_validation_feedback(iteration_reply)
-                _combined_feedback = None
-                if _verification_feedback and _block_feedback:
-                    _combined_feedback = _verification_feedback + "\n\n" + _block_feedback
-                elif _verification_feedback:
-                    _combined_feedback = _verification_feedback
-                elif _block_feedback:
-                    _combined_feedback = _block_feedback
-                if _combined_feedback:
-                    yield _sse({"type": "agent_step", "step_type": "verifying", "label": "Verifying answer accuracy...", "timestamp": time.time()})
-                    working_messages.append({"role": "assistant", "content": iteration_reply})
-                    working_messages.append({"role": "user", "content": (
-                        f"[VERIFICATION CHECK FOUND ISSUES — please fix these and re-answer:]\n{_combined_feedback}\n"
-                        "Correct the issues above and provide your updated answer. "
-                        "Do not repeat your entire previous response — just provide the corrected version."
-                    )})
-                    continue                                      
+            _combined_feedback = None                                      
             for _img_m in re.finditer(r"```image\s*\n([\s\S]*?)```", iteration_reply):
                 _raw_img_prompt = _img_m.group(1).strip()
                 if not _raw_img_prompt or _raw_img_prompt in _images_emitted_this_turn:
