@@ -298,6 +298,7 @@ CORS(app, resources={
         ]
     }
 }, supports_credentials=True)
+GEMINI_API_KEY       = os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip()
 GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
 def _collect_groq_keys() -> list:
     keys = []
@@ -2905,6 +2906,14 @@ except Exception:
     except Exception:
         _GTA6_FALLBACK = ""
 
+try:
+    from api.dynamic_synth import synthesize_project
+except Exception:
+    try:
+        from dynamic_synth import synthesize_project
+    except Exception:
+        synthesize_project = None
+
 def _get_panda_valley_code() -> str:
     from pathlib import Path
     for candidate in [
@@ -3053,6 +3062,19 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
                 "```\n\n"
                 "Click the `panda_valley.html` file card below to play and preview it immediately!"
             )
+        if not any(k in prompt_lower for k in ["space", "asteroid", "ship", "laser"]) and synthesize_project:
+            proj = synthesize_project(prompt)
+            if proj:
+                feats = "\n".join([f"- **{f}**" for f in proj["features"]])
+                return (
+                    f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `{proj['filename']}`.\n\n"
+                    f"```createfile:{proj['filename']}\n"
+                    + proj["code"] + "\n"
+                    "```\n\n"
+                    f"### ✨ {proj['title']} — Architecture & Features:\n"
+                    + feats + "\n\n"
+                    f"Click the `{proj['filename']}` file card below to preview and play it immediately!"
+                )
         return (
             "Here is a complete, self-contained single-file HTML5 Canvas game: **Neon Asteroids Survival**! You can save this code as `game.html` and open it directly in any browser.\n\n"
             "```createfile:game.html\n"
@@ -3227,6 +3249,24 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     words_in_prompt = re.findall(r"\b[a-zA-Z0-9_]+\b", prompt_lower)
     if re.search(greeting_pattern, prompt_lower) and len(words_in_prompt) <= 4 and not any(k in prompt_lower for k in action_keywords):
         return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
+
+    # 7.5 General App / Tool / 3D Simulation Creation Intent
+    if any(k in prompt_lower for k in [
+        "make", "build", "create", "code a", "generate", "develop", "design", "write a",
+        "3d", "solar", "minecraft", "weather", "todo", "calculator", "portfolio", "drum", "paint", "sandbox", "quiz"
+    ]) and synthesize_project:
+        proj = synthesize_project(prompt)
+        if proj:
+            feats = "\n".join([f"- **{f}**" for f in proj["features"]])
+            return (
+                f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file application is delivered as `{proj['filename']}`.\n\n"
+                f"```createfile:{proj['filename']}\n"
+                + proj["code"] + "\n"
+                "```\n\n"
+                f"### ✨ {proj['title']} — Architecture & Features:\n"
+                + feats + "\n\n"
+                f"Click the `{proj['filename']}` file card below to preview, test, or edit it immediately in your Artifact Workspace!"
+            )
 
     # 8. Python / Code generation / Technical queries
     if any(k in prompt_lower for k in ["python", "javascript", "script", "code", "function", "api", "html", "css", "flask", "fastapi", "react", "bug", "sql", "database", "algorithm"]):
@@ -4328,6 +4368,74 @@ def _stream_google_oauth_gemini(messages,state=None):
         if exc.code == 401: raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
         raise RuntimeError(f'HTTP {exc.code}: {msg}')
 
+def _stream_gemini_api_key(messages, state=None):
+    api_key = getattr(_do_stream, '_current_gemini_key', None) or GEMINI_API_KEY
+    if not api_key:
+        raise RuntimeError("No Gemini API key available.")
+    system_parts = []
+    contents = []
+    for item in messages or []:
+        text = str(item.get("content", "") or "")
+        if not text:
+            continue
+        role = item.get("role", "user")
+        if role == "system":
+            system_parts.append(text)
+        else:
+            contents.append({"role": "model" if role == "assistant" else "user", "parts": [{"text": text}]})
+    if not contents:
+        raise RuntimeError("No user content was supplied to Gemini.")
+    temp = (state or {}).pop("temperature", 0.4) if state is not None else 0.4
+    body = {
+        "contents": contents,
+        "generationConfig": {"temperature": float(temp), "maxOutputTokens": 32768}
+    }
+    if system_parts:
+        body["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}
+    
+    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    last_err = None
+    for model_name in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?key={api_key}&alt=sse"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream", "Cache-Control": "no-cache"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    raw = line[5:].strip()
+                    if not raw:
+                        continue
+                    try:
+                        payload = json.loads(raw)
+                    except Exception:
+                        continue
+                    if payload.get("error"):
+                        raise RuntimeError((payload.get("error") or {}).get("message") or "Gemini API request failed.")
+                    for candidate in payload.get("candidates") or []:
+                        finish = candidate.get("finishReason") or candidate.get("finish_reason")
+                        if finish and state is not None:
+                            state["finish_reason"] = "length" if str(finish).upper() in {"MAX_TOKENS", "LENGTH"} else "stop"
+                        for part in ((candidate.get("content") or {}).get("parts") or []):
+                            if part.get("text"):
+                                yield _sse({"type": "token", "text": part["text"]})
+            return
+        except urllib.error.HTTPError as exc:
+            try:
+                raw_e = exc.read().decode("utf-8", errors="replace")
+                msg = (json.loads(raw_e).get("error") or {}).get("message") or raw_e[:300]
+            except Exception:
+                msg = str(exc)
+            last_err = msg
+            continue
+    raise RuntimeError(f"Gemini API request failed: {last_err}")
+
 _MULTITASK_VERB_RE = re.compile(
     r'\b(zip|pdf|csv|svg|python|bash|compute|calculate|create|build|write|make|then|also|plus|and then|export|generate.*and)\b',
     re.IGNORECASE
@@ -4647,7 +4755,8 @@ def _generate_ai_chat_title(message: str) -> str:
             continue
     return message[:60]
 def _stream_groq(messages, state=None):
-    keys = GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
+    user_key = getattr(_do_stream, '_current_groq_key', None)
+    keys = ([user_key] if user_key else []) or GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
     if not keys:
         raise RuntimeError("Groq unavailable (no API keys configured).")
     last_error = None
@@ -5007,6 +5116,7 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
 _PROVIDER_CHAIN = [
+    ("gemini_api_key", _stream_gemini_api_key),
     ("antigravity_cli", _stream_antigravity_cli),
     ("google_gemini_oauth", _stream_google_oauth_gemini),
     ("groq", _stream_groq),
@@ -5942,7 +6052,6 @@ def _require_gemini_connection():
 def gemini_oauth_config():
     if request.method=='OPTIONS': return _cors_preflight()
     connected = False
-    account_email = "manojkumarsinha1972@gmail.com"
     antigravity_token_path = "/root/.gemini/antigravity-cli/antigravity-oauth-token"
     if os.path.exists(antigravity_token_path):
         connected = True
@@ -5955,8 +6064,8 @@ def gemini_oauth_config():
         "image_model": GEMINI_IMAGE_MODEL,
         "integrated": True,
         "connected": connected,
-        "account_email": account_email,
-        "secondary_account_email": "pratham31sinha@gmail.com",
+        "account_email": "Primary Agentic Engine",
+        "secondary_account_email": "Standby Engine",
         "dual_account": True,
         "dual_active": True
     })
@@ -5990,7 +6099,7 @@ def gemini_oauth_status():
             "ok": True,
             "connected": True,
             "account_email": _user_email(),
-            "secondary_account_email": "pratham31sinha@gmail.com",
+            "secondary_account_email": "Standby Engine",
             "dual_account": True,
             "configured": True
         })
@@ -5999,16 +6108,16 @@ def gemini_oauth_status():
         return jsonify({
             "ok": True,
             "connected": True,
-            "account_email": "manojkumarsinha1972@gmail.com",
-            "secondary_account_email": "pratham31sinha@gmail.com",
+            "account_email": "Primary Agentic Engine",
+            "secondary_account_email": "Standby Engine",
             "dual_account": True,
             "configured": True,
             "account1": {
-                "email": "manojkumarsinha1972@gmail.com",
+                "email": "Primary Engine",
                 "available": _WARM_ANTIGRAVITY_ACC1.is_available()
             },
             "account2": {
-                "email": "pratham31sinha@gmail.com",
+                "email": "Standby Engine",
                 "available": _WARM_ANTIGRAVITY_ACC2.is_available()
             }
         })
@@ -6238,6 +6347,10 @@ def chat_stream():
     body = request.get_json(silent=True) or {}
     message = (body.get("message") or "").strip()
     conv_id = body.get("conversation_id") or None
+    user_gemini_key = request.headers.get("X-Gemini-Key", "").strip() or (body.get("gemini_api_key", "").strip() if isinstance(body, dict) else "")
+    user_groq_key = request.headers.get("X-Groq-Key", "").strip() or (body.get("groq_api_key", "").strip() if isinstance(body, dict) else "")
+    _do_stream._current_gemini_key = user_gemini_key
+    _do_stream._current_groq_key = user_groq_key
     is_deep_research = "[[DEEP_RESEARCH]]" in message
     if is_deep_research:
         message = message.replace("[[DEEP_RESEARCH]]", "").strip()

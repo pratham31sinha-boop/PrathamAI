@@ -573,7 +573,23 @@
                 contain: layout style;
             }
             #profile-dropdown-menu { left: 8px; right: 8px; width: auto; }
-            #settings-modal .settings-sidebar { display: none; }
+            #settings-modal .settings-sidebar {
+                display: flex !important;
+                flex-direction: row !important;
+                width: 100% !important;
+                border-right: none !important;
+                border-bottom: 1px solid var(--border) !important;
+                overflow-x: auto !important;
+                padding: 6px 8px !important;
+                gap: 4px !important;
+                white-space: nowrap !important;
+                -webkit-overflow-scrolling: touch;
+            }
+            #settings-modal .settings-tab {
+                padding: 6px 9px !important;
+                font-size: 11.5px !important;
+                flex-shrink: 0 !important;
+            }
             .katex-display, table, pre, code { max-width: 100%; overflow-x: auto; }
             [data-seg-type="text"], [data-seg-type="finaldoc"] { max-width: 96% !important; }
             /* Disable heavy animations on phones for performance */
@@ -1952,6 +1968,21 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Claude-Style Artifact AI Edit Bar -->
+                <div id="workbench-ai-edit-bar" class="border-t border-[var(--border)] p-2 sm:p-2.5 flex items-center gap-2 shrink-0" style="background:var(--sidebar);">
+                    <div class="flex items-center gap-1 text-[11px] text-[var(--accent)] font-semibold shrink-0">
+                        <span>✨</span>
+                        <span class="hidden sm:inline">Ask AI to edit:</span>
+                    </div>
+                    <div class="flex-1 relative flex items-center">
+                        <input id="workbench-edit-input" type="text" placeholder="e.g. Make dark neon theme, add score counter, fix mobile controls..." class="w-full text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-all" onkeydown="if(event.key==='Enter'){event.preventDefault();submitWorkbenchAiEdit();}" />
+                    </div>
+                    <button type="button" onclick="submitWorkbenchAiEdit()" id="workbench-edit-submit-btn" class="px-3 py-1.5 text-xs font-semibold rounded-lg accent-gradient text-white hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1 shrink-0 shadow-xs">
+                        <span>Update File</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                    </button>
+                </div>
             </div>
         </main>
     </div>
@@ -2011,23 +2042,108 @@
             </div>
         </div>
     </div>
-    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-4">
-        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-2xl h-[75vh] max-h-[560px] overflow-hidden premium-card flex">
-            <div class="settings-sidebar w-44 border-r border-[var(--border)] p-3 flex flex-col gap-1 bg-[var(--panel-2)]">
-                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pb-1">Settings</div>
-                <div class="settings-tab active">⚙️ General</div>
-                <div class="settings-tab">👤 Account</div>
-                <div class="settings-tab">🛡️ Privacy</div>
-                <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-3 pb-1">Customize</div>
-                <div class="settings-tab">🎨 Appearance</div>
-                <div class="settings-tab">ℹ️ About</div>
+    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 items-center justify-center hidden p-3 sm:p-4">
+        <div class="bg-[var(--panel)] border border-[var(--border)] rounded-2xl w-full max-w-2xl h-[82vh] max-h-[620px] overflow-hidden premium-card flex flex-col sm:flex-row">
+            <!-- Sidebar / Top Tabs -->
+            <div class="settings-sidebar w-full sm:w-48 border-b sm:border-b-0 sm:border-r border-[var(--border)] p-2 sm:p-3 flex sm:flex-col gap-1 bg-[var(--panel-2)] shrink-0 overflow-x-auto">
+                <div class="settings-category-label text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pb-1 hidden sm:block">Settings</div>
+                <button type="button" class="settings-tab active" data-settings-tab="general" onclick="switchSettingsTab('general')">⚙️ General</button>
+                <button type="button" class="settings-tab" data-settings-tab="ai-keys" onclick="switchSettingsTab('ai-keys')">🤖 AI Engine &amp; Keys</button>
+                <button type="button" class="settings-tab" data-settings-tab="account" onclick="switchSettingsTab('account')">👤 Account</button>
+                <div class="settings-category-label text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-3 pb-1 hidden sm:block">Customize</div>
+                <button type="button" class="settings-tab" data-settings-tab="appearance" onclick="switchSettingsTab('appearance')">🎨 Appearance</button>
+                <button type="button" class="settings-tab" data-settings-tab="about" onclick="switchSettingsTab('about')">ℹ️ About</button>
             </div>
-            <div class="flex-1 flex flex-col min-w-0">
-                <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
-                    <h4 class="text-sm font-bold text-[var(--text)]">Profile</h4>
-                    <button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer">✕</button>
+            <!-- Settings Panes Container -->
+            <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+                <div class="p-3.5 sm:p-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
+                    <h4 id="settings-pane-header-title" class="text-sm font-bold text-[var(--text)]">Settings — General</h4>
+                    <button onclick="toggleModal('settings-modal')" class="text-[var(--text-dim)] hover:text-[var(--text)] font-bold text-sm cursor-pointer p-1">✕</button>
                 </div>
-                <div class="flex-1 overflow-y-auto workspace-scrollpane p-5">
+                
+                <!-- Pane 1: General -->
+                <div id="pane-settings-general" class="settings-pane flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-4">
+                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-semibold text-[var(--text)] flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
+                                Pratham AI Autonomous Engine
+                            </div>
+                            <div class="text-xs text-[var(--text-dim)] mt-1 leading-relaxed">Agentic pair-programming workspace with real-time dynamic code generation and instant interactive preview.</div>
+                        </div>
+                        <span class="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full whitespace-nowrap">Online · Ultra-Low Latency</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <span class="text-sm text-[var(--text)]">Product &amp; Engineering</span>
+                        <span class="text-sm font-medium text-[var(--text)]">Pratham Sinha</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <span class="text-sm text-[var(--text)]">Supervision</span>
+                        <span class="text-sm font-medium text-[var(--text)]">Akriti &amp; Aditi Aishwaryam</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <span class="text-sm text-[var(--text)]">Claude Artifacts &amp; Live Workspace</span>
+                        <span class="text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Active</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <span class="text-sm text-[var(--text)]">Dual-Engine Image Generation</span>
+                        <span class="text-xs text-[var(--text-dim)]">Gemini Imagen 3.0 + Pollinations Neural Fallback</span>
+                    </div>
+                </div>
+
+                <!-- Pane 2: AI Engine & Keys -->
+                <div id="pane-settings-ai-keys" class="settings-pane hidden flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-5">
+                    <div class="p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 text-xs text-[var(--text)] leading-relaxed">
+                        <div class="font-bold text-indigo-400 mb-1 flex items-center gap-1.5">
+                            <span>⚡</span><span>Bring Your Own Free API Keys (Optional)</span>
+                        </div>
+                        Pratham AI has built-in dynamic agentic generation. To unlock unrestricted, high-speed cloud intelligence (Gemini 2.0 Flash or Groq Llama 3.3 70B) from anywhere, enter your keys below. Keys are stored safely in your browser only.
+                    </div>
+
+                    <!-- Gemini Key -->
+                    <div class="flex flex-col gap-2 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">✨</span>
+                                <span class="text-xs font-bold text-[var(--text)]">Google Gemini API Key</span>
+                            </div>
+                            <span id="settings-gemini-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Not Set</span>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-dim)]">Powers Gemini 2.0 Flash &amp; 1.5 Flash models. Free from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] underline hover:opacity-80">Google AI Studio ↗</a>.</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
+                            <button type="button" onclick="toggleApiKeyVisibility('input-gemini-key')" class="p-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[var(--text-dim)]" title="Show / Hide">👁️</button>
+                        </div>
+                    </div>
+
+                    <!-- Groq Key -->
+                    <div class="flex flex-col gap-2 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">⚡</span>
+                                <span class="text-xs font-bold text-[var(--text)]">Groq Cloud API Key</span>
+                            </div>
+                            <span id="settings-groq-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Not Set</span>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-dim)]">Powers ultra-fast Llama 3.3 70B inference. Free from <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] underline hover:opacity-80">Groq Console ↗</a>.</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <input type="password" id="input-groq-key" placeholder="gsk_..." class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
+                            <button type="button" onclick="toggleApiKeyVisibility('input-groq-key')" class="p-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[var(--text-dim)]" title="Show / Hide">👁️</button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-1">
+                        <button type="button" onclick="clearSavedApiKeys()" class="text-xs text-red-400 hover:text-red-300 underline cursor-pointer">Clear Saved Keys</button>
+                        <button type="button" onclick="saveApiKeysSettings()" id="save-api-keys-btn" class="px-4 py-2 accent-gradient text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-all cursor-pointer shadow-sm">Save &amp; Activate Keys</button>
+                    </div>
+                </div>
+
+                <!-- Pane 3: Account -->
+                <div id="pane-settings-account" class="settings-pane hidden flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-4">
                     <div class="settings-row">
                         <span class="text-sm text-[var(--text)]">Avatar</span>
                         <div id="settings-avatar-frame" class="w-9 h-9 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold text-xs overflow-hidden">U</div>
@@ -2040,57 +2156,47 @@
                         <span class="text-sm text-[var(--text)]">Email</span>
                         <span id="settings-email-display" class="text-sm text-[var(--text-dim)]">—</span>
                     </div>
-                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
-                        <div class="min-w-0 flex-1">
-                            <div class="text-sm font-semibold text-[var(--text)] flex items-center gap-1.5">
-                                <span style="width:7px;height:7px;border-radius:50%;background:#10b981;display:inline-block;"></span>
-                                Antigravity Account 1 (Primary)
-                            </div>
-                            <div class="text-xs text-[#10b981] font-mono mt-0.5">manojkumarsinha1972@gmail.com</div>
-                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Integrated directly via local Antigravity session. Created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.</div>
-                        </div>
-                        <span class="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full whitespace-nowrap">Primary · Active</span>
-                    </div>
-                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
-                        <div class="min-w-0 flex-1">
-                            <div class="text-sm font-semibold text-[var(--text)] flex items-center gap-1.5">
-                                <span style="width:7px;height:7px;border-radius:50%;background:#3b82f6;display:inline-block;"></span>
-                                Antigravity Account 2 (Failover)
-                            </div>
-                            <div class="text-xs text-[#3b82f6] font-mono mt-0.5">pratham31sinha@gmail.com</div>
-                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Warm standby session with instant auto-failover (&lt;0.1s) if Account 1 reaches limit or quota exhaustion.</div>
-                        </div>
-                        <span class="text-[10px] font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full whitespace-nowrap">Standby &lt;0.1s</span>
-                    </div>
-                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
-                        <div class="min-w-0 flex-1">
-                            <div class="text-sm text-[var(--text)]">Pratham AI</div>
-                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Your workspace is configured automatically when you sign in.</div>
-                        </div>
-                        <span class="text-[10px] font-semibold text-[var(--accent)] whitespace-nowrap">Ready</span>
-                    </div>
-                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
-                        <div class="min-w-0 flex-1">
-                            <div class="text-sm text-[var(--text)]">Product &amp; engineering</div>
-                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Pratham Sinha</div>
-                        </div>
-                    </div>
-                    <div class="settings-row" style="align-items:flex-start;gap:12px;">
-                        <div class="min-w-0 flex-1">
-                            <div class="text-sm text-[var(--text)]">Supervision</div>
-                            <div class="text-[11px] text-[var(--text-dim)] mt-1 leading-relaxed">Akriti &amp; Aditi Aishwaryam</div>
-                        </div>
-                    </div>
                     <div class="settings-row">
-                        <span class="text-sm text-[var(--text)]">Appearance</span>
-                        <div class="flex gap-1.5">
-                            <div class="theme-choice-btn" id="theme-btn-light" onclick="setThemeManual('light')">☀️</div>
-                            <div class="theme-choice-btn" id="theme-btn-dark" onclick="setThemeManual('dark')">🌙</div>
-                        </div>
+                        <span class="text-sm text-[var(--text)]">Account Tier</span>
+                        <span id="settings-role-display" class="text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Standard Member</span>
                     </div>
                     <div class="pt-6">
                         <button onclick="triggerIdentitySignout()" class="w-full py-2 bg-red-500/10 text-red-500 font-semibold text-xs rounded-lg hover:bg-red-500/20 transition-opacity cursor-pointer">Log out</button>
                     </div>
+                </div>
+
+                <!-- Pane 4: Appearance -->
+                <div id="pane-settings-appearance" class="settings-pane hidden flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-4">
+                    <div class="settings-row">
+                        <span class="text-sm text-[var(--text)]">Color Mode</span>
+                        <div class="flex gap-1.5">
+                            <div class="theme-choice-btn" id="theme-btn-light" onclick="setThemeManual('light')">☀️ Light</div>
+                            <div class="theme-choice-btn" id="theme-btn-dark" onclick="setThemeManual('dark')">🌙 Dark</div>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <span class="text-sm text-[var(--text)]">Interface Style</span>
+                        <span class="text-xs text-[var(--text-dim)]">Glassmorphic Modern · Mobile Optimized</span>
+                    </div>
+                </div>
+
+                <!-- Pane 5: About -->
+                <div id="pane-settings-about" class="settings-pane hidden flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-4">
+                    <div class="flex items-center gap-3 pb-3 border-b border-[var(--border)]">
+                        <div class="w-12 h-12 rounded-2xl accent-gradient flex items-center justify-center text-white font-black text-xl shadow-md">P</div>
+                        <div>
+                            <h3 class="text-base font-bold text-[var(--text)]">Pratham AI</h3>
+                            <p class="text-xs text-[var(--text-dim)]">Version 2.4.0 (Public Release)</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-[var(--text)] leading-relaxed">
+                        Pratham AI is an autonomous, agentic coding assistant and conversational intelligence workspace. It delivers real-time live code execution, interactive Three.js 3D simulations, modern web dashboards, and seamless multi-file workflows.
+                    </p>
+                    <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--panel-2)] text-xs space-y-1.5">
+                        <div class="font-bold text-[var(--text)]">Product Architecture &amp; Development</div>
+                        <div class="text-[var(--text-dim)]">Engineered by <strong class="text-[var(--text)]">Pratham Sinha</strong> under the supervision of <strong class="text-[var(--text)]">Akriti and Aditi Aishwaryam</strong>.</div>
+                    </div>
+                    <p class="text-[11px] text-[var(--text-dim)] pt-2">© 2026 Pratham AI. Designed for public release and professional developer pair-programming.</p>
                 </div>
             </div>
         </div>
@@ -2810,8 +2916,130 @@
         }
         function toggleModal(modalTargetId) {
             const target = document.getElementById(modalTargetId);
+            if (!target) return;
             target.classList.toggle('hidden');
             target.classList.toggle('flex');
+            if (modalTargetId === 'settings-modal' && !target.classList.contains('hidden')) {
+                loadSavedApiKeys();
+            }
+        }
+        function switchSettingsTab(tabId) {
+            document.querySelectorAll('#settings-modal .settings-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-settings-tab') === tabId);
+            });
+            document.querySelectorAll('#settings-modal .settings-pane').forEach(pane => {
+                pane.classList.add('hidden');
+            });
+            const activePane = document.getElementById('pane-settings-' + tabId);
+            if (activePane) activePane.classList.remove('hidden');
+
+            const titleMap = {
+                'general': 'Settings — General',
+                'ai-keys': 'Settings — AI Engine & Keys',
+                'account': 'Settings — Account',
+                'appearance': 'Settings — Appearance',
+                'about': 'Settings — About'
+            };
+            const headerTitle = document.getElementById('settings-pane-header-title');
+            if (headerTitle) headerTitle.innerText = titleMap[tabId] || 'Settings';
+
+            if (tabId === 'ai-keys') {
+                loadSavedApiKeys();
+            }
+        }
+
+        function loadSavedApiKeys() {
+            const geminiKey = localStorage.getItem('pratham_gemini_key') || '';
+            const groqKey = localStorage.getItem('pratham_groq_key') || '';
+            const geminiInput = document.getElementById('input-gemini-key');
+            const groqInput = document.getElementById('input-groq-key');
+            const geminiBadge = document.getElementById('settings-gemini-status-badge');
+            const groqBadge = document.getElementById('settings-groq-status-badge');
+
+            if (geminiInput) geminiInput.value = geminiKey;
+            if (groqInput) groqInput.value = groqKey;
+
+            if (geminiBadge) {
+                if (geminiKey.trim()) {
+                    geminiBadge.innerText = 'Connected · Active';
+                    geminiBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500';
+                } else {
+                    geminiBadge.innerText = 'Not Set';
+                    geminiBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]';
+                }
+            }
+
+            if (groqBadge) {
+                if (groqKey.trim()) {
+                    groqBadge.innerText = 'Connected · Active';
+                    groqBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500';
+                } else {
+                    groqBadge.innerText = 'Not Set';
+                    groqBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]';
+                }
+            }
+        }
+
+        function saveApiKeysSettings() {
+            const geminiInput = document.getElementById('input-gemini-key');
+            const groqInput = document.getElementById('input-groq-key');
+            const geminiVal = geminiInput ? geminiInput.value.trim() : '';
+            const groqVal = groqInput ? groqInput.value.trim() : '';
+
+            if (geminiVal) localStorage.setItem('pratham_gemini_key', geminiVal);
+            else localStorage.removeItem('pratham_gemini_key');
+
+            if (groqVal) localStorage.setItem('pratham_groq_key', groqVal);
+            else localStorage.removeItem('pratham_groq_key');
+
+            loadSavedApiKeys();
+
+            const saveBtn = document.getElementById('save-api-keys-btn');
+            if (saveBtn) {
+                const origText = saveBtn.innerText;
+                saveBtn.innerText = '✓ Saved & Activated!';
+                saveBtn.classList.add('bg-emerald-600');
+                setTimeout(() => {
+                    saveBtn.innerText = origText;
+                    saveBtn.classList.remove('bg-emerald-600');
+                }, 2000);
+            }
+        }
+
+        function clearSavedApiKeys() {
+            if (!confirm('Clear all saved API keys?')) return;
+            localStorage.removeItem('pratham_gemini_key');
+            localStorage.removeItem('pratham_groq_key');
+            loadSavedApiKeys();
+        }
+
+        function toggleApiKeyVisibility(inputId) {
+            const el = document.getElementById(inputId);
+            if (!el) return;
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        function submitWorkbenchAiEdit() {
+            const input = document.getElementById('workbench-edit-input');
+            if (!input) return;
+            const instruction = input.value.trim();
+            if (!instruction) {
+                input.focus();
+                return;
+            }
+            const activeFilename = (currentWorkspaceArtifact && currentWorkspaceArtifact.filename) || 'project';
+            const editPrompt = `Please update "${activeFilename}" with the following changes: ${instruction}`;
+            
+            // Put prompt into main chat composer
+            if (userPromptInputField) {
+                userPromptInputField.value = editPrompt;
+                input.value = '';
+                // If on small screen, switch back to chat view so user can follow progress
+                if (window.innerWidth < 640 && typeof toggleWorkbenchSplit === 'function') {
+                    toggleWorkbenchSplit();
+                }
+                dispatchChatMessage();
+            }
         }
         function createNewConversation() {
             currentConversationId = null;
@@ -5035,6 +5263,8 @@
                 // Dedicated controller lets Stop terminate the network request itself,
                 // instead of merely stopping DOM updates while the server keeps working.
                 _activeChatAbortController = new AbortController();
+                const userGeminiKey = (localStorage.getItem('pratham_gemini_key') || '').trim();
+                const userGroqKey = (localStorage.getItem('pratham_groq_key') || '').trim();
                 const response = await smartFetchRequest('/chat-stream', {
                     method: 'POST',
                     headers: {
@@ -5042,11 +5272,15 @@
                         'Accept': 'text/event-stream',
                         'Cache-Control': 'no-cache',
                         'Authorization': globalAuthorizationToken || 'Bearer guest-session',
-                        ...(geminiAccessToken ? { 'X-Gemini-Access-Token': geminiAccessToken } : {})
+                        ...(geminiAccessToken ? { 'X-Gemini-Access-Token': geminiAccessToken } : {}),
+                        ...(userGeminiKey ? { 'X-Gemini-Key': userGeminiKey } : {}),
+                        ...(userGroqKey ? { 'X-Groq-Key': userGroqKey } : {})
                     },
                     body: JSON.stringify({
                         message: message,
                         conversation_id: currentConversationId,
+                        gemini_key: userGeminiKey || null,
+                        groq_key: userGroqKey || null,
                         reference_image: (
                             window._lastGeneratedImageDataUrl &&
                             /\b(?:add|change|edit|remove|replace|modify|turn it|make it|put|give it|now)\b/i.test(message)
@@ -6173,6 +6407,7 @@
                 _ham._sidebarWired = true;
                 _ham.addEventListener('click', openMobileSidebar);
             }
+            try { loadSavedApiKeys(); } catch (e) {}
         }
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', bootstrapPrathamAI);
