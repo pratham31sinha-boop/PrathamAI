@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pratham AI - Intelligent Chatbot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0d14;
+      --bg-card: rgba(18, 24, 38, 0.75);
+      --border-glow: rgba(99, 102, 241, 0.25);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #06b6d4;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --user-bubble: linear-gradient(135deg, #4f46e5, #6366f1);
+      --bot-bubble: rgba(30, 41, 59, 0.85);
+      --code-bg: #030712;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.12) 0px, transparent 50%);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .chat-container {
+      width: 100%;
+      max-width: 950px;
+      height: 94vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glow);
+      border-radius: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      margin: 16px;
+    }
+
+    /* Header */
+    .header {
+      padding: 18px 26px;
+      background: rgba(15, 23, 42, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .avatar-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 20px;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+    }
+
+    .brand-text h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 0.68rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+    }
+
+    .creator-tag {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .actions-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      padding: 8px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    /* Messages Box */
+    .messages-box {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+
+    .messages-box::-webkit-scrollbar {
+      width: 6px;
+    }
+    .messages-box::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+    }
+
+    .message-row {
+      display: flex;
+      gap: 14px;
+      max-width: 85%;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-row.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message-row.bot {
+      align-self: flex-start;
+    }
+
+    .msg-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .msg-avatar.user-av {
+      background: #475569;
+    }
+
+    .msg-avatar.bot-av {
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+    }
+
+    .msg-bubble {
+      padding: 14px 18px;
+      border-radius: 18px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      word-break: break-word;
+      position: relative;
+    }
+
+    .message-row.user .msg-bubble {
+      background: var(--user-bubble);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-row.bot .msg-bubble {
+      background: var(--bot-bubble);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-bottom-left-radius: 4px;
+    }
+
+    .meta-time {
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.45);
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    /* Content Styling inside Bot bubble */
+    .msg-bubble table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 0.88rem;
+    }
+
+    .msg-bubble th, .msg-bubble td {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    .msg-bubble th {
+      background: rgba(255, 255, 255, 0.08);
+      font-weight: 600;
+    }
+
+    .msg-bubble pre {
+      background: var(--code-bg);
+      padding: 12px;
+      border-radius: 10px;
+      overflow-x: auto;
+      margin: 10px 0;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    .msg-bubble code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 0.88rem;
+    }
+
+    /* Quick Suggestions */
+    .suggestions {
+      display: flex;
+      gap: 8px;
+      padding: 6px 24px;
+      overflow-x: auto;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .chip:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    /* Input Footer */
+    .footer-input-area {
+      padding: 18px 24px;
+      background: rgba(15, 23, 42, 0.8);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .input-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 6px 14px;
+      transition: border-color 0.2s;
+    }
+
+    .input-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      height: 24px;
+      line-height: 24px;
+    }
+
+    textarea::placeholder {
+      color: rgba(255, 255, 255, 0.35);
+    }
+
+    .btn-send {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      border: none;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    .btn-send:hover {
+      transform: scale(1.05);
+    }
+
+    .btn-send:active {
+      transform: scale(0.95);
+    }
+
+    /* Typing Dots */
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      padding: 6px 0;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="chat-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand-group">
+        <div class="avatar-logo">P</div>
+        <div class="brand-text">
+          <h1>Pratham AI <span class="badge">v2.5 Pro</span></h1>
+          <p class="creator-tag">Created by Pratham Sinha • Supervised by Akriti & Aditi Aishwaryam</p>
+        </div>
+      </div>
+      <div class="actions-group">
+        <button class="btn-icon" id="clearBtn" title="Clear Chat">Clear</button>
+      </div>
+    </header>
+
+    <!-- Chat Messages Screen -->
+    <div class="messages-box" id="messagesBox">
+      <!-- Welcome Message -->
+      <div class="message-row bot">
+        <div class="msg-avatar bot-av">P</div>
+        <div class="msg-bubble">
+          Hello! I am <strong>Pratham AI</strong>, an advanced conversational AI model created by <strong>Pratham Sinha</strong> under the guidance of <strong>Akriti and Aditi Aishwaryam</strong>.<br><br>
+          How can I assist you today? Feel free to ask about tech, coding, comparisons like AGI vs ASI, science, or write code with me!
+          <div class="meta-time">Just now</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Prompt Suggestions -->
+    <div class="suggestions">
+      <div class="chip" onclick="quickSend('Difference between AGI and ASI in tabular form')">📊 AGI vs ASI Table</div>
+      <div class="chip" onclick="quickSend('Who created Pratham AI?')">👤 Creator Info</div>
+      <div class="chip" onclick="quickSend('Write a Python web scraper using BeautifulSoup')">🐍 Python Web Scraper</div>
+      <div class="chip" onclick="quickSend('Explain Quantum Computing in simple terms')">⚛️ Quantum Computing</div>
+    </div>
+
+    <!-- Input Box -->
+    <footer class="footer-input-area">
+      <div class="input-box">
+        <textarea id="userInput" placeholder="Ask Pratham AI anything..." rows="1"></textarea>
+        <button class="btn-send" id="sendBtn" title="Send message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const messagesBox = document.getElementById('messagesBox');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    // Auto resize textarea
+    userInput.addEventListener('input', () => {
+      userInput.style.height = 'auto';
+      userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+    });
+
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    clearBtn.addEventListener('click', () => {
+      messagesBox.innerHTML = `
+        <div class="message-row bot">
+          <div class="msg-avatar bot-av">P</div>
+          <div class="msg-bubble">
+            Chat cleared! I am <strong>Pratham AI</strong>. What would you like to explore next?
+            <div class="meta-time">Just now</div>
+          </div>
+        </div>
+      `;
+    });
+
+    function quickSend(text) {
+      userInput.value = text;
+      sendMessage();
+    }
+
+    function getTimeString() {
+      const d = new Date();
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function appendMessage(sender, text, isHtml = false) {
+      const row = document.createElement('div');
+      row.className = `message-row ${sender}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = `msg-avatar ${sender === 'user' ? 'user-av' : 'bot-av'}`;
+      avatar.textContent = sender === 'user' ? 'U' : 'P';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'msg-bubble';
+
+      if (isHtml) {
+        bubble.innerHTML = text;
+      } else {
+        bubble.textContent = text;
+      }
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'meta-time';
+      timeDiv.textContent = getTimeString();
+      bubble.appendChild(timeDiv);
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      messagesBox.appendChild(row);
+
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+      return bubble;
+    }
+
+    function showTypingIndicator() {
+      const row = document.createElement('div');
+      row.className = 'message-row bot typing-indicator-row';
+      row.innerHTML = `
+        <div class="msg-avatar bot-av">P</div>
+        <div class="msg-bubble">
+          <div class="typing-dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+          </div>
+        </div>
+      `;
+      messagesBox.appendChild(row);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+      return row;
+    }
+
+    // Markdown Parser
+    function formatMarkdown(text) {
+      let formatted = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Tables
+      formatted = formatted.replace(/\|(.+)\|/g, function(match) {
+        const rows = match.split('\n');
+        return match;
+      });
+
+      // Code blocks
+      formatted = formatted.replace(/
