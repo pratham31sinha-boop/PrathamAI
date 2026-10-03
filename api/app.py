@@ -692,8 +692,8 @@ _ZIP_INTENT_RE = re.compile(
     re.IGNORECASE
 )
 _PDF_INTENT_RE = re.compile(
-    r"\b(?:export|download|save|convert|provide|give\s+me)\b.*\b(?:pdf|document)\b|"
-    r"\b(?:as\s+(?:a\s+)?pdf|in\s+(?:a\s+)?pdf|into\s+(?:a\s+)?pdf|make\s+(?:it\s+)?(?:a\s+)?pdf|pdf\s+format)\b",
+    r"\b(?:export|download|save|convert|provide|give\s+me|make|create|generate|write|build)\b.*\b(?:pdf|document)\b|"
+    r"\b(?:as\s+(?:a\s+)?pdf|in\s+(?:a\s+)?pdf|into\s+(?:a\s+)?pdf|make\s+(?:it\s+)?(?:a\s+)?pdf|pdf\s+format|\.pdf)\b",
     re.IGNORECASE
 )
 def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
@@ -728,7 +728,11 @@ _EXPORT_FILLER_LINE_RE = re.compile(
     re.IGNORECASE
 )
 def _strip_export_filler(text: str) -> str:
-    kept_lines = [ln for ln in text.split("\n") if not _EXPORT_FILLER_LINE_RE.match(ln)]
+    clean_text = re.sub(r"```(?:python|py|bash|sh|shell|cmd|terminal)[\s\S]*?```", "", text or "", flags=re.IGNORECASE)
+    clean_text = re.sub(r"```(?:createfile|editfile):[^\n]*\n[\s\S]*?```", "", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"\[(?:TERMINAL OUTPUT|STDOUT|STDERR)[\s\S]*?\]", "", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"^Task Plan[\s\S]*?(?=\n\n|\n[A-Z#])", "", clean_text, flags=re.IGNORECASE)
+    kept_lines = [ln for ln in clean_text.split("\n") if not _EXPORT_FILLER_LINE_RE.match(ln)]
     cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines))
     return cleaned.strip()
 def _extract_export_content(assistant_text: str) -> str:
@@ -3599,13 +3603,16 @@ class _WarmAntigravitySession:
                 written_files = {}
                 accumulated_streamed_text = []
 
-                # Live planning step indicator
-                p_low = (prompt or "").lower()
-                if any(k in p_low for k in ["game", "arcade", "stumble", "gta"]):
+                # Live planning step indicator based on the actual user query (not system prompt boilerplate)
+                user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
+                user_query = user_matches[-1].lower() if user_matches else (prompt or "").lower()
+                if any(k in user_query for k in ["pdf", "document", "report", "essay"]):
+                    step_lbl = "Synthesizing publication-grade document deliverable..."
+                elif any(k in user_query for k in ["game", "arcade", "stumble", "gta"]):
                     step_lbl = "Architecting game mechanics & responsive controls..."
-                elif any(k in p_low for k in ["html", "website", "web page", "webpage", "app"]):
+                elif any(k in user_query for k in ["html", "website", "web page", "webpage", "app"]):
                     step_lbl = "Synthesizing full web application components..."
-                elif any(k in p_low for k in ["python", "script", "code", "backend"]):
+                elif any(k in user_query for k in ["python", "script", "code", "backend"]):
                     step_lbl = "Engineering production code deliverable..."
                 else:
                     step_lbl = "Deconstructing query & generating comprehensive response..."
@@ -3731,7 +3738,13 @@ class _WarmAntigravitySession:
                             self._in_turn = False
                             # Ensure any file written by agy tools is presented to the user as a deliverable card
                             full_streamed = "".join(accumulated_streamed_text)
+                            user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
+                            user_query = user_matches[-1].lower() if user_matches else (prompt or "").lower()
+                            is_doc_or_zip = bool(re.search(r"\b(?:pdf|zip|document|tar\.gz)\b", user_query))
                             for w_name, w_code in written_files.items():
+                                # If the user asked for a PDF or ZIP, intermediate generator scripts (.py/.sh) are not deliverables
+                                if is_doc_or_zip and not w_name.lower().endswith((".pdf", ".zip", ".tar.gz", ".7z")):
+                                    continue
                                 if f"createfile:{w_name}" not in full_streamed and f"editfile:{w_name}" not in full_streamed:
                                     file_block = f"\n\n```createfile:{w_name}\n{w_code}\n```\n"
                                     for part in re.split(r"(\s+)", file_block):
@@ -4161,6 +4174,7 @@ def _stream_antigravity_cli(messages, state=None):
         "or for targeted in-place updates:\n"
         "```editfile:<filename>\n<<<<<<< SEARCH\n<existing code>\n=======\n<replacement code>\n>>>>>>> REPLACE\n```\n"
         "This ensures the user can immediately preview, run, test, and download the files as interactive cards in their workspace.\n"
+        "- When the user requests a PDF, document, or ZIP archive, run the build commands to produce the compiled file directly on disk. Do NOT present intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the document itself cleanly without extra helper scripts.\n"
         "- Always deliver complete, functional, standalone files."
     )
 
@@ -5278,6 +5292,7 @@ def _do_stream(messages):
                     )}
                 ]
             if any_token_yielded:
+                _do_stream._last_successful_provider = name
                 yield _sse({"type": "complete"})
                 return
         except Exception as exc:
@@ -6952,11 +6967,15 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
-                    _produced_files_this_turn.append({
-                        "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                        "size_bytes": written["size_bytes"], "line_count": written["line_count"], "lang": file_ext
-                    })
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
+                    if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and file_ext.lower() != "pdf":
+                        # User explicitly asked for a PDF document. Do not deliver helper python scripts as deliverable cards!
+                        pass
+                    else:
+                        _produced_files_this_turn.append({
+                            "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                            "size_bytes": written["size_bytes"], "line_count": written["line_count"], "lang": file_ext
+                        })
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
 
                     # If this file already existed, compute and yield real diff stats
                     if prior_content is not None and prior_content.strip() != final_content.strip():
@@ -7027,11 +7046,14 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
-                    _produced_files_this_turn.append({
-                        "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                        "size_bytes": written["size_bytes"], "line_count": written["line_count"], "lang": file_ext
-                    })
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
+                    if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and file_ext.lower() != "pdf":
+                        pass
+                    else:
+                        _produced_files_this_turn.append({
+                            "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                            "size_bytes": written["size_bytes"], "line_count": written["line_count"], "lang": file_ext
+                        })
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
                     yield _sse({
                         "type": "activity_edited",
                         "filename": filename,
@@ -7058,6 +7080,12 @@ def chat_stream():
                         })
                 except Exception as exc:
                     print(f"[EDITFILE][FAULT] {exc}")
+            # If antigravity_cli handled this turn, it has already executed tools natively during its turn.
+            # Do NOT re-execute code blocks or loop back into the model — turn is complete!
+            is_antigravity = (getattr(_do_stream, '_last_successful_provider', None) == "antigravity_cli")
+            if is_antigravity:
+                break
+
             all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
             executable_present = any(
                 (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
@@ -7130,6 +7158,8 @@ def chat_stream():
                     for _new_path in sorted(_post_exec_files - _pre_exec_files):
                         try:
                             _new_name = os.path.basename(_new_path)
+                            if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and not _new_name.lower().endswith(".pdf"):
+                                continue
                             with open(_new_path, "rb") as _fh:
                                 _new_bytes = _fh.read()
                             if len(_new_bytes) > 60 * 1024 * 1024:                   
@@ -7139,12 +7169,18 @@ def chat_stream():
                             _generated_files_store[_new_token] = {
                                 "bytes": _new_bytes, "filename": _new_name, "mimetype": _new_mimetype,
                             }
+                            _produced_files_this_turn.append({
+                                "filename": _new_name, "url": f"/download/{_new_token}", "download_url": f"/download/{_new_token}",
+                                "size_bytes": len(_new_bytes), "lang": _new_name.rsplit(".", 1)[-1] if "." in _new_name else "bin"
+                            })
                             yield _sse({
                                 "type": "file_ready",
                                 "url": f"/download/{_new_token}",
                                 "filename": _new_name,
                             })
                             _produced_filenames_this_turn.add(_new_name.lower())
+                            if user_email:
+                                _save_user_chat_file(user_email, conv_id, _new_name, _new_bytes)
                         except Exception as _reg_exc:
                             print(f"[AUTO FILE DISCOVERY FAULT] {_new_path} -> {_reg_exc}")
                 try:
@@ -7152,6 +7188,8 @@ def chat_stream():
                     for _tmp_f in sorted(_post_tmp_files - _pre_tmp_files):
                         _tmp_path = os.path.join("/tmp", _tmp_f)
                         if os.path.isfile(_tmp_path) and not _tmp_f.startswith("."):
+                            if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and not _tmp_f.lower().endswith(".pdf"):
+                                continue
                             if terminal_workdir and os.path.isdir(terminal_workdir):
                                 try:
                                     shutil.copy2(_tmp_path, os.path.join(terminal_workdir, _tmp_f))
@@ -7165,12 +7203,18 @@ def chat_stream():
                                 _generated_files_store[_t_token] = {
                                     "bytes": _t_bytes, "filename": _tmp_f, "mimetype": _t_mime,
                                 }
+                                _produced_files_this_turn.append({
+                                    "filename": _tmp_f, "url": f"/download/{_t_token}", "download_url": f"/download/{_t_token}",
+                                    "size_bytes": len(_t_bytes), "lang": _tmp_f.rsplit(".", 1)[-1] if "." in _tmp_f else "bin"
+                                })
                                 yield _sse({
                                     "type": "file_ready",
                                     "url": f"/download/{_t_token}",
                                     "filename": _tmp_f,
                                 })
                                 _produced_filenames_this_turn.add(_tmp_f.lower())
+                                if user_email:
+                                    _save_user_chat_file(user_email, conv_id, _tmp_f, _t_bytes)
                 except Exception as _te:
                     print(f"[TMP AUTO FILE DISCOVERY FAULT] {_te}")
                 results.append({"lang": lang, "code": code, "stdout": stdout, "stderr": stderr, "returncode": rc})
@@ -7216,9 +7260,18 @@ def chat_stream():
         for fname in referenced_filenames:
             if fname.lower() in _produced_filenames_this_turn:
                 continue
+            if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and not fname.lower().endswith(".pdf"):
+                continue
             cand_path = None
             if terminal_workdir and os.path.isfile(os.path.join(terminal_workdir, fname)):
                 cand_path = os.path.join(terminal_workdir, fname)
+            elif os.path.isfile(os.path.join(WORKSPACE_ROOT, fname)):
+                cand_path = os.path.join(WORKSPACE_ROOT, fname)
+                if terminal_workdir and os.path.isdir(terminal_workdir):
+                    try:
+                        shutil.copy2(cand_path, os.path.join(terminal_workdir, fname))
+                    except Exception:
+                        pass
             elif os.path.isfile(os.path.join("/tmp", fname)):
                 cand_path = os.path.join("/tmp", fname)
                 if terminal_workdir and os.path.isdir(terminal_workdir):
@@ -7270,15 +7323,52 @@ def chat_stream():
             elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
                 has_pdf_already = any(f.get("filename", "").lower().endswith(".pdf") for f in _produced_files_this_turn)
                 if not has_pdf_already:
-                    pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                    if pdf_bytes:
-                        pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
-                        token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                    # Look for any real .pdf deliverable generated on disk in WORKSPACE_ROOT, terminal_workdir, or /tmp
+                    found_disk_pdf = None
+                    search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
+                    for s_dir in search_dirs:
+                        try:
+                            for f in os.listdir(s_dir):
+                                if f.lower().endswith(".pdf") and not f.startswith("."):
+                                    full_p = os.path.join(s_dir, f)
+                                    if os.path.isfile(full_p) and os.path.getsize(full_p) > 200:
+                                        try:
+                                            if os.path.getmtime(full_p) >= (turn_start_time - 10.0):
+                                                found_disk_pdf = full_p
+                                                break
+                                        except Exception:
+                                            pass
+                            if found_disk_pdf:
+                                break
+                        except Exception:
+                            pass
+
+                    if found_disk_pdf:
+                        pdf_name = os.path.basename(found_disk_pdf)
+                        with open(found_disk_pdf, "rb") as pf_h:
+                            pdf_bytes = pf_h.read()
+                        token = _store_generated_file(pdf_bytes, pdf_name, "application/pdf")
                         _produced_files_this_turn.append({
                             "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
                             "size_bytes": len(pdf_bytes), "lang": "pdf"
                         })
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                        _produced_filenames_this_turn.add(pdf_name.lower())
+                        if user_email:
+                            _save_user_chat_file(user_email, conv_id, pdf_name, pdf_bytes)
+                    else:
+                        pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                        if pdf_bytes:
+                            pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
+                            token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                            _produced_files_this_turn.append({
+                                "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                                "size_bytes": len(pdf_bytes), "lang": "pdf"
+                            })
+                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                            _produced_filenames_this_turn.add(pdf_name.lower())
+                            if user_email:
+                                _save_user_chat_file(user_email, conv_id, pdf_name, pdf_bytes)
             else:
                 generic_ext = _detect_generic_extension_intent(export_intent_check_message)
                 if generic_ext and generic_ext.lower() != "txt":
