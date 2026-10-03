@@ -18,7 +18,20 @@ def synthesize_project(prompt: str) -> dict:
     """
     p_lower = (prompt or "").lower().strip()
 
-    # Priority 0: Dedicated Games Synthesizer (Ludo 3D, Cricket, Hill Climb, GTA 6, Chess, etc.)
+    # Priority 0: Dedicated Epic 3D & Games Synthesizers
+    try:
+        from api.epic_3d_synth import synthesize_epic_3d
+    except Exception:
+        try:
+            from epic_3d_synth import synthesize_epic_3d
+        except Exception:
+            synthesize_epic_3d = None
+
+    if synthesize_epic_3d:
+        epic_res = synthesize_epic_3d(prompt)
+        if epic_res:
+            return epic_res
+
     try:
         from api.games_synth import synthesize_game
     except Exception:
@@ -1049,8 +1062,20 @@ def synthesize_project(prompt: str) -> dict:
 
 
     # 6. Default Dynamic Application Synthesizer (Catches any other request!)
-    clean_title = re.sub(r"[^\w\s]", "", prompt).strip()[:40].title() or "Custom Web Application"
-    clean_filename = re.sub(r"[^\w]+", "_", clean_title.lower()).strip("_") + ".html"
+    explicit_fn = None
+    fn_match = re.search(r'(?:called|named|file|delivered as)?\s*`?([a-zA-Z0-9_\-]+\.html)`?', prompt, re.IGNORECASE)
+    if fn_match:
+        cand = fn_match.group(1).strip().lower()
+        if cand not in ["html", "app.html", "index.html"]:
+            explicit_fn = cand
+
+    if explicit_fn:
+        clean_filename = explicit_fn
+        clean_title = re.sub(r"[\._\-]", " ", clean_filename.replace(".html", "")).title()
+    else:
+        clean_title = re.sub(r"[^\w\s]", "", prompt).strip()[:40].title() or "Custom Web Application"
+        clean_filename = re.sub(r"[^\w]+", "_", clean_title.lower()).strip("_") + ".html"
+
     is_game_intent = any(k in p_lower for k in ["game", "play", "arcade", "runner", "canvas", "platformer", "shooter", "race", "racing", "quest", "adventure", "battle"])
     is_3d_intent = any(k in p_lower for k in ["3d", "three", "threejs", "three.js", "simulation", "galaxy", "orbit", "solar", "website", "portfolio"])
 
