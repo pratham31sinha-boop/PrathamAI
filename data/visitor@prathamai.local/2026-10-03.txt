@@ -2154,3 +2154,395 @@ I have created **Ludo 3D Master: Classic Board Arena** for you with full agentic
 
 Click the `ludo_3d.html` file card below to preview and play it immediately!
 ================================================================================
+
+=== 2026-10-03T04:56:43.264865+00:00 ===
+User: [[NO_WEB_SEARCH]]Now make stumble guys game
+Pratham AI:
+I have created **Stumble Guys: Knockout Obstacle Royale** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `stumble_guys.html`.
+
+```createfile:stumble_guys.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stumble Guys: Knockout Royale — Pratham AI</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+    body, html { width:100%; height:100%; overflow:hidden; background:#111827; font-family:'Segoe UI', system-ui, sans-serif; }
+    #game-container { position:relative; width:100vw; height:100vh; overflow:hidden; background:linear-gradient(180deg, #38bdf8 0%, #818cf8 60%, #4338ca 100%); }
+    canvas { display:block; width:100%; height:100%; }
+    #hud { position:absolute; top:16px; left:16px; right:16px; display:flex; justify-content:space-between; align-items:center; pointer-events:none; z-index:10; }
+    .badge { background:rgba(15,23,42,0.85); backdrop-filter:blur(8px); padding:8px 16px; border-radius:20px; font-weight:800; font-size:14px; color:#fff; border:2px solid rgba(255,255,255,0.15); box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+    .badge span { color:#fbbf24; }
+    #mobile-controls { position:absolute; bottom:20px; left:0; right:0; height:150px; display:flex; justify-content:space-between; align-items:center; padding:0 24px; pointer-events:none; z-index:20; }
+    .touch-btn { pointer-events:auto; width:72px; height:72px; border-radius:50%; background:rgba(255,255,255,0.25); border:3px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-size:24px; font-weight:900; box-shadow:0 6px 16px rgba(0,0,0,0.3); touch-action:none; }
+    .touch-btn:active { transform:scale(0.92); background:rgba(255,255,255,0.45); }
+    #dpad { display:grid; grid-template-columns:repeat(3, 50px); grid-template-rows:repeat(3, 50px); gap:4px; pointer-events:auto; }
+    .dpad-btn { width:50px; height:50px; border-radius:12px; background:rgba(255,255,255,0.25); border:2px solid #fff; color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; }
+    .dpad-btn:active { background:rgba(255,255,255,0.5); }
+    #win-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:30; color:#fff; text-align:center; padding:20px; }
+    #win-overlay.active { display:flex; }
+    #win-overlay h2 { font-size:42px; font-weight:900; color:#fbbf24; text-shadow:0 0 25px rgba(251,191,36,0.6); margin-bottom:12px; }
+    #win-overlay button { padding:14px 32px; font-size:18px; font-weight:800; border-radius:30px; border:none; background:linear-gradient(135deg, #10b981, #059669); color:#fff; cursor:pointer; box-shadow:0 8px 24px rgba(16,185,129,0.5); }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="hud">
+      <div class="badge">👑 QUALIFIED: <span id="rank-display">1 / 16</span></div>
+      <div class="badge">⏱️ TIME: <span id="time-display">00:00</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="mobile-controls">
+      <div id="dpad">
+        <div></div><button class="dpad-btn" id="dpad-up">▲</button><div></div>
+        <button class="dpad-btn" id="dpad-left">◀</button><div></div><button class="dpad-btn" id="dpad-right">▶</button>
+        <div></div><button class="dpad-btn" id="dpad-down">▼</button><div></div>
+      </div>
+      <div style="display:flex; gap:16px;">
+        <button class="touch-btn" id="btn-dive" style="background:#f59e0b;">💨</button>
+        <button class="touch-btn" id="btn-jump" style="background:#10b981;">🔺</button>
+      </div>
+    </div>
+    <div id="win-overlay">
+      <h2>🏆 VICTORY CROWN!</h2>
+      <p style="font-size:18px; margin-bottom:24px; color:#e2e8f0;">You conquered the Knockout Obstacle Run!</p>
+      <button onclick="resetGame()">Play Again</button>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Audio SFX
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let actx = null;
+    function playSfx(type) {
+      try {
+        if (!actx) actx = new AudioCtx();
+        const osc = actx.createOscillator();
+        const g = actx.createGain();
+        osc.connect(g); g.connect(actx.destination);
+        const t = actx.currentTime;
+        if (type === 'jump') {
+          osc.frequency.setValueAtTime(260, t);
+          osc.frequency.exponentialRampToValueAtTime(540, t + 0.15);
+          g.gain.setValueAtTime(0.2, t);
+          g.gain.linearRampToValueAtTime(0, t + 0.15);
+          osc.start(t); osc.stop(t + 0.15);
+        } else if (type === 'hit') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, t);
+          osc.frequency.linearRampToValueAtTime(60, t + 0.2);
+          g.gain.setValueAtTime(0.3, t);
+          g.gain.linearRampToValueAtTime(0, t + 0.2);
+          osc.start(t); osc.stop(t + 0.2);
+        } else if (type === 'win') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, t);
+          osc.frequency.setValueAtTime(554, t + 0.1);
+          osc.frequency.setValueAtTime(659, t + 0.2);
+          osc.frequency.setValueAtTime(880, t + 0.3);
+          g.gain.setValueAtTime(0.3, t);
+          g.gain.linearRampToValueAtTime(0, t + 0.6);
+          osc.start(t); osc.stop(t + 0.6);
+        }
+      } catch(e){}
+    }
+
+    const player = {
+      x: 0, y: 0, z: 0,
+      vx: 0, vy: 0, vz: 0,
+      radius: 18, color: '#f43f5e',
+      isGrounded: true, isDiving: false,
+      runAnim: 0
+    };
+
+    const keys = {};
+    window.addEventListener('keydown', e => { keys[e.code] = true; if(['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault(); });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // Touch controls
+    function setupTouch(id, code) {
+      const btn = document.getElementById(id);
+      if(!btn) return;
+      btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[code] = true; });
+      btn.addEventListener('pointerup', e => { e.preventDefault(); keys[code] = false; });
+      btn.addEventListener('pointercancel', e => { keys[code] = false; });
+    }
+    setupTouch('dpad-up', 'KeyW');
+    setupTouch('dpad-down', 'KeyS');
+    setupTouch('dpad-left', 'KeyA');
+    setupTouch('dpad-right', 'KeyD');
+    setupTouch('btn-jump', 'Space');
+    setupTouch('btn-dive', 'ShiftLeft');
+
+    // Track Course Setup
+    const COURSE_LENGTH = 3200;
+    const trackWidth = 320;
+    const obstacles = [
+      { type: 'rotator', z: 400, x: 0, armLen: 120, angle: 0, speed: 0.05, color: '#f59e0b' },
+      { type: 'rotator', z: 750, x: -60, armLen: 100, angle: 1.5, speed: -0.06, color: '#ef4444' },
+      { type: 'rotator', z: 750, x: 60, armLen: 100, angle: 0, speed: 0.06, color: '#ef4444' },
+      { type: 'pusher', z: 1200, width: 280, phase: 0, speed: 0.04, color: '#ec4899' },
+      { type: 'pusher', z: 1500, width: 280, phase: Math.PI, speed: 0.04, color: '#8b5cf6' },
+      { type: 'spinner', z: 1900, radius: 140, angle: 0, speed: 0.04, color: '#10b981' },
+      { type: 'spinner', z: 2300, radius: 140, angle: Math.PI/2, speed: -0.05, color: '#06b6d4' },
+      { type: 'bouncer', z: 2700, x: -70, radius: 35, color: '#fbbf24' },
+      { type: 'bouncer', z: 2700, x: 70, radius: 35, color: '#fbbf24' },
+      { type: 'bouncer', z: 2850, x: 0, radius: 40, color: '#fbbf24' },
+    ];
+
+    let startTime = Date.now();
+    let won = false;
+
+    function resetGame() {
+      player.x = 0; player.y = 0; player.z = 0;
+      player.vx = 0; player.vy = 0; player.vz = 0;
+      player.isGrounded = true; player.isDiving = false;
+      won = false;
+      startTime = Date.now();
+      document.getElementById('win-overlay').classList.remove('active');
+    }
+
+    function update() {
+      if (won) return;
+      const moveSpeed = 4.2;
+      const diveBonus = player.isDiving ? 2.5 : 1.0;
+
+      if (keys['KeyW'] || keys['ArrowUp']) player.vz += moveSpeed * 0.25 * diveBonus;
+      if (keys['KeyS'] || keys['ArrowDown']) player.vz -= moveSpeed * 0.2 * diveBonus;
+      if (keys['KeyA'] || keys['ArrowLeft']) player.vx -= moveSpeed * 0.25;
+      if (keys['KeyD'] || keys['ArrowRight']) player.vx += moveSpeed * 0.25;
+
+      if ((keys['Space'] || keys['KeyK']) && player.isGrounded) {
+        player.vy = 9.5;
+        player.isGrounded = false;
+        playSfx('jump');
+      }
+
+      if ((keys['ShiftLeft'] || keys['KeyJ']) && !player.isDiving && !player.isGrounded) {
+        player.isDiving = true;
+        player.vz += 4.5;
+        player.vy = Math.max(player.vy, 2.0);
+      }
+
+      // Physics
+      player.vy -= 0.42;
+      player.y += player.vy;
+      if (player.y <= 0) {
+        player.y = 0;
+        player.vy = 0;
+        player.isGrounded = true;
+        player.isDiving = false;
+      }
+
+      player.vx *= 0.88;
+      player.vz *= 0.92;
+      player.x += player.vx;
+      player.z += player.vz;
+
+      // Track boundaries
+      if (Math.abs(player.x) > trackWidth / 2) {
+        playSfx('hit');
+        player.x = 0;
+        player.y = 0;
+        player.z = Math.max(0, player.z - 250);
+        player.vx = 0; player.vz = 0;
+      }
+
+      // Update obstacles
+      for (const ob of obstacles) {
+        if (ob.type === 'rotator' || ob.type === 'spinner') {
+          ob.angle += ob.speed;
+          if (Math.abs(player.z - ob.z) < 30 && player.y < 35) {
+            const hx = (ob.x || 0) + Math.cos(ob.angle) * (ob.armLen || ob.radius);
+            const dist = Math.hypot(player.x - hx, player.z - ob.z);
+            if (dist < player.radius + 25) {
+              player.vx += Math.cos(ob.angle) * 12;
+              player.vz += Math.sin(ob.angle) * 8;
+              player.vy = 6;
+              player.isGrounded = false;
+              playSfx('hit');
+            }
+          }
+        } else if (ob.type === 'pusher') {
+          ob.phase += ob.speed;
+          const pushX = Math.sin(ob.phase) * (trackWidth / 3);
+          if (Math.abs(player.z - ob.z) < 35 && Math.abs(player.x - pushX) < 45 && player.y < 30) {
+            player.vx += (player.x > pushX ? 8 : -8);
+            player.vy = 4;
+            playSfx('hit');
+          }
+        } else if (ob.type === 'bouncer') {
+          const d = Math.hypot(player.x - ob.x, player.z - ob.z);
+          if (d < player.radius + ob.radius && player.y < 30) {
+            player.vy = 14;
+            player.vz += 6;
+            player.isGrounded = false;
+            playSfx('jump');
+          }
+        }
+      }
+
+      // Check win
+      if (player.z >= COURSE_LENGTH && !won) {
+        won = true;
+        playSfx('win');
+        document.getElementById('win-overlay').classList.add('active');
+      }
+
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      document.getElementById('time-display').textContent = `${m}:${s}`;
+    }
+
+    function project(x, y, z, camZ) {
+      const relZ = z - camZ;
+      if (relZ <= 10) return null;
+      const fov = 400;
+      const scale = fov / relZ;
+      return {
+        x: W / 2 + x * scale,
+        y: H * 0.72 - y * scale - (relZ * 0.05),
+        scale: scale
+      };
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      const camZ = player.z - 240;
+
+      // Draw Course Road
+      const segSize = 80;
+      const startSeg = Math.floor(Math.max(0, camZ) / segSize);
+      const endSeg = startSeg + 35;
+
+      for (let s = endSeg; s >= startSeg; s--) {
+        const z1 = s * segSize;
+        const z2 = (s + 1) * segSize;
+        const p1L = project(-trackWidth/2, 0, z1, camZ);
+        const p1R = project(trackWidth/2, 0, z1, camZ);
+        const p2L = project(-trackWidth/2, 0, z2, camZ);
+        const p2R = project(trackWidth/2, 0, z2, camZ);
+        if (!p1L || !p2L) continue;
+
+        ctx.fillStyle = (s % 2 === 0) ? '#4f46e5' : '#4338ca';
+        ctx.beginPath();
+        ctx.moveTo(p1L.x, p1L.y); ctx.lineTo(p1R.x, p1R.y);
+        ctx.lineTo(p2R.x, p2R.y); ctx.lineTo(p2L.x, p2L.y);
+        ctx.fill();
+
+        ctx.fillStyle = (s % 2 === 0) ? '#fbbf24' : '#f97316';
+        ctx.fillRect(p1L.x - 4*p1L.scale, p1L.y - 6*p1L.scale, 8*p1L.scale, 6*p1L.scale);
+        ctx.fillRect(p1R.x - 4*p1R.scale, p1R.y - 6*p1R.scale, 8*p1R.scale, 6*p1R.scale);
+      }
+
+      // Draw Finish Arch
+      const finishP = project(0, 0, COURSE_LENGTH, camZ);
+      if (finishP) {
+        ctx.fillStyle = '#fbbf24';
+        const archW = trackWidth * finishP.scale;
+        const archH = 140 * finishP.scale;
+        ctx.fillRect(finishP.x - archW/2, finishP.y - archH, archW, archH);
+        ctx.fillStyle = '#1e1b4b';
+        ctx.font = `bold ${Math.max(12, Math.floor(28 * finishP.scale))}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('🏁 FINISH LINE 👑', finishP.x, finishP.y - archH/2);
+      }
+
+      // Draw Obstacles
+      for (const ob of obstacles) {
+        const p = project(ob.x || 0, 0, ob.z, camZ);
+        if (!p) continue;
+        if (ob.type === 'rotator' || ob.type === 'spinner') {
+          ctx.strokeStyle = ob.color;
+          ctx.lineWidth = 10 * p.scale;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y - 10 * p.scale);
+          const endX = p.x + Math.cos(ob.angle) * (ob.armLen || ob.radius) * p.scale;
+          const endY = (p.y - 10 * p.scale) + Math.sin(ob.angle) * (ob.armLen || ob.radius) * 0.4 * p.scale;
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+          ctx.fillStyle = '#f43f5e';
+          ctx.beginPath();
+          ctx.arc(endX, endY, 18 * p.scale, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (ob.type === 'bouncer') {
+          ctx.fillStyle = ob.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, ob.radius * p.scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Draw Player Stumble Character
+      const pl = project(player.x, player.y, player.z, camZ);
+      if (pl) {
+        const pr = player.radius * pl.scale;
+        const pShadow = project(player.x, 0, player.z, camZ);
+        if (pShadow) {
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.beginPath();
+          ctx.ellipse(pShadow.x, pShadow.y, pr * 1.2, pr * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.ellipse(pl.x, pl.y - pr, pr, pr * 1.35, (player.vx * 0.05), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2.5 * pl.scale;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(pl.x - pr * 0.3, pl.y - pr * 1.2, pr * 0.35, 0, Math.PI * 2);
+        ctx.arc(pl.x + pr * 0.3, pl.y - pr * 1.2, pr * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(pl.x - pr * 0.3 + (player.vx*0.1), pl.y - pr * 1.2, pr * 0.18, 0, Math.PI * 2);
+        ctx.arc(pl.x + pr * 0.3 + (player.vx*0.1), pl.y - pr * 1.2, pr * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.moveTo(pl.x - pr * 0.6, pl.y - pr * 2.2);
+        ctx.lineTo(pl.x - pr * 0.3, pl.y - pr * 1.8);
+        ctx.lineTo(pl.x, pl.y - pr * 2.4);
+        ctx.lineTo(pl.x + pr * 0.3, pl.y - pr * 1.8);
+        ctx.lineTo(pl.x + pr * 0.6, pl.y - pr * 2.2);
+        ctx.lineTo(pl.x + pr * 0.6, pl.y - pr * 1.7);
+        ctx.lineTo(pl.x - pr * 0.6, pl.y - pr * 1.7);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
+```
+
+### ✨ Stumble Guys: Knockout Obstacle Royale — Architecture & Features:
+- **🏃 3D Obstacle Course: Realistic pseudo-3D perspective road with rotating hammers and pushers**
+- **📱 Mobile Touch Controls: On-screen D-Pad and Jump/Dive buttons with tactile feedback**
+- **💻 PC Keyboard Controls: WASD or Arrow Keys to run, [Space] to Jump, [Shift] to Dive**
+- **🎵 Procedural Web Audio API: 100% offline synthesized SFX for jumps, collisions, and victory fanfare**
+
+Click the `stumble_guys.html` file card below to preview and play it immediately!
+================================================================================
