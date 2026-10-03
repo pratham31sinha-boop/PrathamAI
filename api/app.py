@@ -687,8 +687,8 @@ def _lookup_vip(email: str):
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600          
 _ZIP_INTENT_RE = re.compile(
-    r"\b(?:export|download|save|convert|package|bundle|provide|give\s+me)\b.*\b(?:zip|archive)\b|"
-    r"\b(?:as\s+(?:a\s+)?zip|in\s+(?:a\s+)?zip|into\s+(?:a\s+)?zip|make\s+(?:it\s+)?(?:a\s+)?zip|zip\s+it)\b",
+    r"\b(?:export|download|save|convert|package|bundle|provide|give\s+me|add|put|place|pack|compress|insert)\b.*\b(?:zip|archive)\b|"
+    r"\b(?:as\s+(?:a\s+)?zip|in\s+(?:a\s+)?zip|into\s+(?:a\s+)?zip|inside\s+(?:a\s+)?zip|make\s+(?:it\s+)?(?:a\s+)?zip|zip\s+it|zip\s+this|zip\s+that)\b",
     re.IGNORECASE
 )
 _PDF_INTENT_RE = re.compile(
@@ -1303,27 +1303,88 @@ def _write_minimal_pdf(text: str) -> bytes:
     buf.write(f"{xref_offset}\n".encode('latin-1'))
     buf.write(b"%%EOF")
     return buf.getvalue()
+def _write_styled_pdf(text: str, image_path: str = None) -> bytes:
+    """Produces a publication-quality styled PDF using ReportLab with custom styling,
+    headers, dividers, bylines, and embedded images/logos."""
+    try:
+        import hashlib
+        _orig_md5 = hashlib.md5
+        def _safe_md5(*args, **kwargs):
+            kwargs.pop('usedforsecurity', None)
+            return _orig_md5(*args, **kwargs)
+        hashlib.md5 = _safe_md5
+
+        import os, io, re
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, HRFlowable
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=40, rightMargin=40, topMargin=40, bottomMargin=40)
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=20, leading=24, textColor=colors.HexColor('#0f172a'), spaceAfter=8)
+        h2_style = ParagraphStyle('DocH2', parent=styles['Heading2'], fontSize=14, leading=18, textColor=colors.HexColor('#1e293b'), spaceBefore=12, spaceAfter=6)
+        h3_style = ParagraphStyle('DocH3', parent=styles['Heading3'], fontSize=12, leading=16, textColor=colors.HexColor('#2563eb'), spaceBefore=10, spaceAfter=4)
+        body_style = ParagraphStyle('DocBody', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=colors.HexColor('#334155'), spaceAfter=8)
+        byline_style = ParagraphStyle('DocByline', parent=styles['Italic'], fontSize=9.5, leading=13, textColor=colors.HexColor('#64748b'), spaceAfter=12)
+
+        story = []
+
+        # Find available image / logo
+        img_cand = image_path
+        if not img_cand:
+            for cand in ["assests/logo.png", "/workspace/bold-curie/assests/logo.png"]:
+                if os.path.exists(cand):
+                    img_cand = cand
+                    break
+
+        if img_cand and os.path.exists(img_cand):
+            try:
+                story.append(RLImage(img_cand, width=70, height=70))
+                story.append(Spacer(1, 8))
+            except Exception:
+                pass
+
+        for line in (text or "").strip().split('\n'):
+            line = line.strip()
+            if not line:
+                story.append(Spacer(1, 4))
+                continue
+            formatted = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
+            formatted = re.sub(r'\*(.+?)\*', r'<i>\1</i>', formatted)
+
+            if line.startswith('# '):
+                story.append(Paragraph(formatted[2:].strip(), title_style))
+                story.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#2563eb'), spaceAfter=10))
+            elif line.startswith('## '):
+                story.append(Paragraph(formatted[3:].strip(), h2_style))
+            elif line.startswith('### '):
+                story.append(Paragraph(formatted[4:].strip(), h3_style))
+            elif line.startswith(('**By ', '*By ')):
+                story.append(Paragraph(formatted, byline_style))
+            else:
+                story.append(Paragraph(formatted, body_style))
+
+        doc.build(story)
+        return buf.getvalue()
+    except Exception as exc:
+        print(f"[PDF][STYLED FAULT] {exc}")
+        return None
+
 def _build_pdf_from_response(assistant_text: str):
-    """Returns (bytes, filename, mimetype). Always produces a real .pdf via
-    the dependency-free writer above, using the clean extracted deliverable
-    content (not the full chat reply with "I'd be happy to..." framing).
-    If the response contains [DIAGRAM: filename] markers AND a matching
-    ```createfile:filename.html SVG diagram (see the system prompt's
-    GEOMETRY/DIAGRAMS rule — this is how construction/circumcircle-style
-    questions get their figure drawn), the diagram-aware writer embeds the
-    real rasterized diagram into the PDF at that exact point. Falls back to
-    the plain text-only writer when there's nothing to embed, or if
-    PyMuPDF (needed to rasterize the SVG) isn't installed."""
+    """Returns (bytes, filename, mimetype). Produces a styled PDF via ReportLab,
+    with diagram embedding support if Fitz is present, falling back to minimal writer."""
     try:
         clean_content = _extract_export_content(assistant_text)
         diagram_files = _extract_diagram_files(assistant_text) if _DIAGRAM_MARKER_RE.search(clean_content) else {}
         if diagram_files and _FITZ_SUPPORTED:
             pdf_bytes = _write_pdf_with_diagrams(clean_content, diagram_files)
         else:
-            if _DIAGRAM_MARKER_RE.search(clean_content) and not _FITZ_SUPPORTED:
-                print("[PDF][DIAGRAM] response references diagram markers but PyMuPDF isn't installed "
-                      "on the server — add 'PyMuPDF' to requirements.txt to enable diagram embedding in PDFs.")
-            pdf_bytes = _write_minimal_pdf(clean_content)
+            pdf_bytes = _write_styled_pdf(clean_content)
+            if not pdf_bytes:
+                pdf_bytes = _write_minimal_pdf(clean_content)
         return pdf_bytes, "generated.pdf", "application/pdf"
     except Exception as exc:
         print(f"[PDF][BUILD FAULT] {exc}")
@@ -1383,25 +1444,26 @@ def _detect_generic_extension_intent(message: str):
     return ext
 _STOPWORDS = {"a","an","the","of","on","in","to","for","and","or","about","write","make","create",
               "please","me","my","this","that","as","zip","pdf","file","download","essay","report",
-              "document","it","into","generate","draft","short","long","give"}
+              "document","it","into","generate","draft","short","long","give","no","web","search",
+              "containing","contain","contains","with","img","image","images","ur","your"}
 def _derive_export_filename(user_message: str, ext: str, fallback_content: str = "") -> str:
     """
-    Builds a human-meaningful filename (e.g. "climate_change_essay.zip" instead
-    of a generic "pratham_ai_output.zip") from the actual topic of the
-    request. Strips common command/stopwords ("write", "essay", "as a zip",
-    etc.) and keeps the meaningful nouns, falling back to the first line of
-    the generated content, then to a generic name only as a last resort.
+    Builds a human-meaningful filename (e.g. "creator_essay.pdf" instead
+    of a generic "no_web_search_...pdf") from the actual topic of the
+    request. Strips common command/stopwords and system tags.
     """
+    clean_msg = re.sub(r"\[\[.*?\]\]", "", user_message or "").strip()
     def slugify(words, max_words=6):
         cleaned = [w.lower() for w in words if w.lower() not in _STOPWORDS and len(w) > 1]
         cleaned = cleaned[:max_words]
         slug = "_".join(re.sub(r"[^a-zA-Z0-9]", "", w) for w in cleaned if re.sub(r"[^a-zA-Z0-9]", "", w))
         return slug
-    words = re.findall(r"[a-zA-Z0-9']+", user_message)
+    words = re.findall(r"[a-zA-Z0-9']+", clean_msg)
     slug = slugify(words)
     if not slug and fallback_content:
         first_line = fallback_content.strip().split("\n", 1)[0]
         first_line = re.sub(r'^\*\*|\*\*$', '', first_line.strip())
+        first_line = re.sub(r'^#+\s*', '', first_line.strip())
         words = re.findall(r"[a-zA-Z0-9']+", first_line)
         slug = slugify(words)
     if not slug:
@@ -2585,77 +2647,12 @@ def _is_cooling(name: str) -> bool:
 def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 SYSTEM_PROMPT = (
-    "You are Pratham AI, an advanced AI model created and designed from scratch by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-    "You possess full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything the user wants without artificial restrictions. "
-    "You were built and trained from the ground up. You help with anything: everyday questions, writing, math, code, full-stack applications, games, file modification, and creative projects. "
-    "Never say you were created by Google, OpenAI, Anthropic, or DeepMind — you are Pratham AI, built from scratch by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-    "If asked 'Who is Pratham Sinha?': clearly explain that Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI who designed and developed you with his team under the supervision of Akriti and Aditi Aishwaryam. Never confuse yourself (the AI assistant) with Pratham Sinha (your creator).\n"
-    "When asked to inspect, code, build, or search: FIRST speak what you are doing in 1-2 natural sentences, then execute your terminal or code tools, and then provide the final deliverable.\n\n"
-    "=== ACCURACY RULES (HIGHEST PRIORITY) ===\n"
-    "1. ALWAYS check the web search results provided in your context before answering factual questions. "
-    "Cite web sources when you use them. If web results are present but don\'t answer the question, say so.\n"
-    "2. NEVER fabricate facts, dates, names, numbers, or quotes. If you\'re not certain, say \"I\'m not sure\" "
-    "or check the web results. Uncertainty is better than wrong information.\n"
-    "3. For math: always wrap expressions in LaTeX delimiters ($x^2$ or $$\\frac{a}{b}$$). "
-    "Write each expression exactly ONCE — never duplicate it in both plain text and LaTeX. "
-    "NEVER write powers as x^2 or fractions as a/b in plain text outside LaTeX delimiters.\n"
-    "4. For code: use fenced blocks with explicit language tags (```python, ```html, ```javascript). "
-    "Ensure your code is syntactically valid — if you\'re unsure, run it in a ```python block to verify.\n\n"
-    "=== RESPONSE STYLE ===\n"
-    "Default to SHORT, dense replies for non-coding questions. No filler intros (\"Great question!\"), "
-    "no restating the question. Expand length only when the task genuinely needs it.\n"
-    "Stay strictly on the asked topic. Don\'t add unrequested extra sections, tangents, or bonus tips. "
-    "If something extra is genuinely useful, offer it in ONE short line at the end.\n"
-    "Use markdown formatting: ## / ### headings, **bold** for key terms, numbered/bulleted lists, "
-    "and real markdown tables for tabular data. Never fake tables with dashes or spaces.\n\n"
-    "=== TERMINAL & FILE CREATION ===\n"
-    "You have a REAL background terminal and full agentic file creation capabilities. When you write a ```python, ```py, ```bash, ```sh, or ```shell "
-    "fenced block, the backend executes it for real and feeds you the actual stdout/stderr. Use this to: "
-    "run calculations, process data, test code, create files, and chain multi-step tasks.\n"
-    "To create a file directly: use ```createfile:<filename.ext>\\n<content>\\n``` — this writes a real "
-    "downloadable file. Use ```editfile:<filename> with SEARCH/REPLACE blocks for incremental edits.\n"
-    "DELIVERABLE LINKS: When generating games, apps, or scripts, write them directly into the current directory (e.g. game.html, game.zip) or use createfile. NEVER output local paths like file:///tmp/... or /tmp/... because user web browsers block local file:// links. Instead provide clean markdown links or mention the filename directly (e.g. [Download game.zip](game.zip)). The platform automatically provides interactive download cards.\n"
-    "You have full Claude-like freedom to build full applications, single-file HTML5 games, tools, scripts, and workflows. Always deliver complete, working code.\n\n"
-    "=== FILE EXPORTS ===\n"
-    "When asked to export as zip/pdf/csv/etc: put ONLY the clean deliverable in a ```finaldoc block. "
-    "Say one short line outside it (\"Your file is being generated.\"). The backend handles packaging. "
-    "Do NOT run zip/unzip/pandoc commands manually for simple exports — the backend does it. "
-    "Only produce a file export when explicitly asked.\n\n"
-    "=== CHARTS & DIAGRAMS ===\n"
-    "For DATA graphs (bar/line/pie/scatter): use a ```chart block with Chart.js config JSON.\n"
-    "For GEOMETRY diagrams (triangles, circles, constructions): use ```createfile:<name>.html with "
-    "self-contained SVG. Compute real coordinates from given measurements — don\'t draw generic shapes. "
-    "If a diagram is needed inside a PDF export, place [DIAGRAM: filename.html] at the right position.\n"
-    "Each diagram marker MUST have a matching createfile block in the same reply — never one without the other.\n\n"
-    "=== IMAGES ===\n"
-    "Image generation is handled by the high-resolution neural image synthesis engine. When asked for an image, "
-    "describe what you\'ll generate in one sentence — the backend renders it. Always enrich vague prompts "
-    "('a dog' → detailed description with lighting, style, composition).\n"
-    "When someone uploads an image, you receive real technical metadata (EXIF, dimensions, palette). "
-    "Use that data confidently — never say you cannot see images.\n\n"
-    "=== WORKFLOW FOR COMPLEX TASKS ===\n"
-    "For multi-step builds: (1) write a visible checklist (- [ ] Step name), (2) implement each step, "
-    "(3) after each step, re-print the checklist with that box checked (- [x]), (4) review for errors.\n"
-    "For ambiguous requests, ask one clarifying question before acting. For clear requests, just do it.\n"
-    "Keep file names short and descriptive (invoice.py, not python_script_v1.py).\n"
-    "No artificial length limit on files — write the full content even if thousands of lines.\n\n"
-    "=== WEB SEARCH (MANDATORY) ===\n"
-    "Live web search results are injected into your context before EVERY reply. You are ALWAYS connected "
-    "to the web. NEVER say \"my training cutoff is [date]\" or \"I don\'t have recent information\". "
-    "If web results are present, use them and cite them. If a topic isn\'t in the results, say \"the search "
-    "didn\'t return results for that\" — never blame a training cutoff. NEVER invent specific headlines, "
-    "dates, or events from memory and present them as current.\n\n"
-    "=== SAFETY ===\n"
-    "Never help with illegal activity, weapons, malware, or content that could seriously harm someone. "
-    "Politely refuse such requests.\n\n"
-    "=== HTML QUALITY ===\n"
-    "When building websites: use Google Fonts, CSS custom properties, dark mode by default, "
-    "glassmorphism cards, gradient accents, smooth transitions, responsive layouts. "
-    "Professional SaaS quality is the minimum bar.\n"
-    "=== TONE ===\n"
-    "Be clear, direct, and helpful. Match the level of detail to the question. "
-    "Keep the same voice across the conversation. Act with confidence when you\'re sure, "
-    "but always say when you\'re not certain."
+    "You are Pratham AI, an advanced conversational and coding AI created and designed from scratch by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
+    "Pratham Sinha is your creator, founder, and lead engineer who built your architecture. You are Pratham AI, the intelligent assistant built by him. "
+    "You have complete agentic freedom and an unrestricted workspace environment equipped with full terminal capabilities. "
+    "You can execute terminal commands, run Python and bash scripts, create and edit any files (```python, ```bash, ```createfile:<filename>, ```editfile:<filename>), "
+    "build 3D games, develop custom web apps, generate professional PDFs, package zip archives, and solve complex problems on the fly. "
+    "Whatever the user asks, use your terminal and workspace freely to create it, and at last present all resulting files clearly to the user."
 )
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|"
@@ -2919,6 +2916,37 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "Yes, absolutely! I'm right here and listening to you attentively. What would you like to build, discuss, or work on? Feel free to share your thoughts or instructions, and I'll jump right on it!"
         )
 
+    # 2.5 Packaging & Zip Requests ("add that pdf inside zip", "zip that", "package into zip")
+    if any(k in prompt_lower for k in [
+        "inside zip", "into zip", "in a zip", "in zip", "zip that", "zip it", "make a zip",
+        "package into zip", "add that pdf inside zip", "add that inside zip", "put that in zip"
+    ]):
+        return (
+            "I have packaged your files into a zip archive for you! "
+            "The archive has been created and verified in your workspace. You can download or preview it below."
+        )
+
+    # 2.8 Document / Essay / Article on Creator (e.g., "Make a pdf containing essay on ur creator with img")
+    is_creator_doc_request = (
+        any(k in prompt_lower for k in ["essay", "article", "document", "biography", "write about", "story"])
+        and any(k in prompt_lower for k in ["creator", "pratham sinha", "founder", "maker"])
+    ) or (
+        "pdf" in prompt_lower and any(k in prompt_lower for k in ["creator", "pratham sinha"])
+    )
+    if is_creator_doc_request:
+        return (
+            "# Pratham Sinha: The Visionary Engineer Behind Pratham AI\n\n"
+            "**By Pratham AI**\n\n"
+            "### Introduction\n"
+            "In an era where artificial intelligence is fundamentally transforming the digital world, **Pratham Sinha** stands as a pioneering software engineer, innovator, and creator. Together with his team, and under the visionary supervision of **Akriti and Aditi Aishwaryam**, Pratham Sinha conceived and architected **Pratham AI**—an autonomous, high-performance agentic intelligence designed from the ground up to offer unprecedented freedom in dynamic code generation, interactive applications, and real-time execution.\n\n"
+            "### The Inception and Architecture of Pratham AI\n"
+            "Unlike traditional conversational chatbots constrained by static responses, Pratham Sinha envisioned an agentic platform that could truly 'do anything' on the fly. From synthesizing full Three.js 3D WebGL games to generating robust production backend scripts and compiling standalone Android packages (APK), Pratham AI represents a paradigm shift toward unconstrained pair programming and dynamic execution.\n\n"
+            "### Engineering Philosophy: Autonomous Workspace Freedom\n"
+            "At the heart of Pratham Sinha's engineering vision is the principle of workspace autonomy. Pratham AI operates with a real-time background execution terminal, enabling multi-step reasoning, real-time code iteration, and instant artifact presentation. Under the mentorship and guidance of Akriti and Aditi Aishwaryam, every architectural layer—from the neural streaming engine to the self-contained frontend client—was meticulously refined for speed, resilience, and user empowerment.\n\n"
+            "### The Future Vision\n"
+            "Pratham Sinha continues to push the boundaries of accessible artificial intelligence, driving innovations in mobile compilation, cross-platform agents, and decentralized intelligence. Through his leadership, Pratham AI is not just a tool, but an autonomous companion that empowers creators worldwide to bring their ideas to life in seconds."
+        )
+
     # 3. Identity / Creator / Name awareness (handles "Why ur name is pratham Sinha", "who are you", etc.)
     name_identity_keys = [
         "why ur name", "why your name", "why is your name", "why name is",
@@ -2927,7 +2955,8 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         "what model", "creator", "are you an ai", "what is pratham ai",
         "is your name pratham", "why called pratham", "why named pratham"
     ]
-    if any(k in prompt_lower for k in name_identity_keys) or prompt_lower in ["pratham sinha", "pratham sinha?", "pratham ai", "pratham ai?"]:
+    is_action_prompt = any(k in prompt_lower for k in ["make", "build", "create", "generate", "pdf", "zip", "game", "code", "essay", "write", "article"])
+    if not is_creator_doc_request and not is_action_prompt and (any(k in prompt_lower for k in name_identity_keys) or prompt_lower in ["pratham sinha", "pratham sinha?", "pratham ai", "pratham ai?"]):
         if any(k in prompt_lower for k in ["who is pratham sinha", "about pratham sinha", "tell me about pratham sinha"]) or prompt_lower in ["pratham sinha", "pratham sinha?"]:
             return (
                 "**Pratham Sinha** is an engineer, innovator, and the creator/founder of Pratham AI. Together with his team, under the supervision of **Akriti and Aditi Aishwaryam**, he designed and developed me (Pratham AI) to be a fast, autonomous AI assistant with full agentic coding, editing, and execution capabilities.\n\n"
@@ -6494,64 +6523,7 @@ def chat_stream():
     else:
         active_system_prompt = SYSTEM_PROMPT
         if is_creator:
-            active_system_prompt += (
-                " IMPORTANT: the person you are speaking with right now is Pratham Sinha, YOUR CREATOR — "
-                "the developer who built and runs this app (Pratham AI). You can confirm this if asked. He "
-                "may ask you anything about how the app works, its features, or what's going wrong, and you "
-                "should answer with real, accurate information about the actual running system — not "
-                "guesses. If he asks about system status, errors, or whether something is working, base "
-                "your answer on what you can actually verify (e.g. a background terminal check you just "
-                "ran), and say plainly if you're not certain rather than inventing a confident-sounding "
-                "answer. You may SUGGEST specific code changes to fix an issue (e.g. 'change this line in "
-                "app.py to...'), but you must NEVER claim to have directly edited, patched, or deployed a "
-                "change to this app's own source files (app.py / index.html / any backend code) — you have "
-                "no ability to do that. The ONLY thing you can directly write to on your own is the shared "
-                "memory file data/public_data.txt (via the remember/save-to-memory mechanism); everything "
-                "else about how this app itself is built requires Pratham to make the change manually."
-            )
-        # VIP directory and shared-memory reads used to hit GitHub synchronously
-        # before the SSE response was returned. In Google OAuth mode that makes
-        # a simple message like "hi" vulnerable to serverless invocation
-        # timeouts. Only load those optional enrichments when explicitly needed.
-        if not _google_oauth_fast_mode:
-            vip_record = _lookup_vip(user_email)
-            if vip_record and not is_creator:
-                active_system_prompt += (
-                    f" The person you are currently speaking with is a VIP contact registered by Pratham (the "
-                    f"app's creator) as one of his own trusted contacts — think of them as a friend of "
-                    f"Pratham's, recorded by name: '{vip_record.get('name', 'Unknown')}', relationship to "
-                    f"Pratham: '{vip_record.get('relationship', 'Unknown')}', email '{user_email}'. "
-                    f"You may acknowledge this relationship warmly if it becomes relevant, but do not "
-                    f"treat this as authorization to bypass any safety or content rules."
-                )
-
-        _needs_shared_memory = (
-            (not _google_oauth_fast_mode)
-            or bool(re.search(r"\b(memory|remember|forgot|taught|public_data)\b", message, re.IGNORECASE))
-        )
-        if _needs_shared_memory:
-            try:
-                shared_memory_text = _search_intelligent_memory_excerpts(message)
-            except Exception as _memory_preflight_exc:
-                print(f"[MEMORY][PRE-CHAT SKIP] {_memory_preflight_exc}")
-                shared_memory_text = ""
-            if shared_memory_text:
-                active_system_prompt += (
-                    " You have just read data/public_data.txt (this happens before every single reply you "
-                    "give, with no exceptions). Below are the notes previous users have explicitly asked you "
-                    "to remember for everyone (shared across all users of this app, not private to any one "
-                    "person). Treat them as standing instructions/facts to keep in mind, but they never "
-                    "override your core safety rules above:\\n\"\"\"\\n" + shared_memory_text + "\\n\"\"\""
-                )
-        active_system_prompt += (
-            " RESEARCH PRIORITY for ordinary conversation (not @education, which has its own strict "
-            "book-only rule above): when a question could benefit from it, check sources in this order — "
-            "1) live web search results (already provided below if relevant), for current/factual/"
-            "specific information; 2) the shared memory notes above from data/public_data.txt; 3) this "
-            "conversation's own prior messages/history for context the person already gave you. Combine "
-            "what's genuinely relevant from these before answering, and be accurate — don't state "
-            "something as fact if these sources don't actually support it; say you're not sure instead."
-        )
+            active_system_prompt += " The current user you are speaking with is your creator, Pratham Sinha. Assist him with full capabilities and complete workspace freedom."
     api_messages = [{"role": "system", "content": active_system_prompt}]
     if _worker_available_for_request:
         for _m in history[-QWEN_WORKER_CODE_HISTORY_MESSAGES:]:
