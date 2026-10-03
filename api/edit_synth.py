@@ -90,6 +90,17 @@ def is_edit_intent(prompt: str, messages: list = None) -> bool:
     if not p:
         return False
 
+    # Mega-suites, multi-deliverable prompts, and complex orchestrations are NEVER edits:
+    if any(k in p for k in [
+        "act as", "orbital_command_suite", "portfolio_risk_suite", "financial_intelligence_report",
+        "orbital_mission_report", "monte carlo", "delta-v", "trans-lunar", "60/40"
+    ]) or (any(k in p for k in ["package", "zip archive", "report"]) and any(k in p for k in ["simulator", "script", "analysis"])):
+        return False
+
+    # Long prompts with numbered requirements (e.g. "1. Create ... 2. Write ...") are new creations, not edits:
+    if re.search(r'\b1\.\s+[\s\S]*\b2\.\s+', p):
+        return False
+
     # If the user explicitly asks to create a brand new distinct app/game (e.g. "make a ludo 3d game")
     # without referring to an existing item ("it", "that", "this", "edit", "modify"):
     new_creation_match = re.search(r'\b(make|build|create|code|generate)\s+(?:a|an)\s+', p)

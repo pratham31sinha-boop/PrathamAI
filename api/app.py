@@ -2973,24 +2973,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "I'm ready to continue! Please let me know what you'd like to work on next, or if there's any file or task you'd like me to extend."
         )
 
-    # 4.5 Agentic File Editing & Refinement ("make it 3d", "make that file 3d", "edit the game", etc.)
-    if handle_file_edit:
-        edit_res = handle_file_edit(prompt, messages)
-        if edit_res:
-            feats = "\n".join([f"- **{f}**" for f in edit_res.get("features", [])])
-            tag = "editfile" if edit_res.get("action") == "edit" else "createfile"
-            return (
-                f"I have edited and updated **{edit_res['filename']}** for you with full agentic freedom!\n\n"
-                f"```{tag}:{edit_res['filename']}\n"
-                + edit_res["code"] + "\n"
-                "```\n\n"
-                f"### ✨ {edit_res['title']} — Architecture & Features:\n"
-                + feats + "\n\n"
-                f"Click the `{edit_res['filename']}` file card below to preview your updated changes!"
-            )
-
-
-    # 4.8 Senior Quantitative Risk & Orbital Flight Command Suite Handler
+    # 4.5 Senior Quantitative Risk & Orbital Flight Command Suite Handler
     try:
         from api.quant_synth import (
             is_quant_portfolio_request, generate_quant_portfolio_suite,
@@ -3015,6 +2998,22 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     if is_quant_portfolio_request and is_quant_portfolio_request(prompt):
         q_res = generate_quant_portfolio_suite(target_dir="/workspace/bold-curie")
         return q_res["markdown_response"]
+
+    # 4.8 Agentic File Editing & Refinement ("make it 3d", "make that file 3d", "edit the game", etc.)
+    if handle_file_edit:
+        edit_res = handle_file_edit(prompt, messages)
+        if edit_res:
+            feats = "\n".join([f"- **{f}**" for f in edit_res.get("features", [])])
+            tag = "editfile" if edit_res.get("action") == "edit" else "createfile"
+            return (
+                f"I have edited and updated **{edit_res['filename']}** for you with full agentic freedom!\n\n"
+                f"```{tag}:{edit_res['filename']}\n"
+                + edit_res["code"] + "\n"
+                "```\n\n"
+                f"### ✨ {edit_res['title']} — Architecture & Features:\n"
+                + feats + "\n\n"
+                f"Click the `{edit_res['filename']}` file card below to preview your updated changes!"
+            )
 
     # 5. Dynamic Game & Interactive Application Creation (Claude-like agentic generation)
     game_keywords_pattern = r"\b(game|games|play|ludo|cricket|chess|arcade|racing|stumble|fall guys|panda|flappy|snake|platformer|2d game|3d game|rpg|dungeon|gta|vice city|hill climb)\b"
