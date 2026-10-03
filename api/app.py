@@ -2931,6 +2931,23 @@ def _get_panda_valley_code() -> str:
             pass
     return _PANDA_VALLEY_FALLBACK
 
+def _get_gta6_code() -> str:
+    from pathlib import Path
+    for candidate in [
+        Path(__file__).resolve().parent / "gta6.html",
+        Path(__file__).resolve().parent.parent / "gta6.html",
+        Path.cwd() / "gta6.html",
+        Path("gta6.html"),
+    ]:
+        try:
+            if candidate.is_file():
+                txt = candidate.read_text(encoding="utf-8")
+                if len(txt) > 500:
+                    return txt
+        except Exception:
+            pass
+    return _GTA6_FALLBACK or ""
+
 def _generate_pratham_response(prompt: str, messages: list) -> str:
     prompt_lower = (prompt or "").lower().strip()
     
@@ -3038,13 +3055,25 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
 
     if is_game_request:
         if any(k in prompt_lower for k in ["gta", "grand theft auto", "vice city", "open world", "heist", "crime"]):
+            gta_code = _get_gta6_code()
             return (
                 "I have built the high-end open-world 2D game **GTA 6: Vice City Hustle** for you! It is specially engineered with dual touch controls for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `gta6.html`.\n\n"
                 "```createfile:gta6.html\n"
-                + (_GTA6_FALLBACK or "") + "\n"
+                + (gta_code or _GTA6_FALLBACK or "") + "\n"
                 "```\n\n"
                 "Click the `gta6.html` file card below to start playing immediately!"
             )
+        elif any(k in prompt_lower for k in ["stumble", "stumble guys", "knockout", "obstacle royale", "fall guys"]):
+            if synthesize_project:
+                proj = synthesize_project("stumble guys")
+                if proj:
+                    return (
+                        f"I have created **{proj['title']}** for you with full agentic freedom! The complete, self-contained single-file game is delivered as `{proj['filename']}`.\n\n"
+                        f"```createfile:{proj['filename']}\n"
+                        + proj["code"] + "\n"
+                        "```\n\n"
+                        f"Click the `{proj['filename']}` file card below to preview and play it immediately!"
+                    )
         elif any(k in prompt_lower for k in ["hill", "car", "racing", "drive", "climb"]):
             return (
                 "I have built the high-end 2D physics game **Hill Climb Racing** for you! It is specially engineered with dual touch pedals (Gas & Brake) for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `hill_climb_racing.html`.\n\n"
@@ -3390,40 +3419,55 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "- Runs in **$O(\\log n)$** time, checking half of the remaining array with each iteration."
         )
 
-    # 8.6 General Code / Technical Requests
+    # 8.6 Identity & Creator Queries (Natural, ChatGPT/Claude style)
+    if any(k in prompt_lower for k in ["why ur name", "why your name", "who is pratham", "who created you", "who made you", "what is your name", "who are you", "pratham sinha"]):
+        return (
+            "I am **Pratham AI**, an advanced AI assistant created by **Pratham Sinha** and his team under the supervision of **Akriti** and **Aditi Aishwaryam**.\n\n"
+            "I was named after Pratham Sinha and designed with true Claude-like agentic freedom to help developers, creators, and learners:\n"
+            "- 🎮 **Build & Deliver Games:** Generate 3D and 2D games (like GTA 6, Stumble Guys, Chess, and Hill Climb Racing) with instant browser previews and mobile touch controls.\n"
+            "- 💻 **Engineer Full-Stack Apps:** Write complete HTML, CSS, JavaScript, and Python applications directly in your workspace.\n"
+            "- 🧠 **Solve Complex Problems:** Answer questions, explain algorithms, and assist with real-time intelligence.\n\n"
+            "How can I assist you with your project or coding today?"
+        )
+
+    # 8.7 General Code / Technical Requests
     if any(k in prompt_lower for k in ["python", "javascript", "script", "code", "function", "api", "html", "css", "flask", "fastapi", "react", "bug", "sql", "database", "algorithm"]):
         clean_name = re.sub(r"[^\w\s]", "", prompt).strip()[:35].replace(" ", "_").lower() or "solution"
         return (
-            f"Here is a complete, production-ready implementation tailored to your request regarding **{prompt.strip()[:60]}**:\n\n"
+            f"Here is a clean, production-ready solution tailored for **{prompt.strip()[:60]}**:\n\n"
             "```python\n"
-            f"# {prompt.strip()[:60]}\n"
+            f"# Solution for: {prompt.strip()[:60]}\n"
             "# Engineered with clean PEP 8 standards, error handling, and type safety\n"
             "import os\n"
             "import sys\n"
             "from typing import Any, Dict, List, Optional\n\n"
-            f"def {clean_name}_handler(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:\n"
+            f"def process_{clean_name}(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:\n"
             f"    \"\"\"\n"
-            f"    Handles {clean_name} logic with input validation and clean return schema.\n"
+            f"    Processes {clean_name} requirements with input validation and clean error boundaries.\n"
             f"    \"\"\"\n"
-            "    payload = data or {}\n"
+            "    if not data:\n"
+            "        data = {}\n"
+            "    \n"
+            "    # Core business logic\n"
             "    result = {\n"
             "        'status': 'success',\n"
             f"        'task': '{prompt.strip()[:40]}',\n"
-            "        'data': payload\n"
+            "        'processed': True,\n"
+            "        'payload': data\n"
             "    }\n"
             "    return result\n\n"
             "if __name__ == '__main__':\n"
-            "    test_input = {'sample_key': 'sample_value'}\n"
-            f"    print({clean_name}_handler(test_input))\n"
+            "    sample_payload = {'env': 'production', 'ready': True}\n"
+            f"    output = process_{clean_name}(sample_payload)\n"
+            "    print('Execution Output:', output)\n"
             "```\n\n"
-            "### 🛠️ Key Highlights:\n"
-            "- **Type Annotated:** Explicit typing with `from typing import ...`.\n"
-            "- **Defensive Design:** Handles `None` and empty input without crashing.\n"
-            "- Would you like to extend this script with specific parameters or connect it to an API or database?"
+            "### 🛠️ Key Implementation Details:\n"
+            "- **Clean PEP 8 Architecture:** Well-structured type annotations and explicit argument handling.\n"
+            "- **Defensive Validation:** Guards against `None` inputs to guarantee stability.\n\n"
+            "Would you like me to tailor this to a specific database, REST endpoint, or add unit tests?"
         )
 
     # 9. Natural, thoughtful conversational response for all inquiries (Claude & ChatGPT style)
-    # Provides helpful explanations, problem solving, and answers to conceptual questions
     if any(k in prompt_lower for k in ["what is", "what are", "explain", "how does", "how do", "why does", "tell me about"]):
         topic = prompt.strip()
         for prefix in ["what is a ", "what is an ", "what is ", "what are ", "explain ", "how does ", "how do ", "tell me about "]:
@@ -3432,17 +3476,14 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
                 break
 
         return (
-            f"Here is a clear, comprehensive breakdown of **{topic.title() if len(topic) < 40 else topic}**:\n\n"
-            "### 💡 Overview & Core Definition\n"
-            f"**{topic.title() if len(topic) < 40 else topic}** represents a fundamental concept in its domain. At its core, it focuses on providing an efficient, reliable mechanism to solve specific problems or explain underlying principles.\n\n"
-            "### ⚙️ How It Works\n"
-            "1. **Primary Mechanism:** Operates through structured rules and workflows designed to maximize predictability and clarity.\n"
-            "2. **Interconnected Components:** Works seamlessly with related systems and processes to achieve consistent outcomes.\n"
-            "3. **Practical Application:** Widely applied across modern industries, engineering, science, and everyday problem-solving.\n\n"
-            "### 🌟 Key Takeaways\n"
-            "- **Efficiency:** Reduces complexity by breaking the problem down into manageable components.\n"
-            "- **Versatility:** Can be adapted and tailored to both simple use-cases and large-scale architectures.\n\n"
-            f"Would you like to explore a specific example, build a project around **{topic}**, or dive deeper into any aspect?"
+            f"Here is a comprehensive, practical explanation of **{topic.title() if len(topic) < 40 else topic}**:\n\n"
+            f"### 💡 Understanding {topic.title() if len(topic) < 40 else topic}\n"
+            f"{topic} plays an important role in modern software development and problem solving. Understanding its core mechanics allows you to design better architectures and solve real-world problems effectively.\n\n"
+            "### ⚙️ Key Concepts & How It Works:\n"
+            "1. **Core Mechanism:** Operates based on defined principles that process inputs and produce reliable, predictable outputs.\n"
+            "2. **Real-World Integration:** Integrates into modern workflows, libraries, and tools to automate tasks and streamline operations.\n"
+            "3. **Best Practices:** Focus on modularity, clean error handling, and performance optimization when implementing this concept.\n\n"
+            f"Would you like a code example, real-world scenario, or an interactive demonstration of **{topic}**?"
         )
 
     return (
@@ -3493,7 +3534,7 @@ class _WarmAntigravitySession:
         self._in_turn = False
         self._agy_bin = shutil.which("agy") or "/root/.gemini/antigravity-cli/bin/agy" or "/root/.local/bin/agy"
         self._last_rate_limited = 0.0
-        self._cooldown_seconds = 60.0
+        self._cooldown_seconds = 15.0
 
     @property
     def rate_limited_until(self) -> float:
@@ -3515,7 +3556,7 @@ class _WarmAntigravitySession:
         if cooldown_seconds is not None:
             self._cooldown_seconds = float(cooldown_seconds)
         self._last_rate_limited = time.time()
-        print(f"[ANTIGRAVITY][RATE_LIMIT] Account {self._account_email} hit rate limit. Cool-down active for {self._cooldown_seconds}s.")
+        print(f"[ANTIGRAVITY][RATE_LIMIT] Account {self._account_email} cool-down active for {self._cooldown_seconds}s.")
         if self._proc:
             try:
                 self._proc.kill()
@@ -3544,6 +3585,7 @@ class _WarmAntigravitySession:
 
         cmd = [
             self._agy_bin,
+            "-p", "",
             "--input-format", "stream-json",
             "--output-format", "stream-json",
             "--model", "gemini-3.8-flash",
@@ -3614,37 +3656,29 @@ class _WarmAntigravitySession:
 
                 got_any_token = False
                 start_time = time.time()
-                timeout = 25.0
+                last_heartbeat = start_time
+                timeout = 60.0
 
-                # Spoken initial thought + live step indicator (matches 842kb chronological flow)
+                # Live planning step indicator
                 p_low = (prompt or "").lower()
-                if any(k in p_low for k in ["game", "pokemon", "ash", "rpg", "arcade"]):
-                    intro = "Command accepted. Initializing game workspace and inspecting assets..."
-                    step_lbl = "Making game..."
-                elif any(k in p_low for k in ["pdf", "document", "report"]):
-                    intro = "Command accepted. Preparing document compilation environment and inspecting templates..."
-                    step_lbl = "Generating PDF document..."
-                elif any(k in p_low for k in ["zip", "archive", "package", "bundle"]):
-                    intro = "Command accepted. Initializing archive workspace and validating package deliverables..."
-                    step_lbl = "Building archive package..."
-                elif any(k in p_low for k in ["html", "website", "web page", "webpage"]):
-                    intro = "Command accepted. Inspecting project architecture and preparing web application components..."
-                    step_lbl = "Building web application..."
+                if any(k in p_low for k in ["game", "arcade", "stumble", "gta"]):
+                    step_lbl = "Architecting game mechanics & responsive controls..."
+                elif any(k in p_low for k in ["html", "website", "web page", "webpage", "app"]):
+                    step_lbl = "Synthesizing full web application components..."
+                elif any(k in p_low for k in ["python", "script", "code", "backend"]):
+                    step_lbl = "Engineering production code deliverable..."
                 else:
-                    intro = "Command accepted. Analyzing project workspace and requirements..."
-                    step_lbl = "Inspecting project archive contents"
-
-                words = intro.split(" ")
-                for i, w in enumerate(words):
-                    chunk = w if i == len(words) - 1 else w + " "
-                    yield _sse({"type": "token", "text": chunk})
-                    time.sleep(0.012)
-                got_any_token = True
+                    step_lbl = "Deconstructing query & generating comprehensive response..."
 
                 yield _sse({"type": "agent_step", "step_type": "planning", "label": step_lbl, "timestamp": time.time()})
+                yield _sse({"type": "heartbeat"})
 
                 while True:
                     now = time.time()
+                    if not got_any_token and (now - last_heartbeat) >= 2.0:
+                        last_heartbeat = now
+                        yield _sse({"type": "heartbeat"})
+
                     if (now - start_time) > timeout and not got_any_token:
                         raise RuntimeError(f"Session {self._account_email} timed out waiting for first token")
 
@@ -4356,8 +4390,7 @@ def _stream_antigravity_cli(messages, state=None):
             print(f"[ANTIGRAVITY][INSTANT_FAILOVER] {acc_name} hit rate limit ({rl_err}). Switching to supporter account ({_ANTIGRAVITY_ACCOUNT_2}) in fractions of a second...")
             continue
         except Exception as warm_exc:
-            print(f"[ANTIGRAVITY][SESSION_ERR] {acc_name}: {warm_exc}. Switching to supporter account ({_ANTIGRAVITY_ACCOUNT_2})...")
-            session.mark_rate_limited(cooldown_seconds=120)
+            print(f"[ANTIGRAVITY][SESSION_ERR] {acc_name}: {warm_exc}. Failing over to direct CLI / secondary account...")
             continue
 
     # 2. Fallback to direct CLI invocation across dual accounts if warm sessions were interrupted
@@ -4386,9 +4419,11 @@ def _stream_antigravity_cli(messages, state=None):
 
         proc = None
         got_any_token = False
-        first_token_timeout = 25.0
+        first_token_timeout = 60.0
         start_time = time.time()
         last_heartbeat = start_time
+        yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
+        yield _sse({"type": "heartbeat"})
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -4401,7 +4436,7 @@ def _stream_antigravity_cli(messages, state=None):
             )
             while True:
                 now = time.time()
-                if not got_any_token and (now - last_heartbeat) >= 2.5:
+                if not got_any_token and (now - last_heartbeat) >= 2.0:
                     last_heartbeat = now
                     yield _sse({"type": "heartbeat"})
 

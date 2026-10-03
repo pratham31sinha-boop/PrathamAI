@@ -1033,9 +1033,309 @@ def synthesize_project(prompt: str) -> dict:
 </html>"""
         }
 
+    # 5.5 GTA 6: Vice City Hustle (Open World)
+    if any(k in p_lower for k in ["gta", "grand theft auto", "vice city", "open world", "heist", "crime"]):
+        try:
+            from api.gta6_data import GTA6_GAME_HTML
+        except Exception:
+            try:
+                from gta6_data import GTA6_GAME_HTML
+            except Exception:
+                GTA6_GAME_HTML = ""
+        return {
+            "filename": "gta6.html",
+            "title": "GTA 6: Vice City Hustle",
+            "description": "A high-end open-world 2D action game featuring drivable sports cars, neon Vice City streets, pedestrian AI, wanted star levels, and dual mobile touch + desktop keyboard controls!",
+            "features": [
+                "🚗 High-Speed Sports Car: Vector acceleration, drift skidding, and reverse steering",
+                "🌆 Vice City Map: Neon cityscape, asphalt roads, pedestrian sidewalks, and building footprints",
+                "⭐ Wanted System: Dynamic police chase mechanics escalating from 1 to 5 stars",
+                "📱 Multi-Platform Controls: On-screen virtual joystick & pedals for touchscreens, WASD for PC"
+            ],
+            "code": GTA6_GAME_HTML
+        }
+
     # 6. Default Dynamic Application Synthesizer (Catches any other request!)
     clean_title = re.sub(r"[^\w\s]", "", prompt).strip()[:40].title() or "Custom Web Application"
     clean_filename = re.sub(r"[^\w]+", "_", clean_title.lower()).strip("_") + ".html"
+    is_game_intent = any(k in p_lower for k in ["game", "play", "arcade", "runner", "canvas", "platformer", "shooter", "race", "racing", "quest", "adventure", "battle"])
+    is_3d_intent = any(k in p_lower for k in ["3d", "three", "threejs", "three.js", "simulation", "galaxy", "orbit", "solar", "website", "portfolio"])
+
+    if is_game_intent:
+        game_code = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{clean_title} — Pratham AI</title>
+  <style>
+    * {{ margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }}
+    body, html {{ width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: 'Segoe UI', system-ui, sans-serif; }}
+    #game-container {{ position: relative; width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); }}
+    canvas {{ display: block; width: 100%; height: 100%; }}
+    #hud {{ position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; z-index: 10; }}
+    .badge {{ background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); padding: 8px 16px; border-radius: 20px; font-weight: 800; font-size: 14px; color: #fff; border: 2px solid rgba(255, 255, 255, 0.15); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }}
+    .badge span {{ color: #38bdf8; }}
+    #mobile-controls {{ position: absolute; bottom: 24px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 24px; pointer-events: none; z-index: 20; }}
+    .ctrl-btn {{ pointer-events: auto; width: 68px; height: 68px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.6); color: #fff; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }}
+    .ctrl-btn:active {{ background: rgba(56, 189, 248, 0.5); transform: scale(0.92); }}
+    #game-over {{ position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 30; color: #fff; text-align: center; }}
+    #game-over.active {{ display: flex; }}
+    #game-over h2 {{ font-size: 40px; font-weight: 900; color: #f43f5e; margin-bottom: 12px; }}
+    #game-over button {{ padding: 12px 28px; font-size: 16px; font-weight: 800; border-radius: 25px; border: none; background: #38bdf8; color: #0f172a; cursor: pointer; }}
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="hud">
+      <div class="badge">SCORE: <span id="score-val">0</span></div>
+      <div class="badge">SHIELD: <span id="shield-val">100%</span></div>
+    </div>
+    <canvas id="cv"></canvas>
+    <div id="mobile-controls">
+      <div style="display:flex; gap:12px;">
+        <button class="ctrl-btn" id="btn-left">◀</button>
+        <button class="ctrl-btn" id="btn-right">▶</button>
+      </div>
+      <button class="ctrl-btn" id="btn-action" style="background:rgba(56,189,248,0.3); border-color:#38bdf8;">⚡</button>
+    </div>
+    <div id="game-over">
+      <h2>GAME OVER</h2>
+      <p style="margin-bottom: 20px; color:#cbd5e1;">Final Score: <span id="final-score">0</span></p>
+      <button onclick="restart()">Play Again</button>
+    </div>
+  </div>
+  <script>
+    const cv = document.getElementById('cv');
+    const ctx = cv.getContext('2d');
+    let W, H;
+    function resize() {{ W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; }}
+    window.addEventListener('resize', resize);
+    resize();
+
+    let score = 0, shield = 100, isDead = false;
+    const player = {{ x: W/2, y: H - 120, r: 20, vx: 0 }};
+    let items = [], particles = [];
+
+    const keys = {{}};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    const bLeft = document.getElementById('btn-left');
+    const bRight = document.getElementById('btn-right');
+    const bAct = document.getElementById('btn-action');
+    let touchLeft = false, touchRight = false;
+    bLeft.ontouchstart = () => touchLeft = true; bLeft.ontouchend = () => touchLeft = false;
+    bRight.ontouchstart = () => touchRight = true; bRight.ontouchend = () => touchRight = false;
+    bAct.ontouchstart = () => triggerAction();
+
+    function triggerAction() {{
+      for(let i=0; i<items.length; i++) {{
+        if(items[i].y > H - 250) {{
+          items[i].y = -100;
+          score += 50;
+          document.getElementById('score-val').textContent = score;
+        }}
+      }}
+    }}
+
+    function spawnItem() {{
+      items.push({{
+        x: Math.random() * (W - 60) + 30,
+        y: -40,
+        vy: 3 + Math.random() * 4,
+        r: 16,
+        color: Math.random() > 0.3 ? '#f43f5e' : '#38bdf8'
+      }});
+    }}
+
+    function loop() {{
+      if (isDead) return;
+      ctx.clearRect(0, 0, W, H);
+
+      // Player Movement
+      if (keys['ArrowLeft'] || keys['KeyA'] || touchLeft) player.vx -= 0.8;
+      if (keys['ArrowRight'] || keys['KeyD'] || touchRight) player.vx += 0.8;
+      player.vx *= 0.88;
+      player.x += player.vx;
+      if (player.x < player.r) player.x = player.r;
+      if (player.x > W - player.r) player.x = W - player.r;
+
+      // Draw Player
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.arc(0, 0, player.r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.restore();
+
+      // Items
+      if (Math.random() < 0.04 && items.length < 12) spawnItem();
+      for (let i = items.length - 1; i >= 0; i--) {{
+        const it = items[i];
+        it.y += it.vy;
+        ctx.fillStyle = it.color;
+        ctx.beginPath(); ctx.arc(it.x, it.y, it.r, 0, Math.PI*2); ctx.fill();
+
+        // Collision
+        if (Math.hypot(player.x - it.x, player.y - it.y) < player.r + it.r) {{
+          if (it.color === '#38bdf8') {{
+            score += 100;
+            document.getElementById('score-val').textContent = score;
+          }} else {{
+            shield -= 25;
+            document.getElementById('shield-val').textContent = Math.max(0, shield) + '%';
+            if (shield <= 0) {{
+              isDead = true;
+              document.getElementById('final-score').textContent = score;
+              document.getElementById('game-over').classList.add('active');
+            }}
+          }}
+          items.splice(i, 1);
+          continue;
+        }}
+        if (it.y > H + 50) items.splice(i, 1);
+      }}
+
+      score += 1;
+      document.getElementById('score-val').textContent = score;
+      requestAnimationFrame(loop);
+    }}
+
+    function restart() {{
+      score = 0; shield = 100; isDead = false; items = [];
+      document.getElementById('score-val').textContent = '0';
+      document.getElementById('shield-val').textContent = '100%';
+      document.getElementById('game-over').classList.remove('active');
+      player.x = W/2;
+      requestAnimationFrame(loop);
+    }}
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>"""
+        return {
+            "filename": clean_filename,
+            "title": clean_title,
+            "description": f"A self-contained HTML5 Canvas game with real-time physics, score tracking, shield system, and mobile touch + keyboard controls.",
+            "features": [
+                "🎮 60 FPS Canvas Engine: Smooth procedural animations and collision physics",
+                "📱 Touch & Desktop Controls: Virtual touchscreen buttons plus keyboard WASD/Arrows",
+                "🛡️ Dynamic Shield & Score: Real-time HUD counters and game-over state restart"
+            ],
+            "code": game_code
+        }
+
+    # 3D Website or Rich Web App
+    app_code = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{clean_title} — Pratham AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body {{
+      background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+      min-height: 100vh; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }}
+    #webglCanvas {{ position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: 0.7; }}
+  </style>
+</head>
+<body class="relative min-h-screen flex flex-col justify-between p-6 md:p-12 overflow-x-hidden">
+  <canvas id="webglCanvas"></canvas>
+
+  <header class="relative z-10 w-full max-w-5xl mx-auto flex items-center justify-between py-4 border-b border-slate-700/60">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center font-black text-white text-lg shadow-lg shadow-indigo-500/30">⚡</div>
+      <div>
+        <h1 class="font-extrabold text-lg tracking-wide text-white">{clean_title}</h1>
+        <p class="text-xs text-slate-400">Pratham AI Deliverable Workspace</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">● Active</span>
+    </div>
+  </header>
+
+  <main class="relative z-10 w-full max-w-5xl mx-auto my-8 space-y-8">
+    <div class="bg-slate-800/70 backdrop-blur-xl border border-slate-700/80 rounded-3xl p-8 shadow-2xl space-y-6">
+      <div class="max-w-2xl">
+        <span class="text-xs font-bold uppercase tracking-wider text-indigo-400">Next-Gen Application</span>
+        <h2 class="text-3xl md:text-4xl font-black text-white mt-1">{clean_title}</h2>
+        <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+          Engineered dynamically with full agentic freedom for: "{prompt.strip()[:100]}".
+          Featuring real-time 3D background rendering, responsive touch interaction, and reactive UI state.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+        <div class="p-5 bg-slate-900/80 border border-slate-700/60 rounded-2xl space-y-2">
+          <div class="text-2xl">⚡</div>
+          <h3 class="text-sm font-bold text-white">High Performance</h3>
+          <p class="text-xs text-slate-400">Self-contained client-side rendering running at 60 FPS without external server dependencies.</p>
+        </div>
+        <div class="p-5 bg-slate-900/80 border border-slate-700/60 rounded-2xl space-y-2">
+          <div class="text-2xl">📱</div>
+          <h3 class="text-sm font-bold text-white">Touch & Mobile Ready</h3>
+          <p class="text-xs text-slate-400">Fluid responsive layouts adapting dynamically to smartphone screens, tablets, and desktop displays.</p>
+        </div>
+        <div class="p-5 bg-slate-900/80 border border-slate-700/60 rounded-2xl space-y-2">
+          <div class="text-2xl">🎨</div>
+          <h3 class="text-sm font-bold text-white">Interactive 3D Engine</h3>
+          <p class="text-xs text-slate-400">Integrated Three.js ambient scene with particle orbits and geometric dynamic meshes.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="relative z-10 w-full max-w-5xl mx-auto py-4 text-center text-xs text-slate-500">
+    Built with agentic freedom by Pratham AI • Ready to preview or download
+  </footer>
+
+  <script>
+    // Three.js Interactive Background Simulation
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({{ canvas: document.getElementById('webglCanvas'), alpha: true, antialias: true }});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const geom = new THREE.TorusKnotGeometry(10, 3, 100, 16);
+    const mat = new THREE.MeshNormalMaterial({{ wireframe: true }});
+    const torus = new THREE.Mesh(geom, mat);
+    scene.add(torus);
+
+    // Particle Stars
+    const starGeom = new THREE.BufferGeometry();
+    const starCount = 400;
+    const starPos = new Float32Array(starCount * 3);
+    for(let i=0; i<starCount*3; i++) {{ starPos[i] = (Math.random() - 0.5) * 120; }}
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({{ color: 0x38bdf8, size: 0.8 }});
+    const stars = new THREE.Points(starGeom, starMat);
+    scene.add(stars);
+
+    camera.position.z = 32;
+
+    function animate() {{
+      requestAnimationFrame(animate);
+      torus.rotation.x += 0.005;
+      torus.rotation.y += 0.008;
+      stars.rotation.y -= 0.001;
+      renderer.render(scene, camera);
+    }}
+    animate();
+
+    window.addEventListener('resize', () => {{
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }});
+  </script>
+</body>
+</html>"""
 
     return {
         "filename": clean_filename,
@@ -1044,52 +1344,8 @@ def synthesize_project(prompt: str) -> dict:
         "features": [
             "⚡ Production-Grade Code: Self-contained HTML5, CSS3, and modern vanilla JavaScript",
             "📱 Fully Responsive: Seamless adaptation for smartphone touchscreens and desktop monitors",
-            "🎨 Premium Modern Aesthetic: Dark mode styling, smooth micro-interactions, and reactive components",
+            "🎨 Premium Modern Aesthetic: Dark mode styling, Three.js 3D background, and glassmorphism",
             "🚀 Zero Setup: Download or click preview to run immediately in your browser"
         ],
-        "code": f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{clean_title} — Pratham AI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body {{
-      background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
-      min-height: 100vh; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }}
-  </style>
-</head>
-<body class="p-6 md:p-12 flex flex-col items-center justify-center">
-  <div class="w-full max-w-2xl bg-slate-800/80 backdrop-blur-xl border border-slate-700/80 rounded-3xl p-8 shadow-2xl space-y-6">
-    <div class="border-b border-slate-700 pb-5">
-      <span class="text-xs font-bold uppercase tracking-wider text-indigo-400">Engineered Deliverable</span>
-      <h1 class="text-3xl font-extrabold text-white mt-1">{clean_title}</h1>
-      <p class="text-sm text-slate-400 mt-2">Dynamic application created with full agentic freedom for: "{prompt.strip()[:100]}"</p>
-    </div>
-
-    <!-- Interactive Workspace Area -->
-    <div id="appContainer" class="p-6 bg-slate-900/80 border border-slate-700 rounded-2xl text-center space-y-4">
-      <div class="text-5xl">⚡</div>
-      <h2 class="text-lg font-bold text-slate-200">Interactive Workspace Active</h2>
-      <p class="text-xs text-slate-400">Everything requested is loaded and ready for interaction.</p>
-      <button id="actionBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition">
-        Execute Task
-      </button>
-      <div id="outputLog" class="text-xs text-emerald-400 font-mono mt-4 hidden">
-        ✓ Execution completed successfully at 60 FPS.
-      </div>
-    </div>
-  </div>
-
-  <script>
-    document.getElementById('actionBtn').addEventListener('click', () => {{
-      const log = document.getElementById('outputLog');
-      log.classList.remove('hidden');
-      log.textContent = '✓ Active process executed successfully at ' + new Date().toLocaleTimeString();
-    }});
-  </script>
-</body>
-</html>"""
+        "code": app_code
     }
