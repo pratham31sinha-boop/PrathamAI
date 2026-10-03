@@ -1,3 +1,12 @@
+import hashlib
+
+# Fix Python/OpenSSL compatibility issue with reportlab's md5 usage
+_orig_md5 = hashlib.md5
+def _patched_md5(*args, **kwargs):
+    kwargs.pop('usedforsecurity', None)
+    return _orig_md5(*args, **kwargs)
+hashlib.md5 = _patched_md5
+
 import os
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -17,7 +26,7 @@ def generate_pokemon_pdf(filename="pokemon_essay.pdf"):
 
     styles = getSampleStyleSheet()
 
-    # Custom styles
+    # Custom typography & styles
     title_style = ParagraphStyle(
         'PokeTitle',
         parent=styles['Normal'],
