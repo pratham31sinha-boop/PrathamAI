@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GTA 6: Vice City Hustle — Pratham AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden; background: #070913;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #gameCanvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: block; background: #111422;
+    }
+    /* HUD Overlay */
+    .hud {
+      position: absolute; top: 12px; left: 14px; right: 14px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none; z-index: 10;
+    }
+    .hud-left {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .game-logo {
+      font-family: 'Impact', 'Arial Black', sans-serif; font-size: 26px;
+      letter-spacing: 1px; color: #ff2a85;
+      text-shadow: 0 0 12px rgba(255, 42, 133, 0.8), 2px 2px 0 #00f0ff;
+    }
+    .game-subtitle {
+      font-size: 11px; font-weight: 700; color: #00f0ff; letter-spacing: 2px;
+      text-transform: uppercase; margin-top: -4px;
+    }
+    .stats-card {
+      background: rgba(10, 15, 29, 0.85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
+      padding: 6px 12px; display: inline-flex; align-items: center; gap: 14px;
+      color: #fff; font-size: 13px; font-weight: 700;
+    }
+    .stat-item { display: flex; align-items: center; gap: 5px; }
+    .stat-val { color: #00ff88; font-family: monospace; font-size: 14px; }
+    .hud-right {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    }
+    .wanted-stars {
+      display: flex; gap: 4px; font-size: 18px; filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.8));
+    }
+    .star { color: rgba(255, 255, 255, 0.2); }
+    .star.active { color: #ffd700; animation: starPulse 0.8s infinite alternate; }
+    @keyframes starPulse { 0% { transform: scale(1); } 100% { transform: scale(1.2); } }
+    .minimap-wrapper {
+      width: 110px; height: 110px; border-radius: 50%;
+      border: 2px solid #00f0ff; background: rgba(8, 12, 24, 0.9);
+      overflow: hidden; box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+      position: relative;
+    }
+    #minimapCanvas { width: 100%; height: 100%; display: block; }
+    /* Mode Badge */
+    .mode-badge {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(0, 240, 255, 0.3);
+      color: #e2e8f0; font-size: 12px; font-weight: 600; padding: 6px 14px;
+      border-radius: 20px; backdrop-filter: blur(6px); pointer-events: none; z-index: 10;
+      white-space: nowrap; text-align: center;
+    }
+    /* Mobile Touch Controls */
+    .touch-controls {
+      position: absolute; bottom: 15px; left: 15px; right: 15px;
+      display: none; justify-content: space-between; align-items: flex-end;
+      pointer-events: none; z-index: 15;
+    }
+    @media (pointer: coarse), (max-width: 900px) {
+      .touch-controls { display: flex; }
+      .mode-badge { bottom: 140px; }
+    }
+    .touch-dpad {
+      display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 48px);
+      gap: 4px; pointer-events: auto;
+    }
+    .touch-btn {
+      background: rgba(25, 33, 56, 0.8); border: 1px solid rgba(0, 240, 255, 0.4);
+      color: #fff; font-size: 16px; font-weight: bold; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      touch-action: none; active: scale(0.92);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .touch-btn:active, .touch-btn.active {
+      background: rgba(0, 240, 255, 0.4); border-color: #00f0ff;
+    }
+    .touch-actions {
+      display: flex; flex-direction: column; gap: 8px; pointer-events: auto;
+    }
+    .action-row { display: flex; gap: 8px; }
+    .action-btn {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: rgba(255, 42, 133, 0.3); border: 2px solid #ff2a85;
+      color: #fff; font-size: 11px; font-weight: 800; text-transform: uppercase;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      touch-action: none; box-shadow: 0 4px 12px rgba(255, 42, 133, 0.4);
+    }
+    .action-btn:active { background: #ff2a85; transform: scale(0.92); }
+    .btn-gas { background: rgba(0, 255, 136, 0.3); border-color: #00ff88; box-shadow: 0 4px 12px rgba(0,255,136,0.4); }
+    .btn-gas:active { background: #00ff88; }
+    .btn-brake { background: rgba(255, 68, 68, 0.3); border-color: #ff4444; box-shadow: 0 4px 12px rgba(255,68,68,0.4); }
+    .btn-brake:active { background: #ff4444; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="hud">
+    <div class="hud-left">
+      <div class="game-logo">GTA VI</div>
+      <div class="game-subtitle">Vice City Hustle</div>
+      <div class="stats-card">
+        <div class="stat-item">💵 <span class="stat-val" id="cashEl">$1,250</span></div>
+        <div class="stat-item">❤️ <span class="stat-val" id="healthEl">100%</span></div>
+        <div class="stat-item">⚡ <span class="stat-val" id="speedEl">0 MPH</span></div>
+      </div>
+    </div>
+    <div class="hud-right">
+      <div class="wanted-stars" id="wantedEl">
+        <span class="star" id="s1">★</span>
+        <span class="star" id="s2">★</span>
+        <span class="star" id="s3">★</span>
+        <span class="star" id="s4">★</span>
+        <span class="star" id="s5">★</span>
+      </div>
+      <div class="minimap-wrapper">
+        <canvas id="minimapCanvas" width="110" height="110"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="mode-badge" id="modeBadge">🚶 ON FOOT — Walk to a Supercar & press [F] or [ENTER CAR] to drive!</div>
+
+  <div class="touch-controls">
+    <div class="touch-dpad">
+      <div></div>
+      <div class="touch-btn" id="dpadUp">▲</div>
+      <div></div>
+      <div class="touch-btn" id="dpadLeft">◀</div>
+      <div></div>
+      <div class="touch-btn" id="dpadRight">▶</div>
+      <div></div>
+      <div class="touch-btn" id="dpadDown">▼</div>
+      <div></div>
+    </div>
+    <div class="touch-actions">
+      <div class="action-row">
+        <div class="action-btn" id="btnEnter">🚗<br>Drive</div>
+        <div class="action-btn" id="btnSiren">🚨<br>Horn</div>
+      </div>
+      <div class="action-row">
+        <div class="action-btn btn-brake" id="btnBrake">🛑<br>Brake</div>
+        <div class="action-btn btn-gas" id="btnGas">⚡<br>Gas</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Audio Synthesizer (Zero asset dependency)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type, dur, vol=0.1) {
+      try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch (e) {}
+    }
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const minimapCanvas = document.getElementById('minimapCanvas');
+    const mmCtx = minimapCanvas.getContext('2d');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // World & Map Configuration
+    const WORLD_W = 3200;
+    const WORLD_H = 3200;
+    const ROADS = [
+      // Major Highways & Avenues
+      { x: 200, y: 1400, w: 2800, h: 180, name: "Ocean Drive Boulevard" },
+      { x: 200, y: 600,  w: 2800, h: 160, name: "Vice Strip" },
+      { x: 200, y: 2200, w: 2800, h: 160, name: "Sunset Expressway" },
+      // Cross Avenues
+      { x: 600,  y: 200, w: 180, h: 2800, name: "Downtown Ave" },
+      { x: 1500, y: 200, w: 200, h: 2800, name: "Miami Bay Parkway" },
+      { x: 2400, y: 200, w: 180, h: 2800, name: "Neon Causeway" }
+    ];
+
+    // Palm trees & scenery
+    const SCENERY = [];
+    for (let i = 0; i < 90; i++) {
+      SCENERY.push({
+        x: Math.random() * (WORLD_W - 400) + 200,
+        y: Math.random() * (WORLD_H - 400) + 200,
+        r: 18 + Math.random() * 8
+      });
+    }
+
+    // Cash pickups
+    const PICKUPS = [];
+    for (let i = 0; i < 25; i++) {
+      PICKUPS.push({
+        x: Math.random() * (WORLD_W - 400) + 200,
+        y: Math.random() * (WORLD_H - 400) + 200,
+        val: 100 + Math.floor(Math.random() * 4) * 50,
+        active: true
+      });
+    }
+
+    // Player State
+    const player = {
+      x: 1600, y: 1500,
+      vx: 0, vy: 0,
+      angle: 0,
+      speed: 4.5,
+      health: 100,
+      cash: 1250,
+      inVehicle: false,
+      vehicle: null,
+      wanted: 1,
+      lastWantedInc: 0
+    };
+
+    // Vehicles in Vice City
+    const CAR_COLORS = ['#ff2a85', '#00f0ff', '#ffe600', '#ff6b00', '#a855f7', '#10b981'];
+    const vehicles = [
+      { id: 1, x: 1650, y: 1510, angle: 0, speed: 0, maxSpeed: 13, steer: 0, color: '#ff2a85', model: 'Cheetah Supercar', isPolice: false },
+      { id: 2, x: 1350, y: 1470, angle: Math.PI, speed: 0, maxSpeed: 14, steer: 0, color: '#00f0ff', model: 'Infernus GT', isPolice: false },
+      { id: 3, x: 680,  y: 1100, angle: Math.PI/2, speed: 0, maxSpeed: 12, steer: 0, color: '#ffe600', model: 'Banshee V8', isPolice: false },
+      { id: 4, x: 2480, y: 800,  angle: Math.PI/2, speed: 0, maxSpeed: 12, steer: 0, color: '#a855f7', model: 'Vice Cruiser', isPolice: false },
+      // Police Patrol Cruisers
+      { id: 10, x: 1520, y: 900,  angle: 0, speed: 0, maxSpeed: 13.5, steer: 0, color: '#ffffff', model: 'VCPD Cruiser', isPolice: true, sirenPhase: 0 },
+      { id: 11, x: 2300, y: 1500, angle: 0, speed: 0, maxSpeed: 13.5, steer: 0, color: '#ffffff', model: 'VCPD Cruiser', isPolice: true, sirenPhase: 0 }
+    ];
+
+    // Controls tracking
+    const keys = {
+      up: false, down: false, left: false, right: false,
+      drift: false, enter: false, siren: false
+    };
+
+    window.addEventListener('keydown', e => {
+      if (['ArrowUp', 'KeyW'].includes(e.code)) keys.up = true;
+      if (['ArrowDown', 'KeyS'].includes(e.code)) keys.down = true;
+      if (['ArrowLeft', 'KeyA'].includes(e.code)) keys.left = true;
+      if (['ArrowRight', 'KeyD'].includes(e.code)) keys.right = true;
+      if (e.code === 'Space') keys.drift = true;
+      if (e.code === 'KeyF' || e.code === 'Enter') toggleVehicle();
+      if (e.code === 'KeyH') triggerHorn();
+    });
+
+    window.addEventListener('keyup', e => {
+      if (['ArrowUp', 'KeyW'].includes(e.code)) keys.up = false;
+      if (['ArrowDown', 'KeyS'].includes(e.code)) keys.down = false;
+      if (['ArrowLeft', 'KeyA'].includes(e.code)) keys.left = false;
+      if (['ArrowRight', 'KeyD'].includes(e.code)) keys.right = false;
+      if (e.code === 'Space') keys.drift = false;
+    });
+
+    // Touch setup
+    function setupTouch(id, keyName) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('touchstart', e => { e.preventDefault(); keys[keyName] = true; el.classList.add('active'); }, {passive: false});
+      el.addEventListener('touchend', e => { e.preventDefault(); keys[keyName] = false; el.classList.remove('active'); }, {passive: false});
+      el.addEventListener('mousedown', e => { keys[keyName] = true; el.classList.add('active'); });
+      window.addEventListener('mouseup', () => { keys[keyName] = false; el.classList.remove('active'); });
+    }
+    setupTouch('dpadUp', 'up');
+    setupTouch('dpadDown', 'down');
+    setupTouch('dpadLeft', 'left');
+    setupTouch('dpadRight', 'right');
+    setupTouch('btnGas', 'up');
+    setupTouch('btnBrake', 'down');
+
+    document.getElementById('btnEnter').addEventListener('click', toggleVehicle);
+    document.getElementById('btnEnter').addEventListener('touchstart', e => { e.preventDefault(); toggleVehicle(); }, {passive: false});
+    document.getElementById('btnSiren').addEventListener('click', triggerHorn);
+    document.getElementById('btnSiren').addEventListener('touchstart', e => { e.preventDefault(); triggerHorn(); }, {passive: false});
+
+    function triggerHorn() {
+      playTone(320, 'triangle', 0.25, 0.2);
+      playTone(480, 'sine', 0.25, 0.15);
+    }
+
+    function toggleVehicle() {
+      if (player.inVehicle) {
+        // Exit Vehicle
+        const car = player.vehicle;
+        player.inVehicle = false;
+        player.x = car.x + Math.cos(car.angle + Math.PI/2) * 35;
+        player.y = car.y + Math.sin(car.angle + Math.PI/2) * 35;
+        player.vehicle = null;
+        document.getElementById('modeBadge').textContent = '🚶 ON FOOT — Press [F] or [ENTER CAR] to drive!';
+        playTone(200, 'square', 0.1, 0.1);
+      } else {
+        // Find nearest car
+        let nearest = null;
+        let minDist = 75;
+        for (const car of vehicles) {
+          const d = Math.hypot(player.x - car.x, player.y - car.y);
+          if (d < minDist) { minDist = d; nearest = car; }
+        }
+        if (nearest) {
+          player.inVehicle = true;
+          player.vehicle = nearest;
+          document.getElementById('modeBadge').textContent = '🏎️ DRIVING ' + nearest.model + ' — [W] Accelerate | [S] Brake | [A/D] Steer | [F] Exit';
+          playTone(450, 'sine', 0.15, 0.15);
+          playTone(600, 'triangle', 0.2, 0.2);
+        }
+      }
+    }
+
+    // Tire Skid Particles
+    const particles = [];
+    function addSkid(x, y, angle) {
+      if (particles.length > 80) particles.shift();
+      particles.push({ x, y, alpha: 0.6, life: 60 });
+    }
+
+    // Main Game Loop
+    let lastTime = performance.now();
+    function loop(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      // Update Logic
+      if (player.inVehicle && player.vehicle) {
+        const car = player.vehicle;
+        const accel = 18;
+        const drag = 2.5;
+        const steerSpeed = 2.4;
+
+        if (keys.up) car.speed = Math.min(car.speed + accel * dt, car.maxSpeed);
+        else if (keys.down) car.speed = Math.max(car.speed - accel * 1.2 * dt, -car.maxSpeed * 0.4);
+        else car.speed *= Math.max(0, 1 - drag * dt);
+
+        if (Math.abs(car.speed) > 0.5) {
+          const dir = car.speed > 0 ? 1 : -1;
+          if (keys.left) car.angle -= steerSpeed * dt * dir;
+          if (keys.right) car.angle += steerSpeed * dt * dir;
+
+          if (keys.drift || Math.abs(car.speed) > 9) {
+            addSkid(car.x, car.y, car.angle);
+            if (Math.random() < 0.2) playTone(120, 'sawtooth', 0.05, 0.05);
+          }
+        }
+
+        car.x += Math.cos(car.angle) * car.speed;
+        car.y += Math.sin(car.angle) * car.speed;
+        // Keep in bounds
+        car.x = Math.max(50, Math.min(WORLD_W - 50, car.x));
+        car.y = Math.max(50, Math.min(WORLD_H - 50, car.y));
+
+        player.x = car.x;
+        player.y = car.y;
+        player.angle = car.angle;
+
+        const mph = Math.round(Math.abs(car.speed) * 8);
+        document.getElementById('speedEl').textContent = mph + ' MPH';
+
+        // Speeding increases wanted level occasionally
+        if (mph > 80 && Math.random() < 0.003) {
+          player.wanted = Math.min(5, player.wanted + 1);
+        }
+      } else {
+        // Player on foot
+        let dx = 0, dy = 0;
+        if (keys.up) dy -= 1;
+        if (keys.down) dy += 1;
+        if (keys.left) dx -= 1;
+        if (keys.right) dx += 1;
+
+        if (dx !== 0 || dy !== 0) {
+          const len = Math.hypot(dx, dy);
+          player.angle = Math.atan2(dy, dx);
+          player.x += (dx / len) * player.speed;
+          player.y += (dy / len) * player.speed;
+          player.x = Math.max(50, Math.min(WORLD_W - 50, player.x));
+          player.y = Math.max(50, Math.min(WORLD_H - 50, player.y));
+        }
+        document.getElementById('speedEl').textContent = '0 MPH';
+      }
+
+      // Police AI Pursuit
+      vehicles.forEach(car => {
+        if (!car.isPolice || (player.inVehicle && player.vehicle === car)) return;
+        car.sirenPhase = (car.sirenPhase || 0) + dt * 10;
+        const dist = Math.hypot(player.x - car.x, player.y - car.y);
+        if (player.wanted > 0 && dist < 1200) {
+          // Pursue player
+          const targetAngle = Math.atan2(player.y - car.y, player.x - car.x);
+          let diff = targetAngle - car.angle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          car.angle += Math.sign(diff) * Math.min(Math.abs(diff), 2.2 * dt);
+          car.speed = Math.min(car.speed + 14 * dt, 10.5);
+          car.x += Math.cos(car.angle) * car.speed;
+          car.y += Math.sin(car.angle) * car.speed;
+
+          // Sound siren occasionally if near
+          if (dist < 400 && Math.random() < 0.02) {
+            playTone(700 + Math.sin(car.sirenPhase) * 200, 'sine', 0.15, 0.08);
+          }
+
+          // Collision with player
+          if (dist < 40) {
+            player.health = Math.max(0, player.health - 0.2);
+            document.getElementById('healthEl').textContent = Math.round(player.health) + '%';
+          }
+        }
+      });
+
+      // Cash pickup collection
+      PICKUPS.forEach(p => {
+        if (p.active && Math.hypot(player.x - p.x, player.y - p.y) < 36) {
+          p.active = false;
+          player.cash += p.val;
+          document.getElementById('cashEl').textContent = '$' + player.cash.toLocaleString();
+          playTone(587, 'triangle', 0.1, 0.15);
+          playTone(880, 'sine', 0.2, 0.2);
+        }
+      });
+
+      // Update Wanted Stars HUD
+      for (let s = 1; s <= 5; s++) {
+        const starEl = document.getElementById('s' + s);
+        if (s <= player.wanted) starEl.classList.add('active');
+        else starEl.classList.remove('active');
+      }
+
+      // Camera Offset
+      const camX = canvas.width / 2 - player.x;
+      const camY = canvas.height / 2 - player.y;
+
+      // Render World
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(camX, camY);
+
+      // Grass & Ocean background
+      ctx.fillStyle = '#10162a';
+      ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+      // Ocean Shoreline on East edge
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(WORLD_W - 250, 0, 250, WORLD_H);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(WORLD_W - 270, 0, 20, WORLD_H); // Surf foam
+
+      // Draw Roads
+      ROADS.forEach(r => {
+        ctx.fillStyle = '#1f2438';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        // Road curbs / sidewalks
+        ctx.strokeStyle = '#ff2a85';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+        // Dashed Lane Centerlines
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([24, 20]);
+        ctx.beginPath();
+        if (r.w > r.h) {
+          ctx.moveTo(r.x, r.y + r.h / 2);
+          ctx.lineTo(r.x + r.w, r.y + r.h / 2);
+        } else {
+          ctx.moveTo(r.x + r.w / 2, r.y);
+          ctx.lineTo(r.x + r.w / 2, r.y + r.h);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      // Tire Skids
+      particles.forEach((p, idx) => {
+        p.life -= 1;
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Pickups (Cash Bundles)
+      PICKUPS.forEach(p => {
+        if (!p.active) return;
+        ctx.fillStyle = '#22c55e';
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 12;
+        ctx.fillRect(p.x - 10, p.y - 6, 20, 12);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText('$', p.x - 3, p.y + 3);
+        ctx.shadowBlur = 0;
+      });
+
+      // Palm Trees
+      SCENERY.forEach(tree => {
+        ctx.fillStyle = '#064e3b';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y, tree.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Palm frond spikes
+        for (let a = 0; a < 6; a++) {
+          const ang = (a * Math.PI) / 3;
+          ctx.beginPath();
+          ctx.moveTo(tree.x, tree.y);
+          ctx.lineTo(tree.x + Math.cos(ang) * (tree.r + 10), tree.y + Math.sin(ang) * (tree.r + 10));
+          ctx.stroke();
+        }
+      });
+
+      // Render Vehicles
+      vehicles.forEach(car => {
+        ctx.save();
+        ctx.translate(car.x, car.y);
+        ctx.rotate(car.angle);
+
+        // Car Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(-26, -13, 52, 26);
+
+        // Car Body
+        ctx.fillStyle = car.color;
+        ctx.fillRect(-24, -12, 48, 24);
+
+        // Roof / Windshield
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-10, -9, 20, 18);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(4, -8, 8, 16); // Front Windshield
+        ctx.fillRect(-12, -8, 5, 16); // Rear Window
+
+        // Headlights
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(23, -10, 3, 5);
+        ctx.fillRect(23, 5, 3, 5);
+        // Taillights
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-25, -10, 2, 5);
+        ctx.fillRect(-25, 5, 2, 5);
+
+        // Police Siren Flasher
+        if (car.isPolice) {
+          const isRed = Math.floor(car.sirenPhase) % 2 === 0;
+          ctx.fillStyle = isRed ? '#ef4444' : '#3b82f6';
+          ctx.shadowColor = ctx.fillStyle;
+          ctx.shadowBlur = 15;
+          ctx.fillRect(-2, -6, 6, 12);
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.restore();
+      });
+
+      // Render Player (if on foot)
+      if (!player.inVehicle) {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.angle);
+
+        // Player Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Player Torso (Hawaiian vice shirt)
+        ctx.fillStyle = '#ff2a85';
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hands
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(6, -6, 2.5, 0, Math.PI * 2);
+        ctx.arc(6, 6, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      ctx.restore();
+
+      // Render Minimap Radar
+      mmCtx.clearRect(0, 0, 110, 110);
+      const mmScale = 110 / WORLD_W;
+      // Draw roads on radar
+      mmCtx.fillStyle = '#334155';
+      ROADS.forEach(r => {
+        mmCtx.fillRect(r.x * mmScale, r.y * mmScale, r.w * mmScale, r.h * mmScale);
+      });
+      // Draw Vehicles
+      vehicles.forEach(car => {
+        mmCtx.fillStyle = car.isPolice ? '#38bdf8' : '#f43f5e';
+        mmCtx.fillRect(car.x * mmScale - 1, car.y * mmScale - 1, 3, 3);
+      });
+      // Draw Player
+      mmCtx.fillStyle = '#22c55e';
+      mmCtx.beginPath();
+      mmCtx.arc(player.x * mmScale, player.y * mmScale, 3.5, 0, Math.PI * 2);
+      mmCtx.fill();
+
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

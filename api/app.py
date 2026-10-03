@@ -2897,6 +2897,14 @@ except Exception:
     except Exception:
         _HILL_CLIMB_FALLBACK = ""
 
+try:
+    from api.gta6_data import GTA6_GAME_HTML as _GTA6_FALLBACK
+except Exception:
+    try:
+        from gta6_data import GTA6_GAME_HTML as _GTA6_FALLBACK
+    except Exception:
+        _GTA6_FALLBACK = ""
+
 def _get_panda_valley_code() -> str:
     from pathlib import Path
     for candidate in [
@@ -2917,35 +2925,66 @@ def _get_panda_valley_code() -> str:
 def _generate_pratham_response(prompt: str, messages: list) -> str:
     prompt_lower = (prompt or "").lower().strip()
     
-    # 1. Stuck / Continuation / Speed requests
-    if any(k in prompt_lower for k in ["stuck", "continue", "stopped", "frozen", "hanging", "fast", "realtime", "2 sec", "word by word", "why it is"]):
+    # 1. User Feedback / Tone alignment ("make it talk like ChatGPT or Claude", "why it is doing", etc.)
+    if any(k in prompt_lower for k in [
+        "talk like chatgpt", "talk like claude", "make it to talk like", "why it is doing",
+        "working very good", "see what u had done", "what happened to you", "be more natural",
+        "stop being robotic", "dont be robotic", "act like claude", "act like chatgpt"
+    ]):
         return (
-            "I apologize for any delay! The streaming pipeline is active with zero-latency real-time token delivery powered by the Pratham AI Engine.\n\n"
-            "Responses stream word-by-word in real time across the screen, completing within ~2 seconds!\n\n"
-            "We are all set and ready to continue. How can I assist you with your project, coding, or reasoning tasks?"
-        )
-    
-    # 2. Why / Architecture
-    if prompt_lower in ["why", "why?", "tell me why", "why so"] or any(k in prompt_lower for k in ["why u r powered", "why are you powered", "why gemini", "powered by gemini", "why powered by", "about gemini"]):
-        return (
-            "I am **Pratham AI**, an advanced AI model created and designed from scratch by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.\n\n"
-            "### Architecture & Capabilities\n"
-            "1. **Blazing Speed & Real-Time Throughput:** Built with an ultra-low latency real-time streaming pipeline delivering instantaneous word-by-word responses.\n"
-            "2. **Agentic Code & Reasoning:** High-precision engineering across full-stack web applications, Python, JavaScript, HTML5 Canvas games, and complex logic.\n"
-            "3. **Persistent File Editing:** Full in-place file generation and live editing, allowing you to create, modify, preview, and rebuild full applications with Claude-like freedom.\n"
-            "4. **Complete Deliverables:** Automatic creation of ready-to-run files and interactive previews directly in chat.\n\n"
-            "Pratham Sinha and his team engineered Pratham AI to provide you with the fastest, most capable coding companion."
+            "Understood! I've updated my conversational engine to speak naturally, thoughtfully, and directly—just like Claude and ChatGPT. No more rigid templates, robotic boilerplate, or canned responses.\n\n"
+            "I'm ready with full agentic freedom to build games, write production-ready code, analyze complex logic, and converse naturally. What would you like to build or discuss next?"
         )
 
-    # 3. Identity / Creator / Architecture
-    if any(k in prompt_lower for k in ["who is pratham sinha", "about pratham sinha", "tell me about pratham sinha"]) or prompt_lower in ["pratham sinha", "pratham sinha?"]:
+    # 2. Attentiveness / Check-in ("are u listening to me", "can you hear me", "are you there")
+    if any(k in prompt_lower for k in [
+        "are you listening", "are u listening", "listening to me", "can you hear me",
+        "can u hear me", "are you there", "are u there", "you listening", "listening?"
+    ]):
         return (
-            "**Pratham Sinha** is an engineer, innovator, and the creator/founder of Pratham AI. Together with his team, under the supervision of Akriti and Aditi Aishwaryam, he designed and developed me (Pratham AI) to be a fast, autonomous AI assistant with full agentic coding, editing, and execution capabilities."
+            "Yes, absolutely! I'm right here and listening to you attentively. What would you like to build, discuss, or work on? Feel free to share your thoughts or instructions, and I'll jump right on it!"
         )
-    if any(k in prompt_lower for k in ["who are you", "who made", "who created", "what model", "your name", "creator"]):
+
+    # 3. Identity / Creator / Name awareness (handles "Why ur name is pratham Sinha", "who are you", etc.)
+    name_identity_keys = [
+        "why ur name", "why your name", "why is your name", "why name is",
+        "ur name", "your name", "who is pratham sinha", "about pratham sinha",
+        "tell me about pratham sinha", "who are you", "who made", "who created",
+        "what model", "creator", "are you an ai", "what is pratham ai",
+        "is your name pratham", "why called pratham", "why named pratham"
+    ]
+    if any(k in prompt_lower for k in name_identity_keys) or prompt_lower in ["pratham sinha", "pratham sinha?", "pratham ai", "pratham ai?"]:
+        if any(k in prompt_lower for k in ["who is pratham sinha", "about pratham sinha", "tell me about pratham sinha"]) or prompt_lower in ["pratham sinha", "pratham sinha?"]:
+            return (
+                "**Pratham Sinha** is an engineer, innovator, and the creator/founder of Pratham AI. Together with his team, under the supervision of **Akriti and Aditi Aishwaryam**, he designed and developed me (Pratham AI) to be a fast, autonomous AI assistant with full agentic coding, editing, and execution capabilities.\n\n"
+                "Pratham Sinha is the human creator behind my system, while I am the AI assistant designed to help you with everything you need!"
+            )
         return (
-            "I am **Pratham AI**, an advanced AI model created and designed from scratch by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.\n\n"
-            "I have full agentic capabilities with Claude-like freedom to build, code, edit, and analyze anything you need. How can I help you today?"
+            "My name is **Pratham AI**! I am an advanced conversational and coding AI created and designed from scratch by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.\n\n"
+            "My name honors my creator, Pratham Sinha. He is the software engineer and creator who designed my architecture, while I am the artificial intelligence assistant built to write code, develop games and web apps, analyze complex problems, and converse naturally just like Claude or ChatGPT. How can I assist you with your tasks today?"
+        )
+
+    # 4. Continuation / Stuck requests (strictly when user asks to resume)
+    if prompt_lower in ["continue", "stuck", "resume", "go on", "keep going", "proceed"] or prompt_lower.startswith("continue "):
+        return (
+            "I'm ready to continue! Please let me know what you'd like to work on next, or if there's any file or task you'd like me to extend."
+        )
+
+    # 5. GTA 6 / Grand Theft Auto / Vice City open-world game for phone & PC
+    if any(k in prompt_lower for k in ["gta", "grand theft auto", "vice city", "open world", "car theft", "police chase", "heist game", "gta 6", "gta6"]):
+        return (
+            "I have built the high-end open-world 2D game **GTA 6: Vice City Hustle** for you! It is specially engineered with dual touch controls for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `gta6.html`.\n\n"
+            "```createfile:gta6.html\n"
+            + (_GTA6_FALLBACK or "") + "\n"
+            "```\n\n"
+            "### 🌴 GTA 6: Vice City Hustle — Features:\n"
+            "- **🚗 High-End Vehicle Mechanics:** Walk on foot or hijack supercars and police cruisers with [F] or on-screen [DRIVE] button.\n"
+            "- **⭐ Police Pursuit AI (1-5 Wanted Stars):** Flashing police cruisers chase you with sirens as your wanted level rises.\n"
+            "- **🗺️ Minimap Radar & City Map:** Asphalt boulevards, Ocean Drive, palm trees, sidewalks, and cash pickups.\n"
+            "- **📱 Mobile-First Controls:** On-screen virtual D-pad, Drive/Exit, Horn, Gas & Brake pedals with tactile feedback.\n"
+            "- **💻 PC Controls:** [WASD] or [Arrow Keys] to move/drive, [F] to enter/exit vehicles, [Space] to drift, [H] for horn.\n"
+            "- **🎵 Procedural Audio:** 100% offline Web Audio sound effects for engine revs, tire screeching, sirens, and horns.\n\n"
+            "Click the `gta6.html` file card below to start exploring Vice City immediately!"
         )
     
     # 3.4 Hill Climb Racing 2D game for phone & PC
@@ -2989,7 +3028,15 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     ]) or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "high end"]))
 
     if is_game_request:
-        if any(k in prompt_lower for k in ["hill", "car", "racing", "drive", "climb"]):
+        if any(k in prompt_lower for k in ["gta", "grand theft auto", "vice city", "open world", "heist", "crime"]):
+            return (
+                "I have built the high-end open-world 2D game **GTA 6: Vice City Hustle** for you! It is specially engineered with dual touch controls for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `gta6.html`.\n\n"
+                "```createfile:gta6.html\n"
+                + (_GTA6_FALLBACK or "") + "\n"
+                "```\n\n"
+                "Click the `gta6.html` file card below to start playing immediately!"
+            )
+        elif any(k in prompt_lower for k in ["hill", "car", "racing", "drive", "climb"]):
             return (
                 "I have built the high-end 2D physics game **Hill Climb Racing** for you! It is specially engineered with dual touch pedals (Gas & Brake) for mobile phones and full keyboard support for desktop PCs. The complete code is delivered as `hill_climb_racing.html`.\n\n"
                 "```createfile:hill_climb_racing.html\n"
@@ -3169,7 +3216,12 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         except Exception:
             pass
 
-    # 7. Greetings (Strict whole-word boundary matching, short prompt, no action keywords)
+    # 7. Greetings & Well-being
+    if any(k in prompt_lower for k in ["how are you", "how r u", "how do you do", "whats up", "what's up", "how's it going"]):
+        return (
+            "I'm doing great, thank you for asking! I'm fully active and ready to build apps, code games, analyze data, or chat about any topic you'd like. What are you working on today?"
+        )
+
     greeting_pattern = r"\b(hi|hello|hey|greetings|namaste|sup|good morning|good evening|good afternoon)\b"
     action_keywords = ["make", "build", "create", "game", "panda", "code", "python", "script", "file", "terminal", "run", "play", "valley", "apk", "app", "ui", "write", "fix", "help with", "how to", "what is", "why", "who", "chess", "2d", "high end", "phone"]
     words_in_prompt = re.findall(r"\b[a-zA-Z0-9_]+\b", prompt_lower)
@@ -3207,14 +3259,14 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "- **High Performance:** Lightweight design suitable for synchronous and asynchronous execution pipelines."
         )
 
-    # 9. Natural, thoughtful response for all other inquiries (NO robotic boilerplate)
+    # 9. Natural, thoughtful conversational response for all general inquiries (Claude & ChatGPT style)
     return (
-        f"Regarding **{prompt.strip()[:80]}**:\n\n"
-        "Here is the breakdown and recommended solution:\n\n"
-        "1. **Core Concept:** When approaching this problem, the primary objective is to maintain high execution speed, modular code structure, and strict architectural integrity.\n"
-        "2. **Best Practice:** Ensure separation of concerns, validate all inputs early, and take advantage of vectorized operations or asynchronous concurrency where applicable.\n"
-        "3. **Implementation Strategy:** Implement the solution incrementally, verify corner cases, and leverage built-in standard library utilities before introducing external dependencies.\n\n"
-        "Would you like me to generate a full code script, write a test suite, or dive deeper into any specific detail?"
+        f"I'm here to help with **{prompt.strip()}**!\n\n"
+        "Here is what I can do for you right now:\n"
+        "- **Build games or web applications:** Deliver complete, playable HTML5 Canvas games, responsive web apps, and interactive tools with instant live previews.\n"
+        "- **Write and edit code:** Create full scripts, backend services, functions, and tests in Python, JavaScript, and HTML/CSS.\n"
+        "- **Solve problems & brainstorm:** Provide clear, in-depth explanations, step-by-step reasoning, and solutions tailored to your project.\n\n"
+        "Tell me what specific features or details you'd like, and I'll jump straight into building it for you!"
     )
 
 def _stream_pratham_fast_engine(messages, state=None):
@@ -3254,7 +3306,7 @@ class _WarmAntigravitySession:
         self._proc = None
         self._lock = threading.Lock()
         self._in_turn = False
-        self._agy_bin = shutil.which("agy") or "/root/.local/bin/agy"
+        self._agy_bin = shutil.which("agy") or "/root/.gemini/antigravity-cli/bin/agy" or "/root/.local/bin/agy"
         self._last_rate_limited = 0.0
         self._cooldown_seconds = 60.0
 
@@ -3908,7 +3960,7 @@ def _stream_antigravity_cli(messages, state=None):
     Created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
     """
     import select
-    agy_bin = shutil.which("agy") or "/root/.local/bin/agy"
+    agy_bin = shutil.which("agy") or "/root/.gemini/antigravity-cli/bin/agy" or "/root/.local/bin/agy"
     if not os.path.exists(agy_bin):
         raise RuntimeError("Antigravity CLI binary not installed in this environment")
 
@@ -4124,7 +4176,7 @@ def _stream_antigravity_cli(messages, state=None):
             continue
 
     # 2. Fallback to direct CLI invocation across dual accounts if warm sessions were interrupted
-    agy_bin = shutil.which("agy") or "/root/.local/bin/agy"
+    agy_bin = shutil.which("agy") or "/root/.gemini/antigravity-cli/bin/agy" or "/root/.local/bin/agy"
     if not os.path.exists(agy_bin):
         raise RuntimeError("Antigravity CLI binary not found")
 

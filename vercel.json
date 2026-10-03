@@ -4,6 +4,8 @@
     { "src": "api/app.py", "use": "@vercel/python" },
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "panda_valley.html", "use": "@vercel/static" },
+    { "src": "hill_climb_racing.html", "use": "@vercel/static" },
+    { "src": "gta6.html", "use": "@vercel/static" },
     { "src": "auth/mobile-callback.html", "use": "@vercel/static" }
   ],
   "routes": [
