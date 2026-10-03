@@ -2990,15 +2990,27 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             )
 
 
-    # 4.8 Senior Quantitative Risk & Financial Intelligence Agent Handler
+    # 4.8 Senior Quantitative Risk & Orbital Flight Command Suite Handler
     try:
-        from api.quant_synth import is_quant_portfolio_request, generate_quant_portfolio_suite
+        from api.quant_synth import (
+            is_quant_portfolio_request, generate_quant_portfolio_suite,
+            is_orbital_mega_request, generate_orbital_command_suite
+        )
     except Exception:
         try:
-            from quant_synth import is_quant_portfolio_request, generate_quant_portfolio_suite
+            from quant_synth import (
+                is_quant_portfolio_request, generate_quant_portfolio_suite,
+                is_orbital_mega_request, generate_orbital_command_suite
+            )
         except Exception:
             is_quant_portfolio_request = None
             generate_quant_portfolio_suite = None
+            is_orbital_mega_request = None
+            generate_orbital_command_suite = None
+
+    if is_orbital_mega_request and is_orbital_mega_request(prompt):
+        orb_res = generate_orbital_command_suite(target_dir="/workspace/bold-curie")
+        return orb_res["markdown_response"]
 
     if is_quant_portfolio_request and is_quant_portfolio_request(prompt):
         q_res = generate_quant_portfolio_suite(target_dir="/workspace/bold-curie")
