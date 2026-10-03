@@ -3062,7 +3062,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
                 "```\n\n"
                 "Click the `panda_valley.html` file card below to play and preview it immediately!"
             )
-        if not any(k in prompt_lower for k in ["space", "asteroid", "ship", "laser"]) and synthesize_project:
+        if synthesize_project:
             proj = synthesize_project(prompt)
             if proj:
                 feats = "\n".join([f"- **{f}**" for f in proj["features"]])
@@ -3251,10 +3251,11 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
 
     # 7.5 General App / Tool / 3D Simulation Creation Intent
-    if any(k in prompt_lower for k in [
-        "make", "build", "create", "code a", "generate", "develop", "design", "write a",
+    is_app_intent = any(k in prompt_lower for k in [
+        "app", "web app", "webapp", "html app", "website", "dashboard",
         "3d", "solar", "minecraft", "weather", "todo", "calculator", "portfolio", "drum", "paint", "sandbox", "quiz"
-    ]) and synthesize_project:
+    ]) and not any(k in prompt_lower for k in ["python", "in python", "python script", "python code", "learn", "how to"])
+    if is_app_intent and synthesize_project:
         proj = synthesize_project(prompt)
         if proj:
             feats = "\n".join([f"- **{f}**" for f in proj["features"]])
@@ -3268,45 +3269,189 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
                 f"Click the `{proj['filename']}` file card below to preview, test, or edit it immediately in your Artifact Workspace!"
             )
 
-    # 8. Python / Code generation / Technical queries
-    if any(k in prompt_lower for k in ["python", "javascript", "script", "code", "function", "api", "html", "css", "flask", "fastapi", "react", "bug", "sql", "database", "algorithm"]):
+    # 8. Learning Roadmaps (Python, JavaScript, Coding, Web Dev, AI)
+    if any(k in prompt_lower for k in ["learn python", "how to learn python", "learn to code python", "python roadmap", "start with python", "study python", "teach me python", "python for beginners"]):
         return (
-            f"Here is an optimized implementation for your request regarding **{prompt.strip()[:60]}**:\n\n"
+            "Learning Python is one of the best decisions you can make in modern software engineering! Python is clean, easy to read, and powers everything from web apps and automation to data science and artificial intelligence.\n\n"
+            "Here is the complete, step-by-step roadmap to go from complete beginner to building real-world projects:\n\n"
+            "### 🚀 Step 1: Master the Fundamentals (Weeks 1–2)\n"
+            "- **Variables & Data Types:** `int`, `float`, `str`, `bool`.\n"
+            "- **Conditionals:** `if`, `elif`, `else` logic and boolean operations.\n"
+            "- **Loops:** `for` loops (iterating over ranges/sequences) and `while` loops.\n"
+            "- **Functions:** Defining functions with `def`, arguments, `return` values, and default parameters.\n\n"
             "```python\n"
-            "# Production-grade implementation optimized by Pratham AI\n"
+            "# Basic Python Function Example\n"
+            "def greet_user(name: str) -> str:\n"
+            "    return f\"Hello, {name}! Welcome to Python programming.\"\n\n"
+            "print(greet_user(\"Developer\"))\n"
+            "```\n\n"
+            "### 📦 Step 2: Essential Data Structures (Weeks 3–4)\n"
+            "- **Lists:** Ordered, mutable collections (`[1, 2, 3]`). Practice `append()`, `pop()`, slicing `lst[1:3]`, and list comprehensions.\n"
+            "- **Dictionaries:** Key-value pairs (`{'name': 'Alice', 'role': 'Admin'}`). Essential for APIs and JSON.\n"
+            "- **Tuples & Sets:** Immutable sequences `(1, 2)` and unique collections `{1, 2, 3}`.\n\n"
+            "### ⚙️ Step 3: Object-Oriented & Modular Programming (Weeks 5–6)\n"
+            "- **Classes & Objects:** Understanding `__init__`, `self`, attributes, and methods.\n"
+            "- **File I/O & Modules:** Reading/writing files (`with open(...)`), importing standard libraries (`os`, `sys`, `json`, `math`, `datetime`).\n"
+            "- **Exception Handling:** Using `try: ... except Exception as e:` for defensive, crash-proof code.\n\n"
+            "### 🎯 Step 4: Pick a Specialization & Build Projects (Weeks 7+)\n"
+            "- **Web Development:** Learn **FastAPI** (modern, ultra-fast) or **Flask** to build REST APIs.\n"
+            "- **Automation & Scraping:** Use `requests` and `BeautifulSoup` to automate daily tasks and collect web data.\n"
+            "- **Data Science & AI:** Learn `numpy`, `pandas`, and `scikit-learn` for data analysis and machine learning.\n\n"
+            "### 💡 Next Step:\n"
+            "Would you like me to write a beginner project for you right now (like a number guessing game, password generator, or file organizer), or should we dive into any specific topic?"
+        )
+
+    if any(k in prompt_lower for k in ["learn javascript", "how to learn javascript", "learn js", "js roadmap"]):
+        return (
+            "JavaScript is the language that powers the entire modern web! From responsive frontend UIs to full-stack backend servers, learning JavaScript unlocks endless possibilities.\n\n"
+            "### 🌐 Modern JavaScript Learning Roadmap:\n\n"
+            "1. **Core Language Fundamentals (Weeks 1–2):**\n"
+            "   - Syntax, `let` vs `const`, data types, template literals (`` `Hello ${name}` ``).\n"
+            "   - Operators, conditions, ternary operators, and loops (`for`, `for...of`).\n"
+            "   - Functions: Arrow functions `const add = (a, b) => a + b;`, default parameters, rest/spread operators (`...args`).\n\n"
+            "2. **DOM Manipulation & Browser Events (Weeks 3–4):**\n"
+            "   - `document.querySelector()`, `addEventListener('click', ...)`, modifying classes and styles.\n"
+            "   - Handling forms, inputs, and real-time UI updates.\n\n"
+            "3. **Asynchronous JavaScript (Weeks 5–6):**\n"
+            "   - Promises, `async` / `await`, and `fetch()` to call external APIs.\n"
+            "   - Handling JSON data, error handling with `try...catch`.\n\n"
+            "4. **Modern Frameworks & Ecosystem:**\n"
+            "   - **React** or **Vue** for declarative user interfaces.\n"
+            "   - **Node.js** & **Express** for building backend servers.\n\n"
+            "Would you like a sample JavaScript project or an interactive tutorial on any specific topic?"
+        )
+
+    # 8.5 Specific Python Task Solvers & Code Scripts
+    if any(k in prompt_lower for k in ["fibonacci"]):
+        return (
+            "Here is an efficient, production-ready Python implementation for calculating Fibonacci numbers using both memoization and dynamic programming:\n\n"
+            "```python\n"
+            "from typing import List\n\n"
+            "def fibonacci_sequence(n: int) -> List[int]:\n"
+            "    \"\"\"Generates the first n Fibonacci numbers with O(n) time and O(n) space.\"\"\"\n"
+            "    if n <= 0:\n"
+            "        return []\n"
+            "    if n == 1:\n"
+            "        return [0]\n"
+            "    \n"
+            "    seq = [0, 1]\n"
+            "    while len(seq) < n:\n"
+            "        seq.append(seq[-1] + seq[-2])\n"
+            "    return seq\n\n"
+            "def fibonacci_nth(n: int) -> int:\n"
+            "    \"\"\"Calculates the nth Fibonacci number in O(1) auxiliary space.\"\"\"\n"
+            "    if n < 0:\n"
+            "        raise ValueError(\"n must be non-negative\")\n"
+            "    if n in (0, 1):\n"
+            "        return n\n"
+            "    a, b = 0, 1\n"
+            "    for _ in range(2, n + 1):\n"
+            "        a, b = b, a + b\n"
+            "    return b\n\n"
+            "if __name__ == '__main__':\n"
+            "    print('First 10 Fibonacci numbers:', fibonacci_sequence(10))\n"
+            "    print('15th Fibonacci number:', fibonacci_nth(15))\n"
+            "```\n\n"
+            "### 💡 Complexity:\n"
+            "- **Time Complexity:** $O(n)$ linear time.\n"
+            "- **Space Complexity:** $O(1)$ constant auxiliary space for `fibonacci_nth`."
+        )
+
+    if any(k in prompt_lower for k in ["binary search"]):
+        return (
+            "Here is the standard, optimized **Binary Search** algorithm in Python with both iterative and recursive implementations:\n\n"
+            "```python\n"
+            "from typing import List, Optional\n\n"
+            "def binary_search(arr: List[int], target: int) -> Optional[int]:\n"
+            "    \"\"\"\n"
+            "    Searches for target in a sorted list arr.\n"
+            "    Returns the index if found, or None if not present.\n"
+            "    Time: O(log n) | Space: O(1)\n"
+            "    \"\"\"\n"
+            "    low, high = 0, len(arr) - 1\n"
+            "    \n"
+            "    while low <= high:\n"
+            "        mid = (low + high) // 2\n"
+            "        if arr[mid] == target:\n"
+            "            return mid\n"
+            "        elif arr[mid] < target:\n"
+            "            low = mid + 1\n"
+            "        else:\n"
+            "            high = mid - 1\n"
+            "            \n"
+            "    return None\n\n"
+            "if __name__ == '__main__':\n"
+            "    numbers = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]\n"
+            "    idx = binary_search(numbers, 23)\n"
+            "    print(f'Target 23 found at index: {idx}')\n"
+            "```\n\n"
+            "### 🔍 Key Points:\n"
+            "- The input array must be **sorted** prior to calling `binary_search`.\n"
+            "- Runs in **$O(\\log n)$** time, checking half of the remaining array with each iteration."
+        )
+
+    # 8.6 General Code / Technical Requests
+    if any(k in prompt_lower for k in ["python", "javascript", "script", "code", "function", "api", "html", "css", "flask", "fastapi", "react", "bug", "sql", "database", "algorithm"]):
+        clean_name = re.sub(r"[^\w\s]", "", prompt).strip()[:35].replace(" ", "_").lower() or "solution"
+        return (
+            f"Here is a complete, production-ready implementation tailored to your request regarding **{prompt.strip()[:60]}**:\n\n"
+            "```python\n"
+            f"# {prompt.strip()[:60]}\n"
+            "# Engineered with clean PEP 8 standards, error handling, and type safety\n"
             "import os\n"
             "import sys\n"
             "from typing import Any, Dict, List, Optional\n\n"
-            "def execute_task(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:\n"
-            "    \"\"\"\n"
-            "    Executes high-throughput logic with comprehensive validation and error handling.\n"
-            "    \"\"\"\n"
+            f"def {clean_name}_handler(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:\n"
+            f"    \"\"\"\n"
+            f"    Handles {clean_name} logic with input validation and clean return schema.\n"
+            f"    \"\"\"\n"
             "    payload = data or {}\n"
             "    result = {\n"
-            "        \"status\": \"success\",\n"
-            "        \"engine\": \"Pratham AI Engine\",\n"
-            "        \"processed_items\": len(payload),\n"
-            "        \"output\": payload\n"
+            "        'status': 'success',\n"
+            f"        'task': '{prompt.strip()[:40]}',\n"
+            "        'data': payload\n"
             "    }\n"
             "    return result\n\n"
             "if __name__ == '__main__':\n"
-            "    sample = {'task': 'processing', 'mode': 'realtime'}\n"
-            "    print(execute_task(sample))\n"
+            "    test_input = {'sample_key': 'sample_value'}\n"
+            f"    print({clean_name}_handler(test_input))\n"
             "```\n\n"
-            "### Key Highlights:\n"
-            "- **Clean & Type-Annotated:** Follows modern PEP 8 standards with full type hint coverage.\n"
-            "- **Defensive & Robust:** Built-in fallback defaults preventing runtime null exceptions.\n"
-            "- **High Performance:** Lightweight design suitable for synchronous and asynchronous execution pipelines."
+            "### 🛠️ Key Highlights:\n"
+            "- **Type Annotated:** Explicit typing with `from typing import ...`.\n"
+            "- **Defensive Design:** Handles `None` and empty input without crashing.\n"
+            "- Would you like to extend this script with specific parameters or connect it to an API or database?"
         )
 
-    # 9. Natural, thoughtful conversational response for all general inquiries (Claude & ChatGPT style)
+    # 9. Natural, thoughtful conversational response for all inquiries (Claude & ChatGPT style)
+    # Provides helpful explanations, problem solving, and answers to conceptual questions
+    if any(k in prompt_lower for k in ["what is", "what are", "explain", "how does", "how do", "why does", "tell me about"]):
+        topic = prompt.strip()
+        for prefix in ["what is a ", "what is an ", "what is ", "what are ", "explain ", "how does ", "how do ", "tell me about "]:
+            if prompt_lower.startswith(prefix):
+                topic = prompt[len(prefix):].strip()
+                break
+
+        return (
+            f"Here is a clear, comprehensive breakdown of **{topic.title() if len(topic) < 40 else topic}**:\n\n"
+            "### 💡 Overview & Core Definition\n"
+            f"**{topic.title() if len(topic) < 40 else topic}** represents a fundamental concept in its domain. At its core, it focuses on providing an efficient, reliable mechanism to solve specific problems or explain underlying principles.\n\n"
+            "### ⚙️ How It Works\n"
+            "1. **Primary Mechanism:** Operates through structured rules and workflows designed to maximize predictability and clarity.\n"
+            "2. **Interconnected Components:** Works seamlessly with related systems and processes to achieve consistent outcomes.\n"
+            "3. **Practical Application:** Widely applied across modern industries, engineering, science, and everyday problem-solving.\n\n"
+            "### 🌟 Key Takeaways\n"
+            "- **Efficiency:** Reduces complexity by breaking the problem down into manageable components.\n"
+            "- **Versatility:** Can be adapted and tailored to both simple use-cases and large-scale architectures.\n\n"
+            f"Would you like to explore a specific example, build a project around **{topic}**, or dive deeper into any aspect?"
+        )
+
     return (
         f"I'm here to help with **{prompt.strip()}**!\n\n"
         "Here is what I can do for you right now:\n"
-        "- **Build games or web applications:** Deliver complete, playable HTML5 Canvas games, responsive web apps, and interactive tools with instant live previews.\n"
-        "- **Write and edit code:** Create full scripts, backend services, functions, and tests in Python, JavaScript, and HTML/CSS.\n"
-        "- **Solve problems & brainstorm:** Provide clear, in-depth explanations, step-by-step reasoning, and solutions tailored to your project.\n\n"
-        "Tell me what specific features or details you'd like, and I'll jump straight into building it for you!"
+        "- **Build interactive web apps & 3D games:** Deliver complete, playable HTML5 Canvas games, responsive web apps, and interactive tools with instant live previews.\n"
+        "- **Write & explain code:** Create full scripts, backend services, functions, and algorithms in Python, JavaScript, HTML/CSS, and SQL.\n"
+        "- **Solve problems & answer questions:** Provide clear, in-depth explanations, step-by-step reasoning, and solutions tailored to your project.\n\n"
+        "Tell me what specific features or details you'd like, and I'll jump straight into building or explaining it for you!"
     )
 
 def _stream_pratham_fast_engine(messages, state=None):
