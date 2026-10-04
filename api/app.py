@@ -3202,15 +3202,15 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
 
     return (
-        f"⚠️ **AI Model Connection Required on Vercel**\n\n"
-        f"Pratham AI is currently running in serverless mode on Vercel. To generate code, interactive apps, and documents:\n\n"
-        f"1. **Option 1: Free Google Gemini API Key (Recommended)**\n"
+        f"⚠️ **AI Model Connection Needed**\n\n"
+        f"Pratham AI is currently running without an active AI key or connected backend. To generate PDFs, code, games, and essays:\n\n"
+        f"1. **Option 1: Free AI Studio Key (Recommended — takes 10 seconds)**\n"
         f"   - Open **Settings (⚙️) → AI Engine & Keys**.\n"
-        f"   - Paste your free API key from [Google AI Studio](https://aistudio.google.com/apikey) and click **Save & Activate Keys**.\n\n"
+        f"   - Paste your free API key from [AI Studio (Gemini)](https://aistudio.google.com/apikey) and click **Save & Activate Keys**.\n\n"
         f"2. **Option 2: Free Groq Cloud Key**\n"
-        f"   - In **Settings → AI Engine & Keys**, paste your free key from [Groq Console](https://console.groq.com/keys) for ultra-fast Llama 3.3 70B.\n\n"
-        f"3. **Option 3: Connect to Local Engine**\n"
-        f"   - In **Settings → AI Engine & Keys**, enter your **Backend Server URL** (e.g. `http://localhost:5000` or your Cloudflare/ngrok tunnel) to use the full Antigravity terminal agent directly from Vercel!"
+        f"   - In **Settings → AI Engine & Keys**, paste your free key from [Groq Console](https://console.groq.com/keys) for ultra-fast responses.\n\n"
+        f"3. **Option 3: Connect to your Render Backend**\n"
+        f"   - In **Settings → AI Engine & Keys**, paste your **Backend Server URL** (e.g. your Render URL `https://pratham-ai-xxxx.onrender.com` or local tunnel)!"
     )
 
 def _stream_pratham_fast_engine(messages, state=None):
