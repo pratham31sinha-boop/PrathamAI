@@ -388,13 +388,14 @@ _worker_registry: dict = {}
 _worker_registry_lock = threading.Lock()
 _WORKER_REGISTRY_GH_PATH = "data/worker_registry.json"
 _worker_gh_cache = {"data": None, "t": 0}
-_WORKER_GH_CACHE_TTL = 15           
+_WORKER_GH_CACHE_TTL = 60           
 def _github_repo_slug() -> str:
     return GITHUB_REPO.replace("https://github.com/", "").strip("/")
 def _load_worker_from_github() -> dict:
     now_ts = time.time()
-    if _worker_gh_cache["data"] and (now_ts - _worker_gh_cache["t"]) < _WORKER_GH_CACHE_TTL:
-        return _worker_gh_cache["data"]
+    if (now_ts - _worker_gh_cache.get("t", 0)) < _WORKER_GH_CACHE_TTL:
+        return _worker_gh_cache.get("data")
+    _worker_gh_cache["t"] = now_ts
     if not GITHUB_TOKEN:
         return None
     repo_clean = _github_repo_slug()
@@ -404,16 +405,16 @@ def _load_worker_from_github() -> dict:
         headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=6) as resp:
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
             meta = json.loads(resp.read().decode('utf-8'))
             if meta.get("content"):
                 raw = base64.b64decode(meta["content"].replace("\n", "")).decode('utf-8')
                 data = json.loads(raw)
                 _worker_gh_cache["data"] = data
-                _worker_gh_cache["t"] = now_ts
                 return data
     except Exception:
         pass
+    _worker_gh_cache["data"] = None
     return None
 def _save_worker_to_github(entry: dict) -> bool:
     if not GITHUB_TOKEN:
@@ -821,22 +822,24 @@ def _is_intermediate_helper_file(filename: str, user_prompt: str) -> bool:
     return False
 
 def _snapshot_workspace_files(search_dirs: list) -> dict:
-    """Returns {path: mtime} for files in search directories."""
+    """Returns {path: mtime} for files in search directories using fast scandir."""
     snapshot = {}
     for d in search_dirs:
         if not d or not os.path.isdir(d):
             continue
         try:
-            for root, dirs, files in os.walk(d):
-                dirs[:] = [sub for sub in dirs if not sub.startswith((".", "__")) and sub not in ("node_modules", ".git", ".gemini", ".system_generated")]
-                for fn in files:
-                    if fn.startswith((".", "__")) or fn in _IGNORE_FILE_NAMES:
-                        continue
-                    fp = os.path.join(root, fn)
-                    try:
-                        snapshot[fp] = os.path.getmtime(fp)
-                    except Exception:
-                        pass
+            for entry in os.scandir(d):
+                if entry.name.startswith((".", "__")) or entry.name in _IGNORE_FILE_NAMES:
+                    continue
+                try:
+                    if entry.is_file(follow_symlinks=False):
+                        snapshot[entry.path] = entry.stat().st_mtime
+                    elif entry.is_dir(follow_symlinks=False) and entry.name not in ("node_modules", ".git", ".gemini", ".system_generated"):
+                        for sub in os.scandir(entry.path):
+                            if not sub.name.startswith((".", "__")) and sub.is_file(follow_symlinks=False):
+                                snapshot[sub.path] = sub.stat().st_mtime
+                except Exception:
+                    pass
         except Exception:
             pass
     return snapshot
@@ -4385,7 +4388,10 @@ def _stream_gemini_api_key(messages, state=None):
                             state["finish_reason"] = "length" if str(finish).upper() in {"MAX_TOKENS", "LENGTH"} else "stop"
                         for part in ((candidate.get("content") or {}).get("parts") or []):
                             if part.get("text"):
-                                yield _sse({"type": "token", "text": part["text"]})
+                                words = re.split(r"(\s+)", part["text"])
+                                for w in words:
+                                    if w:
+                                        yield _sse({"type": "token", "text": w})
             return
         except urllib.error.HTTPError as exc:
             try:
@@ -4661,7 +4667,10 @@ def _stream_qwen_ollama(messages, state=None):
                         token_text = "".join(str(x.get("text", "") if isinstance(x, dict) else x) for x in token_text)
                     if token_text:
                         got_delta = True
-                        yield _sse({"type": "token", "text": str(token_text)})
+                        words = re.split(r"(\s+)", str(token_text))
+                        for w in words:
+                            if w:
+                                yield _sse({"type": "token", "text": w})
                     finish_reason = choice.get("finish_reason")
                     if finish_reason and state is not None:
                         state["finish_reason"] = finish_reason
@@ -6435,7 +6444,7 @@ def chat_stream():
     # perform network I/O before Flask even returns the SSE response.
     _google_oauth_fast_mode = (PRATHAM_AI_MODE == "google_oauth")
     _worker_available_for_request = (
-        False if _google_oauth_fast_mode else _worker_is_online(_worker_get_latest())
+        False if (_google_oauth_fast_mode or not _worker_registry) else _worker_is_online(_worker_get_latest())
     )
     if _worker_available_for_request:
         web_search_disabled = True
@@ -6857,17 +6866,9 @@ def chat_stream():
                                 "detail": payload.get("detail", "")
                             })
                         elif payload.get("type") == "complete":
-                            continue                                                               
+                            continue
+                    yield chunk
                 except Exception:
-                    pass
-                is_comp = False
-                if chunk.startswith("data: "):
-                    try:
-                        p_data = json.loads(chunk[6:].strip())
-                        is_comp = (p_data.get("type") == "complete")
-                    except Exception:
-                        pass
-                if not is_comp:
                     yield chunk
             iteration_reply = "".join(iteration_text_parts)
             _combined_feedback = None                                      
