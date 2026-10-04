@@ -3202,8 +3202,15 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
 
     return (
-        f"I am ready with complete agentic freedom and terminal capabilities to assist you with **{prompt.strip()}**!\n\n"
-        "Please provide any specific requirements or instructions, and I will execute the commands in the workspace terminal, test the implementation, and present the final deliverable file directly to you."
+        f"⚠️ **AI Model Connection Required on Vercel**\n\n"
+        f"Pratham AI is currently running in serverless mode on Vercel. To generate code, interactive apps, and documents:\n\n"
+        f"1. **Option 1: Free Google Gemini API Key (Recommended)**\n"
+        f"   - Open **Settings (⚙️) → AI Engine & Keys**.\n"
+        f"   - Paste your free API key from [Google AI Studio](https://aistudio.google.com/apikey) and click **Save & Activate Keys**.\n\n"
+        f"2. **Option 2: Free Groq Cloud Key**\n"
+        f"   - In **Settings → AI Engine & Keys**, paste your free key from [Groq Console](https://console.groq.com/keys) for ultra-fast Llama 3.3 70B.\n\n"
+        f"3. **Option 3: Connect to Local Engine**\n"
+        f"   - In **Settings → AI Engine & Keys**, enter your **Backend Server URL** (e.g. `http://localhost:5000` or your Cloudflare/ngrok tunnel) to use the full Antigravity terminal agent directly from Vercel!"
     )
 
 def _stream_pratham_fast_engine(messages, state=None):
@@ -6379,8 +6386,8 @@ def chat_stream():
     body = request.get_json(silent=True) or {}
     message = (body.get("message") or "").strip()
     conv_id = body.get("conversation_id") or None
-    user_gemini_key = request.headers.get("X-Gemini-Key", "").strip() or (body.get("gemini_api_key", "").strip() if isinstance(body, dict) else "")
-    user_groq_key = request.headers.get("X-Groq-Key", "").strip() or (body.get("groq_api_key", "").strip() if isinstance(body, dict) else "")
+    user_gemini_key = request.headers.get("X-Gemini-Key", "").strip() or (body.get("gemini_key", "").strip() if isinstance(body, dict) else "") or (body.get("gemini_api_key", "").strip() if isinstance(body, dict) else "")
+    user_groq_key = request.headers.get("X-Groq-Key", "").strip() or (body.get("groq_key", "").strip() if isinstance(body, dict) else "") or (body.get("groq_api_key", "").strip() if isinstance(body, dict) else "")
     _do_stream._current_gemini_key = user_gemini_key
     _do_stream._current_groq_key = user_groq_key
     is_deep_research = "[[DEEP_RESEARCH]]" in message
@@ -7898,7 +7905,7 @@ def _cors_preflight():
     origin = request.headers.get("Origin", "*")
     resp.headers["Access-Control-Allow-Origin"] = origin
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, X-Requested-With"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, X-Requested-With, X-Gemini-Key, X-Groq-Key, X-Gemini-Access-Token, Cache-Control"
     resp.headers["Access-Control-Allow-Credentials"] = "true"
     return resp
 QWEN_APP_HEARTBEAT_ENABLED = os.environ.get("QWEN_APP_HEARTBEAT_ENABLED", "0").strip().lower() not in {"0", "false", "no", "off"}

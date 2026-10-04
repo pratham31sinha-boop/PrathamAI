@@ -2136,6 +2136,21 @@
                         </div>
                     </div>
 
+                    <!-- Custom Backend Engine URL -->
+                    <div class="flex flex-col gap-2 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">🌐</span>
+                                <span class="text-xs font-bold text-[var(--text)]">Backend Server URL (Local / Tunnel)</span>
+                            </div>
+                            <span id="settings-backend-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Default</span>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-dim)]">Connect your deployed Vercel frontend to your local Pratham AI engine (e.g. <code>http://localhost:5000</code> or your Cloudflare/ngrok tunnel) to get full Antigravity CLI terminal freedom from anywhere.</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <input type="text" id="input-backend-url" placeholder="http://localhost:5000 or https://xyz.trycloudflare.com" class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
+                        </div>
+                    </div>
+
                     <div class="flex items-center justify-between pt-1">
                         <button type="button" onclick="clearSavedApiKeys()" class="text-xs text-red-400 hover:text-red-300 underline cursor-pointer">Clear Saved Keys</button>
                         <button type="button" onclick="saveApiKeysSettings()" id="save-api-keys-btn" class="px-4 py-2 accent-gradient text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-all cursor-pointer shadow-sm">Save &amp; Activate Keys</button>
@@ -2789,7 +2804,18 @@
                 const configured = new URLSearchParams(window.location.search).get('backend');
                 if (configured) {
                     const u = new URL(configured);
-                    if (u.protocol === 'http:' || u.protocol === 'https:') return u.origin.replace(/\/$/, '');
+                    if (u.protocol === 'http:' || u.protocol === 'https:') {
+                        const origin = u.origin.replace(/\/$/, '');
+                        try { localStorage.setItem('pratham_backend_url', origin); } catch (e) {}
+                        return origin;
+                    }
+                }
+                const saved = localStorage.getItem('pratham_backend_url');
+                if (saved) {
+                    try {
+                        const u = new URL(saved);
+                        if (u.protocol === 'http:' || u.protocol === 'https:') return u.origin.replace(/\/$/, '');
+                    } catch (e) {}
                 }
                 if (typeof window !== 'undefined' && window.location && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
                     return window.location.origin.replace(/\/$/, '');
@@ -2951,13 +2977,17 @@
         function loadSavedApiKeys() {
             const geminiKey = localStorage.getItem('pratham_gemini_key') || '';
             const groqKey = localStorage.getItem('pratham_groq_key') || '';
+            const backendUrl = localStorage.getItem('pratham_backend_url') || '';
             const geminiInput = document.getElementById('input-gemini-key');
             const groqInput = document.getElementById('input-groq-key');
+            const backendInput = document.getElementById('input-backend-url');
             const geminiBadge = document.getElementById('settings-gemini-status-badge');
             const groqBadge = document.getElementById('settings-groq-status-badge');
+            const backendBadge = document.getElementById('settings-backend-status-badge');
 
             if (geminiInput) geminiInput.value = geminiKey;
             if (groqInput) groqInput.value = groqKey;
+            if (backendInput) backendInput.value = backendUrl;
 
             if (geminiBadge) {
                 if (geminiKey.trim()) {
@@ -2978,19 +3008,39 @@
                     groqBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]';
                 }
             }
+
+            if (backendBadge) {
+                if (backendUrl.trim()) {
+                    backendBadge.innerText = 'Custom Backend Active';
+                    backendBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400';
+                } else {
+                    backendBadge.innerText = 'Default';
+                    backendBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]';
+                }
+            }
         }
 
         function saveApiKeysSettings() {
             const geminiInput = document.getElementById('input-gemini-key');
             const groqInput = document.getElementById('input-groq-key');
+            const backendInput = document.getElementById('input-backend-url');
             const geminiVal = geminiInput ? geminiInput.value.trim() : '';
             const groqVal = groqInput ? groqInput.value.trim() : '';
+            const backendVal = backendInput ? backendInput.value.trim().replace(/\/+$/, '') : '';
 
             if (geminiVal) localStorage.setItem('pratham_gemini_key', geminiVal);
             else localStorage.removeItem('pratham_gemini_key');
 
             if (groqVal) localStorage.setItem('pratham_groq_key', groqVal);
             else localStorage.removeItem('pratham_groq_key');
+
+            if (backendVal) {
+                localStorage.setItem('pratham_backend_url', backendVal);
+                SERVER_CONTEXT_HOST = backendVal;
+            } else {
+                localStorage.removeItem('pratham_backend_url');
+                SERVER_CONTEXT_HOST = resolvePrathamBackendOrigin();
+            }
 
             loadSavedApiKeys();
 
@@ -3007,9 +3057,11 @@
         }
 
         function clearSavedApiKeys() {
-            if (!confirm('Clear all saved API keys?')) return;
+            if (!confirm('Clear all saved API keys and custom backend settings?')) return;
             localStorage.removeItem('pratham_gemini_key');
             localStorage.removeItem('pratham_groq_key');
+            localStorage.removeItem('pratham_backend_url');
+            SERVER_CONTEXT_HOST = resolvePrathamBackendOrigin();
             loadSavedApiKeys();
         }
 
