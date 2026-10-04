@@ -6,4 +6,5 @@ pypdf>=4.0.0
 reportlab>=4.0.0
 pillow>=10.0.0
 fpdf2>=2.7.0
+gunicorn>=22.0.0
 
