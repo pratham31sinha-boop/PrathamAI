@@ -5081,6 +5081,40 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
         if conv_id:
             _conversation_summaries[conv_id] = summary_text
     return [{"role": "system", "content": summary_text}] + recent_msgs
+
+DEFAULT_CLOUDFLARE_TUNNEL_URL = os.environ.get("CLOUDFLARE_TUNNEL_URL", "https://contacted-gain-morning-valuation.trycloudflare.com").strip().rstrip("/")
+
+def _stream_cloudflare_tunnel(messages, state=None):
+    if shutil.which("agy"):
+        return
+    tunnel = DEFAULT_CLOUDFLARE_TUNNEL_URL
+    if not tunnel:
+        return
+    import urllib.request, json
+    user_msg = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            user_msg = m.get("content", "")
+            break
+    if not user_msg:
+        return
+    target_url = f"{tunnel}/chat-stream"
+    payload = json.dumps({
+        "message": user_msg,
+        "conversation_id": (state or {}).get("conversation_id", "")
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        target_url,
+        data=payload,
+        headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+        method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=50) as resp:
+        for line in resp:
+            line_str = line.decode("utf-8", "ignore")
+            if line_str.startswith("data: "):
+                yield line_str
+
 _PROVIDER_CHAIN = [
     ("antigravity_cli", _stream_antigravity_cli),
     ("gemini_api_key", _stream_gemini_api_key),
@@ -5089,6 +5123,7 @@ _PROVIDER_CHAIN = [
     ("openrouter", _stream_openrouter),
     ("cerebras", _stream_cerebras),
     ("mistral", _stream_mistral),
+    ("cloudflare_tunnel", _stream_cloudflare_tunnel),
     ("qwen_ollama", _stream_qwen_ollama),
     ("pratham_fast_engine", _stream_pratham_fast_engine)
 ]
