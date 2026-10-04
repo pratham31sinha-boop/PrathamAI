@@ -1696,7 +1696,7 @@ def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: st
 def _serve_download_candidate(identifier: str):
     if not identifier:
         return jsonify({"error": "No filename or token specified"}), 400
-    safe_name = os.path.basename(identifier).strip()
+    safe_name = os.path.basename(urllib.parse.unquote(identifier)).strip()
 
     # 1. Exact match or token match in _generated_files_store
     if identifier in _generated_files_store:
@@ -1712,7 +1712,21 @@ def _serve_download_candidate(identifier: str):
             resp.headers["Access-Control-Allow-Origin"] = "*"
             return resp
 
-    # 2. Check /tmp directly
+    # 2. Check WORKSPACE_ROOT directly (primary storage for user deliverables)
+    workspace_path = os.path.join(WORKSPACE_ROOT, safe_name)
+    if os.path.isfile(workspace_path):
+        try:
+            with open(workspace_path, "rb") as fh:
+                data = fh.read()
+            mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+            resp = Response(data, mimetype=mime)
+            resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+        except Exception:
+            pass
+
+    # 3. Check /tmp directly
     tmp_path = os.path.join("/tmp", safe_name)
     if os.path.isfile(tmp_path):
         try:
@@ -1739,7 +1753,23 @@ def _serve_download_candidate(identifier: str):
         except Exception:
             pass
 
-    # 3. Search /tmp subdirectories
+    # 4. Search WORKSPACE_ROOT subdirectories
+    for root, dirs, files in os.walk(WORKSPACE_ROOT):
+        dirs[:] = [d for d in dirs if not d.startswith((".", "__")) and d not in ("node_modules", ".git", ".gemini", ".system_generated")]
+        if safe_name in files:
+            try:
+                candidate = os.path.join(root, safe_name)
+                with open(candidate, "rb") as fh:
+                    data = fh.read()
+                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+                resp = Response(data, mimetype=mime)
+                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return resp
+            except Exception:
+                pass
+
+    # 5. Search /tmp subdirectories
     for root, dirs, files in os.walk("/tmp"):
         if safe_name in files:
             try:
@@ -1754,7 +1784,7 @@ def _serve_download_candidate(identifier: str):
             except Exception:
                 pass
 
-    # 4. Search workspace data directory (sessions, attachments, user files)
+    # 6. Search workspace data directory (sessions, attachments, user files)
     data_root = os.path.join(WORKSPACE_ROOT, "data")
     if os.path.isdir(data_root):
         for root, dirs, files in os.walk(data_root):
@@ -7289,6 +7319,29 @@ def chat_stream():
                 if cand.get("ext") in ("zip", "tar.gz", "7z"):
                     zip_cand = cand
                     break
+            if not zip_cand:
+                zip_refs = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|tar\.gz|7z))\b", (outgoing_user_message or message) + "\n" + assistant_response, re.IGNORECASE)
+                for zref in zip_refs:
+                    for s_dir in search_dirs:
+                        cand_path = os.path.join(s_dir, zref)
+                        if os.path.isfile(cand_path) and os.path.getsize(cand_path) > 50:
+                            zip_cand = {"filename": zref, "path": cand_path, "size_bytes": os.path.getsize(cand_path), "ext": "zip"}
+                            break
+                    if zip_cand:
+                        break
+            if not zip_cand:
+                for s_dir in search_dirs:
+                    try:
+                        for fn in os.listdir(s_dir):
+                            if fn.lower().endswith((".zip", ".tar.gz", ".7z")) and not fn.startswith("."):
+                                fp = os.path.join(s_dir, fn)
+                                if os.path.isfile(fp) and os.path.getsize(fp) > 50:
+                                    zip_cand = {"filename": fn, "path": fp, "size_bytes": os.path.getsize(fp), "ext": "zip"}
+                                    break
+                        if zip_cand:
+                            break
+                    except Exception:
+                        pass
             if zip_cand:
                 zip_name = zip_cand["filename"]
                 with open(zip_cand["path"], "rb") as zf_h:
@@ -7395,6 +7448,31 @@ def chat_stream():
                 yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": exp_name})
                 if user_email:
                     _save_user_chat_file(user_email, conv_id, exp_name, mbytes)
+
+        # Check for ANY file referenced in the response or prompt that exists on disk
+        referenced_files = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json|tar\.gz|7z))\b", assistant_response + "\n" + (outgoing_user_message or message), re.IGNORECASE)
+        for r_fn in referenced_files:
+            if _is_intermediate_helper_file(r_fn, outgoing_user_message or message):
+                continue
+            r_fn_lower = r_fn.lower()
+            if any(f.get("filename", "").lower() == r_fn_lower for f in final_deliverables + _produced_files_this_turn):
+                continue
+            for s_dir in search_dirs:
+                f_path = os.path.join(s_dir, r_fn)
+                if os.path.isfile(f_path) and os.path.getsize(f_path) > 20:
+                    with open(f_path, "rb") as fh:
+                        f_bytes = fh.read()
+                    f_mime = mimetypes.guess_type(r_fn)[0] or "application/octet-stream"
+                    f_token = _store_generated_file(f_bytes, r_fn, f_mime)
+                    file_item = {
+                        "filename": r_fn, "url": f"/download/{f_token}", "download_url": f"/download/{f_token}",
+                        "size_bytes": len(f_bytes), "lang": r_fn.rsplit(".", 1)[-1] if "." in r_fn else "bin"
+                    }
+                    final_deliverables.append(file_item)
+                    yield _sse({"type": "file_ready", "url": f"/download/{f_token}", "filename": r_fn})
+                    if user_email:
+                        _save_user_chat_file(user_email, conv_id, r_fn, f_bytes)
+                    break
 
         if final_deliverables:
             _produced_files_this_turn = final_deliverables

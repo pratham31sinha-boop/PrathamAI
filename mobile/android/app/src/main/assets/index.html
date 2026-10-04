@@ -3935,9 +3935,9 @@
                 const candidateUrls = [];
                 if (urlHint) candidateUrls.push(urlHint);
                 if (card && card.dataset.downloadUrl) candidateUrls.push(card.dataset.downloadUrl);
-                candidateUrls.push(`/api/download_temp_file?name=${encodeURIComponent(filename)}`);
                 candidateUrls.push(`/download/${encodeURIComponent(filename)}`);
                 candidateUrls.push(`/api/download/${encodeURIComponent(filename)}`);
+                candidateUrls.push(`/api/download_temp_file?name=${encodeURIComponent(filename)}`);
 
                 let downloaded = false;
                 for (const dlUrl of candidateUrls) {
@@ -3946,16 +3946,18 @@
                         const resp = await smartFetchRequest(clean, { method: 'GET' });
                         if (resp && resp.ok) {
                             const blob = await resp.blob();
-                            const blobUrl = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = blobUrl;
-                            a.download = filename;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-                            downloaded = true;
-                            break;
+                            if (blob && blob.size > 0) {
+                                const blobUrl = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = blobUrl;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+                                downloaded = true;
+                                break;
+                            }
                         }
                     } catch (e) {}
                 }
@@ -3966,8 +3968,9 @@
                     return;
                 }
 
-                // Case D: Native direct navigation fallback
-                const directUrl = (card && card.dataset.downloadUrl) || `/api/download_temp_file?name=${encodeURIComponent(filename)}`;
+                // Case D: Native direct navigation fallback using resolved backend URL
+                const backendHost = (SERVER_CONTEXT_HOST || '').replace(/\/$/, '');
+                const directUrl = `${backendHost}/download/${encodeURIComponent(filename)}`;
                 const a = document.createElement('a');
                 a.href = directUrl;
                 a.download = filename;
@@ -5802,6 +5805,20 @@
                                     summary.innerHTML = '<span class="as-icon">✓</span>' + parts.join('<span class="asl-sep"></span>');
                                     (modelWrapper._answerZone || modelWrapper).appendChild(summary);
                                 }
+
+                                // Auto-discover and present any deliverable cards mentioned in response or prompt
+                                const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json))\b/gi;
+                                const textMatches = (fullText.match(fileRefRegex) || []).concat((typeof displayMessage === 'string' ? displayMessage.match(fileRefRegex) : []) || []);
+                                const seenRefs = new Set();
+                                textMatches.forEach(fn => {
+                                    const fnLower = fn.toLowerCase();
+                                    if (seenRefs.has(fnLower)) return;
+                                    seenRefs.add(fnLower);
+                                    if (/^(?:generate|make|build|create|run|test|setup|fetch|download|temp)_/i.test(fnLower)) return;
+                                    const dlUrl = `/download/${encodeURIComponent(fn)}`;
+                                    _turnFiles.push({ filename: fn, url: dlUrl, download_url: dlUrl });
+                                    appendDownloadCard(modelWrapper, dlUrl, fn);
+                                });
                             }
                             finalizeThinkingWrap();
                             _activeStepList = null;
