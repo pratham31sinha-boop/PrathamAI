@@ -1,633 +1,1076 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hill Climb Racing 2D</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-user-select: none;
-      margin: 0;
-      padding: 0;
-    }
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #1a1a2e;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    #gameCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      background: #87CEEB;
-    }
-    #ui-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 20px;
-    }
-    .hud-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      color: #fff;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-      font-weight: bold;
-    }
-    .stats-card {
-      background: rgba(0, 0, 0, 0.45);
-      padding: 12px 18px;
-      border-radius: 12px;
-      backdrop-filter: blur(4px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-    .fuel-bar-container {
-      width: 180px;
-      height: 20px;
-      background: #333;
-      border-radius: 10px;
-      overflow: hidden;
-      border: 2px solid #fff;
-      margin-top: 6px;
-    }
-    .fuel-bar {
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, #ff3333, #ffcc00, #33cc33);
-      transition: width 0.1s linear;
-    }
-    .touch-controls {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      pointer-events: auto;
-      margin-bottom: 20px;
-    }
-    .btn-pedal {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      border: 4px solid #fff;
-      background: rgba(0, 0, 0, 0.5);
-      color: #fff;
-      font-size: 20px;
-      font-weight: bold;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-      touch-action: manipulation;
-      cursor: pointer;
-      transition: transform 0.1s, background 0.1s;
-    }
-    .btn-pedal:active, .btn-pedal.active {
-      transform: scale(0.92);
-      background: rgba(255, 255, 255, 0.35);
-    }
-    .btn-brake {
-      background: rgba(220, 53, 69, 0.6);
-      border-color: #ff6b6b;
-    }
-    .btn-gas {
-      background: rgba(40, 167, 69, 0.6);
-      border-color: #51cf66;
-    }
-    #game-over-modal {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(20, 20, 35, 0.95);
-      border: 2px solid #ffaa00;
-      box-shadow: 0 0 25px rgba(255, 170, 0, 0.4);
-      padding: 30px;
-      border-radius: 16px;
-      text-align: center;
-      color: #fff;
-      display: none;
-      pointer-events: auto;
-      min-width: 280px;
-    }
-    #game-over-modal h2 {
-      font-size: 32px;
-      color: #ff4757;
-      margin-bottom: 15px;
-    }
-    #restart-btn {
-      margin-top: 20px;
-      padding: 12px 30px;
-      font-size: 18px;
-      font-weight: bold;
-      background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-      color: #111;
-      border: none;
-      border-radius: 25px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hill Climb Racing - Turbo Overdrive</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  body, html { width: 100%; height: 100%; overflow: hidden; background: #0a0e17; font-family: 'Segoe UI', Roboto, sans-serif; }
+  #canvas-container { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; width: 100%; height: 100%; object-fit: cover; }
+  
+  /* Modern Glassmorphic HUD overlay */
+  .hud {
+    position: absolute;
+    top: 20px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .hud-stat-box {
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    border-radius: 16px;
+    padding: 12px 20px;
+    color: #fff;
+    display: flex;
+    gap: 22px;
+  }
+  .stat-item { display: flex; flex-direction: column; }
+  .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; font-weight: 700; margin-bottom: 2px; }
+  .stat-value { font-size: 24px; font-weight: 900; color: #f8fafc; font-variant-numeric: tabular-nums; }
+  .stat-value.gold { color: #facc15; text-shadow: 0 0 12px rgba(250, 204, 21, 0.5); }
+  .stat-value.distance { color: #38bdf8; text-shadow: 0 0 12px rgba(56, 189, 248, 0.5); }
+
+  /* Fuel Meter */
+  .fuel-container {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .fuel-bar-wrap {
+    width: 100%;
+    height: 14px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 2px;
+  }
+  .fuel-bar {
+    height: 100%;
+    width: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #ef4444, #eab308, #22c55e);
+    transition: width 0.1s ease-out;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+  }
+
+  /* Controls Overlay for Mobile & Touch */
+  .touch-controls {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .pedal-btn {
+    pointer-events: auto;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: radial-gradient(circle, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.2);
+    color: white;
+    font-size: 15px;
+    font-weight: 800;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .pedal-btn:active, .pedal-btn.active {
+    transform: scale(0.92);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4), inset 0 3px 6px rgba(0,0,0,0.6);
+  }
+  .pedal-btn.gas { border-color: rgba(34, 197, 94, 0.5); }
+  .pedal-btn.gas:active, .pedal-btn.gas.active { background: radial-gradient(circle, rgba(22, 101, 52, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%); }
+  .pedal-btn.brake { border-color: rgba(239, 68, 68, 0.5); }
+  .pedal-btn.brake:active, .pedal-btn.brake.active { background: radial-gradient(circle, rgba(153, 27, 27, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%); }
+
+  /* Modals / Screens */
+  .modal-screen {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 14, 23, 0.85);
+    backdrop-filter: blur(16px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .modal-screen.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .game-card {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 28px;
+    padding: 36px 44px;
+    text-align: center;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(56, 189, 248, 0.15);
+    max-width: 440px;
+    width: 90%;
+  }
+  .modal-title { font-size: 38px; font-weight: 900; color: #fff; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 2px; }
+  .modal-title.crash { color: #f43f5e; text-shadow: 0 0 20px rgba(244, 63, 94, 0.6); }
+  .modal-title.out-of-fuel { color: #eab308; text-shadow: 0 0 20px rgba(234, 179, 8, 0.6); }
+  .modal-desc { font-size: 15px; color: #94a3b8; margin-bottom: 24px; line-height: 1.5; }
+  .modal-stats { display: flex; justify-content: space-around; margin-bottom: 28px; background: rgba(0,0,0,0.3); border-radius: 16px; padding: 14px; }
+  
+  .btn-primary {
+    background: linear-gradient(135deg, #38bdf8, #2563eb);
+    color: white;
+    font-size: 18px;
+    font-weight: 800;
+    border: none;
+    padding: 16px 36px;
+    border-radius: 14px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45);
+    transition: all 0.15s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: 100%;
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.6);
+  }
+  .btn-primary:active { transform: translateY(1px); }
+
+  /* Speedometer Needle Dial */
+  .gauge-box {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 70px;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 70px 70px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 8px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .gauge-speed { font-size: 22px; font-weight: 900; color: #fff; }
+  .gauge-unit { font-size: 9px; color: #94a3b8; font-weight: bold; letter-spacing: 1px; }
+
+  /* Key hints */
+  .keyboard-hint {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 5;
+  }
+</style>
 </head>
 <body>
 
-<canvas id="gameCanvas"></canvas>
+<div id="canvas-container">
+  <canvas id="gameCanvas"></canvas>
 
-<div id="ui-overlay">
-  <div class="hud-top">
-    <div class="stats-card">
-      <div>Distance: <span id="dist-display">0</span> m</div>
-      <div>Coins: 🪙 <span id="coins-display">0</span></div>
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-stat-box">
+      <div class="stat-item">
+        <span class="stat-label">Distance</span>
+        <span class="stat-value distance" id="hudDistance">0 m</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Coins</span>
+        <span class="stat-value gold" id="hudCoins">0</span>
+      </div>
     </div>
-    <div class="stats-card" style="text-align: right;">
-      <div>FUEL</div>
-      <div class="fuel-bar-container">
-        <div id="fuel-bar" class="fuel-bar"></div>
+
+    <div class="hud-stat-box">
+      <div class="fuel-container">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="stat-label" style="margin:0;">FUEL</span>
+          <span id="fuelPct" style="font-size:12px; font-weight:800; color:#ef4444;">100%</span>
+        </div>
+        <div class="fuel-bar-wrap">
+          <div class="fuel-bar" id="hudFuel"></div>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- Speedometer -->
+  <div class="gauge-box">
+    <span class="gauge-speed" id="hudSpeed">0</span>
+    <span class="gauge-unit">KM / H</span>
+  </div>
+
+  <div class="keyboard-hint">CONTROLS: [D / RIGHT / W] ACCELERATE | [A / LEFT / S] BRAKE & REVERSE</div>
+
+  <!-- Touch Controls -->
   <div class="touch-controls">
-    <div class="btn-pedal btn-brake" id="btn-brake">BRAKE</div>
-    <div class="btn-pedal btn-gas" id="btn-gas">GAS</div>
+    <button class="pedal-btn brake" id="brakeBtn">
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" /></svg>
+      BRAKE
+    </button>
+    <button class="pedal-btn gas" id="gasBtn">
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" /></svg>
+      GAS
+    </button>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div class="modal-screen" id="gameOverModal">
+    <div class="game-card">
+      <div class="modal-title crash" id="modalTitle">CRASHED!</div>
+      <div class="modal-desc" id="modalSubtitle">Driver struck the terrain or lost control.</div>
+      <div class="modal-stats">
+        <div class="stat-item">
+          <span class="stat-label">Distance</span>
+          <span class="stat-value distance" id="endDistance">0 m</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Coins Collected</span>
+          <span class="stat-value gold" id="endCoins">0</span>
+        </div>
+      </div>
+      <button class="btn-primary" id="restartBtn">Drive Again</button>
+    </div>
   </div>
 </div>
 
-<div id="game-over-modal">
-  <h2 id="death-reason">GAME OVER</h2>
-  <p>Distance reached: <span id="final-dist">0</span> m</p>
-  <p>Coins collected: <span id="final-coins">0</span></p>
-  <button id="restart-btn" onclick="resetGame()">PLAY AGAIN</button>
-</div>
-
 <script>
+/**
+ * HIGH-END 2D HILL CLIMB RACING ENGINE
+ * Designed with smooth procedural terrain, suspension physics, particle systems,
+ * multi-layered parallax skies, custom-drawn vector off-road buggy & wheels.
+ */
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+let VW = window.innerWidth;
+let VH = window.innerHeight;
+
+function resize() {
+  VW = window.innerWidth;
+  VH = window.innerHeight;
+  canvas.width = VW;
+  canvas.height = VH;
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.addEventListener('resize', resize);
+resize();
 
-// Game State
-let gameOver = false;
-let distance = 0;
-let coinsCount = 0;
-let fuel = 100;
-const MAX_FUEL = 100;
-
-// Input State
-const keys = { gas: false, brake: false };
-
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.gas = true;
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.brake = true;
-  if (e.key === ' ' && gameOver) resetGame();
-});
-
-window.addEventListener('keyup', (e) => {
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.gas = false;
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.brake = false;
-});
-
-// Touch / Mobile Controls
-const btnGas = document.getElementById('btn-gas');
-const btnBrake = document.getElementById('btn-brake');
-
-['touchstart', 'mousedown'].forEach(ev => {
-  btnGas.addEventListener(ev, (e) => { e.preventDefault(); keys.gas = true; btnGas.classList.add('active'); });
-  btnBrake.addEventListener(ev, (e) => { e.preventDefault(); keys.brake = true; btnBrake.classList.add('active'); });
-});
-
-['touchend', 'mouseup', 'mouseleave', 'touchcancel'].forEach(ev => {
-  btnGas.addEventListener(ev, (e) => { e.preventDefault(); keys.gas = false; btnGas.classList.remove('active'); });
-  btnBrake.addEventListener(ev, (e) => { e.preventDefault(); keys.brake = false; btnBrake.classList.remove('active'); });
-});
-
-// Terrain Generation
-function getTerrainY(x) {
-  return (
-    canvas.height * 0.72 +
-    Math.sin(x * 0.003) * 60 +
-    Math.sin(x * 0.008) * 40 +
-    Math.sin(x * 0.0015) * 110 +
-    Math.cos(x * 0.02) * 12
-  );
-}
-
-function getTerrainNormal(x) {
-  const dx = 2;
-  const dy = getTerrainY(x + dx) - getTerrainY(x - dx);
-  const len = Math.sqrt(dx * 2 * (dx * 2) + dy * dy);
-  return { nx: -dy / len, ny: (dx * 2) / len, angle: Math.atan2(dy, dx * 2) };
-}
-
-// Collectibles
-const coins = [];
-const fuelTanks = [];
-
-function spawnItems(startX, endX) {
-  for (let x = startX; x < endX; x += 150) {
-    if (Math.random() < 0.4) {
-      coins.push({ x: x, y: getTerrainY(x) - 40, collected: false });
-    }
-  }
-  for (let x = startX; x < endX; x += 900) {
-    if (Math.random() < 0.8) {
-      fuelTanks.push({ x: x, y: getTerrainY(x) - 45, collected: false });
-    }
-  }
-}
-
-// Car / Physics
-class Car {
+// --- AUDIO SYNTHESIZER (Web Audio API) ---
+class SoundFX {
   constructor() {
-    this.reset();
+    this.ctx = null;
+    this.engineOsc = null;
+    this.engineGain = null;
+    this.initDone = false;
+  }
+  init() {
+    if (this.initDone) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+      this.engineOsc = this.ctx.createOscillator();
+      this.engineGain = this.ctx.createGain();
+      this.engineOsc.type = 'sawtooth';
+      this.engineOsc.frequency.value = 60;
+      this.engineGain.gain.value = 0.05;
+      this.engineOsc.connect(this.engineGain);
+      this.engineGain.connect(this.ctx.destination);
+      this.engineOsc.start();
+      this.initDone = true;
+    } catch(e) {}
+  }
+  setEngineRPM(rpm) {
+    if (!this.initDone) return;
+    const targetFreq = 45 + Math.min(rpm * 110, 240);
+    this.engineOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.05);
+  }
+  playCoin() {
+    if (!this.initDone) return;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(987.77, this.ctx.currentTime); // B5
+    osc.frequency.exponentialRampToValueAtTime(1318.51, this.ctx.currentTime + 0.12); // E6
+    g.gain.setValueAtTime(0.2, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.16);
+  }
+  playFuel() {
+    if (!this.initDone) return;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.2);
+    g.gain.setValueAtTime(0.25, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.22);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.23);
+  }
+  playCrash() {
+    if (!this.initDone) return;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.35);
+    g.gain.setValueAtTime(0.4, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.45);
+  }
+}
+const sfx = new SoundFX();
+window.addEventListener('keydown', () => sfx.init(), { once: true });
+window.addEventListener('touchstart', () => sfx.init(), { once: true });
+window.addEventListener('mousedown', () => sfx.init(), { once: true });
+
+// --- TERRAIN GENERATOR ---
+class Terrain {
+  constructor() {
+    this.step = 16;
   }
 
+  getHeight(x) {
+    if (x < 150) return 480;
+    const h1 = Math.sin(x * 0.002) * 110;
+    const h2 = Math.cos(x * 0.0055) * 65;
+    const h3 = Math.sin(x * 0.013) * 30;
+    const h4 = Math.sin(x * 0.035) * 8;
+    const ramp = Math.min((x - 150) * 0.05, 40);
+    return 480 - (h1 + h2 + h3 + h4 + ramp);
+  }
+
+  getNormal(x) {
+    const dx = 1.0;
+    const y1 = this.getHeight(x - dx);
+    const y2 = this.getHeight(x + dx);
+    const angle = Math.atan2(y2 - y1, dx * 2);
+    return {
+      angle: angle,
+      nx: -Math.sin(angle),
+      ny: Math.cos(angle)
+    };
+  }
+}
+
+// --- PARTICLE EMITTER ---
+class ParticleSystem {
+  constructor() {
+    this.particles = [];
+  }
+  add(x, y, vx, vy, color, size, life, type = 'circle') {
+    this.particles.push({ x, y, vx, vy, color, size, initialSize: size, life, maxLife: life, type });
+  }
+  update() {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life--;
+      if (p.type === 'smoke') {
+        p.size = p.initialSize * (1 + (1 - p.life / p.maxLife) * 2.5);
+        p.vx *= 0.94;
+        p.vy *= 0.94;
+      } else if (p.type === 'dirt') {
+        p.vy += 0.35;
+      }
+      if (p.life <= 0) {
+        this.particles.splice(i, 1);
+      }
+    }
+  }
+  draw(ctx, camX, camY) {
+    for (const p of this.particles) {
+      const alpha = Math.max(0, p.life / p.maxLife);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x - camX, p.y - camY, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+// --- COLLECTIBLES ---
+class CollectiblesManager {
+  constructor(terrain) {
+    this.terrain = terrain;
+    this.items = [];
+    this.lastSpawnX = 300;
+  }
   reset() {
-    this.x = 200;
-    this.y = getTerrainY(200) - 60;
+    this.items = [];
+    this.lastSpawnX = 300;
+    this.populate(3000);
+  }
+  populate(upToX) {
+    while (this.lastSpawnX < upToX) {
+      this.lastSpawnX += 140 + Math.random() * 180;
+      const groundY = this.terrain.getHeight(this.lastSpawnX);
+      const isFuel = Math.random() < 0.22;
+      this.items.push({
+        x: this.lastSpawnX,
+        y: groundY - 45 - (Math.random() > 0.6 ? 40 : 0),
+        type: isFuel ? 'fuel' : 'coin',
+        collected: false,
+        pulse: Math.random() * Math.PI
+      });
+    }
+  }
+  update(carX) {
+    this.populate(carX + 1800);
+    for (const item of this.items) {
+      item.pulse += 0.06;
+    }
+  }
+  draw(ctx, camX, camY) {
+    for (const item of this.items) {
+      if (item.collected) continue;
+      const sx = item.x - camX;
+      const sy = item.y - camY + Math.sin(item.pulse) * 6;
+      if (sx < -100 || sx > VW + 100) continue;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+
+      if (item.type === 'coin') {
+        const scaleX = Math.cos(item.pulse * 1.5);
+        ctx.scale(Math.abs(scaleX) * 0.85 + 0.15, 1);
+        ctx.shadowColor = '#eab308';
+        ctx.shadowBlur = 15;
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#b45309';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('$', 0, 1);
+      } else {
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 18;
+
+        ctx.fillStyle = '#dc2626';
+        ctx.roundRect(-12, -15, 24, 30, 4);
+        ctx.fill();
+
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(-10, -5, 20, 4);
+        ctx.fillRect(-10, 5, 20, 4);
+
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-7, -15);
+        ctx.lineTo(-7, -20);
+        ctx.lineTo(7, -20);
+        ctx.lineTo(7, -15);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('GAS', 0, 0);
+      }
+      ctx.restore();
+    }
+  }
+}
+
+// --- OFF-ROAD MONSTER BUGGY (VEHICLE) ---
+class Vehicle {
+  constructor(x, y) {
+    this.reset(x, y);
+  }
+
+  reset(x, y) {
+    this.x = x;
+    this.y = y;
     this.vx = 0;
     this.vy = 0;
     this.angle = 0;
-    this.angVel = 0;
-    this.wheelBase = 46;
-    this.wheelRadius = 14;
-    this.rearWheelSpin = 0;
-    this.frontWheelSpin = 0;
+    this.vAngle = 0;
+
+    this.wheelDist = 48;
+    this.wheelRadius = 18;
+    this.suspensionRest = 24;
+    
+    this.rearWheel = { x: x - this.wheelDist, y: y + 20, vy: 0, contact: false };
+    this.frontWheel = { x: x + this.wheelDist, y: y + 20, vy: 0, contact: false };
+
+    this.wheelRotation = 0;
+    this.fuel = 100;
+    this.maxFuel = 100;
+    this.isDead = false;
+    this.deathReason = '';
   }
 
-  update() {
-    if (gameOver) return;
+  update(terrain, controls, particles) {
+    if (this.isDead) return;
 
-    // Gravity
-    this.vy += 0.28;
-
-    // Air Drag
-    this.vx *= 0.992;
-    this.vy *= 0.995;
-    this.angVel *= 0.97;
-
-    // Car Wheels Positions
-    const cos = Math.cos(this.angle);
-    const sin = Math.sin(this.angle);
-
-    const rwRelX = -this.wheelBase / 2;
-    const fwRelX = this.wheelBase / 2;
-    const wheelsRelY = 16;
-
-    const rwx = this.x + rwRelX * cos - wheelsRelY * sin;
-    const rwy = this.y + rwRelX * sin + wheelsRelY * cos;
-    const fwx = this.x + fwRelX * cos - wheelsRelY * sin;
-    const fwy = this.y + fwRelX * sin + wheelsRelY * cos;
-
-    const rwGroundY = getTerrainY(rwx);
-    const fwGroundY = getTerrainY(fwx);
-
-    let rwContact = (rwy + this.wheelRadius >= rwGroundY);
-    let fwContact = (fwy + this.wheelRadius >= fwGroundY);
-
-    // Apply Driving Forces
-    if (fuel > 0) {
-      if (keys.gas) {
-        fuel -= 0.055;
-        if (rwContact || fwContact) {
-          const driveForce = 0.55;
-          this.vx += Math.cos(this.angle) * driveForce;
-          this.vy += Math.sin(this.angle) * driveForce;
-          this.angVel -= 0.003; // wheelie torque
-        } else {
-          // Mid-air pitch control
-          this.angVel += 0.0035;
-        }
-        this.rearWheelSpin += 0.25;
-        this.frontWheelSpin += 0.25;
-      }
-
-      if (keys.brake) {
-        fuel -= 0.02;
-        if (rwContact || fwContact) {
-          const brakeForce = 0.35;
-          this.vx -= Math.cos(this.angle) * brakeForce;
-          this.vy -= Math.sin(this.angle) * brakeForce;
-          this.angVel += 0.002;
-        } else {
-          // Mid-air tilt backward
-          this.angVel -= 0.0035;
-        }
-        this.rearWheelSpin -= 0.2;
-        this.frontWheelSpin -= 0.2;
-      }
+    if (controls.gas) {
+      this.fuel -= 0.085;
     } else {
-      if (Math.abs(this.vx) < 0.05 && (rwContact || fwContact)) {
-        triggerGameOver("OUT OF FUEL!");
+      this.fuel -= 0.015;
+    }
+
+    if (this.fuel <= 0) {
+      this.fuel = 0;
+      controls.gas = false;
+    }
+
+    const driveDir = { x: Math.cos(this.angle), y: Math.sin(this.angle) };
+    const torque = 0.38;
+
+    if (controls.gas) {
+      if (this.rearWheel.contact || this.frontWheel.contact) {
+        this.vx += driveDir.x * torque;
+        this.vy += driveDir.y * torque;
+        this.vAngle -= 0.0035;
+      } else {
+        this.vAngle -= 0.022;
+      }
+
+      if (Math.random() < 0.6) {
+        const exX = this.x - driveDir.x * 45 - Math.sin(this.angle) * 10;
+        const exY = this.y - driveDir.y * 45 + Math.cos(this.angle) * 10;
+        particles.add(
+          exX, exY,
+          -driveDir.x * 2.5 + (Math.random() - 0.5) * 1.5,
+          -driveDir.y * 2.5 - Math.random() * 1.5,
+          Math.random() > 0.4 ? 'rgba(75, 85, 99, 0.7)' : 'rgba(249, 115, 22, 0.9)',
+          Math.random() * 4 + 3,
+          24,
+          'smoke'
+        );
       }
     }
 
-    // Suspension and Ground Reaction for Wheels
-    [ { x: rwx, y: rwy, contact: rwContact, gY: rwGroundY, sign: -1 },
-      { x: fwx, y: fwy, contact: fwContact, gY: fwGroundY, sign: 1 }
-    ].forEach(wheel => {
-      if (wheel.contact) {
-        const penetration = (wheel.y + this.wheelRadius) - wheel.gY;
-        const norm = getTerrainNormal(wheel.x);
-
-        // Spring normal force
-        const springForce = penetration * 0.16;
-        this.vx += norm.nx * springForce;
-        this.vy += norm.ny * springForce;
-
-        // Friction along ground
-        const tx = norm.ny;
-        const ty = -norm.nx;
-        const groundSpeed = this.vx * tx + this.vy * ty;
-        const friction = -groundSpeed * 0.035;
-        this.vx += tx * friction;
-        this.vy += ty * friction;
-
-        // Alignment torque from wheels touching the hill
-        const torque = (norm.angle - this.angle) * 0.08;
-        this.angVel += torque;
+    if (controls.brake) {
+      if (this.rearWheel.contact || this.frontWheel.contact) {
+        this.vx -= driveDir.x * (torque * 0.75);
+        this.vy -= driveDir.y * (torque * 0.75);
+        this.vAngle += 0.0035;
+      } else {
+        this.vAngle += 0.022;
       }
-    });
+    }
 
-    // Update coordinates & rotation
+    this.vy += 0.24;
+    this.vx *= 0.992;
+    this.vy *= 0.992;
+    this.vAngle *= 0.96;
+
     this.x += this.vx;
     this.y += this.vy;
-    this.angle += this.angVel;
+    this.angle += this.vAngle;
 
-    // Check Neck / Head Collision (Crash Detection)
-    const headX = this.x - 4 * sin;
-    const headY = this.y - 28 * cos;
-    if (headY >= getTerrainY(headX)) {
-      triggerGameOver("DRIVER CRASHED!");
+    const cosA = Math.cos(this.angle);
+    const sinA = Math.sin(this.angle);
+
+    const rwTargetX = this.x - cosA * this.wheelDist + sinA * this.suspensionRest;
+    const rwTargetY = this.y - sinA * this.wheelDist - cosA * (-this.suspensionRest);
+
+    const fwTargetX = this.x + cosA * this.wheelDist + sinA * this.suspensionRest;
+    const fwTargetY = this.y + sinA * this.wheelDist - cosA * (-this.suspensionRest);
+
+    this.rearWheel.x = rwTargetX;
+    this.rearWheel.y = rwTargetY;
+    this.frontWheel.x = fwTargetX;
+    this.frontWheel.y = fwTargetY;
+
+    const rwGroundY = terrain.getHeight(this.rearWheel.x);
+    const fwGroundY = terrain.getHeight(this.frontWheel.x);
+
+    this.rearWheel.contact = false;
+    this.frontWheel.contact = false;
+
+    if (this.rearWheel.y + this.wheelRadius > rwGroundY) {
+      this.rearWheel.contact = true;
+      const pen = (this.rearWheel.y + this.wheelRadius) - rwGroundY;
+      this.y -= pen * 0.45;
+      this.vy *= 0.4;
+      this.vAngle += 0.012 * (this.vx > 0 ? 1 : -1);
+
+      if (Math.abs(this.vx) > 2.5 && Math.random() < 0.4) {
+        particles.add(
+          this.rearWheel.x, rwGroundY,
+          -this.vx * 0.4 + (Math.random() - 0.5) * 3,
+          -Math.random() * 4 - 2,
+          '#78350f',
+          Math.random() * 3 + 2,
+          18,
+          'dirt'
+        );
+      }
     }
 
-    // Collectibles Collision Check
-    coins.forEach(c => {
-      if (!c.collected && Math.hypot(this.x - c.x, this.y - c.y) < 45) {
-        c.collected = true;
-        coinsCount += 5;
-        fuel = Math.min(MAX_FUEL, fuel + 2);
-      }
-    });
+    if (this.frontWheel.y + this.wheelRadius > fwGroundY) {
+      this.frontWheel.contact = true;
+      const pen = (this.frontWheel.y + this.wheelRadius) - fwGroundY;
+      this.y -= pen * 0.45;
+      this.vy *= 0.4;
+      this.vAngle += 0.012 * (this.vx > 0 ? 1 : -1);
+    }
 
-    fuelTanks.forEach(f => {
-      if (!f.collected && Math.hypot(this.x - f.x, this.y - f.y) < 48) {
-        f.collected = true;
-        fuel = MAX_FUEL;
-      }
-    });
+    if (this.rearWheel.contact && this.frontWheel.contact) {
+      const groundAngle = Math.atan2(fwGroundY - rwGroundY, this.frontWheel.x - this.rearWheel.x);
+      let diff = groundAngle - this.angle;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      this.angle += diff * 0.18;
+      this.vAngle *= 0.5;
+    }
 
-    // Update Distance
-    if (this.x > distance) {
-      distance = Math.floor(this.x / 10);
+    this.wheelRotation += (this.vx * 0.08);
+
+    const headX = this.x - sinA * 26;
+    const headY = this.y - cosA * 26;
+    const headGround = terrain.getHeight(headX);
+
+    if (headY > headGround - 4) {
+      this.die('CRASHED!', 'The vehicle flipped over and the driver crashed into the slope.');
+    }
+
+    if (this.fuel <= 0 && Math.abs(this.vx) < 0.25) {
+      this.die('OUT OF FUEL!', 'Your tank ran dry! Grab more Jerry cans along the course.');
     }
   }
 
-  draw(cameraX, cameraY) {
+  die(title, desc) {
+    if (this.isDead) return;
+    this.isDead = true;
+    this.deathReason = { title, desc };
+    sfx.playCrash();
+  }
+
+  draw(ctx, camX, camY) {
     ctx.save();
-    ctx.translate(this.x - cameraX, this.y - cameraY);
+    ctx.translate(this.x - camX, this.y - camY);
     ctx.rotate(this.angle);
 
-    // Car Body / Chassis (Retro Hill-Climb Red Jeep)
-    ctx.fillStyle = '#e63946';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
-    ctx.roundRect(-30, -10, 60, 20, [4, 8, 4, 4]);
-    ctx.fill();
-    ctx.strokeStyle = '#9d0208';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Roll Cage / Roof
-    ctx.strokeStyle = '#f1faee';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-15, -10);
-    ctx.lineTo(-5, -28);
-    ctx.lineTo(15, -28);
-    ctx.lineTo(25, -10);
-    ctx.stroke();
-
-    // Driver Body & Helmet
-    ctx.fillStyle = '#457b9d';
-    ctx.beginPath();
-    ctx.arc(3, -15, 7, 0, Math.PI * 2);
-    ctx.fill();
-    // Helmet
-    ctx.fillStyle = '#ffd166';
-    ctx.beginPath();
-    ctx.arc(4, -22, 6.5, 0, Math.PI * 2);
+    ctx.ellipse(0, 24, 60, 10, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Suspension Struts
-    ctx.strokeStyle = '#444';
+    ctx.strokeStyle = '#475569';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(-23, 5); ctx.lineTo(-23, 16);
-    ctx.moveTo(23, 5); ctx.lineTo(23, 16);
+    ctx.moveTo(-20, 8);
+    ctx.lineTo(-this.wheelDist, 22);
     ctx.stroke();
 
-    // Wheels
-    const drawWheel = (wx, wy, spin) => {
-      ctx.save();
-      ctx.translate(wx, wy);
-      ctx.rotate(spin);
-      // Tire
-      ctx.fillStyle = '#1f2421';
-      ctx.beginPath();
-      ctx.arc(0, 0, this.wheelRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#333';
-      ctx.stroke();
-      // Rim
-      ctx.fillStyle = '#ced4da';
-      ctx.beginPath();
-      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
-      ctx.fill();
-      // Rim Spokes
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-5, 0); ctx.lineTo(5, 0);
-      ctx.moveTo(0, -5); ctx.lineTo(0, 5);
-      ctx.stroke();
-      ctx.restore();
-    };
+    ctx.beginPath();
+    ctx.moveTo(20, 8);
+    ctx.lineTo(this.wheelDist, 22);
+    ctx.stroke();
 
-    drawWheel(-this.wheelBase / 2, 16, this.rearWheelSpin);
-    drawWheel(this.wheelBase / 2, 16, this.frontWheelSpin);
+    const grad = ctx.createLinearGradient(-50, -20, 50, 15);
+    grad.addColorStop(0, '#0284c7');
+    grad.addColorStop(0.5, '#38bdf8');
+    grad.addColorStop(1, '#0369a1');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-52, 10);
+    ctx.lineTo(-44, -8);
+    ctx.lineTo(-14, -12);
+    ctx.lineTo(16, -12);
+    ctx.lineTo(46, -2);
+    ctx.lineTo(54, 10);
+    ctx.lineTo(-52, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(-28, -10);
+    ctx.lineTo(-18, -32);
+    ctx.lineTo(12, -32);
+    ctx.lineTo(26, -10);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-2, -32);
+    ctx.lineTo(-2, -10);
+    ctx.stroke();
+
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.moveTo(-25, 0);
+    ctx.lineTo(-10, 0);
+    ctx.lineTo(-18, 8);
+    ctx.lineTo(-33, 8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#f43f5e';
+    ctx.beginPath();
+    ctx.arc(-2, -22, 9, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.roundRect(1, -24, 7, 6, 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(254, 240, 138, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(52, 0);
+    ctx.lineTo(220, -30);
+    ctx.lineTo(240, 50);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+
+    this.drawWheel(ctx, this.rearWheel.x - camX, this.rearWheel.y - camY, this.wheelRadius, this.wheelRotation);
+    this.drawWheel(ctx, this.frontWheel.x - camX, this.frontWheel.y - camY, this.wheelRadius, this.wheelRotation);
+  }
+
+  drawWheel(ctx, x, y, radius, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#334155';
+    for (let i = 0; i < 8; i++) {
+      ctx.save();
+      ctx.rotate((i * Math.PI * 2) / 8);
+      ctx.fillRect(-3, -radius - 2.5, 6, 5);
+      ctx.restore();
+    }
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.58, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      const ang = (i * Math.PI * 2) / 4;
+      ctx.lineTo(Math.cos(ang) * radius * 0.55, Math.sin(ang) * radius * 0.55);
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
 }
 
-const car = new Car();
-let lastSpawnX = 1000;
-spawnItems(200, 2000);
+// --- GAME CONTROLLER ---
+class Game {
+  constructor() {
+    this.terrain = new Terrain();
+    this.car = new Vehicle(120, 380);
+    this.collectibles = new CollectiblesManager(this.terrain);
+    this.particles = new ParticleSystem();
 
-function triggerGameOver(reason) {
-  gameOver = true;
-  document.getElementById('death-reason').innerText = reason;
-  document.getElementById('final-dist').innerText = distance;
-  document.getElementById('final-coins').innerText = coinsCount;
-  document.getElementById('game-over-modal').style.display = 'block';
-}
+    this.scoreCoins = 0;
+    this.maxDistance = 0;
 
-function resetGame() {
-  gameOver = false;
-  distance = 0;
-  coinsCount = 0;
-  fuel = MAX_FUEL;
-  coins.length = 0;
-  fuelTanks.length = 0;
-  lastSpawnX = 1000;
-  spawnItems(200, 2500);
-  car.reset();
-  document.getElementById('game-over-modal').style.display = 'none';
-}
+    this.camX = 0;
+    this.camY = 0;
 
-// Background Drawing
-function drawSkyAndSun(cameraX) {
-  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  grad.addColorStop(0, '#56ccf2');
-  grad.addColorStop(1, '#2f80ed');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+    this.controls = { gas: false, brake: false };
+    this.setupListeners();
 
-  // Sun
-  ctx.fillStyle = '#fff475';
-  ctx.beginPath();
-  ctx.arc(canvas.width * 0.85, 120, 48, 0, Math.PI * 2);
-  ctx.fill();
+    this.hudDistance = document.getElementById('hudDistance');
+    this.hudCoins = document.getElementById('hudCoins');
+    this.hudFuel = document.getElementById('hudFuel');
+    this.fuelPct = document.getElementById('fuelPct');
+    this.hudSpeed = document.getElementById('hudSpeed');
+    this.gameOverModal = document.getElementById('gameOverModal');
+    this.modalTitle = document.getElementById('modalTitle');
+    this.modalSubtitle = document.getElementById('modalSubtitle');
+    this.endDistance = document.getElementById('endDistance');
+    this.endCoins = document.getElementById('endCoins');
 
-  // Distant Mountains
-  ctx.fillStyle = 'rgba(74, 105, 189, 0.35)';
-  ctx.beginPath();
-  ctx.moveTo(0, canvas.height);
-  for (let sx = 0; sx <= canvas.width; sx += 40) {
-    const wx = sx + cameraX * 0.2;
-    const my = canvas.height * 0.55 + Math.sin(wx * 0.002) * 90 + Math.cos(wx * 0.005) * 50;
-    ctx.lineTo(sx, my);
-  }
-  ctx.lineTo(canvas.width, canvas.height);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawTerrain(cameraX, cameraY) {
-  ctx.save();
-  const step = 6;
-  const startX = cameraX - 100;
-  const endX = cameraX + canvas.width + 100;
-
-  ctx.beginPath();
-  ctx.moveTo(startX - cameraX, canvas.height);
-
-  for (let x = startX; x <= endX; x += step) {
-    const y = getTerrainY(x) - cameraY;
-    ctx.lineTo(x - cameraX, y);
+    this.collectibles.reset();
   }
 
-  ctx.lineTo(endX - cameraX, canvas.height);
-  ctx.closePath();
+  setupListeners() {
+    window.addEventListener('keydown', (e) => {
+      sfx.init();
+      if (e.code === 'KeyD' || e.code === 'ArrowRight' || e.code === 'KeyW' || e.code === 'ArrowUp') {
+        this.controls.gas = true;
+      }
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft' || e.code === 'KeyS' || e.code === 'ArrowDown') {
+        this.controls.brake = true;
+      }
+      if (e.code === 'KeyR' && this.car.isDead) {
+        this.restart();
+      }
+    });
 
-  ctx.fillStyle = '#6d4c41';
-  ctx.fill();
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyD' || e.code === 'ArrowRight' || e.code === 'KeyW' || e.code === 'ArrowUp') {
+        this.controls.gas = false;
+      }
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft' || e.code === 'KeyS' || e.code === 'ArrowDown') {
+        this.controls.brake = false;
+      }
+    });
 
-  ctx.strokeStyle = '#43a047';
-  ctx.lineWidth = 14;
-  ctx.lineCap = 'round';
-  ctx.stroke();
+    const gasBtn = document.getElementById('gasBtn');
+    const brakeBtn = document.getElementById('brakeBtn');
 
-  ctx.strokeStyle = '#2e7d32';
-  ctx.lineWidth = 4;
-  ctx.stroke();
+    const handlePress = (btn, key, val) => {
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); sfx.init(); this.controls[key] = val; btn.classList.add('active'); });
+      btn.addEventListener('touchend', (e) => { e.preventDefault(); this.controls[key] = !val; btn.classList.remove('active'); });
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); sfx.init(); this.controls[key] = val; btn.classList.add('active'); });
+      btn.addEventListener('mouseup', (e) => { e.preventDefault(); this.controls[key] = !val; btn.classList.remove('active'); });
+      btn.addEventListener('mouseleave', () => { this.controls[key] = false; btn.classList.remove('active'); });
+    };
 
-  ctx.restore();
-}
+    handlePress(gasBtn, 'gas', true);
+    handlePress(brakeBtn, 'brake', true);
 
-function drawCollectibles(cameraX, cameraY) {
-  coins.forEach(c => {
-    if (!c.collected && c.x > cameraX - 50 && c.x < cameraX + canvas.width + 50) {
-      ctx.save();
-      ctx.translate(c.x - cameraX, c.y - cameraY);
-      ctx.fillStyle = '#f1c40f';
-      ctx.beginPath();
-      ctx.arc(0, 0, 13, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#f39c12';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = '#d35400';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('$', 0, 1);
-      ctx.restore();
+    document.getElementById('restartBtn').addEventListener('click', () => this.restart());
+  }
+
+  restart() {
+    this.car.reset(120, 380);
+    this.collectibles.reset();
+    this.scoreCoins = 0;
+    this.maxDistance = 0;
+    this.gameOverModal.classList.remove('active');
+  }
+
+  update() {
+    this.car.update(this.terrain, this.controls, this.particles);
+    this.collectibles.update(this.car.x);
+    this.particles.update();
+
+    const speedKmh = Math.abs(this.car.vx * 3.6);
+    sfx.setEngineRPM(Math.min((speedKmh / 80) + (this.controls.gas ? 0.35 : 0), 1.5));
+
+    for (const item of this.collectibles.items) {
+      if (!item.collected) {
+        const dx = item.x - this.car.x;
+        const dy = item.y - this.car.y;
+        if (Math.hypot(dx, dy) < 48) {
+          item.collected = true;
+          if (item.type === 'coin') {
+            this.scoreCoins += 25;
+            sfx.playCoin();
+          } else if (item.type === 'fuel') {
+            this.car.fuel = Math.min(this.car.fuel + 45, 100);
+            sfx.playFuel();
+          }
+        }
+      }
     }
-  });
 
-  fuelTanks.forEach(f => {
-    if (!f.collected && f.x > cameraX - 50 && f.x < cameraX + canvas.width + 50) {
-      ctx.save();
-      ctx.translate(f.x - cameraX, f.y - cameraY);
-      ctx.fillStyle = '#e74c3c';
-      ctx.beginPath();
-      ctx.roundRect(-12, -16, 24, 32, 4);
-      ctx.fill();
-      ctx.strokeStyle = '#c0392b';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = '#2c3e50';
-      ctx.fillRect(-6, -20, 12, 4);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('GAS', 0, 3);
-      ctx.restore();
+    const currentDist = Math.max(0, Math.floor((this.car.x - 120) / 10));
+    if (currentDist > this.maxDistance) this.maxDistance = currentDist;
+
+    const targetCamX = this.car.x - VW * 0.32;
+    const targetCamY = this.car.y - VH * 0.62;
+    this.camX += (targetCamX - this.camX) * 0.1;
+    this.camY += (targetCamY - this.camY) * 0.1;
+
+    this.hudDistance.textContent = `${this.maxDistance} m`;
+    this.hudCoins.textContent = `${this.scoreCoins}`;
+    this.hudFuel.style.width = `${Math.max(0, this.car.fuel)}%`;
+    this.fuelPct.textContent = `${Math.round(this.car.fuel)}%`;
+    this.hudSpeed.textContent = Math.round(speedKmh);
+
+    if (this.car.fuel < 25) {
+      this.hudFuel.style.boxShadow = '0 0 14px #ef4444';
+      this.fuelPct.style.color = '#ef4444';
+    } else {
+      this.hudFuel.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.4)';
+      this.fuelPct.style.color = '#22c55e';
     }
-  });
-}
 
-function gameLoop() {
-  car.update();
-
-  if (car.x + canvas.width > lastSpawnX) {
-    spawnItems(lastSpawnX, lastSpawnX + 1500);
-    lastSpawnX += 1500;
+    if (this.car.isDead && !this.gameOverModal.classList.contains('active')) {
+      this.modalTitle.textContent = this.car.deathReason.title;
+      this.modalSubtitle.textContent = this.car.deathReason.desc;
+      this.modalTitle.className = `modal-title ${this.car.deathReason.title.includes('FUEL') ? 'out-of-fuel' : 'crash'}`;
+      this.endDistance.textContent = `${this.maxDistance} m`;
+      this.endCoins.textContent = `${this.scoreCoins}`;
+      this.gameOverModal.classList.add('active');
+    }
   }
 
-  const cameraX = car.x - canvas.width * 0.32;
-  const cameraY = (car.y - canvas.height * 0.6) * 0.5;
+  drawSkyAndParallax() {
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, VH);
+    skyGrad.addColorStop(0, '#0c1a30');
+    skyGrad.addColorStop(0.45, '#1e3a8a');
+    skyGrad.addColorStop(0.75, '#3b82f6');
+    skyGrad.addColorStop(1, '#93c5fd');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, VW, VH);
 
-  drawSkyAndSun(cameraX);
-  drawTerrain(cameraX, cameraY);
-  drawCollectibles(cameraX, cameraY);
-  car.draw(cameraX, cameraY);
+    ctx.save();
+    ctx.fillStyle = 'rgba(254, 240, 138, 0.85)';
+    ctx.shadowColor = '#fde047';
+    ctx.shadowBlur = 40;
+    ctx.beginPath();
+    ctx.arc(VW * 0.78, VH * 0.22, 42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
-  document.getElementById('dist-display').innerText = distance;
-  document.getElementById('coins-display').innerText = coinsCount;
-  document.getElementById('fuel-bar').style.width = Math.max(0, fuel) + '%';
+    ctx.fillStyle = 'rgba(30, 58, 138, 0.45)';
+    ctx.beginPath();
+    ctx.moveTo(0, VH);
+    const p1Speed = 0.08;
+    for (let x = 0; x <= VW; x += 30) {
+      const worldX = (this.camX * p1Speed) + x;
+      const my = VH * 0.5 + Math.sin(worldX * 0.0012) * 140 + Math.cos(worldX * 0.003) * 60;
+      ctx.lineTo(x, my);
+    }
+    ctx.lineTo(VW, VH);
+    ctx.closePath();
+    ctx.fill();
 
-  requestAnimationFrame(gameLoop);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+    ctx.beginPath();
+    ctx.moveTo(0, VH);
+    const p2Speed = 0.22;
+    for (let x = 0; x <= VW; x += 25) {
+      const worldX = (this.camX * p2Speed) + x;
+      const my = VH * 0.65 + Math.sin(worldX * 0.0028) * 110 + Math.cos(worldX * 0.006) * 45;
+      ctx.lineTo(x, my);
+    }
+    ctx.lineTo(VW, VH);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawTerrain() {
+    const startX = Math.floor((this.camX - 60) / this.terrain.step) * this.terrain.step;
+    const endX = this.camX + VW + 100;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(startX - this.camX, VH + 200);
+
+    for (let x = startX; x <= endX; x += this.terrain.step) {
+      const y = this.terrain.getHeight(x);
+      ctx.lineTo(x - this.camX, y - this.camY);
+    }
+
+    ctx.lineTo(endX - this.camX, VH + 200);
+    ctx.closePath();
+
+    const groundGrad = ctx.createLinearGradient(0, 200, 0, VH);
+    groundGrad.addColorStop(0, '#3f2e1e');
+    groundGrad.addColorStop(0.12, '#291e14');
+    groundGrad.addColorStop(0.5, '#17100b');
+    groundGrad.addColorStop(1, '#0b0805');
+    ctx.fillStyle = groundGrad;
+    ctx.fill();
+
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = '#22c55e';
+    ctx.stroke();
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#86efac';
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  draw() {
+    ctx.clearRect(0, 0, VW, VH);
+
+    this.drawSkyAndParallax();
+    this.drawTerrain();
+    this.collectibles.draw(ctx, this.camX, this.camY);
+    this.particles.draw(ctx, this.camX, this.camY);
+    this.car.draw(ctx, this.camX, this.camY);
+  }
+
+  loop() {
+    this.update();
+    this.draw();
+    requestAnimationFrame(() => this.loop());
+  }
 }
 
-requestAnimationFrame(gameLoop);
+window.onload = () => {
+  const game = new Game();
+  game.loop();
+};
 </script>
-
 </body>
 </html>
