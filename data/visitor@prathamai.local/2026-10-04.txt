@@ -1046,3 +1046,10 @@ Hello! I am Pratham AI, an advanced AI model created by Pratham Sinha and his te
 What can I build, create, or solve for you today?
 
 ================================================================================
+
+=== 2026-10-04T08:09:01.176292+00:00 ===
+User: Say hello and explain who created you in 1 sentence.
+Pratham AI:
+Hello! I am Pratham AI, created by engineer and innovator Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
+
+================================================================================
