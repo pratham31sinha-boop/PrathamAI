@@ -5082,12 +5082,12 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
             _conversation_summaries[conv_id] = summary_text
     return [{"role": "system", "content": summary_text}] + recent_msgs
 
-DEFAULT_CLOUDFLARE_TUNNEL_URL = os.environ.get("CLOUDFLARE_TUNNEL_URL", "https://contacted-gain-morning-valuation.trycloudflare.com").strip().rstrip("/")
+DEFAULT_TUNNEL_URL = os.environ.get("TUNNEL_URL", "https://balance-onlooker-party.ngrok-free.dev").strip().rstrip("/")
 
 def _stream_cloudflare_tunnel(messages, state=None):
     if shutil.which("agy"):
         return
-    tunnel = DEFAULT_CLOUDFLARE_TUNNEL_URL
+    tunnel = DEFAULT_TUNNEL_URL
     if not tunnel:
         return
     import urllib.request, json
@@ -5106,7 +5106,7 @@ def _stream_cloudflare_tunnel(messages, state=None):
     req = urllib.request.Request(
         target_url,
         data=payload,
-        headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+        headers={"Content-Type": "application/json", "Accept": "text/event-stream", "ngrok-skip-browser-warning": "true"},
         method="POST"
     )
     with urllib.request.urlopen(req, timeout=50) as resp:
@@ -7940,7 +7940,7 @@ def _cors_preflight():
     origin = request.headers.get("Origin", "*")
     resp.headers["Access-Control-Allow-Origin"] = origin
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, X-Requested-With, X-Gemini-Key, X-Groq-Key, X-Gemini-Access-Token, Cache-Control"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, X-Requested-With, X-Gemini-Key, X-Groq-Key, X-Gemini-Access-Token, Cache-Control, ngrok-skip-browser-warning"
     resp.headers["Access-Control-Allow-Credentials"] = "true"
     return resp
 QWEN_APP_HEARTBEAT_ENABLED = os.environ.get("QWEN_APP_HEARTBEAT_ENABLED", "0").strip().lower() not in {"0", "false", "no", "off"}

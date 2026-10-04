@@ -11,4 +11,5 @@ data/conversations/
 mobile/android/app/build_manual/
 *.idsig
 cloudflared
+ngrok
 
