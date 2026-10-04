@@ -5977,7 +5977,7 @@ def _append_message(conv_id, role, content, files=None, thinking_summary=None, f
 def index_root():
     return jsonify({"message": "Pratham AI backend active"})
 def _gemini_access_token_from_request():
-    token=request.headers.get(GEMINI_ACCESS_TOKEN_HEADER, "").strip()
+    token = (request.headers.get(GEMINI_ACCESS_TOKEN_HEADER) or "").strip()
     return token[7:].strip() if token.lower().startswith("bearer ") else token
 
 def _gemini_token_fingerprint(token,email):
@@ -6386,8 +6386,8 @@ def chat_stream():
     body = request.get_json(silent=True) or {}
     message = (body.get("message") or "").strip()
     conv_id = body.get("conversation_id") or None
-    user_gemini_key = request.headers.get("X-Gemini-Key", "").strip() or (body.get("gemini_key", "").strip() if isinstance(body, dict) else "") or (body.get("gemini_api_key", "").strip() if isinstance(body, dict) else "")
-    user_groq_key = request.headers.get("X-Groq-Key", "").strip() or (body.get("groq_key", "").strip() if isinstance(body, dict) else "") or (body.get("groq_api_key", "").strip() if isinstance(body, dict) else "")
+    user_gemini_key = (request.headers.get("X-Gemini-Key") or "").strip() or (((body.get("gemini_key") or "") if isinstance(body, dict) else "").strip()) or (((body.get("gemini_api_key") or "") if isinstance(body, dict) else "").strip())
+    user_groq_key = (request.headers.get("X-Groq-Key") or "").strip() or (((body.get("groq_key") or "") if isinstance(body, dict) else "").strip()) or (((body.get("groq_api_key") or "") if isinstance(body, dict) else "").strip())
     _do_stream._current_gemini_key = user_gemini_key
     _do_stream._current_groq_key = user_groq_key
     is_deep_research = "[[DEEP_RESEARCH]]" in message

@@ -5331,8 +5331,8 @@
                     body: JSON.stringify({
                         message: message,
                         conversation_id: currentConversationId,
-                        gemini_key: userGeminiKey || null,
-                        groq_key: userGroqKey || null,
+                        gemini_key: userGeminiKey || '',
+                        groq_key: userGroqKey || '',
                         reference_image: (
                             window._lastGeneratedImageDataUrl &&
                             /\b(?:add|change|edit|remove|replace|modify|turn it|make it|put|give it|now)\b/i.test(message)
