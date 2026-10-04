@@ -1,13 +1,26 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/app.py", "use": "@vercel/python" },
+    {
+      "src": "api/app.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 60,
+        "memory": 1024
+      }
+    },
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "panda_valley.html", "use": "@vercel/static" },
     { "src": "hill_climb_racing.html", "use": "@vercel/static" },
     { "src": "gta6.html", "use": "@vercel/static" },
     { "src": "auth/mobile-callback.html", "use": "@vercel/static" }
   ],
+  "functions": {
+    "api/app.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/app.py" },
     { "src": "/auth/(.*)", "dest": "/api/app.py" },

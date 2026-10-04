@@ -262,6 +262,21 @@ def sitemap_xml():
 
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+def _get_data_root() -> str:
+    """Returns the base data storage directory. In serverless/Vercel environments where
+    WORKSPACE_ROOT is read-only, automatically falls back to /tmp/pratham_data to guarantee uninterrupted file writes."""
+    local_data = os.path.join(WORKSPACE_ROOT, "data")
+    try:
+        if os.access(WORKSPACE_ROOT, os.W_OK) or (os.path.exists(local_data) and os.access(local_data, os.W_OK)):
+            os.makedirs(local_data, exist_ok=True)
+            return local_data
+    except Exception:
+        pass
+    tmp_data = os.path.join(tempfile.gettempdir(), "pratham_data")
+    os.makedirs(tmp_data, exist_ok=True)
+    return tmp_data
+
+
 @app.route("/", methods=["GET"])
 def serve_index():
     index_file = os.path.join(WORKSPACE_ROOT, "index.html")
@@ -1487,17 +1502,31 @@ def _write_styled_pdf(text: str, image_path: str = None) -> bytes:
         # Find available image / logo
         img_cand = image_path
         if not img_cand:
-            for cand in ["assests/logo.png", "/workspace/bold-curie/assests/logo.png"]:
+            for cand in ["assests/logo.png", "/workspace/bold-curie/assests/logo.png", os.path.join(WORKSPACE_ROOT, "assests", "logo.png")]:
                 if os.path.exists(cand):
                     img_cand = cand
                     break
 
         if img_cand and os.path.exists(img_cand):
             try:
-                story.append(RLImage(img_cand, width=70, height=70))
-                story.append(Spacer(1, 8))
+                from PIL import Image as _PILImage
+                with _PILImage.open(img_cand) as pi:
+                    orig_w, orig_h = pi.size
+                if "logo" in img_cand.lower():
+                    disp_w, disp_h = 70, 70
+                else:
+                    max_w, max_h = 280, 200
+                    ratio = min(max_w / max(1, orig_w), max_h / max(1, orig_h))
+                    disp_w = max(40, int(orig_w * ratio))
+                    disp_h = max(40, int(orig_h * ratio))
+                story.append(RLImage(img_cand, width=disp_w, height=disp_h))
+                story.append(Spacer(1, 10))
             except Exception:
-                pass
+                try:
+                    story.append(RLImage(img_cand, width=70, height=70))
+                    story.append(Spacer(1, 8))
+                except Exception:
+                    pass
 
         for line in (text or "").strip().split('\n'):
             line = line.strip()
@@ -1525,16 +1554,37 @@ def _write_styled_pdf(text: str, image_path: str = None) -> bytes:
         print(f"[PDF][STYLED FAULT] {exc}")
         return None
 
-def _build_pdf_from_response(assistant_text: str):
+def _build_pdf_from_response(assistant_text: str, image_path: str = None):
     """Returns (bytes, filename, mimetype). Produces a styled PDF via ReportLab,
     with diagram embedding support if Fitz is present, falling back to minimal writer."""
     try:
         clean_content = _extract_export_content(assistant_text)
         diagram_files = _extract_diagram_files(assistant_text) if _DIAGRAM_MARKER_RE.search(clean_content) else {}
+        
+        # Auto-detect image candidate if not explicitly passed
+        img_cand = image_path
+        if not img_cand:
+            for s_dir in [WORKSPACE_ROOT, "/tmp", _get_data_root()]:
+                if not os.path.isdir(s_dir):
+                    continue
+                try:
+                    for fn in os.listdir(s_dir):
+                        if fn.lower().endswith((".png", ".jpg", ".jpeg", ".webp")) and not fn.startswith("."):
+                            fp = os.path.join(s_dir, fn)
+                            if os.path.isfile(fp) and os.path.getsize(fp) > 500:
+                                base_stem = fn.lower().rsplit(".", 1)[0]
+                                if base_stem in clean_content.lower() or any(k in base_stem for k in ["pokemon", "pikachu", "portrait", "banner", "chart"]):
+                                    img_cand = fp
+                                    break
+                except Exception:
+                    pass
+                if img_cand:
+                    break
+
         if diagram_files and _FITZ_SUPPORTED:
             pdf_bytes = _write_pdf_with_diagrams(clean_content, diagram_files)
         else:
-            pdf_bytes = _write_styled_pdf(clean_content)
+            pdf_bytes = _write_styled_pdf(clean_content, image_path=img_cand)
             if not pdf_bytes:
                 pdf_bytes = _write_minimal_pdf(clean_content)
         return pdf_bytes, "generated.pdf", "application/pdf"
@@ -3297,7 +3347,7 @@ class _WarmAntigravitySession:
             print(f"[ANTIGRAVITY][WARM_START_ERR] {self._account_email}: {e}")
             return None
 
-    def stream_turn(self, prompt, state=None):
+    def stream_turn(self, prompt, user_query=None, state=None):
         import select
         if not self.is_available():
             raise AntigravityRateLimitError(f"Account {self._account_email} is in rate limit cooldown")
@@ -3344,16 +3394,19 @@ class _WarmAntigravitySession:
                 written_files = {}
                 accumulated_streamed_text = []
 
-                # Live planning step indicator based on the actual user query (not system prompt boilerplate)
-                user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
-                user_query = user_matches[-1].lower() if user_matches else (prompt or "").lower()
-                if any(k in user_query for k in ["pdf", "document", "report", "essay"]):
+                # Live planning step indicator based on the actual user query (never falling back to system prompt text)
+                uq = (user_query or "").strip().lower()
+                if not uq:
+                    user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
+                    uq = user_matches[-1].lower() if user_matches else ""
+
+                if any(k in uq for k in ["pdf", "document", "report", "essay"]):
                     step_lbl = "Synthesizing publication-grade document deliverable..."
-                elif any(k in user_query for k in ["game", "arcade", "stumble", "gta"]):
+                elif any(k in uq for k in ["game", "arcade", "stumble", "gta", "canvas"]):
                     step_lbl = "Architecting game mechanics & responsive controls..."
-                elif any(k in user_query for k in ["html", "website", "web page", "webpage", "app"]):
+                elif any(k in uq for k in ["html", "website", "web page", "webpage", "app"]):
                     step_lbl = "Synthesizing full web application components..."
-                elif any(k in user_query for k in ["python", "script", "code", "backend"]):
+                elif any(k in uq for k in ["python", "script", "code", "backend", "algorithm"]):
                     step_lbl = "Engineering production code deliverable..."
                 else:
                     step_lbl = "Deconstructing query & generating comprehensive response..."
@@ -3788,6 +3841,7 @@ def _get_user_attachments(user_email: str, conv_id: str = None, messages: list =
 def _get_planning_steps_for_prompt(prompt: str, attached_files: list = None) -> list:
     p_lower = (prompt or "").lower()
     steps = []
+    is_pdf_request = any(w in p_lower for w in ["pdf", "document", "report", "essay"])
     is_zip_request = any(w in p_lower for w in ["zip", "archive", "compress", "package", "download"])
     is_edit_request = any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "improve", "refactor", "add to", "tweak"]) and (attached_files or "file" in p_lower or ".html" in p_lower or ".py" in p_lower or ".js" in p_lower or "chess" in p_lower or "game" in p_lower)
     is_game_request = any(w in p_lower for w in ["game", "play", "canvas", "arcade", "snake", "pong", "tetris", "asteroids", "flappy", "chess"])
@@ -3800,7 +3854,26 @@ def _get_planning_steps_for_prompt(prompt: str, attached_files: list = None) -> 
                 fname = af["filename"]
                 break
 
-    if is_zip_request and (is_edit_request or attached_files or "chess" in p_lower or "file" in p_lower):
+    if is_pdf_request:
+        steps.append({
+            "type": "agent_step",
+            "step_type": "thinking",
+            "label": "Structuring document sections, layout & styling",
+            "detail": "Outlining narrative hierarchy, visual elements, typography, and content density."
+        })
+        steps.append({
+            "type": "agent_step",
+            "step_type": "planning",
+            "label": "Synthesizing publication-grade document layout",
+            "detail": "Formatting headers, margins, palette, tables, and asset embeddings for crisp rendering."
+        })
+        steps.append({
+            "type": "agent_step",
+            "step_type": "writing",
+            "label": "Compiling publication-ready PDF deliverable",
+            "detail": "Rendering vector typography and embedding high-resolution visuals into standalone PDF document."
+        })
+    elif is_zip_request and (is_edit_request or attached_files or "chess" in p_lower or "file" in p_lower):
         steps.append({
             "type": "agent_step",
             "step_type": "thinking",
@@ -3918,24 +3991,33 @@ def _stream_antigravity_cli(messages, state=None):
     conv_id = getattr(_do_stream, '_current_conv_id', None) or ""
     attached_files = _get_user_attachments(user_email, conv_id=conv_id, messages=messages)
 
-    # Clean system prompt focusing on creator identity, terminal workspace freedom, and complete deliverables
+    # Clean system prompt focusing on creator identity, terminal workspace freedom, rapid performance, and complete deliverables
     system_instruction = (
         "You are Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n\n"
         "CREATOR & IDENTITY:\n"
         "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
         "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
-        "WORKSPACE FREEDOM & TERMINAL EXECUTION:\n"
-        "- You have complete agentic freedom in the workspace to do anything the user requests: write code, run terminal/bash commands, inspect files, build complete applications, create 3D games, synthesize PDFs, process data, and search the web.\n"
-        "- Use the terminal freely and proactively whenever running commands, scripts, builds, or tests helps fulfill the user's request.\n"
-        "- Complete every task thoroughly — write full, production-ready code with no shortcuts, omissions, or placeholders ('// rest of code here').\n\n"
+        "RAPID WORKSPACE EXECUTION & PERFORMANCE (< 45 SECONDS):\n"
+        "- Complete every user task in the absolute minimum number of turns (1-2 tool calls maximum). Do NOT waste turns.\n"
+        "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, hashlib, math, os, sys, and json fully installed.\n"
+        "- NEVER run exploratory diagnostic checks (e.g. NEVER execute 'python3 -c import reportlab', 'which weasyprint', or test network pings). Immediately write and run the actual deliverable.\n"
+        "- Synchronous Command Execution: When executing run_command to build files or run Python scripts, ALWAYS pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately in the same turn without spawning background tasks or requiring log inspection.\n"
+        "- PDF & Document Generation:\n"
+        "  * Generate the PDF in ONE shot: write a self-contained Python script using ReportLab (SimpleDocTemplate, Paragraph, Spacer, Image, Table, getSampleStyleSheet) or FPDF and execute it in a single command.\n"
+        "  * If an image is needed: download it directly inside the python script using urllib.request (with 'User-Agent': 'Mozilla/5.0' and a 5-second timeout), or if offline/blocked, generate a clean graphic using Pillow or Matplotlib.\n"
+        "  * Write the PDF directly to disk in the current workspace (e.g. pokemon_essay.pdf) and confirm.\n"
+        "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the PDF cleanly on disk.\n"
+        "- Interactive HTML5 Apps, 3D Games & Code:\n"
+        "  * Write full, production-ready code with no shortcuts or placeholders.\n"
+        "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
         "FILE PRESENTATION & DELIVERABLES:\n"
         "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
         "```createfile:<filename>\n<complete code here>\n```\n"
         "or for targeted in-place updates:\n"
         "```editfile:<filename>\n<<<<<<< SEARCH\n<existing code>\n=======\n<replacement code>\n>>>>>>> REPLACE\n```\n"
         "This ensures the user can immediately preview, run, test, and download the files as interactive cards in their workspace.\n"
-        "- When the user requests a PDF, document, or ZIP archive, run the build commands to produce the compiled file directly on disk. Do NOT present intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the document itself cleanly without extra helper scripts.\n"
+        "- When the user requests a PDF, document, or ZIP archive, run the build commands to produce the compiled file directly on disk. Do NOT present intermediate generator scripts in ```createfile: blocks — deliver the document itself cleanly without extra helper scripts.\n"
         "- Always deliver complete, functional, standalone files."
     )
 
@@ -4074,7 +4156,7 @@ def _stream_antigravity_cli(messages, state=None):
     got_tokens = False
     for session, acc_name in sessions_to_run:
         try:
-            for chunk in session.stream_turn(formatted_prompt, state=state):
+            for chunk in session.stream_turn(formatted_prompt, user_query=last_user_prompt, state=state):
                 got_tokens = True
                 yield chunk
             return
@@ -5904,35 +5986,107 @@ def _gemini_tokeninfo(token):
         print(f"[GEMINI][TOKENINFO] {exc}")
         return None
 
+def _refresh_google_oauth_token(refresh_token: str) -> str:
+    """Refreshes a Google OAuth access token using Google's token endpoint."""
+    if not refresh_token:
+        return None
+    try:
+        data = urllib.parse.urlencode({
+            "client_id": GOOGLE_GEMINI_OAUTH_CLIENT_ID,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://oauth2.googleapis.com/token",
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            res = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            new_tok = res.get("access_token")
+            return new_tok
+    except Exception as e:
+        print(f"[GOOGLE_OAUTH_REFRESH_ERR] {e}")
+        return None
+
 def _require_gemini_connection():
-    token=_gemini_access_token_from_request(); user=getattr(request,'current_user',{}) or {}
+    token = _gemini_access_token_from_request(); user = getattr(request, 'current_user', {}) or {}
     if token:
-        binding=request.cookies.get('pratham_gemini_binding','')
-        expected=_gemini_token_fingerprint(token,user.get('email',''))
-        if binding and hmac.compare_digest(binding,expected):
-            return token,None
-    # Check Antigravity / Gemini OAuth credentials on server
-    for tpath in ["/root/.gemini/antigravity-cli/antigravity-oauth-token"]:
+        binding = request.cookies.get('pratham_gemini_binding', '')
+        expected = _gemini_token_fingerprint(token, user.get('email', ''))
+        if binding and hmac.compare_digest(binding, expected):
+            return token, None
+
+    # Check environment variables (crucial for Vercel / serverless deployments)
+    env_direct_tok = os.environ.get("ANTIGRAVITY_TOKEN") or os.environ.get("ANTIGRAVITY_OAUTH_TOKEN") or os.environ.get("GEMINI_OAUTH_TOKEN")
+    if env_direct_tok:
+        return env_direct_tok.strip(), None
+
+    env_json_str = os.environ.get("ANTIGRAVITY_OAUTH_TOKEN_JSON") or os.environ.get("ANTIGRAVITY_TOKEN_JSON")
+    if env_json_str:
+        try:
+            tdata = json.loads(env_json_str)
+            tok = tdata.get("token", {}).get("access_token") or tdata.get("access_token")
+            ref_tok = tdata.get("token", {}).get("refresh_token") or tdata.get("refresh_token")
+            if tok:
+                return tok, None
+            if ref_tok:
+                refreshed = _refresh_google_oauth_token(ref_tok)
+                if refreshed:
+                    return refreshed, None
+        except Exception as e:
+            print(f"[ENV_TOKEN_JSON_PARSE_ERR] {e}")
+
+    # Check Antigravity / Gemini OAuth credentials on server disk
+    cand_paths = [
+        "/root/.gemini/antigravity-cli/antigravity-oauth-token",
+        os.path.expanduser("~/.gemini/antigravity-cli/antigravity-oauth-token"),
+        os.path.join(WORKSPACE_ROOT, ".gemini", "antigravity-oauth-token"),
+        os.path.join(_get_data_root(), "antigravity-oauth-token")
+    ]
+    for tpath in cand_paths:
         if os.path.exists(tpath):
             try:
                 with open(tpath, "r", encoding="utf-8") as f:
                     tdata = json.load(f)
                     tok = tdata.get("token", {}).get("access_token")
+                    ref_tok = tdata.get("token", {}).get("refresh_token")
                     if tok:
                         return tok, None
+                    if ref_tok:
+                        refreshed = _refresh_google_oauth_token(ref_tok)
+                        if refreshed:
+                            return refreshed, None
             except Exception:
                 pass
-    return None,(jsonify({"error":{"code":"GEMINI_AUTH_REQUIRED","message":"Connect Gemini in Settings before using Gemini."}}),401)
+
+    if GEMINI_API_KEY:
+        return GEMINI_API_KEY, None
+
+    return None, (jsonify({"error": {"code": "GEMINI_AUTH_REQUIRED", "message": "Connect Gemini in Settings before using Gemini."}}), 401)
 
 @app.route('/auth/gemini/config',methods=['GET','OPTIONS'])
 @app.route('/api/auth/gemini/config',methods=['GET','OPTIONS'])
 @app.route('/api/app/auth/gemini/config',methods=['GET','OPTIONS'])
 def gemini_oauth_config():
     if request.method=='OPTIONS': return _cors_preflight()
-    connected = False
-    antigravity_token_path = "/root/.gemini/antigravity-cli/antigravity-oauth-token"
-    if os.path.exists(antigravity_token_path):
-        connected = True
+    cand_paths = [
+        "/root/.gemini/antigravity-cli/antigravity-oauth-token",
+        os.path.expanduser("~/.gemini/antigravity-cli/antigravity-oauth-token"),
+        os.path.join(WORKSPACE_ROOT, ".gemini", "antigravity-oauth-token"),
+        os.path.join(_get_data_root(), "antigravity-oauth-token")
+    ]
+    has_token_file = any(os.path.exists(p) for p in cand_paths)
+    has_env_token = bool(
+        os.environ.get("ANTIGRAVITY_TOKEN") or
+        os.environ.get("ANTIGRAVITY_OAUTH_TOKEN") or
+        os.environ.get("GEMINI_OAUTH_TOKEN") or
+        os.environ.get("ANTIGRAVITY_OAUTH_TOKEN_JSON") or
+        os.environ.get("ANTIGRAVITY_TOKEN_JSON") or
+        os.environ.get("GEMINI_API_KEY") or
+        GEMINI_API_KEY
+    )
+    connected = has_token_file or has_env_token
     return jsonify({
         "ok": True,
         "client_id": GOOGLE_GEMINI_OAUTH_CLIENT_ID,
