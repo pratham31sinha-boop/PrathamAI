@@ -5833,17 +5833,33 @@
                 });
             } else if (log.content && typeof log.content === 'string') {
                 // If log.files wasn't explicitly saved, check for filenames explicitly mentioned in this message's text
-                const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:html|py|js|css|zip|pdf|json|txt))\b/gi;
+                const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:html|py|js|css|zip|pdf|apk|json|txt))\b/gi;
                 let m;
+                const foundFiles = [];
                 const seen = new Set();
                 while ((m = fileRefRegex.exec(log.content)) !== null) {
                     const fn = m[1];
                     const fnLower = fn.toLowerCase();
                     if (!seen.has(fnLower) && !['index.html', 'readme.md', 'package.json'].includes(fnLower)) {
                         seen.add(fnLower);
-                        appendDownloadCard(wrapper, `/download/${encodeURIComponent(fn)}`, fn);
+                        foundFiles.push(fn);
                     }
                 }
+                // If a PDF is present, ONLY mount the PDF (never intermediate helper scripts)
+                const hasPdf = foundFiles.some(f => f.toLowerCase().endsWith('.pdf'));
+                const hasZip = foundFiles.some(f => f.toLowerCase().endsWith('.zip'));
+                const hasApk = foundFiles.some(f => f.toLowerCase().endsWith('.apk'));
+                const hasHtml = foundFiles.some(f => f.toLowerCase().endsWith('.html'));
+
+                foundFiles.forEach(fn => {
+                    const fnLower = fn.toLowerCase();
+                    if (hasPdf && !fnLower.endsWith('.pdf')) return;
+                    if (hasZip && !fnLower.endsWith('.zip')) return;
+                    if (hasApk && !fnLower.endsWith('.apk')) return;
+                    if (hasHtml && !fnLower.endsWith('.html')) return;
+                    if (/^(?:generate|make|build|create|run|test|setup|fetch|download|temp)_.*\.(?:py|sh)$/i.test(fnLower)) return;
+                    appendDownloadCard(wrapper, `/download/${encodeURIComponent(fn)}`, fn);
+                });
             }
         }
 

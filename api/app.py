@@ -713,6 +713,154 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     token = uuid.uuid4().hex
     _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
     return token
+
+_IGNORE_FILE_NAMES = {
+    "index.html", "app.py", "quant_synth.py", "dynamic_synth.py", "edit_synth.py",
+    "games_synth.py", "epic_3d_synth.py", "build_apk.py", "manifest.json",
+    "sw.js", "vercel.json", "requirements.txt", "package.json", "package-lock.json"
+}
+_IGNORE_PREFIXES = (".", "__", "task-", "tmp", "temp", "scratch")
+_IGNORE_EXTS = {".log", ".tmp", ".pyc", ".git", ".map", ".bak"}
+
+def _classify_requested_deliverable_types(user_prompt: str) -> dict:
+    """Classifies user's prompt to determine what deliverable file was asked for."""
+    q = (user_prompt or "").lower().strip()
+    explicit_matches = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:pdf|zip|html|py|apk|csv|json|txt|md|js|css))\b", q)
+    explicit_name = explicit_matches[0] if explicit_matches and explicit_matches[0].lower() not in _IGNORE_FILE_NAMES else None
+
+    is_pdf = bool(re.search(r"\b(?:pdf|document|report|essay)\b|\.pdf\b", q))
+    is_zip = bool(re.search(r"\b(?:zip|archive|package|bundle|tar\.gz)\b|\.zip\b", q)) and not is_pdf
+    is_apk = bool(re.search(r"\b(?:apk|android\s*app)\b|\.apk\b", q))
+    is_csv = bool(re.search(r"\b(?:csv|dataset|spreadsheet|excel)\b|\.csv\b", q))
+    is_html = bool(re.search(r"\b(?:game|arcade|play|3d|html|web\s*app|webapp|website|simulator|dashboard|canvas|stumble|chess|racing|flappy|platformer)\b|\.html\b", q)) and not (is_pdf or is_zip or is_apk)
+    is_script = bool(re.search(r"\b(?:python\s*script|python\s*code|script|backend|scraper|bot)\b|\.py\b", q)) and not (is_pdf or is_zip or is_html or is_apk)
+
+    primary_type = "any"
+    target_exts = set()
+    if is_pdf:
+        primary_type = "pdf"
+        target_exts = {"pdf"}
+    elif is_zip:
+        primary_type = "zip"
+        target_exts = {"zip", "tar.gz", "7z"}
+    elif is_apk:
+        primary_type = "apk"
+        target_exts = {"apk"}
+    elif is_html:
+        primary_type = "html"
+        target_exts = {"html"}
+    elif is_csv:
+        primary_type = "csv"
+        target_exts = {"csv"}
+    elif is_script:
+        primary_type = "py"
+        target_exts = {"py"}
+    elif explicit_name:
+        ext = explicit_name.rsplit(".", 1)[-1].lower()
+        primary_type = ext
+        target_exts = {ext}
+
+    return {
+        "primary_type": primary_type,
+        "target_exts": target_exts,
+        "explicit_name": explicit_name,
+        "is_pdf": is_pdf,
+        "is_zip": is_zip,
+        "is_html": is_html,
+        "is_apk": is_apk,
+        "is_csv": is_csv,
+        "is_script": is_script,
+    }
+
+def _is_intermediate_helper_file(filename: str, user_prompt: str) -> bool:
+    """Returns True if filename is an intermediate script/helper and NOT the asked deliverable."""
+    fn_lower = (filename or "").lower().strip()
+    base_name = os.path.basename(fn_lower)
+    if base_name in _IGNORE_FILE_NAMES:
+        return True
+    if any(base_name.startswith(p) for p in _IGNORE_PREFIXES):
+        return True
+    if any(base_name.endswith(e) for e in _IGNORE_EXTS):
+        return True
+
+    dt = _classify_requested_deliverable_types(user_prompt)
+    ext = base_name.rsplit(".", 1)[-1] if "." in base_name else ""
+
+    if dt.get("explicit_name"):
+        return base_name != dt["explicit_name"].lower()
+    if dt.get("is_pdf"):
+        return ext != "pdf"
+    if dt.get("is_zip"):
+        return ext not in ("zip", "tar.gz", "7z")
+    if dt.get("is_apk"):
+        return ext != "apk"
+    if dt.get("is_html"):
+        return ext != "html"
+    if dt.get("is_csv"):
+        return ext != "csv"
+
+    # Known generator/helper script naming patterns
+    if re.search(r"^(?:generate|make|build|create|run|test|setup|fetch|download|temp)_.*\.(?:py|sh|bash)$", base_name):
+        return True
+
+    return False
+
+def _snapshot_workspace_files(search_dirs: list) -> dict:
+    """Returns {path: mtime} for files in search directories."""
+    snapshot = {}
+    for d in search_dirs:
+        if not d or not os.path.isdir(d):
+            continue
+        try:
+            for root, dirs, files in os.walk(d):
+                dirs[:] = [sub for sub in dirs if not sub.startswith((".", "__")) and sub not in ("node_modules", ".git", ".gemini", ".system_generated")]
+                for fn in files:
+                    if fn.startswith((".", "__")) or fn in _IGNORE_FILE_NAMES:
+                        continue
+                    fp = os.path.join(root, fn)
+                    try:
+                        snapshot[fp] = os.path.getmtime(fp)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    return snapshot
+
+def _detect_new_workspace_files(pre_snapshot: dict, search_dirs: list, turn_start_time: float) -> list:
+    """Finds all files created or modified during the turn."""
+    found = []
+    seen_paths = set()
+    for d in search_dirs:
+        if not d or not os.path.isdir(d):
+            continue
+        try:
+            for root, dirs, files in os.walk(d):
+                dirs[:] = [sub for sub in dirs if not sub.startswith((".", "__")) and sub not in ("node_modules", ".git", ".gemini", ".system_generated")]
+                for fn in files:
+                    if fn.startswith((".", "__")) or fn in _IGNORE_FILE_NAMES:
+                        continue
+                    fp = os.path.join(root, fn)
+                    if fp in seen_paths:
+                        continue
+                    seen_paths.add(fp)
+                    try:
+                        mtime = os.path.getmtime(fp)
+                        sz = os.path.getsize(fp)
+                        if sz > 0 and (fp not in pre_snapshot or mtime > pre_snapshot.get(fp, 0) or mtime >= (turn_start_time - 2.0)):
+                            found.append({
+                                "filename": fn,
+                                "path": fp,
+                                "size_bytes": sz,
+                                "mtime": mtime,
+                                "ext": fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+                            })
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    found.sort(key=lambda x: x["mtime"], reverse=True)
+    return found
+
 _FINALDOC_RE = re.compile(r"```finaldoc\s*\n([\s\S]*?)```", re.IGNORECASE)
 _EXPORT_FILLER_LINE_RE = re.compile(
     r"^\s*("
@@ -2977,71 +3125,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "I'm ready to continue! Please let me know what you'd like to work on next, or if there's any file or task you'd like me to extend."
         )
 
-    # 4.5 Senior Quantitative Risk & Orbital Flight Command Suite Handler
-    try:
-        from api.quant_synth import (
-            is_quant_portfolio_request, generate_quant_portfolio_suite,
-            is_orbital_mega_request, generate_orbital_command_suite
-        )
-    except Exception:
-        try:
-            from quant_synth import (
-                is_quant_portfolio_request, generate_quant_portfolio_suite,
-                is_orbital_mega_request, generate_orbital_command_suite
-            )
-        except Exception:
-            is_quant_portfolio_request = None
-            generate_quant_portfolio_suite = None
-            is_orbital_mega_request = None
-            generate_orbital_command_suite = None
-
-    if is_orbital_mega_request and is_orbital_mega_request(prompt):
-        orb_res = generate_orbital_command_suite(target_dir="/workspace/bold-curie")
-        return orb_res["markdown_response"]
-
-    if is_quant_portfolio_request and is_quant_portfolio_request(prompt):
-        q_res = generate_quant_portfolio_suite(target_dir="/workspace/bold-curie")
-        return q_res["markdown_response"]
-
-    # 4.8 Agentic File Editing & Refinement ("make it 3d", "make that file 3d", "edit the game", etc.)
-    if handle_file_edit:
-        edit_res = handle_file_edit(prompt, messages)
-        if edit_res:
-            feats = "\n".join([f"- **{f}**" for f in edit_res.get("features", [])])
-            tag = "editfile" if edit_res.get("action") == "edit" else "createfile"
-            return (
-                f"Here is the updated **{edit_res['filename']}**:\n\n"
-                f"```{tag}:{edit_res['filename']}\n"
-                + edit_res["code"] + "\n"
-                "```\n\n"
-                f"### ✨ {edit_res['title']} — Architecture & Features:\n"
-                + feats + "\n\n"
-                f"Click the `{edit_res['filename']}` file card below to preview your updated changes!"
-            )
-
-    # 5. Dynamic Game & Interactive Application Creation (Claude-like agentic generation)
-    game_keywords_pattern = r"\b(game|games|play|ludo|cricket|chess|arcade|racing|stumble|fall guys|panda|flappy|snake|platformer|2d game|3d game|rpg|dungeon|gta|vice city|hill climb)\b"
-    is_game_intent = (
-        bool(re.search(game_keywords_pattern, prompt_lower))
-        or ("game" in prompt_lower and any(k in prompt_lower for k in ["make", "build", "create", "code", "develop", "play", "phone", "mobile", "2d", "3d"]))
-        or any(k in prompt_lower for k in ["car game", "driving game", "racing game"])
-    ) and not any(k in prompt_lower for k in ["quant", "monte carlo", "portfolio", "sharpe", "sortino", "var 95"])
-
-    if is_game_intent and synthesize_project:
-        proj = synthesize_project(prompt)
-        if proj:
-            feats = "\n".join([f"- **{f}**" for f in proj.get("features", [])])
-            return (
-                f"Here is the complete **{proj['title']}** (`{proj['filename']}`):\n\n"
-                f"```createfile:{proj['filename']}\n"
-                + proj["code"] + "\n"
-                "```\n\n"
-                f"### ✨ {proj['title']} — Architecture & Features:\n"
-                + feats + "\n\n"
-                f"Click the `{proj['filename']}` file card below to preview and play it immediately!"
-            )
-    
-    # 6. Math / Arithmetic
+    # 5. Math / Arithmetic
     math_match = re.search(r"(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)", prompt)
     if math_match:
         try:
@@ -3055,7 +3139,7 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
         except Exception:
             pass
 
-    # 7. Greetings & Well-being
+    # 6. Greetings & Well-being
     if any(k in prompt_lower for k in ["how are you", "how r u", "how do you do", "whats up", "what's up", "how's it going"]):
         return (
             "I'm doing great, thank you for asking! I'm fully active and ready to build apps, code games, analyze data, or chat about any topic you'd like. What are you working on today?"
@@ -3067,352 +3151,9 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     if re.search(greeting_pattern, prompt_lower) and len(words_in_prompt) <= 4 and not any(k in prompt_lower for k in action_keywords):
         return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
 
-    # 7.2 Dedicated Chatbot Web Application Generator
-    if any(k in prompt_lower for k in ["chatbot", "chat bot", "chat app"]):
-        chatbot_html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pratham AI Chatbot Web Application</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
-    .chat-bubble-user { background: #6366f1; border-radius: 18px 18px 4px 18px; }
-    .chat-bubble-ai { background: #1e293b; border: 1px solid #334155; border-radius: 18px 18px 18px 4px; }
-  </style>
-</head>
-<body class="h-screen flex flex-col justify-between max-w-3xl mx-auto p-4">
-  <header class="flex items-center justify-between py-3 border-b border-slate-800">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">⚡</div>
-      <div>
-        <h1 class="font-bold text-base text-white">Pratham AI Chat Companion</h1>
-        <p class="text-xs text-emerald-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Online & Active</p>
-      </div>
-    </div>
-    <button onclick="clearChat()" class="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800">Clear</button>
-  </header>
-
-  <div id="messages" class="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
-    <div class="flex gap-3">
-      <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">AI</div>
-      <div class="chat-bubble-ai p-4 text-sm leading-relaxed max-w-[85%] shadow-md">
-        Hello! I am your interactive AI chatbot web companion. Ask me anything, brainstorm ideas, write code, or test chat queries!
-      </div>
-    </div>
-  </div>
-
-  <footer class="pt-3 border-t border-slate-800">
-    <form id="chatForm" onsubmit="sendMessage(event)" class="flex gap-2">
-      <input type="text" id="userInput" placeholder="Ask anything..." autocomplete="off" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-3 rounded-xl text-sm flex items-center gap-1 transition shadow-lg shadow-indigo-600/30">
-        Send
-      </button>
-    </form>
-    <p class="text-[10px] text-center text-slate-500 mt-2">Built with Pratham AI agentic framework • Responsive Client</p>
-  </footer>
-
-  <script>
-    const messagesContainer = document.getElementById('messages');
-    const userInput = document.getElementById('userInput');
-
-    function appendMessage(sender, text) {
-      const isUser = sender === 'user';
-      const wrapper = document.createElement('div');
-      wrapper.className = isUser ? 'flex justify-end' : 'flex gap-3';
-      if (!isUser) {
-        const avatar = document.createElement('div');
-        avatar.className = 'w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0';
-        avatar.textContent = 'AI';
-        wrapper.appendChild(avatar);
-      }
-      const bubble = document.createElement('div');
-      bubble.className = (isUser ? 'chat-bubble-user text-white' : 'chat-bubble-ai text-slate-200') + ' p-4 text-sm leading-relaxed max-w-[85%] shadow-md break-words';
-      bubble.textContent = text;
-      wrapper.appendChild(bubble);
-      messagesContainer.appendChild(wrapper);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    async function sendMessage(e) {
-      e.preventDefault();
-      const text = userInput.value.trim();
-      if (!text) return;
-      userInput.value = '';
-      appendMessage('user', text);
-
-      const typingEl = document.createElement('div');
-      typingEl.id = 'typing';
-      typingEl.className = 'flex gap-3';
-      typingEl.innerHTML = '<div class=\"w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0\">AI</div><div class=\"chat-bubble-ai px-4 py-3 text-sm text-slate-400 italic\">Thinking...</div>';
-      messagesContainer.appendChild(typingEl);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-      setTimeout(() => {
-        typingEl.remove();
-        let reply = '';
-        const q = text.toLowerCase();
-        if (q.includes('hello') || q.includes('hi') || q.includes('hey')) {
-          reply = 'Hello! How can I assist you with your project today?';
-        } else if (q.includes('who are you') || q.includes('creator')) {
-          reply = 'I am a chatbot web app powered by the Pratham AI architecture, created by Pratham Sinha and team under the supervision of Akriti and Aditi Aishwaryam!';
-        } else if (q.includes('difference') || q.includes('agi') || q.includes('asi')) {
-          reply = 'AGI matches human general cognitive capabilities, while ASI is superhuman intelligence surpassing all collective human intellect!';
-        } else {
-          reply = 'You asked: \"' + text + '\". I am running as a self-contained responsive chatbot client ready to integrate with backend APIs!';
-        }
-        appendMessage('ai', reply);
-      }, 600);
-    }
-
-    function clearChat() {
-      messagesContainer.innerHTML = '';
-      appendMessage('ai', 'Chat history cleared. How can I assist you now?');
-    }
-  </script>
-</body>
-</html>"""
-        return (
-            "Here is the complete **Chatbot Web Application** (`chatbot_app.html`):\n\n"
-            "```createfile:chatbot_app.html\n"
-            + chatbot_html + "\n"
-            "```\n\n"
-            "### ✨ Chatbot Web App — Architecture & Features:\n"
-            "- **💬 Interactive Chat Interface:** Responsive chat messages with user and AI avatar styling.\n"
-            "- **⚡ Real-Time Typing Indicator:** Smooth messaging states with instant reactive updates.\n"
-            "- **📱 Mobile & Desktop Ready:** Tailored with Tailwind CSS for fluid responsive display.\n"
-            "- **🚀 Zero Setup:** Run directly in any browser with instant preview.\n\n"
-            "Click the `chatbot_app.html` file card below to preview and chat immediately!"
-        )
-
-    # 7.3 AGI vs ASI Tabular Comparison
-    if ("asi" in prompt_lower and "agi" in prompt_lower) or ("superintelligence" in prompt_lower and "general intelligence" in prompt_lower):
-        return (
-            "Here is the tabular comparison between **AGI (Artificial General Intelligence)** and **ASI (Artificial Superintelligence)** across 5 clear points:\n\n"
-            "| # | Feature / Aspect | AGI (Artificial General Intelligence) | ASI (Artificial Superintelligence) |\n"
-            "| :-: | :--- | :--- | :--- |\n"
-            "| **1** | **Intelligence Level** | **Human-Level Intelligence:** Matches average to expert human capabilities across intellectual tasks. | **Superhuman Intelligence:** Vastly exceeds the collective intellect of all humans combined. |\n"
-            "| **2** | **Scope & Flexibility** | Capable of learning, reasoning, and adapting across any domain a human can master. | Operates in multidimensional domains, scientific breakthroughs, and concepts far beyond human comprehension. |\n"
-            "| **3** | **Evolution Mechanism** | Developed through large models, reinforcement learning, and structured training. | Driven by **autonomous recursive self-improvement**, rewriting and upgrading its own code exponentially. |\n"
-            "| **4** | **Problem Solving** | Solves complex real-world tasks at the speed and depth of top human specialists. | Solves previously unsolvable mysteries (e.g. quantum gravity, curing complex diseases, advanced interstellar tech). |\n"
-            "| **5** | **Control & Safety** | Governed through aligned behavioral objectives and human-interpretable constraints. | Extremely difficult to contain or predict due to cognitive superiority and speed. |\n\n"
-            "### 💡 Simple Summary:\n"
-            "- **AGI:** An AI that can do any intellectual job a human can do.\n"
-            "- **ASI:** An AI that makes all of human history's greatest geniuses look like ants by comparison."
-        )
-
-    # 7.5 General App / Tool / 3D Simulation Creation Intent
-    is_app_intent = any(k in prompt_lower for k in [
-        "app", "web app", "webapp", "html app", "website", "dashboard",
-        "3d", "solar", "minecraft", "weather", "todo", "calculator", "portfolio", "drum", "paint", "sandbox", "quiz"
-    ]) and not any(k in prompt_lower for k in ["python", "in python", "python script", "python code", "learn", "how to", "chatbot", "chat bot", "difference", "agi", "asi"])
-    if is_app_intent and synthesize_project:
-        proj = synthesize_project(prompt)
-        if proj:
-            feats = "\n".join([f"- **{f}**" for f in proj["features"]])
-            return (
-                f"Here is the complete **{proj['title']}** (`{proj['filename']}`):\n\n"
-                f"```createfile:{proj['filename']}\n"
-                + proj["code"] + "\n"
-                "```\n\n"
-                f"### ✨ {proj['title']} — Architecture & Features:\n"
-                + feats + "\n\n"
-                f"Click the `{proj['filename']}` file card below to preview, test, or edit it immediately in your Artifact Workspace!"
-            )
-
-    # 8. Learning Roadmaps (Python, JavaScript, Coding, Web Dev, AI)
-    if any(k in prompt_lower for k in ["learn python", "how to learn python", "learn to code python", "python roadmap", "start with python", "study python", "teach me python", "python for beginners"]):
-        return (
-            "Learning Python is one of the best decisions you can make in modern software engineering! Python is clean, easy to read, and powers everything from web apps and automation to data science and artificial intelligence.\n\n"
-            "Here is the complete, step-by-step roadmap to go from complete beginner to building real-world projects:\n\n"
-            "### 🚀 Step 1: Master the Fundamentals (Weeks 1–2)\n"
-            "- **Variables & Data Types:** `int`, `float`, `str`, `bool`.\n"
-            "- **Conditionals:** `if`, `elif`, `else` logic and boolean operations.\n"
-            "- **Loops:** `for` loops (iterating over ranges/sequences) and `while` loops.\n"
-            "- **Functions:** Defining functions with `def`, arguments, `return` values, and default parameters.\n\n"
-            "```python\n"
-            "# Basic Python Function Example\n"
-            "def greet_user(name: str) -> str:\n"
-            "    return f\"Hello, {name}! Welcome to Python programming.\"\n\n"
-            "print(greet_user(\"Developer\"))\n"
-            "```\n\n"
-            "### 📦 Step 2: Essential Data Structures (Weeks 3–4)\n"
-            "- **Lists:** Ordered, mutable collections (`[1, 2, 3]`). Practice `append()`, `pop()`, slicing `lst[1:3]`, and list comprehensions.\n"
-            "- **Dictionaries:** Key-value pairs (`{'name': 'Alice', 'role': 'Admin'}`). Essential for APIs and JSON.\n"
-            "- **Tuples & Sets:** Immutable sequences `(1, 2)` and unique collections `{1, 2, 3}`.\n\n"
-            "### ⚙️ Step 3: Object-Oriented & Modular Programming (Weeks 5–6)\n"
-            "- **Classes & Objects:** Understanding `__init__`, `self`, attributes, and methods.\n"
-            "- **File I/O & Modules:** Reading/writing files (`with open(...)`), importing standard libraries (`os`, `sys`, `json`, `math`, `datetime`).\n"
-            "- **Exception Handling:** Using `try: ... except Exception as e:` for defensive, crash-proof code.\n\n"
-            "### 🎯 Step 4: Pick a Specialization & Build Projects (Weeks 7+)\n"
-            "- **Web Development:** Learn **FastAPI** (modern, ultra-fast) or **Flask** to build REST APIs.\n"
-            "- **Automation & Scraping:** Use `requests` and `BeautifulSoup` to automate daily tasks and collect web data.\n"
-            "- **Data Science & AI:** Learn `numpy`, `pandas`, and `scikit-learn` for data analysis and machine learning.\n\n"
-            "### 💡 Next Step:\n"
-            "Would you like me to write a beginner project for you right now (like a number guessing game, password generator, or file organizer), or should we dive into any specific topic?"
-        )
-
-    if any(k in prompt_lower for k in ["learn javascript", "how to learn javascript", "learn js", "js roadmap"]):
-        return (
-            "JavaScript is the language that powers the entire modern web! From responsive frontend UIs to full-stack backend servers, learning JavaScript unlocks endless possibilities.\n\n"
-            "### 🌐 Modern JavaScript Learning Roadmap:\n\n"
-            "1. **Core Language Fundamentals (Weeks 1–2):**\n"
-            "   - Syntax, `let` vs `const`, data types, template literals (`` `Hello ${name}` ``).\n"
-            "   - Operators, conditions, ternary operators, and loops (`for`, `for...of`).\n"
-            "   - Functions: Arrow functions `const add = (a, b) => a + b;`, default parameters, rest/spread operators (`...args`).\n\n"
-            "2. **DOM Manipulation & Browser Events (Weeks 3–4):**\n"
-            "   - `document.querySelector()`, `addEventListener('click', ...)`, modifying classes and styles.\n"
-            "   - Handling forms, inputs, and real-time UI updates.\n\n"
-            "3. **Asynchronous JavaScript (Weeks 5–6):**\n"
-            "   - Promises, `async` / `await`, and `fetch()` to call external APIs.\n"
-            "   - Handling JSON data, error handling with `try...catch`.\n\n"
-            "4. **Modern Frameworks & Ecosystem:**\n"
-            "   - **React** or **Vue** for declarative user interfaces.\n"
-            "   - **Node.js** & **Express** for building backend servers.\n\n"
-            "Would you like a sample JavaScript project or an interactive tutorial on any specific topic?"
-        )
-
-    # 8.5 Specific Python Task Solvers & Code Scripts
-    if any(k in prompt_lower for k in ["fibonacci"]):
-        return (
-            "Here is an efficient, production-ready Python implementation for calculating Fibonacci numbers using both memoization and dynamic programming:\n\n"
-            "```python\n"
-            "from typing import List\n\n"
-            "def fibonacci_sequence(n: int) -> List[int]:\n"
-            "    \"\"\"Generates the first n Fibonacci numbers with O(n) time and O(n) space.\"\"\"\n"
-            "    if n <= 0:\n"
-            "        return []\n"
-            "    if n == 1:\n"
-            "        return [0]\n"
-            "    \n"
-            "    seq = [0, 1]\n"
-            "    while len(seq) < n:\n"
-            "        seq.append(seq[-1] + seq[-2])\n"
-            "    return seq\n\n"
-            "def fibonacci_nth(n: int) -> int:\n"
-            "    \"\"\"Calculates the nth Fibonacci number in O(1) auxiliary space.\"\"\"\n"
-            "    if n < 0:\n"
-            "        raise ValueError(\"n must be non-negative\")\n"
-            "    if n in (0, 1):\n"
-            "        return n\n"
-            "    a, b = 0, 1\n"
-            "    for _ in range(2, n + 1):\n"
-            "        a, b = b, a + b\n"
-            "    return b\n\n"
-            "if __name__ == '__main__':\n"
-            "    print('First 10 Fibonacci numbers:', fibonacci_sequence(10))\n"
-            "    print('15th Fibonacci number:', fibonacci_nth(15))\n"
-            "```\n\n"
-            "### 💡 Complexity:\n"
-            "- **Time Complexity:** $O(n)$ linear time.\n"
-            "- **Space Complexity:** $O(1)$ constant auxiliary space for `fibonacci_nth`."
-        )
-
-    if any(k in prompt_lower for k in ["binary search"]):
-        return (
-            "Here is the standard, optimized **Binary Search** algorithm in Python with both iterative and recursive implementations:\n\n"
-            "```python\n"
-            "from typing import List, Optional\n\n"
-            "def binary_search(arr: List[int], target: int) -> Optional[int]:\n"
-            "    \"\"\"\n"
-            "    Searches for target in a sorted list arr.\n"
-            "    Returns the index if found, or None if not present.\n"
-            "    Time: O(log n) | Space: O(1)\n"
-            "    \"\"\"\n"
-            "    low, high = 0, len(arr) - 1\n"
-            "    \n"
-            "    while low <= high:\n"
-            "        mid = (low + high) // 2\n"
-            "        if arr[mid] == target:\n"
-            "            return mid\n"
-            "        elif arr[mid] < target:\n"
-            "            low = mid + 1\n"
-            "        else:\n"
-            "            high = mid - 1\n"
-            "            \n"
-            "    return None\n\n"
-            "if __name__ == '__main__':\n"
-            "    numbers = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]\n"
-            "    idx = binary_search(numbers, 23)\n"
-            "    print(f'Target 23 found at index: {idx}')\n"
-            "```\n\n"
-            "### 🔍 Key Points:\n"
-            "- The input array must be **sorted** prior to calling `binary_search`.\n"
-            "- Runs in **$O(\\log n)$** time, checking half of the remaining array with each iteration."
-        )
-
-    # 8.6 Identity & Creator Queries (Natural, ChatGPT/Claude style)
-    if any(k in prompt_lower for k in ["why ur name", "why your name", "who is pratham", "who created you", "who made you", "what is your name", "who are you", "pratham sinha"]):
-        return (
-            "I am **Pratham AI**, an advanced AI assistant created by **Pratham Sinha** and his team under the supervision of **Akriti** and **Aditi Aishwaryam**.\n\n"
-            "I was named after Pratham Sinha and designed with true Claude-like agentic freedom to help developers, creators, and learners:\n"
-            "- 🎮 **Build & Deliver Games:** Generate 3D and 2D games (like GTA 6, Stumble Guys, Chess, and Hill Climb Racing) with instant browser previews and mobile touch controls.\n"
-            "- 💻 **Engineer Full-Stack Apps:** Write complete HTML, CSS, JavaScript, and Python applications directly in your workspace.\n"
-            "- 🧠 **Solve Complex Problems:** Answer questions, explain algorithms, and assist with real-time intelligence.\n\n"
-            "How can I assist you with your project or coding today?"
-        )
-
-    # 8.7 General Code / Technical Requests
-    if any(k in prompt_lower for k in ["python", "javascript", "script", "code", "function", "api", "html", "css", "flask", "fastapi", "react", "bug", "sql", "database", "algorithm"]):
-        clean_name = re.sub(r"[^\w\s]", "", prompt).strip()[:35].replace(" ", "_").lower() or "solution"
-        return (
-            f"Here is a clean, production-ready solution tailored for **{prompt.strip()[:60]}**:\n\n"
-            "```python\n"
-            f"# Solution for: {prompt.strip()[:60]}\n"
-            "# Engineered with clean PEP 8 standards, error handling, and type safety\n"
-            "import os\n"
-            "import sys\n"
-            "from typing import Any, Dict, List, Optional\n\n"
-            f"def process_{clean_name}(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:\n"
-            f"    \"\"\"\n"
-            f"    Processes {clean_name} requirements with input validation and clean error boundaries.\n"
-            f"    \"\"\"\n"
-            "    if not data:\n"
-            "        data = {}\n"
-            "    \n"
-            "    # Core business logic\n"
-            "    result = {\n"
-            "        'status': 'success',\n"
-            f"        'task': '{prompt.strip()[:40]}',\n"
-            "        'processed': True,\n"
-            "        'payload': data\n"
-            "    }\n"
-            "    return result\n\n"
-            "if __name__ == '__main__':\n"
-            "    sample_payload = {'env': 'production', 'ready': True}\n"
-            f"    output = process_{clean_name}(sample_payload)\n"
-            "    print('Execution Output:', output)\n"
-            "```\n\n"
-            "### 🛠️ Key Implementation Details:\n"
-            "- **Clean PEP 8 Architecture:** Well-structured type annotations and explicit argument handling.\n"
-            "- **Defensive Validation:** Guards against `None` inputs to guarantee stability.\n\n"
-            "Would you like me to tailor this to a specific database, REST endpoint, or add unit tests?"
-        )
-
-    # 9. Natural, thoughtful conversational response for all inquiries (Claude & ChatGPT style)
-    if any(k in prompt_lower for k in ["what is", "what are", "explain", "how does", "how do", "why does", "tell me about"]):
-        topic = prompt.strip()
-        for prefix in ["what is a ", "what is an ", "what is ", "what are ", "explain ", "how does ", "how do ", "tell me about "]:
-            if prompt_lower.startswith(prefix):
-                topic = prompt[len(prefix):].strip()
-                break
-
-        return (
-            f"Here is a comprehensive, practical explanation of **{topic.title() if len(topic) < 40 else topic}**:\n\n"
-            f"### 💡 Understanding {topic.title() if len(topic) < 40 else topic}\n"
-            f"{topic} plays an important role in modern software development and problem solving. Understanding its core mechanics allows you to design better architectures and solve real-world problems effectively.\n\n"
-            "### ⚙️ Key Concepts & How It Works:\n"
-            "1. **Core Mechanism:** Operates based on defined principles that process inputs and produce reliable, predictable outputs.\n"
-            "2. **Real-World Integration:** Integrates into modern workflows, libraries, and tools to automate tasks and streamline operations.\n"
-            "3. **Best Practices:** Focus on modularity, clean error handling, and performance optimization when implementing this concept.\n\n"
-            f"Would you like a code example, real-world scenario, or an interactive demonstration of **{topic}**?"
-        )
-
     return (
-        f"I'm here to assist you with **{prompt.strip()}**!\n\n"
-        "Could you please share a few more specifics on how you would like this implemented or structured? "
-        "Whether you need code, an interactive web application, an explanation, or a dataset, I'm ready to jump straight into building or answering it for you!"
+        f"I am ready with complete agentic freedom and terminal capabilities to assist you with **{prompt.strip()}**!\n\n"
+        "Please provide any specific requirements or instructions, and I will execute the commands in the workspace terminal, test the implementation, and present the final deliverable file directly to you."
     )
 
 def _stream_pratham_fast_engine(messages, state=None):
@@ -3740,16 +3481,36 @@ class _WarmAntigravitySession:
                             full_streamed = "".join(accumulated_streamed_text)
                             user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
                             user_query = user_matches[-1].lower() if user_matches else (prompt or "").lower()
-                            is_doc_or_zip = bool(re.search(r"\b(?:pdf|zip|document|tar\.gz)\b", user_query))
+                            
+                            # Filter written_files to strictly requested deliverables (never present intermediate helper scripts)
                             for w_name, w_code in written_files.items():
-                                # If the user asked for a PDF or ZIP, intermediate generator scripts (.py/.sh) are not deliverables
-                                if is_doc_or_zip and not w_name.lower().endswith((".pdf", ".zip", ".tar.gz", ".7z")):
+                                if _is_intermediate_helper_file(w_name, user_query):
                                     continue
                                 if f"createfile:{w_name}" not in full_streamed and f"editfile:{w_name}" not in full_streamed:
                                     file_block = f"\n\n```createfile:{w_name}\n{w_code}\n```\n"
                                     for part in re.split(r"(\s+)", file_block):
                                         if part:
                                             yield _sse({"type": "token", "text": part})
+                            
+                            # Also check if an HTML deliverable was created on disk in WORKSPACE_ROOT
+                            dt = _classify_requested_deliverable_types(user_query)
+                            if dt.get("is_html") and not any(k in full_streamed for k in ["```createfile:", "```editfile:"]):
+                                try:
+                                    for fn in os.listdir(WORKSPACE_ROOT):
+                                        if fn.lower().endswith(".html") and fn.lower() not in _IGNORE_FILE_NAMES:
+                                            fp = os.path.join(WORKSPACE_ROOT, fn)
+                                            if os.path.isfile(fp) and os.path.getmtime(fp) >= (start_time - 5.0):
+                                                with open(fp, "r", encoding="utf-8", errors="replace") as fh:
+                                                    hcode = fh.read()
+                                                if len(hcode) > 20:
+                                                    file_block = f"\n\n```createfile:{fn}\n{hcode}\n```\n"
+                                                    for part in re.split(r"(\s+)", file_block):
+                                                        if part:
+                                                            yield _sse({"type": "token", "text": part})
+                                                break
+                                except Exception:
+                                    pass
+
                             if state is not None:
                                 state["finish_reason"] = "stop"
                             break
@@ -6856,6 +6617,8 @@ def chat_stream():
         turn_flow = []
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
+        search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
+        pre_snap = _snapshot_workspace_files(search_dirs)
         total_blocks_seen = 0
         session_file_contents = {}
         _images_emitted_this_turn = set()
@@ -6968,8 +6731,7 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
-                    if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and file_ext.lower() != "pdf":
-                        # User explicitly asked for a PDF document. Do not deliver helper python scripts as deliverable cards!
+                    if _is_intermediate_helper_file(filename, outgoing_user_message or message):
                         pass
                     else:
                         _produced_files_this_turn.append({
@@ -7047,7 +6809,7 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
-                    if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and file_ext.lower() != "pdf":
+                    if _is_intermediate_helper_file(filename, outgoing_user_message or message):
                         pass
                     else:
                         _produced_files_this_turn.append({
@@ -7159,7 +6921,7 @@ def chat_stream():
                     for _new_path in sorted(_post_exec_files - _pre_exec_files):
                         try:
                             _new_name = os.path.basename(_new_path)
-                            if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and not _new_name.lower().endswith(".pdf"):
+                            if _is_intermediate_helper_file(_new_name, outgoing_user_message or message):
                                 continue
                             with open(_new_path, "rb") as _fh:
                                 _new_bytes = _fh.read()
@@ -7189,7 +6951,7 @@ def chat_stream():
                     for _tmp_f in sorted(_post_tmp_files - _pre_tmp_files):
                         _tmp_path = os.path.join("/tmp", _tmp_f)
                         if os.path.isfile(_tmp_path) and not _tmp_f.startswith("."):
-                            if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and not _tmp_f.lower().endswith(".pdf"):
+                            if _is_intermediate_helper_file(_tmp_f, outgoing_user_message or message):
                                 continue
                             if terminal_workdir and os.path.isdir(terminal_workdir):
                                 try:
@@ -7253,198 +7015,197 @@ def chat_stream():
                 })
         assistant_response = "".join(full_reply_parts)
 
-        # Auto-detect ANY files referenced in assistant_response or created in /tmp or terminal_workdir
-        referenced_filenames = set()
-        for m in re.finditer(r"(?:file:///tmp/|/tmp/|```createfile:|\b)([a-zA-Z0-9_\-]+\.(?:zip|html|py|js|json|css|pdf|tar\.gz))\b", assistant_response):
-            referenced_filenames.add(m.group(1))
+        # Comprehensive Deliverable Resolution & Discovery:
+        # Detect newly created files on disk across workspace and session,
+        # and present ONLY the exact deliverable file the user asked for.
+        dt = _classify_requested_deliverable_types(outgoing_user_message or message)
+        new_disk_files = _detect_new_workspace_files(pre_snap, search_dirs, turn_start_time)
 
-        for fname in referenced_filenames:
-            if fname.lower() in _produced_filenames_this_turn:
-                continue
-            if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE) and not fname.lower().endswith(".pdf"):
-                continue
-            cand_path = None
-            if terminal_workdir and os.path.isfile(os.path.join(terminal_workdir, fname)):
-                cand_path = os.path.join(terminal_workdir, fname)
-            elif os.path.isfile(os.path.join(WORKSPACE_ROOT, fname)):
-                cand_path = os.path.join(WORKSPACE_ROOT, fname)
-                if terminal_workdir and os.path.isdir(terminal_workdir):
+        # Discard any intermediate helper scripts from candidates
+        valid_disk_candidates = [
+            f for f in new_disk_files
+            if not _is_intermediate_helper_file(f["filename"], outgoing_user_message or message)
+        ]
+
+        # Purge intermediate helper scripts from _produced_files_this_turn
+        _produced_files_this_turn = [
+            f for f in _produced_files_this_turn
+            if not _is_intermediate_helper_file(f.get("filename", ""), outgoing_user_message or message)
+        ]
+        _produced_filenames_this_turn = {f.get("filename", "").lower() for f in _produced_files_this_turn}
+
+        final_deliverables = []
+
+        if dt.get("is_pdf"):
+            # Find any real PDF on disk
+            pdf_cand = None
+            for cand in valid_disk_candidates:
+                if cand.get("ext") == "pdf":
+                    pdf_cand = cand
+                    break
+            if not pdf_cand:
+                for s_dir in search_dirs:
                     try:
-                        shutil.copy2(cand_path, os.path.join(terminal_workdir, fname))
+                        for fn in os.listdir(s_dir):
+                            if fn.lower().endswith(".pdf") and not fn.startswith("."):
+                                fp = os.path.join(s_dir, fn)
+                                if os.path.isfile(fp) and os.path.getsize(fp) > 100:
+                                    try:
+                                        if os.path.getmtime(fp) >= (turn_start_time - 15.0):
+                                            pdf_cand = {"filename": fn, "path": fp, "size_bytes": os.path.getsize(fp), "ext": "pdf"}
+                                            break
+                                    except Exception:
+                                        pass
+                        if pdf_cand:
+                            break
                     except Exception:
                         pass
-            elif os.path.isfile(os.path.join("/tmp", fname)):
-                cand_path = os.path.join("/tmp", fname)
-                if terminal_workdir and os.path.isdir(terminal_workdir):
-                    try:
-                        shutil.copy2(cand_path, os.path.join(terminal_workdir, fname))
-                    except Exception:
-                        pass
-            
-            if cand_path and os.path.isfile(cand_path):
-                try:
-                    # ONLY pick up files modified or created during THIS turn
-                    if os.path.getmtime(cand_path) < turn_start_time - 2.0:
-                        continue
-                    with open(cand_path, "rb") as fh:
-                        fbytes = fh.read()
-                    fmime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
-                    ftoken = _store_generated_file(fbytes, fname, fmime)
-                    _produced_files_this_turn.append({
-                        "filename": fname, "url": f"/download/{ftoken}", "download_url": f"/download/{ftoken}",
-                        "size_bytes": len(fbytes), "lang": fname.rsplit(".", 1)[-1] if "." in fname else "txt"
-                    })
-                    yield _sse({"type": "file_ready", "url": f"/download/{ftoken}", "filename": fname})
-                    _produced_filenames_this_turn.add(fname.lower())
-                    if user_email:
-                        _save_user_chat_file(user_email, conv_id, fname, fbytes)
-                except Exception as _fe:
-                    print(f"[REFERENCED FILE DISCOVERY FAULT] {fname} -> {_fe}")
 
-        try:
-            if _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
-                has_zip_already = any(f.get("filename", "").lower().endswith(".zip") for f in _produced_files_this_turn)
-                if not has_zip_already:
-                    zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
-                    if not zip_name.endswith(".zip"):
-                        zip_name += ".zip"
-                    inner_name = _derive_export_filename(export_intent_check_message, "html", assistant_response)
-                    # Pull previous conversation files as extra assets into the zip
-                    prev_files = _extract_conversation_files(conv_id=conv_id, user_email=user_email)
-                    zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name, extra_files=prev_files)
-                    token = _store_generated_file(zip_bytes, zip_name, "application/zip")
-                    _produced_files_this_turn.append({
-                        "filename": zip_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                        "size_bytes": len(zip_bytes), "lang": "zip"
-                    })
-                    # Also persist the zip to attachments so it's always accessible
-                    if user_email:
-                        _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
-            elif _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
-                has_pdf_already = any(f.get("filename", "").lower().endswith(".pdf") for f in _produced_files_this_turn)
-                if not has_pdf_already:
-                    # Look for any real .pdf deliverable generated on disk in WORKSPACE_ROOT, terminal_workdir, or /tmp
-                    found_disk_pdf = None
-                    search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
-                    for s_dir in search_dirs:
-                        try:
-                            for f in os.listdir(s_dir):
-                                if f.lower().endswith(".pdf") and not f.startswith("."):
-                                    full_p = os.path.join(s_dir, f)
-                                    if os.path.isfile(full_p) and os.path.getsize(full_p) > 200:
-                                        try:
-                                            if os.path.getmtime(full_p) >= (turn_start_time - 10.0):
-                                                found_disk_pdf = full_p
-                                                break
-                                        except Exception:
-                                            pass
-                            if found_disk_pdf:
-                                break
-                        except Exception:
-                            pass
-
-                    if found_disk_pdf:
-                        pdf_name = os.path.basename(found_disk_pdf)
-                        with open(found_disk_pdf, "rb") as pf_h:
-                            pdf_bytes = pf_h.read()
-                        token = _store_generated_file(pdf_bytes, pdf_name, "application/pdf")
-                        _produced_files_this_turn.append({
-                            "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                            "size_bytes": len(pdf_bytes), "lang": "pdf"
-                        })
-                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
-                        _produced_filenames_this_turn.add(pdf_name.lower())
-                        if user_email:
-                            _save_user_chat_file(user_email, conv_id, pdf_name, pdf_bytes)
-                    else:
-                        pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
-                        if pdf_bytes:
-                            pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
-                            token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
-                            _produced_files_this_turn.append({
-                                "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                                "size_bytes": len(pdf_bytes), "lang": "pdf"
-                            })
-                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
-                            _produced_filenames_this_turn.add(pdf_name.lower())
-                            if user_email:
-                                _save_user_chat_file(user_email, conv_id, pdf_name, pdf_bytes)
+            if pdf_cand:
+                pdf_name = pdf_cand["filename"]
+                with open(pdf_cand["path"], "rb") as pf_h:
+                    pdf_bytes = pf_h.read()
+                token = _store_generated_file(pdf_bytes, pdf_name, "application/pdf")
+                final_deliverables = [{
+                    "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(pdf_bytes), "lang": "pdf"
+                }]
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, pdf_name, pdf_bytes)
             else:
-                generic_ext = _detect_generic_extension_intent(export_intent_check_message)
-                if generic_ext and generic_ext.lower() != "txt":
-                    has_gen_already = any(f.get("filename", "").lower().endswith(f".{generic_ext.lower()}") for f in _produced_files_this_turn)
-                    if not has_gen_already:
-                        file_bytes, _default_name, file_mime = _build_generic_file_from_response(
-                            assistant_response, generic_ext, workdir=terminal_workdir
-                        )
-                        if file_bytes:
-                            file_name = _derive_export_filename(export_intent_check_message, generic_ext, assistant_response)
-                            token = _store_generated_file(file_bytes, file_name, file_mime)
-                            _produced_files_this_turn.append({
-                                "filename": file_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                                "size_bytes": len(file_bytes), "lang": generic_ext
-                            })
-                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": file_name})
-        except Exception as exc:
-            print(f"[FILEGEN][FAULT] {exc}")
+                pdf_bytes, _default_name, pdf_mime = _build_pdf_from_response(assistant_response)
+                if pdf_bytes:
+                    pdf_name = _derive_export_filename(export_intent_check_message, "pdf", assistant_response)
+                    token = _store_generated_file(pdf_bytes, pdf_name, pdf_mime)
+                    final_deliverables = [{
+                        "filename": pdf_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": len(pdf_bytes), "lang": "pdf"
+                    }]
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": pdf_name})
+                    if user_email:
+                        _save_user_chat_file(user_email, conv_id, pdf_name, pdf_bytes)
 
-        # Automatic code deliverable discovery:
-        # If no file was registered yet, but the assistant output a complete HTML, Python, or Canvas app/game,
-        # extract and present it as a downloadable deliverable attachment card immediately!
-        try:
-            if not _produced_files_this_turn and not _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
+        elif dt.get("is_zip"):
+            zip_cand = None
+            for cand in valid_disk_candidates:
+                if cand.get("ext") in ("zip", "tar.gz", "7z"):
+                    zip_cand = cand
+                    break
+            if zip_cand:
+                zip_name = zip_cand["filename"]
+                with open(zip_cand["path"], "rb") as zf_h:
+                    zip_bytes = zf_h.read()
+                token = _store_generated_file(zip_bytes, zip_name, "application/zip")
+                final_deliverables = [{
+                    "filename": zip_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(zip_bytes), "lang": "zip"
+                }]
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
+            else:
+                zip_name = _derive_export_filename(export_intent_check_message, "zip", assistant_response)
+                if not zip_name.endswith(".zip"):
+                    zip_name += ".zip"
+                inner_name = _derive_export_filename(export_intent_check_message, "html", assistant_response)
+                prev_files = _extract_conversation_files(conv_id=conv_id, user_email=user_email)
+                zip_bytes = _build_zip_from_response(assistant_response, workdir=terminal_workdir, deliverable_name=inner_name, extra_files=prev_files)
+                token = _store_generated_file(zip_bytes, zip_name, "application/zip")
+                final_deliverables = [{
+                    "filename": zip_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(zip_bytes), "lang": "zip"
+                }]
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": zip_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, zip_name, zip_bytes)
+
+        elif dt.get("is_apk"):
+            apk_cand = None
+            for cand in valid_disk_candidates:
+                if cand.get("ext") == "apk":
+                    apk_cand = cand
+                    break
+            if not apk_cand and os.path.isfile(os.path.join(WORKSPACE_ROOT, "mobile", "PrathamAI.apk")):
+                apk_cand = {"filename": "PrathamAI.apk", "path": os.path.join(WORKSPACE_ROOT, "mobile", "PrathamAI.apk"), "ext": "apk"}
+            if apk_cand:
+                apk_name = apk_cand["filename"]
+                with open(apk_cand["path"], "rb") as af_h:
+                    apk_bytes = af_h.read()
+                token = _store_generated_file(apk_bytes, apk_name, "application/vnd.android.package-archive")
+                final_deliverables = [{
+                    "filename": apk_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(apk_bytes), "lang": "apk"
+                }]
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": apk_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, apk_name, apk_bytes)
+
+        elif dt.get("is_html"):
+            html_cand = None
+            for cand in valid_disk_candidates:
+                if cand.get("ext") == "html":
+                    html_cand = cand
+                    break
+            if not html_cand:
+                for f in _produced_files_this_turn:
+                    if f.get("filename", "").lower().endswith(".html"):
+                        html_cand = {"filename": f["filename"], "path": os.path.join(WORKSPACE_ROOT, f["filename"]), "ext": "html"}
+                        break
+            if not html_cand:
                 html_block_match = re.search(r"```(?:html|htm)?\s*\n([\s\S]*?<!DOCTYPE html[\s\S]*?</html>[\s\S]*?)```", assistant_response, re.IGNORECASE)
                 if not html_block_match:
                     html_block_match = re.search(r"```(?:html|htm)\s*\n([\s\S]*?)```", assistant_response, re.IGNORECASE)
                 if html_block_match:
                     extracted_html = html_block_match.group(1).strip()
-                    cand_fn = "app.html"
-                    q_lower = export_intent_check_message.lower()
-                    if any(k in q_lower for k in ["chess", "grandmaster"]):
-                        cand_fn = "chess.html"
-                    elif any(k in q_lower for k in ["snake"]):
-                        cand_fn = "snake.html"
-                    elif any(k in q_lower for k in ["asteroid", "space"]):
-                        cand_fn = "asteroids.html"
-                    elif any(k in q_lower for k in ["game"]):
-                        cand_fn = "game.html"
-                    else:
-                        cand_fn = _derive_export_filename(export_intent_check_message, "html", assistant_response)
-                        if not cand_fn.endswith(".html"):
-                            cand_fn += ".html"
-                    
+                    cand_fn = _derive_export_filename(export_intent_check_message, "html", assistant_response)
+                    if not cand_fn.endswith(".html"):
+                        cand_fn += ".html"
                     written = _write_direct_file(terminal_workdir, cand_fn, extracted_html)
-                    with open(written["path"], "rb") as fh:
-                        fbytes = fh.read()
-                    token = _store_generated_file(fbytes, cand_fn, "text/html")
-                    _produced_files_this_turn.append({
-                        "filename": cand_fn, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                        "size_bytes": len(fbytes), "lang": "html"
-                    })
-                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": cand_fn})
-                    yield _sse({
-                        "type": "activity_created",
-                        "filename": cand_fn,
-                        "size_bytes": len(fbytes),
-                        "line_count": extracted_html.count("\n") + 1,
-                        "preview_type": "html"
-                    })
-                    if user_email:
-                        _save_user_chat_file(user_email, conv_id, cand_fn, fbytes)
-        except Exception as _auto_exc:
-            print(f"[AUTO DELIVERABLE FAULT] {_auto_exc}")
+                    html_cand = {"filename": cand_fn, "path": written["path"], "ext": "html"}
 
-        # Strict deliverable filtering according to user request intent:
-        # If user explicitly asked for PDF, present ONLY PDF files!
-        if _is_export_intent(export_intent_check_message, _PDF_INTENT_RE):
-            pdf_turn_files = [f for f in _produced_files_this_turn if f.get("filename", "").lower().endswith(".pdf")]
-            if pdf_turn_files:
-                _produced_files_this_turn = pdf_turn_files
-        elif _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
-            zip_turn_files = [f for f in _produced_files_this_turn if f.get("filename", "").lower().endswith(".zip")]
-            if zip_turn_files:
-                _produced_files_this_turn = zip_turn_files
+            if html_cand and os.path.isfile(html_cand.get("path", "")):
+                html_name = html_cand["filename"]
+                with open(html_cand["path"], "rb") as hf_h:
+                    hbytes = hf_h.read()
+                token = _store_generated_file(hbytes, html_name, "text/html")
+                final_deliverables = [{
+                    "filename": html_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(hbytes), "lang": "html"
+                }]
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": html_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, html_name, hbytes)
+
+        elif dt.get("explicit_name"):
+            exp_name = dt["explicit_name"]
+            matched_cand = None
+            for cand in valid_disk_candidates:
+                if cand["filename"].lower() == exp_name.lower():
+                    matched_cand = cand
+                    break
+            if not matched_cand and os.path.isfile(os.path.join(WORKSPACE_ROOT, exp_name)):
+                matched_cand = {"filename": exp_name, "path": os.path.join(WORKSPACE_ROOT, exp_name)}
+            if matched_cand and os.path.isfile(matched_cand.get("path", "")):
+                with open(matched_cand["path"], "rb") as mf_h:
+                    mbytes = mf_h.read()
+                mime = mimetypes.guess_type(exp_name)[0] or "application/octet-stream"
+                token = _store_generated_file(mbytes, exp_name, mime)
+                final_deliverables = [{
+                    "filename": exp_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                    "size_bytes": len(mbytes), "lang": exp_name.rsplit(".", 1)[-1] if "." in exp_name else "txt"
+                }]
+                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": exp_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, exp_name, mbytes)
+
+        if final_deliverables:
+            _produced_files_this_turn = final_deliverables
+        else:
+            _produced_files_this_turn = [
+                f for f in _produced_files_this_turn
+                if not _is_intermediate_helper_file(f.get("filename", ""), outgoing_user_message or message)
+            ]
 
         # Finalize and persist assistant message with all produced files
         if assistant_response:
