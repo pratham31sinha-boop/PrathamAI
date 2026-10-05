@@ -3444,6 +3444,8 @@ class _WarmAntigravitySession:
                     proc.stdin.flush()
 
                 got_any_token = False
+                last_token_time = None
+                in_tool_execution = False
                 start_time = time.time()
                 last_heartbeat = start_time
                 timeout = 90.0
@@ -3479,7 +3481,11 @@ class _WarmAntigravitySession:
                     if (now - start_time) > timeout and not got_any_token:
                         raise RuntimeError(f"Session {self._account_email} timed out waiting for first token")
 
-                    rlist, _, _ = select.select([proc.stdout], [], [], 0.4)
+                    # If the assistant has delivered text tokens and has been idle with no active tool for 1.5s, auto-complete the turn
+                    if got_any_token and not in_tool_execution and last_token_time and (now - last_token_time) >= 1.5:
+                        break
+
+                    rlist, _, _ = select.select([proc.stdout], [], [], 0.3)
                     if not rlist:
                         if proc.poll() is not None:
                             break
@@ -3511,6 +3517,12 @@ class _WarmAntigravitySession:
                             stype = su.get("step_type")
                             state_val = su.get("state")
                             if stype == "tool":
+                                if state_val == "ACTIVE":
+                                    in_tool_execution = True
+                                elif state_val == "DONE":
+                                    in_tool_execution = False
+                                    last_token_time = time.time()
+
                                 tool_name = su.get("tool_name", "")
                                 tool_info = su.get("tool_info", {}) or {}
                                 params = tool_info.get("parameters", {}) or {}
@@ -3576,6 +3588,8 @@ class _WarmAntigravitySession:
                                     self.mark_rate_limited()
                                     raise AntigravityRateLimitError(f"{self._account_email} rate limit in delta")
                                 got_any_token = True
+                                in_tool_execution = False
+                                last_token_time = time.time()
                                 cleaned = _clean_antigravity_text(delta)
                                 if cleaned:
                                     accumulated_streamed_text.append(cleaned)
@@ -3585,48 +3599,49 @@ class _WarmAntigravitySession:
                                         if w:
                                             yield _sse({"type": "token", "text": w})
                         elif evt == "result":
-                            self._in_turn = False
-                            # Ensure any file written by agy tools is presented to the user as a deliverable card
-                            full_streamed = "".join(accumulated_streamed_text)
-                            user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
-                            user_query = user_matches[-1].lower() if user_matches else (prompt or "").lower()
-                            
-                            # Filter written_files to strictly requested deliverables (never present intermediate helper scripts)
-                            for w_name, w_code in written_files.items():
-                                if _is_intermediate_helper_file(w_name, user_query):
-                                    continue
-                                if f"createfile:{w_name}" not in full_streamed and f"editfile:{w_name}" not in full_streamed:
-                                    file_block = f"\n\n```createfile:{w_name}\n{w_code}\n```\n"
-                                    for part in re.split(r"(\s+)", file_block):
-                                        if part:
-                                            yield _sse({"type": "token", "text": part})
-                            
-                            # Also check if an HTML deliverable was created on disk in WORKSPACE_ROOT
-                            dt = _classify_requested_deliverable_types(user_query)
-                            if dt.get("is_html") and not any(k in full_streamed for k in ["```createfile:", "```editfile:"]):
-                                try:
-                                    for fn in os.listdir(WORKSPACE_ROOT):
-                                        if fn.lower().endswith(".html") and fn.lower() not in _IGNORE_FILE_NAMES:
-                                            fp = os.path.join(WORKSPACE_ROOT, fn)
-                                            if os.path.isfile(fp) and os.path.getmtime(fp) >= (start_time - 5.0):
-                                                with open(fp, "r", encoding="utf-8", errors="replace") as fh:
-                                                    hcode = fh.read()
-                                                if len(hcode) > 20:
-                                                    file_block = f"\n\n```createfile:{fn}\n{hcode}\n```\n"
-                                                    for part in re.split(r"(\s+)", file_block):
-                                                        if part:
-                                                            yield _sse({"type": "token", "text": part})
-                                                break
-                                except Exception:
-                                    pass
-
-                            if state is not None:
-                                state["finish_reason"] = "stop"
                             break
                     except (AntigravityRateLimitError, RuntimeError):
                         raise
                     except Exception:
                         continue
+
+                self._in_turn = False
+                # Ensure any file written by agy tools is presented to the user as a deliverable card
+                full_streamed = "".join(accumulated_streamed_text)
+                user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
+                user_query = user_matches[-1].lower() if user_matches else (prompt or "").lower()
+                
+                # Filter written_files to strictly requested deliverables (never present intermediate helper scripts)
+                for w_name, w_code in written_files.items():
+                    if _is_intermediate_helper_file(w_name, user_query):
+                        continue
+                    if f"createfile:{w_name}" not in full_streamed and f"editfile:{w_name}" not in full_streamed:
+                        file_block = f"\n\n```createfile:{w_name}\n{w_code}\n```\n"
+                        for part in re.split(r"(\s+)", file_block):
+                            if part:
+                                yield _sse({"type": "token", "text": part})
+                
+                # Also check if an HTML deliverable was created on disk in WORKSPACE_ROOT
+                dt = _classify_requested_deliverable_types(user_query)
+                if dt.get("is_html") and not any(k in full_streamed for k in ["```createfile:", "```editfile:"]):
+                    try:
+                        for fn in os.listdir(WORKSPACE_ROOT):
+                            if fn.lower().endswith(".html") and fn.lower() not in _IGNORE_FILE_NAMES:
+                                fp = os.path.join(WORKSPACE_ROOT, fn)
+                                if os.path.isfile(fp) and os.path.getmtime(fp) >= (start_time - 5.0):
+                                    with open(fp, "r", encoding="utf-8", errors="replace") as fh:
+                                        hcode = fh.read()
+                                    if len(hcode) > 20:
+                                        file_block = f"\n\n```createfile:{fn}\n{hcode}\n```\n"
+                                        for part in re.split(r"(\s+)", file_block):
+                                            if part:
+                                                yield _sse({"type": "token", "text": part})
+                                    break
+                    except Exception:
+                        pass
+
+                if state is not None:
+                    state["finish_reason"] = "stop"
 
                 if not got_any_token:
                     raise RuntimeError(f"Session {self._account_email} produced no output")
@@ -4249,6 +4264,8 @@ def _stream_antigravity_cli(messages, state=None):
 
         proc = None
         got_any_token = False
+        last_token_time = None
+        in_tool_execution = False
         first_token_timeout = 90.0
         start_time = time.time()
         last_heartbeat = start_time
@@ -4270,10 +4287,16 @@ def _stream_antigravity_cli(messages, state=None):
                     last_heartbeat = now
                     yield _sse({"type": "heartbeat"})
 
-                wait_sec = 0.5 if not got_any_token else 10.0
                 if not got_any_token and (now - start_time) > first_token_timeout:
                     break
 
+                # Auto-complete turn if output tokens have finished and no tool is currently executing
+                if got_any_token and not in_tool_execution and last_token_time and (now - last_token_time) >= 1.5:
+                    if state is not None:
+                        state["finish_reason"] = "stop"
+                    break
+
+                wait_sec = 0.4 if not got_any_token else 0.3
                 rlist, _, _ = select.select([proc.stdout], [], [], wait_sec)
                 if not rlist:
                     if proc.poll() is not None:
@@ -4295,6 +4318,12 @@ def _stream_antigravity_cli(messages, state=None):
                         stype = su.get("step_type")
                         state_val = su.get("state")
                         if stype == "tool":
+                            if state_val == "ACTIVE":
+                                in_tool_execution = True
+                            elif state_val == "DONE":
+                                in_tool_execution = False
+                                last_token_time = time.time()
+
                             tool_name = su.get("tool_name", "")
                             tool_info = su.get("tool_info", {}) or {}
                             params = tool_info.get("parameters", {}) or {}
@@ -4313,6 +4342,8 @@ def _stream_antigravity_cli(messages, state=None):
                         delta = su.get("text_delta")
                         if delta:
                             got_any_token = True
+                            in_tool_execution = False
+                            last_token_time = time.time()
                             cleaned_delta = _clean_antigravity_text(delta)
                             if cleaned_delta:
                                 words = re.split(r"(\s+)", cleaned_delta)

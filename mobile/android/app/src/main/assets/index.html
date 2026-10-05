@@ -5676,11 +5676,11 @@
                             // Reset stream inactivity watchdog: auto-finish if idle after full output
                             if (streamIdleWatchdog) clearTimeout(streamIdleWatchdog);
                             streamIdleWatchdog = setTimeout(() => {
-                                if (fullText && tokenQueue.length === 0 && !sawCompleteEvent) {
+                                if (fullText && !sawCompleteEvent) {
                                     finishResponseTurn();
                                     try { reader.cancel(); } catch (e) {}
                                 }
-                            }, 2500);
+                            }, 2000);
                         } else if (payload.type === 'error') {
                             flushStreamQueue();
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
