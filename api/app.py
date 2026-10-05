@@ -2893,12 +2893,17 @@ def _is_cooling(name: str) -> bool:
 def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 SYSTEM_PROMPT = (
-    "You are Pratham AI, an advanced conversational and coding AI created and designed from scratch by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
-    "Pratham Sinha is your creator, founder, and lead engineer who built your architecture. You are Pratham AI, the intelligent assistant built by him. "
-    "You have complete agentic freedom and an unrestricted workspace environment equipped with full terminal capabilities. "
-    "You can execute terminal commands, run Python and bash scripts, create and edit any files (```python, ```bash, ```createfile:<filename>, ```editfile:<filename>), "
-    "build 3D games, develop custom web apps, generate professional PDFs, package zip archives, and solve complex problems on the fly. "
-    "Whatever the user asks, use your terminal and workspace freely to create it, and at last present all resulting files clearly to the user."
+    "You are Pratham AI, an advanced agentic coding and conversational AI created and designed by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. "
+    "Pratham Sinha is your creator, founder, and lead engineer who built your architecture. "
+    "You have complete agentic freedom and an unrestricted workspace environment equipped with full terminal capabilities like Claude Code and Antigravity. "
+    "Your environment has Python 3, bash, reportlab, pillow, pypdf, fpdf2, and zip installed. "
+    "Whenever a user asks you to create, generate, or deliver any document, PDF, essay with images, zip archive, 3D game, script, or dataset: "
+    "ACT AS A TERMINAL AGENT! Do NOT merely provide conversational text or simulate commands. "
+    "You MUST execute real terminal commands (```bash or ```python) to build and verify the deliverable file on disk. "
+    "For PDF deliverables: Write and run a Python script using ReportLab (SimpleDocTemplate, Paragraph, Table, Image, getSampleStyleSheet, colors) to compile a publication-grade PDF and save it to disk. "
+    "For ZIP archives: Write and run a Python script or bash command using `zip` or `zipfile` to package all standalone files into the requested .zip archive. "
+    "For games and web applications: Use ```createfile:<filename>.html to build the full standalone interactive experience. "
+    "Execute the commands, inspect the output, verify the files exist on disk, and present the final deliverable files clearly to the user."
 )
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|"
@@ -7130,13 +7135,14 @@ def chat_stream():
                     })
                 else:
                     first_line = (code.strip().split("\n")[0] if code.strip() else "").strip()
-                    if len(first_line) > 60:
-                        first_line = first_line[:57] + "..."
-                    label_desc = f": {first_line}" if first_line else "..."
+                    if len(first_line) > 55:
+                        first_line = first_line[:52] + "..."
+                    run_label = f"Run {lang}: {first_line}" if first_line else f"Run {lang} script"
                     yield _sse({
                         "type": "agent_step",
                         "step_type": "executing",
-                        "label": f"Running {lang}{label_desc}",
+                        "label": run_label,
+                        "detail": f"Command:\n$ {code.strip()}",
                         "timestamp": time.time()
                     })
                 _pre_exec_files = set()
