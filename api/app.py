@@ -8465,6 +8465,12 @@ PRATHAM_FAST_WORKER_BUILD = "2026-09-13-fast-worker-v4"
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     import socket, signal
+    try:
+        if hasattr(signal, "SIGHUP"):
+            signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    except Exception:
+        pass
+
     def _is_port_in_use(p):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(("127.0.0.1", p)) == 0
@@ -8488,4 +8494,4 @@ if __name__ == "__main__":
         except Exception as e:
             print("Port cleanup note:", e)
 
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
