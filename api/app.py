@@ -728,6 +728,17 @@ def _store_generated_file(data: bytes, filename: str, mimetype: str) -> str:
     _prune_generated_files()
     token = uuid.uuid4().hex
     _generated_files_store[token] = {"bytes": data, "filename": filename, "mimetype": mimetype, "t": time.time()}
+    try:
+        # Write to /tmp so serverless instances on Vercel can retrieve it across requests
+        for p in ["/tmp", os.path.join(tempfile.gettempdir(), "pratham_downloads")]:
+            os.makedirs(p, exist_ok=True)
+            if filename:
+                with open(os.path.join(p, os.path.basename(filename)), "wb") as f:
+                    f.write(data)
+            with open(os.path.join(p, token), "wb") as f:
+                f.write(data)
+    except Exception:
+        pass
     return token
 
 _IGNORE_FILE_NAMES = {
