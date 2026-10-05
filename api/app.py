@@ -8509,19 +8509,37 @@ if __name__ == "__main__":
     if _is_port_in_use(port):
         print(f"[PORT CHECK] Port {port} is in use. Terminating stale background instance...")
         try:
-            os.system("mount -t proc proc /proc 2>/dev/null")
             curr_pid = os.getpid()
-            for pid_str in os.listdir("/proc"):
-                if pid_str.isdigit() and int(pid_str) != curr_pid:
-                    try:
-                        with open(f"/proc/{pid_str}/cmdline", "rb") as cf:
-                            c = cf.read().replace(b"\x00", b" ").decode("utf-8", "ignore")
-                            if "app.py" in c:
-                                print(f"Terminating older app.py process: PID {pid_str}")
-                                os.kill(int(pid_str), signal.SIGKILL)
-                    except Exception:
-                        pass
-            time.sleep(0.6)
+            # 1. Try pidof python3 (works reliably across container namespaces)
+            try:
+                out = subprocess.check_output(["pidof", "python3"]).decode().split()
+                for p_str in out:
+                    if p_str.isdigit():
+                        p_int = int(p_str)
+                        if p_int != curr_pid:
+                            try:
+                                os.kill(p_int, signal.SIGKILL)
+                                print(f"Terminated older python3 process: PID {p_int}")
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+            # 2. Try procfs scan
+            try:
+                for pid_str in os.listdir("/proc"):
+                    if pid_str.isdigit() and int(pid_str) != curr_pid:
+                        try:
+                            with open(f"/proc/{pid_str}/cmdline", "rb") as cf:
+                                c = cf.read().replace(b"\x00", b" ").decode("utf-8", "ignore")
+                                if "app.py" in c:
+                                    print(f"Terminating older app.py process: PID {pid_str}")
+                                    os.kill(int(pid_str), signal.SIGKILL)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            time.sleep(0.8)
         except Exception as e:
             print("Port cleanup note:", e)
 
