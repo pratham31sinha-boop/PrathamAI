@@ -5711,6 +5711,19 @@
                             pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
                             _turnFiles.push({ filename: payload.filename, url: payload.url, download_url: payload.url });
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
+                        } else if (payload.type === 'terminal_executing') {
+                            if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
+                            if (!window._execCount) window._execCount = 0;
+                            const ord = payload.ordinal || window._execCount;
+                            let execCard = modelWrapper.querySelector(`.execution-chain-card.running`);
+                            if (!execCard) {
+                                execCard = buildExecutionChainCard(payload.lang || 'bash', payload.code || '', false, ord);
+                                (modelWrapper._answerZone || modelWrapper).appendChild(execCard);
+                            } else {
+                                updateExecutionChainCard(execCard, payload.code || '', false);
+                            }
+                            setAgentActivity(`Running ${payload.lang || 'bash'}...`);
+                            pushTerminalLog(`Executing in terminal: ${payload.code || ''}`);
                         } else if (payload.type === 'terminal_output') {
                             const ok = payload.returncode === 0;
                             if (!window._execCount) window._execCount = 0;
@@ -5718,15 +5731,14 @@
                             pushTerminalLog(`Executed block #${payload.ordinal} → exit ${payload.returncode}`);
                             if (payload.stdout) pushTerminalLog(`stdout: ${payload.stdout.slice(0, 300)}`);
                             if (payload.stderr) pushTerminalLog(`stderr: ${payload.stderr.slice(0, 300)}`);
-                            // Cache the REAL output by ordinal so the matching
-                            // activity_terminal step (which fires right after
-                            // this event, same ordinal) can show it inline —
-                            // this is genuine stdout/stderr from the actual
-                            // subprocess execution, not simulated text.
                             _pendingTerminalOutputs[payload.ordinal] = payload;
                             if (modelWrapper) {
-                                const execCard = modelWrapper.querySelector(`.execution-chain-card[data-ordinal="${payload.ordinal}"]`)
+                                let execCard = modelWrapper.querySelector(`.execution-chain-card[data-ordinal="${payload.ordinal}"]`)
                                     || modelWrapper.querySelector(`.execution-chain-card.running`);
+                                if (!execCard && payload.code) {
+                                    execCard = buildExecutionChainCard('bash', payload.code, false, payload.ordinal || 0);
+                                    (modelWrapper._answerZone || modelWrapper).appendChild(execCard);
+                                }
                                 if (execCard) {
                                     finishExecutionChainCard(execCard, payload.stdout, payload.stderr, payload.returncode, payload.code);
                                 }

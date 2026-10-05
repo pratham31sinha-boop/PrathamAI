@@ -3542,6 +3542,21 @@ class _WarmAntigravitySession:
                                         "detail": detail_txt,
                                         "timestamp": time.time()
                                     })
+                                    if state_val == "ACTIVE":
+                                        yield _sse({
+                                            "type": "terminal_executing",
+                                            "code": cmd_clean,
+                                            "lang": "bash"
+                                        })
+                                    elif state_val == "DONE":
+                                        yield _sse({
+                                            "type": "terminal_output",
+                                            "ordinal": 0,
+                                            "code": cmd_clean,
+                                            "stdout": str(out) if out else "",
+                                            "stderr": "",
+                                            "returncode": 0
+                                        })
                                 elif tool_name in ("write_to_file", "replace_file_content"):
                                     target_file = params.get("TargetFile", "")
                                     target_name = os.path.basename(target_file) if target_file else "file"
@@ -7117,16 +7132,13 @@ def chat_stream():
                         })
                 except Exception as exc:
                     print(f"[EDITFILE][FAULT] {exc}")
-            # If antigravity_cli handled this turn, it has already executed tools natively during its turn.
-            # Do NOT re-execute code blocks or loop back into the model — turn is complete!
-            is_antigravity = (getattr(_do_stream, '_last_successful_provider', None) == "antigravity_cli")
-            if is_antigravity:
-                break
-
             all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
             executable_present = any(
                 (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
             )
+            is_antigravity = (getattr(_do_stream, '_last_successful_provider', None) == "antigravity_cli")
+            if is_antigravity and not executable_present:
+                break
             if not executable_present:
                 if not _promise_correction_attempted:
                     _promised_filenames = set(
