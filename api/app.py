@@ -3458,18 +3458,21 @@ class _WarmAntigravitySession:
                     user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
                     uq = user_matches[-1].lower() if user_matches else ""
 
-                if any(k in uq for k in ["pdf", "document", "report", "essay"]):
-                    step_lbl = "Synthesizing publication-grade document deliverable..."
-                elif any(k in uq for k in ["game", "arcade", "stumble", "gta", "canvas"]):
-                    step_lbl = "Architecting game mechanics & responsive controls..."
-                elif any(k in uq for k in ["html", "website", "web page", "webpage", "app"]):
-                    step_lbl = "Synthesizing full web application components..."
-                elif any(k in uq for k in ["python", "script", "code", "backend", "algorithm"]):
-                    step_lbl = "Engineering production code deliverable..."
-                else:
-                    step_lbl = "Deconstructing query & generating comprehensive response..."
+                is_greeting = bool(re.match(r"^(?:hi|hello|hey|greetings|hola|namaste|good\s+(?:morning|afternoon|evening|day)|sup|yo)\b[!?.]*$", uq.strip(), re.IGNORECASE))
 
-                yield _sse({"type": "agent_step", "step_type": "planning", "label": step_lbl, "timestamp": time.time()})
+                if not is_greeting:
+                    if any(k in uq for k in ["pdf", "document", "report", "essay"]):
+                        step_lbl = "Synthesizing publication-grade document deliverable..."
+                    elif any(k in uq for k in ["game", "arcade", "stumble", "gta", "canvas"]):
+                        step_lbl = "Architecting game mechanics & responsive controls..."
+                    elif any(k in uq for k in ["html", "website", "web page", "webpage", "app"]):
+                        step_lbl = "Synthesizing full web application components..."
+                    elif any(k in uq for k in ["python", "script", "code", "backend", "algorithm"]):
+                        step_lbl = "Engineering production code deliverable..."
+                    else:
+                        step_lbl = "Deconstructing query & generating comprehensive response..."
+
+                    yield _sse({"type": "agent_step", "step_type": "planning", "label": step_lbl, "timestamp": time.time()})
                 yield _sse({"type": "heartbeat"})
 
                 while True:
@@ -3542,21 +3545,6 @@ class _WarmAntigravitySession:
                                         "detail": detail_txt,
                                         "timestamp": time.time()
                                     })
-                                    if state_val == "ACTIVE":
-                                        yield _sse({
-                                            "type": "terminal_executing",
-                                            "code": cmd_clean,
-                                            "lang": "bash"
-                                        })
-                                    elif state_val == "DONE":
-                                        yield _sse({
-                                            "type": "terminal_output",
-                                            "ordinal": 0,
-                                            "code": cmd_clean,
-                                            "stdout": str(out) if out else "",
-                                            "stderr": "",
-                                            "returncode": 0
-                                        })
                                 elif tool_name in ("write_to_file", "replace_file_content"):
                                     target_file = params.get("TargetFile", "")
                                     target_name = os.path.basename(target_file) if target_file else "file"
@@ -4109,8 +4097,17 @@ def _stream_antigravity_cli(messages, state=None):
 
     prompt_sections = [system_instruction]
 
-    # Inject existing session workspace files if any exist
-    if conv_id:
+    is_greeting = bool(re.match(r"^(?:hi|hello|hey|greetings|hola|namaste|good\s+(?:morning|afternoon|evening|day)|sup|yo)\b[!?.]*$", last_user_prompt.strip(), re.IGNORECASE))
+
+    if is_greeting:
+        prompt_sections.append(
+            "[CRITICAL DIRECTIVE - USER GREETING]\n"
+            "The user is simply greeting you. STRICTLY DO NOT invoke run_command or any tool. DO NOT run bash or python code. DO NOT inspect files or write code. "
+            "Respond immediately and conversationally with a warm, friendly greeting in 1-2 sentences as Pratham AI, and ask how you can help."
+        )
+
+    # Inject existing session workspace files if any exist (suppressed on greeting to prevent unwarranted tool execution)
+    if conv_id and not is_greeting:
         s_dir = _get_session_workdir(conv_id, user_email)
         if os.path.isdir(s_dir):
             existing_session_files = []
@@ -4127,20 +4124,21 @@ def _stream_antigravity_cli(messages, state=None):
                     "perform in-place updates or additions on the existing archive without deleting previous files."
                 )
 
-    # Inject last HTML deliverable awareness in this chat
-    last_html = _get_last_html_file_in_chat(user_email, conv_id)
-    if last_html:
-        prompt_sections.append(
-            "[ACTIVE CHAT HTML DELIVERABLE]\n"
-            f"The last HTML deliverable created in this chat is: '{last_html['filename']}'.\n"
-            f"When the user asks to update, edit, modify, fix, or add features to the HTML or web game/app:\n"
-            f"You MUST update this exact file ('{last_html['filename']}') rather than inventing a new HTML filename.\n"
-            f"Use ```editfile:{last_html['filename']} with SEARCH/REPLACE or ```createfile:{last_html['filename']} with the complete code."
-        )
+    # Inject last HTML deliverable awareness in this chat (suppressed on greeting)
+    if not is_greeting:
+        last_html = _get_last_html_file_in_chat(user_email, conv_id)
+        if last_html:
+            prompt_sections.append(
+                "[ACTIVE CHAT HTML DELIVERABLE]\n"
+                f"The last HTML deliverable created in this chat is: '{last_html['filename']}'.\n"
+                f"When the user asks to update, edit, modify, fix, or add features to the HTML or web game/app:\n"
+                f"You MUST update this exact file ('{last_html['filename']}') rather than inventing a new HTML filename.\n"
+                f"Use ```editfile:{last_html['filename']} with SEARCH/REPLACE or ```createfile:{last_html['filename']} with the complete code."
+            )
 
     # Search user account files if user asks to find/search across their account
     is_search_intent = bool(re.search(r"\b(?:find|where is|search for|look for|get|locate|list)\b.*\b(?:file|attachment|zip|html|code|game|app|script)\b", last_user_prompt, re.IGNORECASE))
-    if is_search_intent and user_email:
+    if is_search_intent and user_email and not is_greeting:
         acc_files = _search_user_account_files(user_email)
         if acc_files:
             file_summaries = [f"- {af['filename']} (Folder: {af['folder']}, Size: {af['size_bytes']} bytes)" for af in acc_files[:15]]
@@ -4174,7 +4172,7 @@ def _stream_antigravity_cli(messages, state=None):
                     image_disk_path = fpath
                     break
 
-    if image_disk_path:
+    if image_disk_path and not is_greeting:
         prompt_sections.append(
             f"[ATTACHED IMAGE REFERENCE: {os.path.basename(image_disk_path)}]\n"
             f"Image file on disk: {image_disk_path}\n"
@@ -4182,10 +4180,10 @@ def _stream_antigravity_cli(messages, state=None):
             f"Otherwise, answer the user's primary instructions directly."
         )
 
-    # Target file lookup for editing or packaging
+    # Target file lookup for editing or packaging (suppressed on greeting)
     p_lower = last_user_prompt.lower()
     target = None
-    if attached_files:
+    if attached_files and not is_greeting:
         code_deliverables = [f for f in attached_files if f.get("ext") not in ("png", "jpg", "jpeg", "webp", "gif")]
         search_pool = code_deliverables if code_deliverables else attached_files
         for f in search_pool:
@@ -4197,7 +4195,7 @@ def _stream_antigravity_cli(messages, state=None):
         if not target and (any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "file", "zip", "game", "code", "that file", "previous", "old file"]) or any(k in p_lower for k in ["chess", "stumble"])):
             target = search_pool[0]
 
-    if target and target.get("content"):
+    if target and target.get("content") and not is_greeting:
         prompt_sections.append(
             f"[ATTACHED / CONVERSATION FILE LOADED FROM THIS SESSION: {target['filename']}]\n"
             f"Storage Path: {target.get('rel_path', target['filename'])}\n"
@@ -4283,8 +4281,8 @@ def _stream_antigravity_cli(messages, state=None):
         in_tool_execution = False
         first_token_timeout = 90.0
         start_time = time.time()
-        last_heartbeat = start_time
-        yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
+        if not is_greeting:
+            yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
         yield _sse({"type": "heartbeat"})
         try:
             proc = subprocess.Popen(
