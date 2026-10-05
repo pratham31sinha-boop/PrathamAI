@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 
-# Prints the current date in YYYY-MM-DD format
-print(f"Current Date: {datetime.now().strftime('%Y-%m-%d')}")
+# Standard ISO date format
+print(date.today())
 
-# Prints formatted date with month name
-print(f"Formatted Date: {datetime.now().strftime('%B %d, %Y')}")
+# Custom formatted date
+print(datetime.now().strftime("%B %d, %Y"))
