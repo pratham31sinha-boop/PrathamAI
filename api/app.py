@@ -7495,11 +7495,24 @@ def chat_stream():
                 f"Pratham AI:\n{assistant_response}\n"
                 f"{'=' * 80}\n"
             )
-            _write_to_github_repository(repo_sync_destination_path, log_entry)
+            # Non-blocking GitHub sync in background daemon thread
+            if GITHUB_TOKEN:
+                try:
+                    threading.Thread(
+                        target=_write_to_github_repository,
+                        args=(repo_sync_destination_path, log_entry),
+                        daemon=True
+                    ).start()
+                except Exception as _gh_th_err:
+                    print(f"[GITHUB_ASYNC_SYNC_ERR] {_gh_th_err}")
 
-            # Persist any generated conversation files to data/<email>/attachments/
+            # Persist any generated conversation files in background daemon thread
             try:
-                _extract_conversation_files(conv_id=conv_id, messages=[{"role": "assistant", "content": assistant_response}], user_email=user_email)
+                threading.Thread(
+                    target=_extract_conversation_files,
+                    kwargs={"conv_id": conv_id, "messages": [{"role": "assistant", "content": assistant_response}], "user_email": user_email},
+                    daemon=True
+                ).start()
             except Exception as _cexc:
                 print(f"[CONV_FILES_EXTRACT_ERR] {_cexc}")
         elif _produced_files_this_turn:

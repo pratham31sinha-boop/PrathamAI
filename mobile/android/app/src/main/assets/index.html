@@ -5503,6 +5503,76 @@
                     flushStreamQueue();
                 };
                 let sawCompleteEvent = false;
+                let streamIdleWatchdog = null;
+
+                const finishResponseTurn = () => {
+                    if (sawCompleteEvent) return;
+                    sawCompleteEvent = true;
+                    _streamFinishedByProtocol = true;
+                    if (streamIdleWatchdog) { clearTimeout(streamIdleWatchdog); streamIdleWatchdog = null; }
+                    flushStreamQueue();
+                    if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
+                    if (window._currentActiveStepRow) {
+                        finishStep(window._currentActiveStepRow, true);
+                        window._currentActiveStepRow = null;
+                    }
+                    if (modelWrapper) {
+                        updateAssistantMessageDOM(modelWrapper, fullText, false);
+                        modelWrapper.querySelectorAll('[data-seg-type="text"], .assistant-text-segment').forEach(n => {
+                            n._katexDone = false;
+                            renderMathIfAvailable(n);
+                        });
+                        appendAssistantCopyButton(modelWrapper, fullText);
+                        // Inject activity summary: "Executed code X times · Used Y tools"
+                        if (window._execCount > 0 || window._toolCount > 0) {
+                            const summary = document.createElement('div');
+                            summary.className = 'activity-summary-line active';
+                            let parts = [];
+                            if (window._execCount > 0) {
+                                parts.push(`<span>Executed code ${window._execCount} ${window._execCount === 1 ? 'time' : 'times'}</span>`);
+                            }
+                            if (window._toolCount > 0) {
+                                parts.push(`<span>Used ${window._toolCount} ${window._toolCount === 1 ? 'tool' : 'tools'}</span>`);
+                            }
+                            summary.innerHTML = '<span class="as-icon">✓</span>' + parts.join('<span class="asl-sep"></span>');
+                            (modelWrapper._answerZone || modelWrapper).appendChild(summary);
+                        }
+
+                        // Auto-discover and present any deliverable cards mentioned in response or prompt
+                        const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json))\b/gi;
+                        const textMatches = (fullText.match(fileRefRegex) || []).concat((typeof displayMessage === 'string' ? displayMessage.match(fileRefRegex) : []) || []);
+                        const seenRefs = new Set();
+                        textMatches.forEach(fn => {
+                            const fnLower = fn.toLowerCase();
+                            if (seenRefs.has(fnLower)) return;
+                            seenRefs.add(fnLower);
+                            if (/^(?:generate|make|build|create|run|test|setup|fetch|download|temp)_/i.test(fnLower)) return;
+                            const dlUrl = `/download/${encodeURIComponent(fn)}`;
+                            _turnFiles.push({ filename: fn, url: dlUrl, download_url: dlUrl });
+                            appendDownloadCard(modelWrapper, dlUrl, fn);
+                        });
+                        finalizeThinkingWrap(modelWrapper);
+                    } else {
+                        finalizeThinkingWrap();
+                    }
+                    _activeStepList = null;
+                    _activeThinkingWrap = null;
+                    pushTerminalLog('Response complete.');
+                    clearAgentActivity();
+                    _activeChatReader = null;
+                    _activeChatAbortController = null;
+                    _activeChatStoppedByUser = false;
+                    if (inputActionSubmitBtn) {
+                        inputActionSubmitBtn.classList.remove('is-stopping');
+                        inputActionSubmitBtn.classList.remove('sending');
+                        inputActionSubmitBtn.innerHTML = '↑';
+                        inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
+                        inputActionSubmitBtn.title = 'Send message';
+                    }
+                    window._execCount = 0;
+                    window._toolCount = 0;
+                };
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
@@ -5592,8 +5662,8 @@
                             if (!modelWrapper) {
                                 removeTypingIndicator();
                                 modelWrapper = mountModelOutputTargetShell();
-                                setAgentActivity('Writing response...');
                             }
+                            setAgentActivity('Writing response...');
                             if (modelWrapper._durationHeader && !modelWrapper._durationHeader.classList.contains('done')) {
                                 _refreshThinkingSummary(modelWrapper);
                             }
@@ -5602,6 +5672,15 @@
                             _streamReceivedOutput = true;
                             enqueueTokens(payload.text);
                             pinnedAutoScroll();
+
+                            // Reset stream inactivity watchdog: auto-finish if idle after full output
+                            if (streamIdleWatchdog) clearTimeout(streamIdleWatchdog);
+                            streamIdleWatchdog = setTimeout(() => {
+                                if (fullText && tokenQueue.length === 0 && !sawCompleteEvent) {
+                                    finishResponseTurn();
+                                    try { reader.cancel(); } catch (e) {}
+                                }
+                            }, 2500);
                         } else if (payload.type === 'error') {
                             flushStreamQueue();
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
@@ -5780,88 +5859,13 @@
                             }
                             pushTerminalLog(`Activity: ran ${payload.lang} block #${payload.ordinal} → exit ${payload.returncode}`);
                         } else if (payload.type === 'complete') {
-                            sawCompleteEvent = true;
-                            _streamFinishedByProtocol = true;
-                            flushStreamQueue();
-                            if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
-                            if (modelWrapper) {
-                                updateAssistantMessageDOM(modelWrapper, fullText, false);
-                                modelWrapper.querySelectorAll('[data-seg-type="text"], .assistant-text-segment').forEach(n => {
-                                    n._katexDone = false;
-                                    renderMathIfAvailable(n);
-                                });
-                                appendAssistantCopyButton(modelWrapper, fullText);
-                                // Inject activity summary: "Executed code X times · Used Y tools"
-                                if (window._execCount > 0 || window._toolCount > 0) {
-                                    const summary = document.createElement('div');
-                                    summary.className = 'activity-summary-line active';
-                                    let parts = [];
-                                    if (window._execCount > 0) {
-                                        parts.push(`<span>Executed code ${window._execCount} ${window._execCount === 1 ? 'time' : 'times'}</span>`);
-                                    }
-                                    if (window._toolCount > 0) {
-                                        parts.push(`<span>Used ${window._toolCount} ${window._toolCount === 1 ? 'tool' : 'tools'}</span>`);
-                                    }
-                                    summary.innerHTML = '<span class="as-icon">✓</span>' + parts.join('<span class="asl-sep"></span>');
-                                    (modelWrapper._answerZone || modelWrapper).appendChild(summary);
-                                }
-
-                                // Auto-discover and present any deliverable cards mentioned in response or prompt
-                                const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json))\b/gi;
-                                const textMatches = (fullText.match(fileRefRegex) || []).concat((typeof displayMessage === 'string' ? displayMessage.match(fileRefRegex) : []) || []);
-                                const seenRefs = new Set();
-                                textMatches.forEach(fn => {
-                                    const fnLower = fn.toLowerCase();
-                                    if (seenRefs.has(fnLower)) return;
-                                    seenRefs.add(fnLower);
-                                    if (/^(?:generate|make|build|create|run|test|setup|fetch|download|temp)_/i.test(fnLower)) return;
-                                    const dlUrl = `/download/${encodeURIComponent(fn)}`;
-                                    _turnFiles.push({ filename: fn, url: dlUrl, download_url: dlUrl });
-                                    appendDownloadCard(modelWrapper, dlUrl, fn);
-                                });
-                            }
-                            finalizeThinkingWrap();
-                            _activeStepList = null;
-                            _activeThinkingWrap = null;
-                            pushTerminalLog('Response complete.');
-                            clearAgentActivity();
-                            _activeChatReader = null;
-                            _activeChatAbortController = null;
-                            _activeChatStoppedByUser = false;
-                            if (inputActionSubmitBtn) {
-                                inputActionSubmitBtn.classList.remove('is-stopping');
-                                inputActionSubmitBtn.innerHTML = '↑';
-                                inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
-                                inputActionSubmitBtn.title = 'Send message';
-                            }
-                            window._execCount = 0;
-                            window._toolCount = 0;
+                            finishResponseTurn();
+                            break;
                         }
                     }
-                    // `complete` is authoritative. Stop reading immediately instead of
-                    // waiting for a proxy/worker socket to close. This is what makes the
-                    // composer return to Send mode promptly after a finished response.
                     if (sawCompleteEvent) break;
                 }
-                // Final safety net: whether the server sent `complete`,
-                // closed the SSE stream normally, or a proxy ended the stream
-                // after the answer, always restore the composer to Send mode.
-                if (!sawCompleteEvent && !_streamFinishedByProtocol) {
-                    flushStreamQueue();
-                    if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
-                    clearAgentActivity();
-                    try { finalizeThinkingWrap(); } catch (e) {}
-                    _activeChatReader = null;
-                    _activeChatAbortController = null;
-                    _activeChatStoppedByUser = false;
-                    if (inputActionSubmitBtn) {
-                        inputActionSubmitBtn.classList.remove('is-stopping');
-                        inputActionSubmitBtn.classList.remove('sending');
-                        inputActionSubmitBtn.innerHTML = '↑';
-                        inputActionSubmitBtn.setAttribute('aria-label', 'Send message');
-                        inputActionSubmitBtn.title = 'Send message';
-                    }
-                }
+                finishResponseTurn();
                 removeTypingIndicator();
                 clearAgentActivity();
                 activeChatTitleHeader.innerText = displayMessage.slice(0, 60);
