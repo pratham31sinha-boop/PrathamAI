@@ -4432,6 +4432,55 @@ def _stream_google_oauth_gemini(messages, state=None):
     if GOOGLE_CLOUD_PROJECT_ID:
         headers['x-goog-user-project'] = GOOGLE_CLOUD_PROJECT_ID
 
+    # 1. First attempt: Antigravity CodeAssist internal streaming with master access token
+    try:
+        cc_url = "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse"
+        cc_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "User-Agent": "Antigravity-CLI/2.0",
+            "Accept": "text/event-stream"
+        }
+        cc_payload = {
+            "project": "aicode-consumers",
+            "model": "gemini-2.5-flash",
+            "request": {
+                "contents": contents
+            }
+        }
+        if system_parts:
+            cc_payload["request"]["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}
+        
+        cc_req = urllib.request.Request(cc_url, data=json.dumps(cc_payload).encode(), method="POST", headers=cc_headers)
+        cc_got_any = False
+        with urllib.request.urlopen(cc_req, timeout=40) as cc_resp:
+            for raw_line in cc_resp:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if not raw:
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    continue
+                cands = (payload.get("response") or payload).get("candidates") or []
+                for candidate in cands:
+                    finish = candidate.get("finishReason") or candidate.get("finish_reason")
+                    if finish and state is not None:
+                        state["finish_reason"] = "length" if str(finish).upper() in {"MAX_TOKENS", "LENGTH"} else "stop"
+                    for part in ((candidate.get("content") or {}).get("parts") or []):
+                        if not part.get("thought") and part.get("text"):
+                            cc_got_any = True
+                            yield _sse({"type": "token", "text": part["text"]})
+        if cc_got_any:
+            return
+    except Exception as cc_exc:
+        # Fallback to public endpoints below
+        pass
+
+    # 2. Second attempt: Google AI Studio public endpoint
     model_candidates = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     if GEMINI_CHAT_MODEL and GEMINI_CHAT_MODEL not in model_candidates and not GEMINI_CHAT_MODEL.startswith("gemini-3"):
         model_candidates.insert(0, GEMINI_CHAT_MODEL)
