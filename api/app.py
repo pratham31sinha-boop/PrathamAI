@@ -313,6 +313,30 @@ CORS(app, resources={
         ]
     }
 }, supports_credentials=True)
+
+@app.before_request
+def _handle_cors_preflight():
+    if request.method == "OPTIONS":
+        resp = Response()
+        origin = request.headers.get("Origin") or "*"
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-Gemini-Access-Token, X-Gemini-Key, X-Groq-Key, ngrok-skip-browser-warning, X-Daytona-Skip-Preview-Warning, X-Daytona-Preview-Token"
+        return resp
+
+@app.after_request
+def _handle_cors_headers(response):
+    origin = request.headers.get("Origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-Gemini-Access-Token, X-Gemini-Key, X-Groq-Key, ngrok-skip-browser-warning, X-Daytona-Skip-Preview-Warning, X-Daytona-Preview-Token"
+    return response
+
 GEMINI_API_KEY       = os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip()
 GROQ_API_KEY         = os.environ.get("GROQ_API_KEY", "").strip()
 def _collect_groq_keys() -> list:

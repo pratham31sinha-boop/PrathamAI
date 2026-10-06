@@ -2178,9 +2178,9 @@
                             </div>
                             <span id="settings-backend-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Default</span>
                         </div>
-                        <p class="text-[11px] text-[var(--text-dim)]">Connect your deployed Vercel frontend to your local Pratham AI engine (e.g. <code>http://localhost:5000</code> or your Cloudflare/ngrok tunnel) to get full Antigravity CLI terminal freedom from anywhere.</p>
+                        <p class="text-[11px] text-[var(--text-dim)]">Connect your deployed Vercel frontend to your Daytona cloud server or tunnel (e.g. <code>https://5000-6dd723e1-aa4c-4fef-8252-ca19412dffbf.proxy.daytona.work</code> or <code>http://localhost:5000</code>) to get full Antigravity CLI terminal freedom from anywhere.</p>
                         <div class="flex items-center gap-2 mt-1">
-                            <input type="text" id="input-backend-url" placeholder="http://localhost:5000 or https://xyz.trycloudflare.com" class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
+                            <input type="text" id="input-backend-url" placeholder="https://5000-6dd723e1-aa4c-4fef-8252-ca19412dffbf.proxy.daytona.work" class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
                         </div>
                     </div>
 
@@ -2832,7 +2832,7 @@
             paintIdentityIntoShell(guestClaims);
             enterAppShell();
         }
-        const DEFAULT_LIVE_TUNNEL_ENDPOINT = 'https://balance-onlooker-party.ngrok-free.dev';
+        const DEFAULT_LIVE_TUNNEL_ENDPOINT = 'https://5000-6dd723e1-aa4c-4fef-8252-ca19412dffbf.proxy.daytona.work';
         function resolvePrathamBackendOrigin() {
             try {
                 const configured = new URLSearchParams(window.location.search).get('backend');
@@ -2867,8 +2867,10 @@
             options.headers = options.headers || {};
             if (options.headers instanceof Headers) {
                 options.headers.set('ngrok-skip-browser-warning', 'true');
+                options.headers.set('X-Daytona-Skip-Preview-Warning', 'true');
             } else {
                 options.headers['ngrok-skip-browser-warning'] = 'true';
+                options.headers['X-Daytona-Skip-Preview-Warning'] = 'true';
             }
             const base = (SERVER_CONTEXT_HOST || '').replace(/\/$/, '');
             const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
