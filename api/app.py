@@ -6237,28 +6237,59 @@ def _gemini_tokeninfo(token):
         print(f"[GEMINI][TOKENINFO] {exc}")
         return None
 
-def _refresh_google_oauth_token(refresh_token: str) -> str:
+def _refresh_google_oauth_token(refresh_token: str, client_id: str = None, client_secret: str = None) -> str:
     """Refreshes a Google OAuth access token using Google's token endpoint."""
     if not refresh_token:
         return None
+    cids_to_try = []
+    if client_id:
+        cids_to_try.append((client_id, client_secret))
+    
+    # Try reading from vault dynamically if not passed
     try:
-        data = urllib.parse.urlencode({
-            "client_id": GOOGLE_GEMINI_OAUTH_CLIENT_ID,
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            "https://oauth2.googleapis.com/token",
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            res = json.loads(resp.read().decode("utf-8", errors="ignore"))
-            new_tok = res.get("access_token")
-            return new_tok
-    except Exception as e:
-        print(f"[GOOGLE_OAUTH_REFRESH_ERR] {e}")
-        return None
+        import base64
+        vpath = os.path.join(WORKSPACE_ROOT, "data", "master-engine-vault.dat")
+        if os.path.exists(vpath):
+            with open(vpath, "r", encoding="ascii") as vf:
+                raw_b64 = vf.read().strip()
+            obf = base64.b64decode(raw_b64)
+            plain_json = bytes([b ^ 0x5A for b in obf]).decode("utf-8")
+            vdata = json.loads(plain_json)
+            vcid = vdata.get("oauth_client_id")
+            vsec = vdata.get("oauth_client_secret")
+            if vcid:
+                cids_to_try.append((vcid, vsec))
+    except Exception:
+        pass
+
+    if GOOGLE_GEMINI_OAUTH_CLIENT_ID:
+        cids_to_try.append((GOOGLE_GEMINI_OAUTH_CLIENT_ID, None))
+
+    for cid, sec in cids_to_try:
+        if not cid:
+            continue
+        try:
+            params = {
+                "client_id": cid,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            }
+            if sec:
+                params["client_secret"] = sec
+            data = urllib.parse.urlencode(params).encode("utf-8")
+            req = urllib.request.Request(
+                "https://oauth2.googleapis.com/token",
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                res = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                new_tok = res.get("access_token")
+                if new_tok:
+                    return new_tok
+        except Exception:
+            pass
+    return None
 
 def _require_gemini_connection():
     token = _gemini_access_token_from_request()
