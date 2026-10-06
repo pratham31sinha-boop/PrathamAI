@@ -4408,43 +4408,87 @@ def _stream_antigravity_cli(messages, state=None):
 
     raise RuntimeError("Both Antigravity accounts (Primary & Secondary) produced no output")
 
-def _stream_google_oauth_gemini(messages,state=None):
-    access_token,err=_require_gemini_connection()
-    if err: raise RuntimeError('GEMINI_AUTH_REQUIRED')
-    system_parts=[]; contents=[]
+def _stream_google_oauth_gemini(messages, state=None):
+    access_token, err = _require_gemini_connection()
+    if err:
+        raise RuntimeError('GEMINI_AUTH_REQUIRED')
+    system_parts = []
+    contents = []
     for item in messages or []:
-        text=str(item.get('content','') or '')
-        if not text: continue
-        role=item.get('role','user')
-        if role=='system': system_parts.append(text)
-        else: contents.append({'role':'model' if role=='assistant' else 'user','parts':[{'text':text}]})
-    if not contents: raise RuntimeError('No user content was supplied to Gemini.')
-    temp=(state or {}).pop('temperature',0.4) if state is not None else 0.4
-    body={'contents':contents,'generationConfig':{'temperature':float(temp),'maxOutputTokens':32768}}
-    if system_parts: body['systemInstruction']={'parts':[{'text':'\n\n'.join(system_parts)}]}
-    url=f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_CHAT_MODEL,safe='-_.')}:streamGenerateContent?alt=sse"
-    req=urllib.request.Request(url,data=json.dumps(body).encode(),method='POST',headers={'Authorization':f'Bearer {access_token}','x-goog-user-project':GOOGLE_CLOUD_PROJECT_ID,'Content-Type':'application/json','Accept':'text/event-stream','Cache-Control':'no-cache'})
-    try:
-        with urllib.request.urlopen(req,timeout=120) as resp:
-            for raw_line in resp:
-                line=raw_line.decode('utf-8',errors='replace').strip()
-                if not line.startswith('data:'): continue
-                raw=line[5:].strip()
-                if not raw: continue
-                try: payload=json.loads(raw)
-                except Exception: continue
-                if payload.get('error'): raise RuntimeError((payload.get('error') or {}).get('message') or 'Gemini API request failed.')
-                for candidate in payload.get('candidates') or []:
-                    finish=candidate.get('finishReason') or candidate.get('finish_reason')
-                    if finish and state is not None: state['finish_reason']='length' if str(finish).upper() in {'MAX_TOKENS','LENGTH'} else 'stop'
-                    for part in ((candidate.get('content') or {}).get('parts') or []):
-                        if part.get('text'): yield _sse({'type':'token','text':part['text']})
-    except urllib.error.HTTPError as exc:
+        text = str(item.get('content', '') or '')
+        if not text:
+            continue
+        role = item.get('role', 'user')
+        if role == 'system':
+            system_parts.append(text)
+        else:
+            contents.append({'role': 'model' if role == 'assistant' else 'user', 'parts': [{'text': text}]})
+    if not contents:
+        raise RuntimeError('No user content was supplied to Gemini.')
+    temp = (state or {}).pop('temperature', 0.4) if state is not None else 0.4
+    body = {'contents': contents, 'generationConfig': {'temperature': float(temp), 'maxOutputTokens': 32768}}
+    if system_parts:
+        body['systemInstruction'] = {'parts': [{'text': '\n\n'.join(system_parts)}]}
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache'
+    }
+    if GOOGLE_CLOUD_PROJECT_ID:
+        headers['x-goog-user-project'] = GOOGLE_CLOUD_PROJECT_ID
+
+    model_candidates = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    if GEMINI_CHAT_MODEL and GEMINI_CHAT_MODEL not in model_candidates and not GEMINI_CHAT_MODEL.startswith("gemini-3"):
+        model_candidates.insert(0, GEMINI_CHAT_MODEL)
+
+    last_exc = None
+    for model_name in model_candidates:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(model_name, safe='-_.')}:streamGenerateContent?alt=sse"
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), method='POST', headers=headers)
         try:
-            raw=exc.read().decode('utf-8',errors='replace'); msg=(json.loads(raw).get('error') or {}).get('message') or raw[:500]
-        except Exception: msg=str(exc)
-        if exc.code == 401: raise RuntimeError(f'GEMINI_RECONNECT_REQUIRED: {msg}')
-        raise RuntimeError(f'HTTP {exc.code}: {msg}')
+            got_any = False
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode('utf-8', errors='replace').strip()
+                    if not line.startswith('data:'):
+                        continue
+                    raw = line[5:].strip()
+                    if not raw:
+                        continue
+                    try:
+                        payload = json.loads(raw)
+                    except Exception:
+                        continue
+                    if payload.get('error'):
+                        raise RuntimeError((payload.get('error') or {}).get('message') or 'Gemini API request failed.')
+                    for candidate in payload.get('candidates') or []:
+                        finish = candidate.get('finishReason') or candidate.get('finish_reason')
+                        if finish and state is not None:
+                            state['finish_reason'] = 'length' if str(finish).upper() in {'MAX_TOKENS', 'LENGTH'} else 'stop'
+                        for part in ((candidate.get('content') or {}).get('parts') or []):
+                            if part.get('text'):
+                                got_any = True
+                                yield _sse({'type': 'token', 'text': part['text']})
+            if got_any:
+                return
+        except urllib.error.HTTPError as exc:
+            try:
+                raw = exc.read().decode('utf-8', errors='replace')
+                msg = (json.loads(raw).get('error') or {}).get('message') or raw[:500]
+            except Exception:
+                msg = str(exc)
+            last_exc = RuntimeError(f"HTTP {exc.code} with model {model_name}: {msg}")
+            if exc.code == 404:
+                continue
+            raise last_exc
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    if last_exc:
+        raise last_exc
 
 def _stream_gemini_api_key(messages, state=None):
     api_key = getattr(_do_stream, '_current_gemini_key', None) or GEMINI_API_KEY
@@ -6175,12 +6219,9 @@ def _refresh_google_oauth_token(refresh_token: str) -> str:
         return None
 
 def _require_gemini_connection():
-    token = _gemini_access_token_from_request(); user = getattr(request, 'current_user', {}) or {}
+    token = _gemini_access_token_from_request()
     if token:
-        binding = request.cookies.get('pratham_gemini_binding', '')
-        expected = _gemini_token_fingerprint(token, user.get('email', ''))
-        if binding and hmac.compare_digest(binding, expected):
-            return token, None
+        return token, None
 
     # Check environment variables (crucial for Vercel / serverless deployments)
     env_direct_tok = os.environ.get("ANTIGRAVITY_TOKEN") or os.environ.get("ANTIGRAVITY_OAUTH_TOKEN") or os.environ.get("GEMINI_OAUTH_TOKEN")
