@@ -3570,7 +3570,7 @@ class _WarmAntigravitySession:
                                     detail_txt = f"Target: {target_file}"
                                     if code_snippet:
                                         detail_txt += f"\n\nCode Preview:\n{code_snippet[:600]}"
-                                    if target_name and code_snippet and len(code_snippet) > 10:
+                                    if target_name and code_snippet and len(code_snippet) > 10 and target_name.lower() not in _IGNORE_FILE_NAMES:
                                         written_files[target_name] = code_snippet
                                     yield _sse({
                                         "type": "agent_step",
@@ -4101,6 +4101,7 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the PDF cleanly on disk.\n"
         "- Interactive HTML5 Apps, 3D Games & Code:\n"
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
+        "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
         "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
         "FILE PRESENTATION & DELIVERABLES:\n"
         "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
