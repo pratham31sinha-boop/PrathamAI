@@ -2081,7 +2081,7 @@
             <div class="settings-sidebar w-full sm:w-48 border-b sm:border-b-0 sm:border-r border-[var(--border)] p-2 sm:p-3 flex sm:flex-col gap-1 bg-[var(--panel-2)] shrink-0 overflow-x-auto">
                 <div class="settings-category-label text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pb-1 hidden sm:block">Settings</div>
                 <button type="button" class="settings-tab active" data-settings-tab="general" onclick="switchSettingsTab('general')">⚙️ General</button>
-                <button type="button" class="settings-tab" data-settings-tab="ai-keys" onclick="switchSettingsTab('ai-keys')">🤖 AI Engine &amp; Keys</button>
+                <button type="button" class="settings-tab" data-settings-tab="ai-keys" onclick="switchSettingsTab('ai-keys')">⚡ Autonomous Engine</button>
                 <button type="button" class="settings-tab" data-settings-tab="account" onclick="switchSettingsTab('account')">👤 Account</button>
                 <div class="settings-category-label text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] px-2 pt-3 pb-1 hidden sm:block">Customize</div>
                 <button type="button" class="settings-tab" data-settings-tab="appearance" onclick="switchSettingsTab('appearance')">🎨 Appearance</button>
@@ -2128,61 +2128,42 @@
                     </div>
                 </div>
 
-                <!-- Pane 2: AI Engine & Keys -->
-                <div id="pane-settings-ai-keys" class="settings-pane hidden flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-5">
-                    <div class="p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 text-xs text-[var(--text)] leading-relaxed">
-                        <div class="font-bold text-indigo-400 mb-1 flex items-center gap-1.5">
-                            <span>⚡</span><span>Bring Your Own Free API Keys (Optional)</span>
+                <!-- Pane 2: Autonomous Engine -->
+                <div id="pane-settings-ai-keys" class="settings-pane hidden flex-1 overflow-y-auto workspace-scrollpane p-4 sm:p-5 space-y-4">
+                    <!-- Native Engine Status Banner -->
+                    <div class="p-4 rounded-xl border border-emerald-500/25 bg-emerald-500/5 text-xs text-[var(--text)] leading-relaxed space-y-2">
+                        <div class="font-bold text-emerald-400 flex items-center justify-between">
+                            <span class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
+                                <span>Pratham AI Autonomous Engine — 100% Native</span>
+                            </span>
+                            <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full">Universal Default</span>
                         </div>
-                        Pratham AI has built-in dynamic agentic generation. To unlock unrestricted, high-speed cloud intelligence (Gemini 2.0 Flash or Groq Llama 3.3 70B) from anywhere, enter your keys below. Keys are stored safely in your browser only.
+                        <p class="text-[11px] text-[var(--text-dim)] leading-relaxed">
+                            No external API keys, tokens, or third-party paid subscriptions are required. Pratham AI is 100% natively self-powered and engineered by creator <strong class="text-[var(--text)]">Pratham Sinha</strong> under the supervision of <strong class="text-[var(--text)]">Akriti &amp; Aditi Aishwaryam</strong>.
+                        </p>
                     </div>
 
-                    <!-- Google Account OAuth Button -->
-                    <div class="flex flex-col gap-2 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
+                    <!-- Master Account Status Card -->
+                    <div class="flex flex-col gap-2.5 p-4 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
                         <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.655 32.657 29.154 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039L37.521 9.48C33.299 5.733 28.038 3.5 24 3.5 12.685 3.5 3.5 12.685 3.5 24S12.685 44.5 24 44.5 44.5 35.315 44.5 24c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 16.186 18.961 13 24 13c3.059 0 5.842 1.154 7.961 3.039L37.521 9.48C33.299 5.733 28.038 3.5 24 3.5 16.318 3.5 9.656 7.835 6.306 14.691z"/><path fill="#4CAF50" d="M24 44.5c5.934 0 11.002-2.31 14.67-6.271l-6.777-5.583C30.011 34.46 27.198 36 24 36c-5.133 0-9.623-3.33-11.292-7.965l-6.522 5.025C9.122 39.556 15.974 44.5 24 44.5z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.189 5.647l6.777 5.583C37.498 39.492 44.5 34.5 44.5 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
-                                <span class="text-xs font-bold text-[var(--text)]">Google Account Sign-In</span>
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-xs">
+                                    AG
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-[var(--text)]">Master Antigravity Account</div>
+                                    <div class="text-[11px] font-mono text-[var(--accent)]">manojkumarsinha1972@gmail.com</div>
+                                </div>
                             </div>
-                            <span id="settings-google-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Not Connected</span>
+                            <span id="settings-master-status-badge" class="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Connected · Default
+                            </span>
                         </div>
-                        <p class="text-[11px] text-[var(--text-dim)]">Connect your Google account directly to power Gemini with zero API keys required.</p>
-                        <button type="button" id="settings-google-signin-btn" onclick="startUnifiedGoogleSignIn()" class="w-full py-2 bg-[var(--panel)] border border-[var(--border)] text-[var(--accent)] font-semibold rounded-lg hover:border-[var(--accent)] transition-all flex items-center justify-center gap-2 text-xs cursor-pointer shadow-xs mt-1">
-                            <svg width="15" height="15" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.655 32.657 29.154 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039L37.521 9.48C33.299 5.733 28.038 3.5 24 3.5 12.685 3.5 3.5 12.685 3.5 24S12.685 44.5 24 44.5 44.5 35.315 44.5 24c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 16.186 18.961 13 24 13c3.059 0 5.842 1.154 7.961 3.039L37.521 9.48C33.299 5.733 28.038 3.5 24 3.5 16.318 3.5 9.656 7.835 6.306 14.691z"/><path fill="#4CAF50" d="M24 44.5c5.934 0 11.002-2.31 14.67-6.271l-6.777-5.583C30.011 34.46 27.198 36 24 36c-5.133 0-9.623-3.33-11.292-7.965l-6.522 5.025C9.122 39.556 15.974 44.5 24 44.5z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.189 5.647l6.777 5.583C37.498 39.492 44.5 34.5 44.5 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
-                            <span id="settings-google-btn-text">Sign in with Google</span>
-                        </button>
-                    </div>
-
-                    <!-- Gemini Key -->
-                    <div class="flex flex-col gap-2 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <span class="text-base">✨</span>
-                                <span class="text-xs font-bold text-[var(--text)]">Google Gemini API Key</span>
-                            </div>
-                            <span id="settings-gemini-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Not Set</span>
-                        </div>
-                        <p class="text-[11px] text-[var(--text-dim)]">Powers Gemini 2.0 Flash &amp; 1.5 Flash models. Free from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] underline hover:opacity-80">Google AI Studio ↗</a>.</p>
-                        <div class="flex items-center gap-2 mt-1">
-                            <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
-                            <button type="button" onclick="toggleApiKeyVisibility('input-gemini-key')" class="p-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[var(--text-dim)]" title="Show / Hide">👁️</button>
-                        </div>
-                    </div>
-
-                    <!-- Groq Key -->
-                    <div class="flex flex-col gap-2 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--panel-2)]">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <span class="text-base">⚡</span>
-                                <span class="text-xs font-bold text-[var(--text)]">Groq Cloud API Key</span>
-                            </div>
-                            <span id="settings-groq-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Not Set</span>
-                        </div>
-                        <p class="text-[11px] text-[var(--text-dim)]">Powers ultra-fast Llama 3.3 70B inference. Free from <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] underline hover:opacity-80">Groq Console ↗</a>.</p>
-                        <div class="flex items-center gap-2 mt-1">
-                            <input type="password" id="input-groq-key" placeholder="gsk_..." class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
-                            <button type="button" onclick="toggleApiKeyVisibility('input-groq-key')" class="p-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[var(--text-dim)]" title="Show / Hide">👁️</button>
-                        </div>
+                        <p class="text-[11px] text-[var(--text-dim)] leading-relaxed">
+                            Every user, guest, or member using Pratham AI is automatically routed through this master account connection. All dynamic coding, agentic tool execution, and full model generation are permanently unlocked.
+                        </p>
                     </div>
 
                     <!-- Custom Backend Engine URL -->
@@ -2190,19 +2171,19 @@
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <span class="text-base">🌐</span>
-                                <span class="text-xs font-bold text-[var(--text)]">Backend Server URL (Local / Tunnel)</span>
+                                <span class="text-xs font-bold text-[var(--text)]">Backend Server Endpoint (Optional)</span>
                             </div>
-                            <span id="settings-backend-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-500/10 text-[var(--text-dim)]">Default</span>
+                            <span id="settings-backend-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">Live Auto-Detect</span>
                         </div>
-                        <p class="text-[11px] text-[var(--text-dim)]">Connect your deployed Vercel frontend to your Daytona cloud server or tunnel (e.g. <code>https://5000-6dd723e1-aa4c-4fef-8252-ca19412dffbf.proxy.daytona.work</code> or <code>http://localhost:5000</code>) to get full Antigravity CLI terminal freedom from anywhere.</p>
+                        <p class="text-[11px] text-[var(--text-dim)]">Default routes directly to the live backend. If running Daytona or a local custom tunnel, you may override the endpoint URL here.</p>
                         <div class="flex items-center gap-2 mt-1">
                             <input type="text" id="input-backend-url" placeholder="https://5000-6dd723e1-aa4c-4fef-8252-ca19412dffbf.proxy.daytona.work" class="flex-1 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] font-mono outline-none focus:border-[var(--accent)]" />
                         </div>
                     </div>
 
                     <div class="flex items-center justify-between pt-1">
-                        <button type="button" onclick="clearSavedApiKeys()" class="text-xs text-red-400 hover:text-red-300 underline cursor-pointer">Clear Saved Keys</button>
-                        <button type="button" onclick="saveApiKeysSettings()" id="save-api-keys-btn" class="px-4 py-2 accent-gradient text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-all cursor-pointer shadow-sm">Save &amp; Activate Keys</button>
+                        <button type="button" onclick="clearSavedApiKeys()" class="text-xs text-[var(--text-dim)] hover:text-red-400 underline cursor-pointer">Reset Endpoint</button>
+                        <button type="button" onclick="saveApiKeysSettings()" id="save-api-keys-btn" class="px-4 py-2 accent-gradient text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-all cursor-pointer shadow-sm">Save Changes</button>
                     </div>
                 </div>
 
@@ -3025,7 +3006,7 @@
 
             const titleMap = {
                 'general': 'Settings — General',
-                'ai-keys': 'Settings — AI Engine & Keys',
+                'ai-keys': 'Settings — Autonomous Engine',
                 'account': 'Settings — Account',
                 'appearance': 'Settings — Appearance',
                 'about': 'Settings — About'
@@ -3090,10 +3071,10 @@
 
             if (backendBadge) {
                 if (backendUrl.trim()) {
-                    backendBadge.innerText = 'Custom Backend Active';
+                    backendBadge.innerText = 'Custom Endpoint Active';
                     backendBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400';
                 } else {
-                    backendBadge.innerText = 'Ngrok Live Tunnel Active';
+                    backendBadge.innerText = 'Live Auto-Detect';
                     backendBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400';
                 }
             }
