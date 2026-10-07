@@ -5,3 +5,10 @@ Pratham AI:
 Hello! I'm Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I help you today?
 
 ================================================================================
+
+=== 2026-10-07T08:35:21.750265+00:00 ===
+User: Why
+Pratham AI:
+Could you clarify what you're asking about? Let me know what specific question, topic, or challenge you have in mind, and I'll be glad to help!
+
+================================================================================
