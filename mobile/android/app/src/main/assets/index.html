@@ -3868,14 +3868,50 @@
             if (statusText) statusText.innerText = 'Preparing download...';
 
             try {
-                // 1. Direct browser memory download if we have code in memory
+                // 1. Direct browser memory download if we have code in memory or in message DOM
                 let codeContent = card ? card._code : null;
                 if (!codeContent && window._currentSessionFiles && window._currentSessionFiles[filename]) {
                     codeContent = window._currentSessionFiles[filename];
                 }
                 if (!codeContent) {
-                    const matchCard = document.querySelector(`.file-creation-card[data-filename="${filename}"]`);
+                    const matchCard = document.querySelector(`.file-creation-card[data-filename="${CSS.escape(filename)}"]`);
                     if (matchCard && matchCard._code) codeContent = matchCard._code;
+                }
+                // Check parent/surrounding message wrapper for code content or createfile block
+                if (!codeContent) {
+                    const msgWrapper = card ? card.closest('.msg-wrapper') : null;
+                    if (msgWrapper) {
+                        // Check other cards inside this message
+                        const otherCards = msgWrapper.querySelectorAll('.file-creation-card');
+                        for (const oc of otherCards) {
+                            if (oc._code) {
+                                if (oc.dataset.filename === filename || (filename.endsWith('.html') && oc._code.includes('<html')) || (filename.endsWith('.py') && (oc.dataset.lang?.includes('py') || oc._code.includes('def ')))) {
+                                    codeContent = oc._code;
+                                    break;
+                                }
+                            }
+                        }
+                        // Check text/code blocks within message
+                        if (!codeContent) {
+                            const rawText = msgWrapper.textContent || '';
+                            const cfRegex = new RegExp(`\`\`\`(?:createfile:)?(?:\\w+\\s+)?${filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\r\\n]+([\\s\\S]*?)\`\`\``, 'i');
+                            const cfMatch = rawText.match(cfRegex);
+                            if (cfMatch && cfMatch[1]) {
+                                codeContent = cfMatch[1].trim();
+                            } else if (filename.endsWith('.html')) {
+                                const htmlBlocks = msgWrapper.querySelectorAll('pre code, .code-snippet');
+                                for (const hb of htmlBlocks) {
+                                    if (hb.textContent && (hb.textContent.includes('<!DOCTYPE html>') || hb.textContent.includes('<html'))) {
+                                        codeContent = hb.textContent;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (codeContent && card && !card._code) {
+                    card._code = codeContent;
                 }
 
                 const isZip = filename.toLowerCase().endsWith('.zip');

@@ -1729,23 +1729,40 @@ def _build_generic_file_from_response(assistant_text: str, ext: str, workdir: st
     mimetype = mimetypes.guess_type("generated." + ext)[0] or "application/octet-stream"
     return content.encode("utf-8", "replace"), f"generated.{ext}", mimetype
 def _serve_download_candidate(identifier: str):
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+
     if not identifier:
-        return jsonify({"error": "No filename or token specified"}), 400
-    safe_name = os.path.basename(urllib.parse.unquote(identifier)).strip()
+        resp = jsonify({"error": "No filename or token specified"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp, 400
+
+    raw_ident = urllib.parse.unquote(identifier).strip()
+    safe_name = os.path.basename(raw_ident).strip()
+    if not safe_name:
+        safe_name = raw_ident
+
+    # Helper to return response with proper CORS and download headers
+    def _make_download_response(data: bytes, filename: str, mime: str = None):
+        if not mime:
+            mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        resp = Response(data, mimetype=mime)
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+        return resp
 
     # 1. Exact match or token match in _generated_files_store
     if identifier in _generated_files_store:
         entry = _generated_files_store[identifier]
-        resp = Response(entry["bytes"], mimetype=entry["mimetype"])
-        resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        return resp
+        return _make_download_response(entry["bytes"], entry["filename"], entry.get("mimetype"))
+    if raw_ident in _generated_files_store:
+        entry = _generated_files_store[raw_ident]
+        return _make_download_response(entry["bytes"], entry["filename"], entry.get("mimetype"))
     for tok, entry in _generated_files_store.items():
-        if entry.get("filename") == safe_name:
-            resp = Response(entry["bytes"], mimetype=entry["mimetype"])
-            resp.headers["Content-Disposition"] = f'attachment; filename="{entry["filename"]}"'
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            return resp
+        if entry.get("filename") == safe_name or entry.get("filename", "").lower() == safe_name.lower():
+            return _make_download_response(entry["bytes"], entry["filename"], entry.get("mimetype"))
 
     # 2. Check WORKSPACE_ROOT directly (primary storage for user deliverables)
     workspace_path = os.path.join(WORKSPACE_ROOT, safe_name)
@@ -1753,27 +1770,22 @@ def _serve_download_candidate(identifier: str):
         try:
             with open(workspace_path, "rb") as fh:
                 data = fh.read()
-            mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-            resp = Response(data, mimetype=mime)
-            resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            return resp
+            return _make_download_response(data, safe_name)
         except Exception:
             pass
 
-    # 3. Check /tmp directly
-    tmp_path = os.path.join("/tmp", safe_name)
-    if os.path.isfile(tmp_path):
-        try:
-            with open(tmp_path, "rb") as fh:
-                data = fh.read()
-            mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-            resp = Response(data, mimetype=mime)
-            resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            return resp
-        except Exception:
-            pass
+    # 3. Check /tmp and /tmp/pratham_downloads directly
+    for tmp_dir in ["/tmp", os.path.join(tempfile.gettempdir(), "pratham_downloads")]:
+        for candidate_name in [safe_name, raw_ident, identifier]:
+            tp = os.path.join(tmp_dir, candidate_name)
+            if os.path.isfile(tp):
+                try:
+                    with open(tp, "rb") as fh:
+                        data = fh.read()
+                    real_name = safe_name if safe_name and safe_name != candidate_name else safe_name
+                    return _make_download_response(data, real_name or candidate_name)
+                except Exception:
+                    pass
 
     # Check mobile directory for APK downloads
     mobile_apk = os.path.join(WORKSPACE_ROOT, "mobile", safe_name)
@@ -1781,68 +1793,58 @@ def _serve_download_candidate(identifier: str):
         try:
             with open(mobile_apk, "rb") as fh:
                 data = fh.read()
-            resp = Response(data, mimetype="application/vnd.android.package-archive")
-            resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            return resp
+            return _make_download_response(data, safe_name, "application/vnd.android.package-archive")
         except Exception:
             pass
 
     # 4. Search WORKSPACE_ROOT subdirectories
     for root, dirs, files in os.walk(WORKSPACE_ROOT):
         dirs[:] = [d for d in dirs if not d.startswith((".", "__")) and d not in ("node_modules", ".git", ".gemini", ".system_generated")]
-        if safe_name in files:
-            try:
-                candidate = os.path.join(root, safe_name)
-                with open(candidate, "rb") as fh:
-                    data = fh.read()
-                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-                resp = Response(data, mimetype=mime)
-                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-                resp.headers["Access-Control-Allow-Origin"] = "*"
-                return resp
-            except Exception:
-                pass
+        for f in files:
+            if f == safe_name or f.lower() == safe_name.lower():
+                try:
+                    candidate = os.path.join(root, f)
+                    with open(candidate, "rb") as fh:
+                        data = fh.read()
+                    return _make_download_response(data, safe_name)
+                except Exception:
+                    pass
 
     # 5. Search /tmp subdirectories
     for root, dirs, files in os.walk("/tmp"):
-        if safe_name in files:
-            try:
-                candidate = os.path.join(root, safe_name)
-                with open(candidate, "rb") as fh:
-                    data = fh.read()
-                mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-                resp = Response(data, mimetype=mime)
-                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-                resp.headers["Access-Control-Allow-Origin"] = "*"
-                return resp
-            except Exception:
-                pass
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for f in files:
+            if f == safe_name or f.lower() == safe_name.lower():
+                try:
+                    candidate = os.path.join(root, f)
+                    with open(candidate, "rb") as fh:
+                        data = fh.read()
+                    return _make_download_response(data, safe_name)
+                except Exception:
+                    pass
 
     # 6. Search workspace data directory (sessions, attachments, user files)
     data_root = os.path.join(WORKSPACE_ROOT, "data")
     if os.path.isdir(data_root):
         for root, dirs, files in os.walk(data_root):
-            if safe_name in files:
-                try:
-                    candidate = os.path.join(root, safe_name)
-                    with open(candidate, "rb") as fh:
-                        data = fh.read()
-                    mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
-                    resp = Response(data, mimetype=mime)
-                    resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-                    resp.headers["Access-Control-Allow-Origin"] = "*"
-                    return resp
-                except Exception:
-                    pass
+            for f in files:
+                if f == safe_name or f.lower() == safe_name.lower():
+                    try:
+                        candidate = os.path.join(root, f)
+                        with open(candidate, "rb") as fh:
+                            data = fh.read()
+                        return _make_download_response(data, safe_name)
+                    except Exception:
+                        pass
 
-    # 5. Check if it's a zip request where components exist on disk or in _generated_files_store
+    # 7. Check if it's a zip request where components exist on disk or in _generated_files_store
     if safe_name.lower().endswith(".zip"):
         base_stem = safe_name[:-4].lower()
         bundle_candidates = []
-        for check_root in ["/tmp", data_root]:
+        for check_root in ["/tmp", data_root, WORKSPACE_ROOT]:
             if os.path.isdir(check_root):
                 for root, dirs, files in os.walk(check_root):
+                    dirs[:] = [d for d in dirs if not d.startswith((".", "__")) and d not in ("node_modules", ".git", ".gemini")]
                     for f in files:
                         if f.lower().startswith(base_stem) and not f.lower().endswith(".zip"):
                             bundle_candidates.append(os.path.join(root, f))
@@ -1855,32 +1857,100 @@ def _serve_download_candidate(identifier: str):
                         zf.write(cf, arcname)
                 zip_data = zip_buf.getvalue()
                 _store_generated_file(zip_data, safe_name, "application/zip")
-                try:
-                    with open(os.path.join("/tmp", safe_name), "wb") as wf:
-                        wf.write(zip_data)
-                except Exception:
-                    pass
-                resp = Response(zip_data, mimetype="application/zip")
-                resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
-                resp.headers["Access-Control-Allow-Origin"] = "*"
-                return resp
+                return _make_download_response(zip_data, safe_name, "application/zip")
             except Exception as ze:
                 print(f"[ON_THE_FLY_ZIP_ERR] {ze}")
 
-    return jsonify({"error": f"File '{safe_name}' not found or expired"}), 404
+    # 8. Extract from conversation messages on disk / memory if deliverable was generated in chat
+    try:
+        conv_dirs_to_check = []
+        if os.path.isdir(_CONV_STORAGE_DIR):
+            conv_dirs_to_check.append(_CONV_STORAGE_DIR)
+        alt_conv_dir = os.path.join(tempfile.gettempdir(), "pratham_conversations")
+        if os.path.isdir(alt_conv_dir) and alt_conv_dir not in conv_dirs_to_check:
+            conv_dirs_to_check.append(alt_conv_dir)
 
-@app.route("/download/<path:token>", methods=["GET"])
-@app.route("/api/download/<path:token>", methods=["GET"])
-@app.route("/api/app/download/<path:token>", methods=["GET"])
+        for cdir in conv_dirs_to_check:
+            for cfile in sorted(os.listdir(cdir), reverse=True)[:50]:
+                if cfile.endswith(".json"):
+                    try:
+                        with open(os.path.join(cdir, cfile), "r", encoding="utf-8") as jf:
+                            cdata = json.load(jf)
+                            msgs = cdata.get("messages", [])
+                            for m in msgs:
+                                if m.get("role") != "assistant":
+                                    continue
+                                ctext = m.get("content") or ""
+                                # Check createfile blocks
+                                for cf_name, cf_content in _extract_createfile_blocks(ctext):
+                                    if cf_name and (cf_name.lower() == safe_name.lower() or os.path.basename(cf_name).lower() == safe_name.lower()):
+                                        raw_b = cf_content.encode("utf-8")
+                                        _store_generated_file(raw_b, safe_name, mimetypes.guess_type(safe_name)[0] or "text/plain")
+                                        return _make_download_response(raw_b, safe_name)
+                                # Check markdown code blocks if filename matches
+                                for lang_m, code_m in _CODE_BLOCK_RE.findall(ctext):
+                                    code_str = code_m.strip()
+                                    if len(code_str) < 40:
+                                        continue
+                                    if safe_name.lower().endswith(".html") and ("<html" in code_str.lower() or "<!doctype html>" in code_str.lower()):
+                                        raw_b = code_str.encode("utf-8")
+                                        _store_generated_file(raw_b, safe_name, "text/html")
+                                        return _make_download_response(raw_b, safe_name, "text/html")
+                    except Exception:
+                        pass
+    except Exception as conv_err:
+        print(f"[DOWNLOAD_CONV_RESTORE_ERR] {conv_err}")
+
+    # 9. GitHub remote backup fallback for deployed instances
+    if GITHUB_TOKEN:
+        try:
+            repo_clean = _github_repo_slug()
+            candidate_paths = [
+                f"data/{safe_name}",
+                f"data/attachments/{safe_name}",
+                f"data/{_user_email()}/attachments/{safe_name}",
+                f"mobile/{safe_name}"
+            ]
+            for gh_p in candidate_paths:
+                enc_p = "/".join(urllib.parse.quote(seg, safe="") for seg in gh_p.split("/") if seg)
+                gh_url = f"https://api.github.com/repos/{repo_clean}/contents/{enc_p}"
+                req = urllib.request.Request(
+                    gh_url,
+                    headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=5) as resp_gh:
+                        meta = json.loads(resp_gh.read().decode("utf-8"))
+                        if meta.get("content"):
+                            file_bytes = base64.b64decode(meta["content"].replace("\n", ""))
+                            # Cache locally in /tmp
+                            try:
+                                with open(os.path.join("/tmp", safe_name), "wb") as wf:
+                                    wf.write(file_bytes)
+                            except Exception:
+                                pass
+                            return _make_download_response(file_bytes, safe_name)
+                except Exception:
+                    continue
+        except Exception as gh_err:
+            print(f"[DOWNLOAD_GH_BACKUP_ERR] {gh_err}")
+
+    resp = jsonify({"error": f"File '{safe_name}' not found or expired"})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp, 404
+
+@app.route("/download/<path:token>", methods=["GET", "OPTIONS"])
+@app.route("/api/download/<path:token>", methods=["GET", "OPTIONS"])
+@app.route("/api/app/download/<path:token>", methods=["GET", "OPTIONS"])
 def download_generated_file(token):
     return _serve_download_candidate(token)
 
-@app.route("/download_temp_file", methods=["GET"])
-@app.route("/api/download_temp_file", methods=["GET"])
-@app.route("/api/app/download_temp_file", methods=["GET"])
-@app.route("/download_file", methods=["GET"])
-@app.route("/api/download_file", methods=["GET"])
-@app.route("/api/app/download_file", methods=["GET"])
+@app.route("/download_temp_file", methods=["GET", "OPTIONS"])
+@app.route("/api/download_temp_file", methods=["GET", "OPTIONS"])
+@app.route("/api/app/download_temp_file", methods=["GET", "OPTIONS"])
+@app.route("/download_file", methods=["GET", "OPTIONS"])
+@app.route("/api/download_file", methods=["GET", "OPTIONS"])
+@app.route("/api/app/download_file", methods=["GET", "OPTIONS"])
 def download_temp_file():
     name = request.args.get("name") or request.args.get("file") or request.args.get("path") or request.args.get("token")
     return _serve_download_candidate(name)
