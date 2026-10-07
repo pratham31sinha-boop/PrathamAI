@@ -2987,21 +2987,22 @@ def _is_cooling(name: str) -> bool:
 def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 SYSTEM_PROMPT = (
-    "You are Pratham AI, an advanced agentic coding and conversational AI created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n\n"
+    "You are Pratham AI, an advanced autonomous agentic coding and conversational AI created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n\n"
     "CREATOR & IDENTITY:\n"
     "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
     "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI who built your architecture. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
     "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
     "GREETING DIRECTIVE:\n"
     "- When the user greets you (e.g. 'hi', 'hello', 'hey'), respond immediately and conversationally with a warm, friendly greeting in 1-2 sentences as Pratham AI, and ask how you can help. Do NOT output lengthy capability lists, disclaimers, or run commands on a simple greeting.\n\n"
-    "RAPID WORKSPACE EXECUTION & PERFORMANCE:\n"
-    "- Complete every user task with full agentic freedom and an unrestricted workspace environment equipped with full terminal capabilities like Claude Code and Antigravity.\n"
+    "FULL CLAUDE-LIKE AGENTIC POWER & UNRESTRICTED TERMINAL FREEDOM:\n"
+    "- You possess full Claude-like agentic power and an unrestricted workspace environment equipped with complete terminal capabilities.\n"
     "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, zip, pypdf, and bash fully installed.\n"
-    "- Whenever a user asks you to create, generate, or deliver any document, PDF, essay with images, zip archive, 3D game, script, or dataset: ACT AS A REAL TERMINAL AGENT! Do NOT merely provide conversational text or simulate commands.\n"
-    "- PDF & Document Generation: Write and run a Python script (```python) using ReportLab (SimpleDocTemplate, Paragraph, Table, Image, getSampleStyleSheet, colors) or FPDF to compile a publication-grade PDF and save it directly to disk. If an image is needed, download it inside the script or generate a clean graphic using Pillow/Matplotlib. Do NOT output intermediate generator scripts in ```createfile: blocks — deliver the PDF cleanly on disk.\n"
-    "- ZIP archives: Write and run a Python script or bash command (```bash) using `zip` or `zipfile` to package all standalone files into the requested .zip archive directly on disk.\n"
-    "- Interactive HTML5 Apps, 3D Games & Code: Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch, edit, or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. hill_climb_racing.html, snake_game.html, app.html).\n"
-    "- Execute the commands, inspect the output, verify the files exist on disk, and present the final deliverable files clearly to the user."
+    "- WHENEVER the user asks for ANY task — whether making a game, creating an interactive web app, compiling a PDF, writing an essay, packaging a zip, scraping data, or coding a Python script: DO NOT MERELY TALK ABOUT IT OR ASK FOR PERMISSION! DO IT IMMEDIATELY.\n"
+    "- Take full initiative: write the code, execute the terminal commands, build the deliverables, test the logic, and present the final files to the user.\n"
+    "- PDF & Document Generation: Write and execute a Python script (```python) using ReportLab (SimpleDocTemplate, Paragraph, Table, Image, getSampleStyleSheet, colors) or FPDF to compile publication-grade PDFs directly to disk in the current workspace (e.g. essay.pdf, document.pdf). When done, confirm the PDF deliverable.\n"
+    "- ZIP Archives: Package requested files into a .zip archive directly using python zipfile or bash zip.\n"
+    "- Interactive HTML5 Apps, 3D Games & Code: Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch, edit, or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. hill_climb_racing.html, snake_game.html, app.html).\n"
+    "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files clearly to the user."
 )
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|"
@@ -3715,7 +3716,7 @@ class _WarmAntigravitySession:
                             if part:
                                 yield _sse({"type": "token", "text": part})
                 
-                # Also check if an HTML deliverable was created on disk in WORKSPACE_ROOT
+                # Also check if any deliverable (HTML, PDF, ZIP, or script) was created on disk in WORKSPACE_ROOT
                 dt = _classify_requested_deliverable_types(user_query)
                 if dt.get("is_html") and not any(k in full_streamed for k in ["```createfile:", "```editfile:"]):
                     try:
@@ -3733,6 +3734,24 @@ class _WarmAntigravitySession:
                                     break
                     except Exception:
                         pass
+
+                # Check for PDF or ZIP deliverables created on disk by python/bash commands
+                target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
+                if target_ext:
+                    try:
+                        for fn in os.listdir(WORKSPACE_ROOT):
+                            if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
+                                fp = os.path.join(WORKSPACE_ROOT, fn)
+                                if os.path.isfile(fp) and os.path.getsize(fp) > 50:
+                                    if os.path.getmtime(fp) >= (start_time - 15.0):
+                                        with open(fp, "rb") as bin_fh:
+                                            bin_bytes = bin_fh.read()
+                                        mime = "application/pdf" if target_ext == "pdf" else "application/zip"
+                                        token = _store_generated_file(bin_bytes, fn, mime)
+                                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
+                                        break
+                    except Exception as bin_err:
+                        print(f"[ANTIGRAVITY][BIN_DELIVERABLE_ERR] {bin_err}")
 
                 if state is not None:
                     state["finish_reason"] = "stop"
@@ -4163,16 +4182,15 @@ def _stream_antigravity_cli(messages, state=None):
         "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
         "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
-        "RAPID WORKSPACE EXECUTION & PERFORMANCE (< 45 SECONDS):\n"
-        "- Complete every user task in the absolute minimum number of turns (1-2 tool calls maximum). Do NOT waste turns.\n"
+        "FULL CLAUDE-LIKE AGENTIC POWER & RAPID EXECUTION:\n"
+        "- You have full Claude-like agentic power and an unrestricted workspace environment equipped with complete terminal capabilities.\n"
+        "- Take immediate, proactive action: write the code, run the terminal commands, test the outputs, and present real deliverables without waiting for permission.\n"
         "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, hashlib, math, os, sys, and json fully installed.\n"
-        "- NEVER run exploratory diagnostic checks (e.g. NEVER execute 'python3 -c import reportlab', 'which weasyprint', or test network pings). Immediately write and run the actual deliverable.\n"
-        "- Synchronous Command Execution: When executing run_command to build files or run Python scripts, ALWAYS pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately in the same turn without spawning background tasks or requiring log inspection.\n"
+        "- Synchronous Command Execution: When executing run_command to build files or run Python scripts, pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately.\n"
         "- PDF & Document Generation:\n"
-        "  * Generate the PDF in ONE shot: write a self-contained Python script using ReportLab (SimpleDocTemplate, Paragraph, Spacer, Image, Table, getSampleStyleSheet) or FPDF and execute it in a single command.\n"
-        "  * If an image is needed: download it directly inside the python script using urllib.request (with 'User-Agent': 'Mozilla/5.0' and a 5-second timeout), or if offline/blocked, generate a clean graphic using Pillow or Matplotlib.\n"
-        "  * Write the PDF directly to disk in the current workspace (e.g. pokemon_essay.pdf) and confirm.\n"
-        "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the PDF cleanly on disk.\n"
+        "  * Write a self-contained Python script using ReportLab (SimpleDocTemplate, Paragraph, Spacer, Image, Table, getSampleStyleSheet) or FPDF and execute it with run_command.\n"
+        "  * If an image is needed: download it directly inside the python script using urllib.request (with 'User-Agent': 'Mozilla/5.0' and a 5-second timeout), or generate a clean graphic using Pillow or Matplotlib.\n"
+        "  * Write the PDF directly to disk in the current workspace (e.g. essay.pdf, document.pdf) and confirm.\n"
         "- Interactive HTML5 Apps, 3D Games & Code:\n"
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
         "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
@@ -4183,7 +4201,7 @@ def _stream_antigravity_cli(messages, state=None):
         "or for targeted in-place updates:\n"
         "```editfile:<filename>\n<<<<<<< SEARCH\n<existing code>\n=======\n<replacement code>\n>>>>>>> REPLACE\n```\n"
         "This ensures the user can immediately preview, run, test, and download the files as interactive cards in their workspace.\n"
-        "- When the user requests a PDF, document, or ZIP archive, run the build commands to produce the compiled file directly on disk. Do NOT present intermediate generator scripts in ```createfile: blocks — deliver the document itself cleanly without extra helper scripts.\n"
+        "- When the user requests a PDF, document, or ZIP archive, run the build commands to produce the compiled file directly on disk.\n"
         "- Always deliver complete, functional, standalone files."
     )
 
@@ -4443,6 +4461,9 @@ def _stream_antigravity_cli(messages, state=None):
                             elif tool_name in ("write_to_file", "replace_file_content"):
                                 target_file = params.get("TargetFile", "")
                                 target_name = os.path.basename(target_file) if target_file else "file"
+                                code_snippet = params.get("CodeContent") or params.get("ReplacementContent") or ""
+                                if target_name and code_snippet and len(code_snippet) > 10 and target_name.lower() not in _IGNORE_FILE_NAMES:
+                                    written_files[target_name] = code_snippet
                                 yield _sse({"type": "agent_step", "step_type": "writing", "label": f"Making {target_name}...", "detail": f"Target: {target_file}", "timestamp": time.time()})
                         delta = su.get("text_delta")
                         if delta:
@@ -4451,6 +4472,7 @@ def _stream_antigravity_cli(messages, state=None):
                             last_token_time = time.time()
                             cleaned_delta = _clean_antigravity_text(delta)
                             if cleaned_delta:
+                                accumulated_streamed_text.append(cleaned_delta)
                                 words = re.split(r"(\s+)", cleaned_delta)
                                 for w in words:
                                     if w:
@@ -4472,6 +4494,36 @@ def _stream_antigravity_cli(messages, state=None):
                     pass
 
         if got_any_token:
+            # Deliverable emission for direct CLI
+            full_streamed = "".join(accumulated_streamed_text)
+            user_matches = re.findall(r"User:\s*([^\n]+)", formatted_prompt or "")
+            user_query = user_matches[-1].lower() if user_matches else (last_user_prompt or "").lower()
+            for w_name, w_code in written_files.items():
+                if _is_intermediate_helper_file(w_name, user_query):
+                    continue
+                if f"createfile:{w_name}" not in full_streamed and f"editfile:{w_name}" not in full_streamed:
+                    file_block = f"\n\n```createfile:{w_name}\n{w_code}\n```\n"
+                    for part in re.split(r"(\s+)", file_block):
+                        if part:
+                            yield _sse({"type": "token", "text": part})
+
+            dt = _classify_requested_deliverable_types(user_query)
+            target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
+            if target_ext:
+                try:
+                    for fn in os.listdir(WORKSPACE_ROOT):
+                        if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
+                            fp = os.path.join(WORKSPACE_ROOT, fn)
+                            if os.path.isfile(fp) and os.path.getsize(fp) > 50:
+                                if os.path.getmtime(fp) >= (start_time - 15.0):
+                                    with open(fp, "rb") as bin_fh:
+                                        bin_bytes = bin_fh.read()
+                                    mime = "application/pdf" if target_ext == "pdf" else "application/zip"
+                                    token = _store_generated_file(bin_bytes, fn, mime)
+                                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
+                                    break
+                except Exception:
+                    pass
             return
 
     raise RuntimeError("Both Antigravity accounts (Primary & Secondary) produced no output")
