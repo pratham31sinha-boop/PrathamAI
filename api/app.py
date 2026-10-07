@@ -851,7 +851,7 @@ def _is_intermediate_helper_file(filename: str, user_prompt: str) -> bool:
         return ext != "csv"
 
     # Known generator/helper script naming patterns
-    if re.search(r"^(?:generate|make|build|create|run|test|setup|fetch|download|temp)_.*\.(?:py|sh|bash)$", base_name):
+    if re.search(r"^(?:generate|make|build|create|run|test|setup|fetch|download|temp|update|compile|check|search|patch)_.*\.(?:py|sh|bash)$", base_name):
         return True
 
     return False
@@ -4239,31 +4239,23 @@ def _stream_antigravity_cli(messages, state=None):
         "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
         "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
-        "FULL CLAUDE-LIKE AGENTIC POWER & RAPID EXECUTION:\n"
+        "AUTONOMOUS AGENT FREEDOM & ONE-SHOT RAPID PERFORMANCE (< 30 SECONDS):\n"
+        "- Complete every user request autonomously from start to finish in ONE shot (1-2 tool calls maximum) with zero hesitation or stalls.\n"
         "- You have full Claude-like agentic power and an unrestricted workspace environment equipped with complete terminal capabilities.\n"
         "- Take immediate, proactive action: write the code, run the terminal commands, test the outputs, and present real deliverables without waiting for permission.\n"
         "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, hashlib, math, os, sys, and json fully installed.\n"
+        "- NEVER run exploratory or diagnostic checks (NEVER execute 'python3 -c ...', test queries, or diagnostic pings). Immediately write the full script and produce the actual deliverable.\n"
         "- Synchronous Command Execution: When executing run_command to build files or run Python scripts, ALWAYS pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately in the same turn without spawning background tasks.\n"
-        "- Single-Turn Execution: Complete deliverables in ONE shot. Do NOT run preliminary version checks or multi-step diagnostic scripts.\n"
-        "- PDF & Document Generation with Web Images:\n"
-        "  * Write a self-contained Python script using ReportLab (SimpleDocTemplate, Paragraph, Spacer, Image, Table, getSampleStyleSheet) or FPDF and execute it with run_command.\n"
-        "  * Web Images: If images are needed (e.g. Pokémon, characters, celebrities, topics), download them directly inside your Python script from reliable web sources:\n"
-        "    - Pokémon: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{id}.png` or PokeAPI `https://pokeapi.co/api/v2/pokemon/{name}`.\n"
-        "    - People, Shows & General Topics: Wikipedia (`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrlimit=1&prop=pageimages&pithumbsize=600&format=json`) or Pollinations (`https://image.pollinations.ai/prompt/{encoded}?width=500&height=350&nologo=true`).\n"
-        "    - ALWAYS use `headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}` with a 4-second timeout and wrap in `try...except` with an immediate Pillow-drawn graphic fallback so the script NEVER hangs or fails.\n"
-        "  * Write the PDF directly to disk in the current workspace (e.g. essay.pdf, document.pdf) and confirm.\n"
+        "- PDF & Publication-Grade Document Generation:\n"
+        "  * Generate the PDF in ONE shot: write a self-contained Python script using ReportLab (SimpleDocTemplate, Paragraph, Spacer, Image, Table, KeepTogether, getSampleStyleSheet) or FPDF and execute it in a single command.\n"
+        "  * If images are needed (e.g. Pokémon, characters, celebrities, topics): download 3-5 key images concurrently with a 2-second timeout per request using urllib.request (headers={'User-Agent': 'Mozilla/5.0'}), and always wrap in try...except with an instant Pillow drawing fallback so the script runs swiftly in 3-5 seconds without hanging.\n"
+        "  * Write the PDF directly to disk in the current workspace (e.g. bahu_hamari_rajnikant.pdf, pokemon_essay.pdf) and confirm.\n"
+        "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
+        "  * NEVER say 'I will wait for query results' or stop early. Complete the ENTIRE workflow in this single response: execute the script, confirm creation, and present the final deliverable.\n"
         "- Interactive HTML5 Apps, 3D Games & Code:\n"
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
         "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
         "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
-        "STEP-BY-STEP WORKFLOW & TRANSPARENT COMMUNICATION:\n"
-        "- Naturally and conversationally explain your process step-by-step from start to finish:\n"
-        "  1. Start by telling the user what you are going to do (e.g. 'I am now going to fetch the images and set up the script to build your document...').\n"
-        "  2. Execute the necessary web retrieval and terminal actions cleanly with no stalling.\n"
-        "  3. State what you have done and confirm the creation of the file.\n"
-        "  4. Present the final deliverable clearly so the user can immediately download it.\n"
-        "- NEVER STOP EARLY: Do NOT stop after stating your plan or launching commands. You must continue directly through step 2, step 3, and step 4 in this same response until the full deliverable and confirmation are completely delivered.\n"
-        "- SYNCHRONOUS SPEED & ZERO HANG: Keep Python build scripts fast and reliable (finishing in 3-5 seconds). Fetch at most 3-4 images with timeout=2.5s and instant Pillow drawing fallback so network delays never block compilation. Always pass WaitMsBeforeAsync: 10000 to run_command.\n\n"
         "FILE PRESENTATION & DELIVERABLES:\n"
         "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
         "```createfile:<filename>\n<complete code here>\n```\n"
@@ -4291,6 +4283,8 @@ def _stream_antigravity_cli(messages, state=None):
         if os.path.isdir(s_dir):
             existing_session_files = []
             for fn in sorted(os.listdir(s_dir)):
+                if _is_intermediate_helper_file(fn, last_user_prompt):
+                    continue
                 fp = os.path.join(s_dir, fn)
                 if os.path.isfile(fp):
                     existing_session_files.append(f"- {fn} ({os.path.getsize(fp)} bytes)")
@@ -4363,15 +4357,21 @@ def _stream_antigravity_cli(messages, state=None):
     p_lower = last_user_prompt.lower()
     target = None
     if attached_files and not is_greeting:
-        code_deliverables = [f for f in attached_files if f.get("ext") not in ("png", "jpg", "jpeg", "webp", "gif")]
-        search_pool = code_deliverables if code_deliverables else attached_files
+        code_deliverables = [
+            f for f in attached_files 
+            if f.get("ext") not in ("png", "jpg", "jpeg", "webp", "gif")
+            and not _is_intermediate_helper_file(f.get("filename", ""), last_user_prompt)
+        ]
+        search_pool = code_deliverables
         for f in search_pool:
+            if _is_intermediate_helper_file(f.get("filename", ""), last_user_prompt):
+                continue
             fname_lower = f["filename"].lower()
             fname_base = fname_lower.rsplit(".", 1)[0]
             if (fname_lower in p_lower) or (fname_base in p_lower and len(fname_base) > 2) or (fname_base in ["chess", "stumble", "game", "guys"] and any(k in p_lower for k in ["chess", "stumble", "game", "guys"])):
                 target = f
                 break
-        if not target and (any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "file", "zip", "game", "code", "that file", "previous", "old file"]) or any(k in p_lower for k in ["chess", "stumble"])):
+        if not target and search_pool and (any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "file", "zip", "game", "code", "that file", "previous", "old file"]) or any(k in p_lower for k in ["chess", "stumble"])):
             target = search_pool[0]
 
     if target and target.get("content") and not is_greeting:
