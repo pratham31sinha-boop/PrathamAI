@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark-mode">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#c2613f">
+    <meta name="theme-color" content="#1a1a18">
     <title>Pratham AI</title>
     <meta name="description" content="Pratham AI — a personal AI assistant with real code execution, file creation, image generation, and education support for Sanskrit, Mathematics, and more.">
     <meta name="robots" content="index, follow">
@@ -6494,8 +6494,8 @@
             const THEME_STORAGE_KEY = "prathamai_theme_pref";
             let savedTheme = null;
             try { savedTheme = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
-            const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            setTheme(savedTheme || (systemPrefersDark ? 'dark' : 'light'));
+            // Default to dark mode exactly like local terminal environment
+            setTheme(savedTheme || 'dark');
             if (window.matchMedia) {
                 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
                     let manualOverride = null;
