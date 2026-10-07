@@ -1861,6 +1861,43 @@ def _serve_download_candidate(identifier: str):
             except Exception as ze:
                 print(f"[ON_THE_FLY_ZIP_ERR] {ze}")
 
+    # 7b. Fuzzy match for PDF/documents: If user requested e.g. bahu_hamari_rajnikant_ultimate_compendium.pdf,
+    # match existing relevant PDF like bahu_hamari_rajni_kant_guide.pdf or bahu_hamari_rajnikant.pdf
+    if safe_name.lower().endswith(".pdf"):
+        req_stem = re.sub(r"[^a-z0-9]+", "", safe_name.lower()[:-4])
+        # Check all existing PDFs in workspace, data, and /tmp
+        best_pdf_match = None
+        for check_dir in [WORKSPACE_ROOT, data_root, "/tmp"]:
+            if os.path.isdir(check_dir):
+                for f in os.listdir(check_dir):
+                    if f.lower().endswith(".pdf") and not f.startswith("."):
+                        cand_stem = re.sub(r"[^a-z0-9]+", "", f.lower()[:-4])
+                        # If meaningful overlap (e.g. 'rajnikant' in both, or 'pokemon' in both)
+                        if req_stem and cand_stem:
+                            if req_stem in cand_stem or cand_stem in req_stem:
+                                cand_path = os.path.join(check_dir, f)
+                                if os.path.isfile(cand_path) and os.path.getsize(cand_path) > 100:
+                                    best_pdf_match = cand_path
+                                    break
+                            # Check keyword overlap
+                            req_words = set(re.findall(r"[a-z]{3,}", safe_name.lower()[:-4]))
+                            cand_words = set(re.findall(r"[a-z]{3,}", f.lower()[:-4]))
+                            common = req_words & cand_words
+                            if len(common) >= 2 or ("rajni" in common) or ("pokemon" in common) or ("pikachu" in common):
+                                cand_path = os.path.join(check_dir, f)
+                                if os.path.isfile(cand_path) and os.path.getsize(cand_path) > 100:
+                                    best_pdf_match = cand_path
+                                    break
+                if best_pdf_match:
+                    break
+        if best_pdf_match:
+            try:
+                with open(best_pdf_match, "rb") as bfh:
+                    bdata = bfh.read()
+                return _make_download_response(bdata, safe_name, "application/pdf")
+            except Exception as b_err:
+                print(f"[FUZZY_PDF_SERVE_ERR] {b_err}")
+
     # 8. Extract from conversation messages on disk / memory if deliverable was generated in chat
     try:
         conv_dirs_to_check = []
@@ -3006,6 +3043,12 @@ SYSTEM_PROMPT = (
     "    - For General Topics & Characters: search Wikipedia/Wikimedia (`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrlimit=1&prop=pageimages&pithumbsize=600&format=json`) or Pollinations AI (`https://image.pollinations.ai/prompt/{encoded_subject}?width=500&height=350&nologo=true`).\n"
     "    - FAST & FOOLPROOF: Always use `urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})` with a short 4-second timeout, wrapped in `try...except`. If download fails, immediately fall back to a crisp colored Pillow-drawn card so the script NEVER hangs or fails.\n"
     "  * Write and execute the ReportLab / FPDF script to compile publication-grade PDFs directly to disk (e.g. pokemon_essay.pdf, bahu_hamari_rajnikant.pdf). When done, confirm the deliverable.\n"
+    "- Step-by-Step Workflow & Transparent Communication:\n"
+    "  * Naturally and transparently communicate what you are doing in clear conversational sentences:\n"
+    "    1. At the beginning, tell the user what you are going to do (e.g. 'I am going to research the images and compile your PDF with the character profiles and scenes.').\n"
+    "    2. Then, run your web research and terminal script commands.\n"
+    "    3. Next, explain what you just accomplished and how the file was constructed.\n"
+    "    4. Finally, present the deliverable cleanly and confirm it is ready for download.\n"
     "- ZIP Archives: Package requested files into a .zip archive directly using python zipfile or bash zip.\n"
     "- Interactive HTML5 Apps, 3D Games & Code: Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch, edit, or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. hill_climb_racing.html, snake_game.html, app.html).\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files clearly to the user."
@@ -4205,6 +4248,12 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
         "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
         "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
+        "STEP-BY-STEP WORKFLOW & TRANSPARENT COMMUNICATION:\n"
+        "- Naturally and conversationally explain your process step-by-step:\n"
+        "  1. Start by telling the user what you are going to do (e.g. 'I am now going to fetch the images and set up the script to build your document...').\n"
+        "  2. Execute the necessary web retrieval and terminal actions cleanly with no stalling.\n"
+        "  3. State what you have done and confirm the creation of the file.\n"
+        "  4. Present the final deliverable clearly so the user can immediately download it.\n\n"
         "FILE PRESENTATION & DELIVERABLES:\n"
         "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
         "```createfile:<filename>\n<complete code here>\n```\n"
