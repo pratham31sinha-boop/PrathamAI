@@ -13,3 +13,24 @@ mobile/android/app/build_manual/
 cloudflared
 ngrok
 
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.pdf
+*.zip
+temp_img/
+real_cast_images/
+rajni_scenes_img/
+rajni_assets/
+assets_baalveer/
+assets_rajni/
+cast_imgs/
+poke_images/
+poke_imgs/
+pokemon_images/
+pokemon_img/
+ash_pokemon_pdfs/
+ash_pokemons_pdf/
+img_cache/

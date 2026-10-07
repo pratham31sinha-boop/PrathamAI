@@ -3524,6 +3524,10 @@ class _WarmAntigravitySession:
             "--dangerously-skip-permissions"
         ]
         env = dict(os.environ)
+        # Clear inherited parent agent environment variables so agy runs as an independent root CLI session
+        for k in list(env.keys()):
+            if "ANTIGRAVITY" in k:
+                del env[k]
         if self._home_dir:
             env["HOME"] = self._home_dir
 
@@ -4451,6 +4455,9 @@ def _stream_antigravity_cli(messages, state=None):
             "--dangerously-skip-permissions"
         ]
         env = dict(os.environ)
+        for k in list(env.keys()):
+            if "ANTIGRAVITY" in k:
+                del env[k]
         if home_dir:
             env["HOME"] = home_dir
 
