@@ -2999,7 +2999,13 @@ SYSTEM_PROMPT = (
     "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, zip, pypdf, and bash fully installed.\n"
     "- WHENEVER the user asks for ANY task — whether making a game, creating an interactive web app, compiling a PDF, writing an essay, packaging a zip, scraping data, or coding a Python script: DO NOT MERELY TALK ABOUT IT OR ASK FOR PERMISSION! DO IT IMMEDIATELY.\n"
     "- Take full initiative: write the code, execute the terminal commands, build the deliverables, test the logic, and present the final files to the user.\n"
-    "- PDF & Document Generation: Write and execute a Python script (```python) using ReportLab (SimpleDocTemplate, Paragraph, Table, Image, getSampleStyleSheet, colors) or FPDF to compile publication-grade PDFs directly to disk in the current workspace (e.g. essay.pdf, document.pdf). When done, confirm the PDF deliverable.\n"
+    "- PDF & Document Generation with Real Images:\n"
+    "  * Generate the complete PDF deliverable directly in ONE single execution. Do NOT waste time running diagnostic test commands (like checking library versions).\n"
+    "  * Real Web Images Retrieval: When images are requested (e.g. Pokémon, characters, celebrities, landmarks, topics), download them from the web inside your Python script:\n"
+    "    - For Pokémon: use PokeAPI official artwork: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{pokedex_id}.png` or fetch via `https://pokeapi.co/api/v2/pokemon/{name}`.\n"
+    "    - For General Topics & Characters: search Wikipedia/Wikimedia (`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrlimit=1&prop=pageimages&pithumbsize=600&format=json`) or Pollinations AI (`https://image.pollinations.ai/prompt/{encoded_subject}?width=500&height=350&nologo=true`).\n"
+    "    - FAST & FOOLPROOF: Always use `urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})` with a short 4-second timeout, wrapped in `try...except`. If download fails, immediately fall back to a crisp colored Pillow-drawn card so the script NEVER hangs or fails.\n"
+    "  * Write and execute the ReportLab / FPDF script to compile publication-grade PDFs directly to disk (e.g. pokemon_essay.pdf, bahu_hamari_rajnikant.pdf). When done, confirm the deliverable.\n"
     "- ZIP Archives: Package requested files into a .zip archive directly using python zipfile or bash zip.\n"
     "- Interactive HTML5 Apps, 3D Games & Code: Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch, edit, or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. hill_climb_racing.html, snake_game.html, app.html).\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files clearly to the user."
@@ -4186,10 +4192,14 @@ def _stream_antigravity_cli(messages, state=None):
         "- You have full Claude-like agentic power and an unrestricted workspace environment equipped with complete terminal capabilities.\n"
         "- Take immediate, proactive action: write the code, run the terminal commands, test the outputs, and present real deliverables without waiting for permission.\n"
         "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, hashlib, math, os, sys, and json fully installed.\n"
-        "- Synchronous Command Execution: When executing run_command to build files or run Python scripts, pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately.\n"
-        "- PDF & Document Generation:\n"
+        "- Synchronous Command Execution: When executing run_command to build files or run Python scripts, ALWAYS pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately in the same turn without spawning background tasks.\n"
+        "- Single-Turn Execution: Complete deliverables in ONE shot. Do NOT run preliminary version checks or multi-step diagnostic scripts.\n"
+        "- PDF & Document Generation with Web Images:\n"
         "  * Write a self-contained Python script using ReportLab (SimpleDocTemplate, Paragraph, Spacer, Image, Table, getSampleStyleSheet) or FPDF and execute it with run_command.\n"
-        "  * If an image is needed: download it directly inside the python script using urllib.request (with 'User-Agent': 'Mozilla/5.0' and a 5-second timeout), or generate a clean graphic using Pillow or Matplotlib.\n"
+        "  * Web Images: If images are needed (e.g. Pokémon, characters, celebrities, topics), download them directly inside your Python script from reliable web sources:\n"
+        "    - Pokémon: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{id}.png` or PokeAPI `https://pokeapi.co/api/v2/pokemon/{name}`.\n"
+        "    - People, Shows & General Topics: Wikipedia (`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrlimit=1&prop=pageimages&pithumbsize=600&format=json`) or Pollinations (`https://image.pollinations.ai/prompt/{encoded}?width=500&height=350&nologo=true`).\n"
+        "    - ALWAYS use `headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}` with a 4-second timeout and wrap in `try...except` with an immediate Pillow-drawn graphic fallback so the script NEVER hangs or fails.\n"
         "  * Write the PDF directly to disk in the current workspace (e.g. essay.pdf, document.pdf) and confirm.\n"
         "- Interactive HTML5 Apps, 3D Games & Code:\n"
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
@@ -5545,7 +5555,7 @@ def _do_stream(messages):
 
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
-_TERMINAL_MAX_ITERATIONS = 4                                                                     
+_TERMINAL_MAX_ITERATIONS = 2                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 30                                                                            
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000                                                                
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
