@@ -3585,11 +3585,12 @@ class _WarmAntigravitySession:
                     proc.stdin.flush()
 
                 got_any_token = False
-                last_token_time = None
                 in_tool_execution = False
                 start_time = time.time()
                 last_heartbeat = start_time
-                timeout = 90.0
+                last_activity_time = start_time
+                first_token_timeout = 90.0
+                turn_silence_timeout = 60.0
                 written_files = {}
                 accumulated_streamed_text = []
 
@@ -3622,11 +3623,12 @@ class _WarmAntigravitySession:
                         last_heartbeat = now
                         yield _sse({"type": "heartbeat"})
 
-                    if (now - start_time) > timeout and not got_any_token:
+                    if (now - start_time) > first_token_timeout and not got_any_token:
                         raise RuntimeError(f"Session {self._account_email} timed out waiting for first token")
 
-                    # If the assistant has delivered text tokens and has been idle with no active tool for 1.5s, auto-complete the turn
-                    if got_any_token and not in_tool_execution and last_token_time and (now - last_token_time) >= 1.5:
+                    # Inactivity watchdog: only break if the process has been completely silent with no stdout lines for 60s
+                    if (now - last_activity_time) >= turn_silence_timeout:
+                        print(f"[ANTIGRAVITY] Silence timeout exceeded ({turn_silence_timeout}s) for {self._account_email}")
                         break
 
                     rlist, _, _ = select.select([proc.stdout], [], [], 0.3)
@@ -3643,6 +3645,7 @@ class _WarmAntigravitySession:
                     line = line.strip()
                     if not line:
                         continue
+                    last_activity_time = time.time()
 
                     try:
                         data = json.loads(line)
@@ -3788,17 +3791,22 @@ class _WarmAntigravitySession:
                 target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
                 if target_ext:
                     try:
+                        candidate_files = []
                         for fn in os.listdir(WORKSPACE_ROOT):
                             if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 50:
-                                    if os.path.getmtime(fp) >= (start_time - 15.0):
-                                        with open(fp, "rb") as bin_fh:
-                                            bin_bytes = bin_fh.read()
-                                        mime = "application/pdf" if target_ext == "pdf" else "application/zip"
-                                        token = _store_generated_file(bin_bytes, fn, mime)
-                                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
-                                        break
+                                    mtime = os.path.getmtime(fp)
+                                    if mtime >= (start_time - 30.0):
+                                        candidate_files.append((mtime, fn, fp))
+                        if candidate_files:
+                            candidate_files.sort(key=lambda x: x[0], reverse=True)
+                            _, fn, fp = candidate_files[0]
+                            with open(fp, "rb") as bin_fh:
+                                bin_bytes = bin_fh.read()
+                            mime = "application/pdf" if target_ext == "pdf" else "application/zip"
+                            token = _store_generated_file(bin_bytes, fn, mime)
+                            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
                     except Exception as bin_err:
                         print(f"[ANTIGRAVITY][BIN_DELIVERABLE_ERR] {bin_err}")
 
@@ -4249,11 +4257,13 @@ def _stream_antigravity_cli(messages, state=None):
         "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
         "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
         "STEP-BY-STEP WORKFLOW & TRANSPARENT COMMUNICATION:\n"
-        "- Naturally and conversationally explain your process step-by-step:\n"
+        "- Naturally and conversationally explain your process step-by-step from start to finish:\n"
         "  1. Start by telling the user what you are going to do (e.g. 'I am now going to fetch the images and set up the script to build your document...').\n"
         "  2. Execute the necessary web retrieval and terminal actions cleanly with no stalling.\n"
         "  3. State what you have done and confirm the creation of the file.\n"
-        "  4. Present the final deliverable clearly so the user can immediately download it.\n\n"
+        "  4. Present the final deliverable clearly so the user can immediately download it.\n"
+        "- NEVER STOP EARLY: Do NOT stop after stating your plan or launching commands. You must continue directly through step 2, step 3, and step 4 in this same response until the full deliverable and confirmation are completely delivered.\n"
+        "- SYNCHRONOUS SPEED & ZERO HANG: Keep Python build scripts fast and reliable (finishing in 3-5 seconds). Fetch at most 3-4 images with timeout=2.5s and instant Pillow drawing fallback so network delays never block compilation. Always pass WaitMsBeforeAsync: 10000 to run_command.\n\n"
         "FILE PRESENTATION & DELIVERABLES:\n"
         "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
         "```createfile:<filename>\n<complete code here>\n```\n"
@@ -4446,10 +4456,12 @@ def _stream_antigravity_cli(messages, state=None):
 
         proc = None
         got_any_token = False
-        last_token_time = None
         in_tool_execution = False
         first_token_timeout = 90.0
         start_time = time.time()
+        last_heartbeat = start_time
+        last_activity_time = start_time
+        turn_silence_timeout = 60.0
         if not is_greeting:
             yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
         yield _sse({"type": "heartbeat"})
@@ -4472,10 +4484,9 @@ def _stream_antigravity_cli(messages, state=None):
                 if not got_any_token and (now - start_time) > first_token_timeout:
                     break
 
-                # Auto-complete turn if output tokens have finished and no tool is currently executing
-                if got_any_token and not in_tool_execution and last_token_time and (now - last_token_time) >= 1.5:
-                    if state is not None:
-                        state["finish_reason"] = "stop"
+                # Watchdog: break only if direct CLI has been completely silent with no stdout lines for 60s
+                if (now - last_activity_time) >= turn_silence_timeout:
+                    print(f"[ANTIGRAVITY][DIRECT_CLI] Silence timeout exceeded ({turn_silence_timeout}s)")
                     break
 
                 wait_sec = 0.4 if not got_any_token else 0.3
@@ -4492,6 +4503,7 @@ def _stream_antigravity_cli(messages, state=None):
                 line = line.strip()
                 if not line:
                     continue
+                last_activity_time = time.time()
                 try:
                     data = json.loads(line)
                     event = data.get("event")
@@ -4570,17 +4582,22 @@ def _stream_antigravity_cli(messages, state=None):
             target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
             if target_ext:
                 try:
+                    candidate_files = []
                     for fn in os.listdir(WORKSPACE_ROOT):
                         if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
                             fp = os.path.join(WORKSPACE_ROOT, fn)
                             if os.path.isfile(fp) and os.path.getsize(fp) > 50:
-                                if os.path.getmtime(fp) >= (start_time - 15.0):
-                                    with open(fp, "rb") as bin_fh:
-                                        bin_bytes = bin_fh.read()
-                                    mime = "application/pdf" if target_ext == "pdf" else "application/zip"
-                                    token = _store_generated_file(bin_bytes, fn, mime)
-                                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
-                                    break
+                                mtime = os.path.getmtime(fp)
+                                if mtime >= (start_time - 30.0):
+                                    candidate_files.append((mtime, fn, fp))
+                    if candidate_files:
+                        candidate_files.sort(key=lambda x: x[0], reverse=True)
+                        _, fn, fp = candidate_files[0]
+                        with open(fp, "rb") as bin_fh:
+                            bin_bytes = bin_fh.read()
+                        mime = "application/pdf" if target_ext == "pdf" else "application/zip"
+                        token = _store_generated_file(bin_bytes, fn, mime)
+                        yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
                 except Exception:
                     pass
             return
