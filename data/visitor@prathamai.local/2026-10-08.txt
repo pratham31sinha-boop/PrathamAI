@@ -30,3 +30,10 @@ A targeted search of indexed LinkedIn profiles and public records was conducted 
 3. **General Web Mentions:** Public lists (such as regional student academic competitions like IAPT Junior Science and local educational records in Jharkhand/Bihar) do record students named Pratham Sinha, but a public LinkedIn profile tied to MGM Bokaro is not visible through public search engines.
 
 ================================================================================
+
+=== 2026-10-08T10:56:42.445131+00:00 ===
+User: hi
+Pratham AI:
+Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I help you today?
+
+================================================================================
