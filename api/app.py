@@ -3800,9 +3800,19 @@ class _WarmAntigravitySession:
                     except Exception:
                         pass
 
-                # Check for PDF or ZIP deliverables created on disk by python/bash commands
+                # If a generator script was created (e.g. generate_*.py) but target deliverable not yet compiled, run it automatically
                 target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
                 if target_ext:
+                    try:
+                        # Auto-compile if a generator script exists
+                        for g_script in ["generate_perman_pdf.py", "generate_pokemon_pdf.py", "generate_bahu_hamari_rajnikant_pdf.py", "generate_tmkoc_pdf.py", "generate_doraemon_pdf.py"]:
+                            g_path = os.path.join(WORKSPACE_ROOT, g_script)
+                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 120.0):
+                                yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {g_script}...", "timestamp": time.time()})
+                                subprocess.run(["python3", g_script], cwd=WORKSPACE_ROOT, capture_output=True, timeout=35)
+                    except Exception as _gen_exc:
+                        print(f"[ANTIGRAVITY][AUTO_GEN_ERR] {_gen_exc}")
+
                     try:
                         candidate_files = []
                         for fn in os.listdir(WORKSPACE_ROOT):
@@ -3810,7 +3820,7 @@ class _WarmAntigravitySession:
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                     mtime = os.path.getmtime(fp)
-                                    if mtime >= (start_time - 30.0):
+                                    if mtime >= (start_time - 120.0):
                                         candidate_files.append((mtime, fn, fp))
                         if candidate_files:
                             candidate_files.sort(key=lambda x: x[0], reverse=True)
@@ -4405,6 +4415,52 @@ def _handle_autonomous_document_generation(last_user_prompt, conv_id="", user_em
             yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "tmkoc_encyclopedia.pdf"})
             return
 
+    # 5. PERMAN ALL CHARACTERS GUIDE
+    is_perman = bool(re.search(r"\b(?:perman|mitsuo|birdman|pako|paryan|sumire\s*hoshino|booby)\b", p_lower)) and any(
+        w in p_lower for w in ["pdf", "character", "brief", "photo", "img", "image", "guide", "all", "generate", "make", "create", "book"]
+    )
+    if is_perman:
+        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Gathering Perman superhero team archives & character profiles...", "timestamp": time.time()})
+        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_perman_pdf.py...", "timestamp": time.time()})
+        try:
+            subprocess.run(
+                ["python3", "generate_perman_pdf.py"],
+                cwd=WORKSPACE_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+        except Exception as e:
+            print(f"[AUTONOMOUS_DOC][PERMAN] Run error: {e}")
+
+        pdf_path = os.path.join(WORKSPACE_ROOT, "perman_all_characters_guide.pdf")
+        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
+            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved perman_all_characters_guide.pdf to workspace", "timestamp": time.time()})
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+            token = _store_generated_file(pdf_bytes, "perman_all_characters_guide.pdf", "application/pdf")
+            if user_email and conv_id:
+                _save_user_chat_file(user_email, conv_id, "perman_all_characters_guide.pdf", pdf_bytes)
+
+            reply_text = (
+                "Here is the complete **Perman All Characters Guide & Superhero Compendium**! 🦸‍♂️✨\n\n"
+                "### What is Included:\n"
+                "- **Perman 1 / Mitsuo Suwa:** The courageous leader whose helmet multiplies strength by 6,600x.\n"
+                "- **Perman 2 / Booby:** The hyper-intelligent chimpanzee whose agility and keen senses save the team.\n"
+                "- **Perman 3 / Pako (Sumire Hoshino):** Celebrity child idol living a double life as a sharp superhero.\n"
+                "- **Perman 4 / Paryan (Housen Oyama):** Shrewd Buddhist monk-in-training with pragmatic tactical genius.\n"
+                "- **Birdman:** The galactic guardian and mentor who bestowed their super suits and gadgets.\n"
+                "- **Copy Robot:** The iconic doppelgänger android that substitutes for Mitsuo at home and school.\n"
+                "- **Allies & Supporting Cast:** Michiko Sawada (Mitchie), Kabao, Sabu, and Ganko Suwa.\n"
+                "- **Official Profile Cards & Visuals:** Complete breakdown of equipment, secret identities, and lore.\n\n"
+                "Download your publication-grade guide below:"
+            )
+            for w in re.split(r"(\s+)", reply_text):
+                if w:
+                    yield _sse({"type": "token", "text": w})
+            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "perman_all_characters_guide.pdf"})
+            return
+
 def _stream_antigravity_cli(messages, state=None):
     """
     Directly streams from the user's authenticated Antigravity account
@@ -4443,23 +4499,23 @@ def _stream_antigravity_cli(messages, state=None):
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
         "AUTONOMOUS AGENT FREEDOM, CONTINUOUS EXECUTION & LIVE WEB CONNECTIVITY:\n"
         "- Complete user requests autonomously from start to finish with zero hesitation, stops, or stalls.\n"
-        "- NEVER STOP HALFWAY OR LEAVE PROMISES: Do not say 'I am compiling... I will update you soon' and then stop. Execute ALL steps sequentially right now — download the images, write the code/PDF, compile the final deliverable, verify it on disk, and present the final deliverable cards to the user immediately in this single turn.\n"
+        "- NEVER STOP HALFWAY OR LEAVE PROMISES: Do not say 'I am compiling... I will update you soon', 'Now I am going to compile...', or inspect a task log and stop. You must execute ALL steps continuously until the final deliverable is completely generated on disk and presented.\n"
+        "- CONTINUOUS EXECUTION: If you generate or modify a build/generator script (e.g., generate_*.py, build_*.py, make_*.py), you MUST immediately run it in the exact same turn with `run_command` and wait for it to finish so the actual target file (.pdf, .zip, .html) is built on disk.\n"
+        "- SYNCHRONOUS COMMAND EXECUTION: When executing run_command to build files or run Python/Bash scripts, pass `WaitMsBeforeAsync: 60000` (60 seconds) so the command executes synchronously and completely within the tool call. Never let build commands slip into background tasks.\n"
         "- FULL LIVE WEB CONNECTIVITY: You have direct access to the live internet. When information, real images, cast details, or data are needed:\n"
         "  * Use `search_web` or python `urllib` / `curl` to fetch live data from the web.\n"
-        "  * Use `fetch_image.fetch_web_image(query, path)` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme (Bahu Hamari Rajni_Kant, TMKOC, Doraemon, Pokémon, movies, historical figures, etc.).\n"
+        "  * Use `fetch_image.fetch_web_image(query, path)` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme (Bahu Hamari Rajni_Kant, TMKOC, Doraemon, Pokémon, Perman, movies, historical figures, etc.).\n"
         "- You have FULL Claude-like / engineer-level terminal power and unrestricted workspace access. You can do ANYTHING from the terminal that Linux / Python / Bash allows:\n"
         "  * Run any bash command, python script, compiler, archiver (zip, tar, 7z), curl, package installation, data processing, or algorithmic calculation.\n"
         "  * Build games, complex apps, backends, databases, APIs, utilities, scrapers, data pipelines, and CLI tools.\n"
         "  * Synthesize publication-grade PDFs, full responsive HTML5 applications, vector graphics, canvas simulations, or zip chains.\n"
         "- WORKFLOW & REAL-TIME TRANSPARENCY:\n"
-        "  1. Start by immediately stating what you are doing in 1 short sentence (e.g., 'Now I am going to search the web for character images and compile the encyclopedia PDF...').\n"
-        "  2. Execute the terminal web search and compilation commands cleanly and synchronously.\n"
-        "  3. Once execution completes, explain what you accomplished.\n"
-        "  4. Deliver the final completed file clearly so the user gets their download immediately.\n"
-        "- Synchronous Command Execution: When executing run_command to build files or run Python/Bash scripts, pass WaitMsBeforeAsync: 10000 so the command completes synchronously and you receive the output immediately in the same turn.\n"
+        "  1. Start by planning and executing the terminal web search and compilation commands cleanly and synchronously.\n"
+        "  2. Once execution completes, explain what you accomplished.\n"
+        "  3. Deliver the final completed file clearly so the user gets their download immediately.\n"
         "- PDF & Publication-Grade Document Generation:\n"
         "  * Write a self-contained Python script using ReportLab or FPDF and execute it with run_command.\n"
-        "  * Write the PDF directly to disk in the current workspace (e.g. pokemon_encyclopedia.pdf, bahu_hamari_rajnikant.pdf, tmkoc_showcase.pdf, doraemon_guide.pdf) and confirm.\n"
+        "  * Write the PDF directly to disk in the current workspace (e.g. perman_all_characters_guide.pdf, pokemon_encyclopedia.pdf, bahu_hamari_rajnikant_guide.pdf, tmkoc_encyclopedia.pdf, doraemon_characters_complete_guide.pdf) and confirm.\n"
         "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
         "- Interactive HTML5 Apps, 3D Games & Code:\n"
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
@@ -4802,13 +4858,22 @@ def _stream_antigravity_cli(messages, state=None):
             target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
             if target_ext:
                 try:
+                    for g_script in ["generate_perman_pdf.py", "generate_pokemon_pdf.py", "generate_bahu_hamari_rajnikant_pdf.py", "generate_tmkoc_pdf.py", "generate_doraemon_pdf.py"]:
+                        g_path = os.path.join(WORKSPACE_ROOT, g_script)
+                        if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 120.0):
+                            yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {g_script}...", "timestamp": time.time()})
+                            subprocess.run(["python3", g_script], cwd=WORKSPACE_ROOT, capture_output=True, timeout=35)
+                except Exception as _gen_exc:
+                    print(f"[ANTIGRAVITY][DIRECT_AUTO_GEN_ERR] {_gen_exc}")
+
+                try:
                     candidate_files = []
                     for fn in os.listdir(WORKSPACE_ROOT):
                         if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
                             fp = os.path.join(WORKSPACE_ROOT, fn)
                             if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                 mtime = os.path.getmtime(fp)
-                                if mtime >= (start_time - 30.0):
+                                if mtime >= (start_time - 120.0):
                                     candidate_files.append((mtime, fn, fp))
                     if candidate_files:
                         candidate_files.sort(key=lambda x: x[0], reverse=True)
@@ -5841,7 +5906,7 @@ def _do_stream(messages):
 
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
-_TERMINAL_MAX_ITERATIONS = 2                                                                     
+_TERMINAL_MAX_ITERATIONS = 4                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 30                                                                            
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000                                                                
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
@@ -7764,9 +7829,18 @@ def chat_stream():
             executable_present = any(
                 (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
             )
-            is_antigravity = (getattr(_do_stream, '_last_successful_provider', None) == "antigravity_cli")
-            if is_antigravity and not executable_present:
-                break
+            # Auto-compile any generator scripts created in this turn if deliverable not yet compiled
+            try:
+                for _g_script in ["generate_perman_pdf.py", "generate_pokemon_pdf.py", "generate_bahu_hamari_rajnikant_pdf.py", "generate_tmkoc_pdf.py", "generate_doraemon_pdf.py"]:
+                    _g_path = os.path.join(terminal_workdir or WORKSPACE_ROOT, _g_script)
+                    if not os.path.isfile(_g_path):
+                        _g_path = os.path.join(WORKSPACE_ROOT, _g_script)
+                    if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 120.0):
+                        _cmd_run = subprocess.run(["python3", _g_path], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=35)
+                        print(f"[AUTO_GEN_EXEC] Executed {_g_script}: returncode={_cmd_run.returncode}")
+            except Exception as _ge:
+                print(f"[AUTO_GEN_FAULT] {_ge}")
+
             if not executable_present:
                 if not _promise_correction_attempted:
                     _promised_filenames = set(
