@@ -5551,12 +5551,27 @@
                 };
                 let sawCompleteEvent = false;
                 let streamIdleWatchdog = null;
+                let maxTurnWatchdog = null;
+                let lastActivityWatchdog = null;
+
+                const resetActivityWatchdog = () => {
+                    if (lastActivityWatchdog) clearTimeout(lastActivityWatchdog);
+                    lastActivityWatchdog = setTimeout(() => {
+                        if (!sawCompleteEvent) {
+                            console.warn('[STREAM] Activity silence timeout (40s). Auto-finalizing response.');
+                            finishResponseTurn();
+                            try { reader.cancel(); } catch (e) {}
+                        }
+                    }, 40000);
+                };
 
                 const finishResponseTurn = () => {
                     if (sawCompleteEvent) return;
                     sawCompleteEvent = true;
                     _streamFinishedByProtocol = true;
                     if (streamIdleWatchdog) { clearTimeout(streamIdleWatchdog); streamIdleWatchdog = null; }
+                    if (maxTurnWatchdog) { clearTimeout(maxTurnWatchdog); maxTurnWatchdog = null; }
+                    if (lastActivityWatchdog) { clearTimeout(lastActivityWatchdog); lastActivityWatchdog = null; }
                     flushStreamQueue();
                     if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                     if (window._currentActiveStepRow) {
@@ -5620,6 +5635,15 @@
                     window._toolCount = 0;
                 };
 
+                maxTurnWatchdog = setTimeout(() => {
+                    if (!sawCompleteEvent) {
+                        console.warn('[STREAM] Maximum turn time guard reached (95s). Auto-finalizing response.');
+                        finishResponseTurn();
+                        try { reader.cancel(); } catch (e) {}
+                    }
+                }, 95000);
+                resetActivityWatchdog();
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
@@ -5642,6 +5666,7 @@
                         let payload;
                         try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
                         if (payload.type === 'metadata') {
+                            resetActivityWatchdog();
                             currentConversationId = payload.conversation_id;
                             // Show AI-generated chat title immediately in header
                             if (payload.title) {
@@ -5650,6 +5675,7 @@
                                 setTimeout(() => activeChatTitleHeader.classList.remove('title-crossfade'), 500);
                             }
                         } else if (payload.type === 'agent_step') {
+                            resetActivityWatchdog();
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             const stepLabels = {
                                 thinking: 'Analyzing requirements...', executing: 'Running code...', planning: 'Planning architecture...',
@@ -5701,6 +5727,7 @@
                                 window._currentActiveStepRow = stepRow;
                             }
                         } else if (payload.type === 'token') {
+                            resetActivityWatchdog();
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
                             if (window._currentActiveStepRow) {
                                 finishStep(window._currentActiveStepRow, true);
@@ -5745,6 +5772,7 @@
                             fullText += (fullText ? '\n\n' : '') + `⚠️ ${errMsg}`;
                             updateAssistantMessageDOM(modelWrapper, fullText, false);
                         } else if (payload.type === 'image') {
+                            resetActivityWatchdog();
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             if (!window._toolCount) window._toolCount = 0;
                             window._toolCount++;
@@ -5752,6 +5780,7 @@
                             pushTerminalLog(`Requesting image generation backend: "${payload.prompt}"`);
                             appendGeneratedImage(modelWrapper, payload.url, payload.prompt);
                         } else if (payload.type === 'file_ready') {
+                            resetActivityWatchdog();
                             if (!modelWrapper) { removeTypingIndicator(); modelWrapper = mountModelOutputTargetShell(); }
                             if (!window._toolCount) window._toolCount = 0;
                             window._toolCount++;
