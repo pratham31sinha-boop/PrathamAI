@@ -19,3 +19,14 @@ Pratham AI:
 Hello! I'm Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you today?
 
 ================================================================================
+
+=== 2026-10-08T10:56:15.530090+00:00 ===
+User: No on Google there is
+Pratham AI:
+A targeted search of indexed LinkedIn profiles and public records was conducted for **Pratham Sinha** associated with **MGM Higher Secondary School, Bokaro** (Mar Gregorios Memorial Higher Secondary School):
+
+1. **LinkedIn Profile Availability:** There is currently no publicly indexed LinkedIn profile under the name **Pratham Sinha** that explicitly lists **MGM Higher Secondary School (Bokaro)** in its education or experience sections.
+2. **Privacy Settings / Indexing:** If the profile exists, it is likely set to private, has search-engine indexing disabled in LinkedIn's public profile privacy settings, or lists MGM under an alternate name/abbreviation.
+3. **General Web Mentions:** Public lists (such as regional student academic competitions like IAPT Junior Science and local educational records in Jharkhand/Bihar) do record students named Pratham Sinha, but a public LinkedIn profile tied to MGM Bokaro is not visible through public search engines.
+
+================================================================================
