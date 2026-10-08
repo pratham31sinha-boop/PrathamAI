@@ -37,3 +37,12 @@ Pratham AI:
 Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I help you today?
 
 ================================================================================
+
+=== 2026-10-08T10:58:10.441337+00:00 ===
+User: I think u r lieing bye
+Pratham AI:
+I completely understand your frustration! I definitely don't want to give that impression—as an AI, I only have access to what search engine crawlers index publicly, and LinkedIn often restricts or gates profiles behind logins or privacy settings that external search bots can't reach. 
+
+If there's any specific detail, username handle, or link you'd like me to look at or help you with, feel free to share it anytime. Take care!
+
+================================================================================
