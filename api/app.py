@@ -3804,12 +3804,13 @@ class _WarmAntigravitySession:
                 target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
                 if target_ext:
                     try:
-                        # Auto-compile if a generator script exists
-                        for g_script in ["generate_perman_pdf.py", "generate_pokemon_pdf.py", "generate_bahu_hamari_rajnikant_pdf.py", "generate_tmkoc_pdf.py", "generate_doraemon_pdf.py"]:
-                            g_path = os.path.join(WORKSPACE_ROOT, g_script)
-                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 120.0):
-                                yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {g_script}...", "timestamp": time.time()})
-                                subprocess.run(["python3", g_script], cwd=WORKSPACE_ROOT, capture_output=True, timeout=35)
+                        # Auto-compile ANY newly written generator script (generate_*.py, build_*.py)
+                        for fn in os.listdir(WORKSPACE_ROOT):
+                            if (fn.startswith("generate_") or fn.startswith("build_")) and fn.endswith(".py"):
+                                g_path = os.path.join(WORKSPACE_ROOT, fn)
+                                if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 180.0):
+                                    yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
+                                    subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=40)
                     except Exception as _gen_exc:
                         print(f"[ANTIGRAVITY][AUTO_GEN_ERR] {_gen_exc}")
 
@@ -4461,6 +4462,50 @@ def _handle_autonomous_document_generation(last_user_prompt, conv_id="", user_em
             yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "perman_all_characters_guide.pdf"})
             return
 
+    # 6. ULTRA B (ウルトラB) ENCYCLOPEDIA
+    is_ultra_b = bool(re.search(r"\b(?:ultra\s*b|ultrab|ub|uchuujin\s*pii\s*suke)\b", p_lower)) and any(
+        w in p_lower for w in ["pdf", "character", "brief", "photo", "img", "image", "guide", "all", "generate", "make", "create", "book"]
+    )
+    if is_ultra_b:
+        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Gathering Ultra B character archives & artwork...", "timestamp": time.time()})
+        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_ultra_b_pdf.py...", "timestamp": time.time()})
+        try:
+            subprocess.run(
+                ["python3", "generate_ultra_b_pdf.py"],
+                cwd=WORKSPACE_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+        except Exception as e:
+            print(f"[AUTONOMOUS_DOC][ULTRA_B] Run error: {e}")
+
+        pdf_path = os.path.join(WORKSPACE_ROOT, "ultra_b_characters_encyclopedia.pdf")
+        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
+            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved ultra_b_characters_encyclopedia.pdf to workspace", "timestamp": time.time()})
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+            token = _store_generated_file(pdf_bytes, "ultra_b_characters_encyclopedia.pdf", "application/pdf")
+            if user_email and conv_id:
+                _save_user_chat_file(user_email, conv_id, "ultra_b_characters_encyclopedia.pdf", pdf_bytes)
+
+            reply_text = (
+                "Here is the complete **Ultra B (ウルトラB) Character & Series Encyclopedia**! 🛸🍼✨\n\n"
+                "### What is Included in the PDF:\n"
+                "- **Ultra B (UB / ユービー):** Mysterious psychic infant alien from the Black Hole quadrant powered by 1-liter milk cartons.\n"
+                "- **Michio Suzumoto (鈴木 ミチオ):** Kind elementary school boy who discovered UB and serves as his guardian brother.\n"
+                "- **Suzumoto Family (Mama Kazuyo & Papa Shinichi):** UB's hilarious foster parents.\n"
+                "- **Classmates & Friends:** Takeomi Aoba (UB's crush), Tateo Tosaka, Daibutsu Narano, and Mr. Kabayama.\n"
+                "- **Villains & Antagonists:** Dictator BB (ベーベー / B・B) and Muscle Bird.\n"
+                "- **Production & Historical Archive:** Fujiko Fujio A's 1984–1989 manga, Shin-Ei Animation anime, and 3D movie history.\n\n"
+                "Download your publication-grade guide below:"
+            )
+            for w in re.split(r"(\s+)", reply_text):
+                if w:
+                    yield _sse({"type": "token", "text": w})
+            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "ultra_b_characters_encyclopedia.pdf"})
+            return
+
 def _stream_antigravity_cli(messages, state=None):
     """
     Directly streams from the user's authenticated Antigravity account
@@ -4858,11 +4903,13 @@ def _stream_antigravity_cli(messages, state=None):
             target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
             if target_ext:
                 try:
-                    for g_script in ["generate_perman_pdf.py", "generate_pokemon_pdf.py", "generate_bahu_hamari_rajnikant_pdf.py", "generate_tmkoc_pdf.py", "generate_doraemon_pdf.py"]:
-                        g_path = os.path.join(WORKSPACE_ROOT, g_script)
-                        if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 120.0):
-                            yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {g_script}...", "timestamp": time.time()})
-                            subprocess.run(["python3", g_script], cwd=WORKSPACE_ROOT, capture_output=True, timeout=35)
+                    # Dynamically discover and execute ANY newly written generator script (generate_*.py, build_*.py)
+                    for fn in os.listdir(WORKSPACE_ROOT):
+                        if (fn.startswith("generate_") or fn.startswith("build_")) and fn.endswith(".py"):
+                            g_path = os.path.join(WORKSPACE_ROOT, fn)
+                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 180.0):
+                                yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
+                                subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=40)
                 except Exception as _gen_exc:
                     print(f"[ANTIGRAVITY][DIRECT_AUTO_GEN_ERR] {_gen_exc}")
 
@@ -7831,37 +7878,46 @@ def chat_stream():
             )
             # Auto-compile any generator scripts created in this turn if deliverable not yet compiled
             try:
-                for _g_script in ["generate_perman_pdf.py", "generate_pokemon_pdf.py", "generate_bahu_hamari_rajnikant_pdf.py", "generate_tmkoc_pdf.py", "generate_doraemon_pdf.py"]:
-                    _g_path = os.path.join(terminal_workdir or WORKSPACE_ROOT, _g_script)
-                    if not os.path.isfile(_g_path):
-                        _g_path = os.path.join(WORKSPACE_ROOT, _g_script)
-                    if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 120.0):
-                        _cmd_run = subprocess.run(["python3", _g_path], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=35)
-                        print(f"[AUTO_GEN_EXEC] Executed {_g_script}: returncode={_cmd_run.returncode}")
+                for _scan_dir in [terminal_workdir, WORKSPACE_ROOT]:
+                    if _scan_dir and os.path.isdir(_scan_dir):
+                        for _fn in os.listdir(_scan_dir):
+                            if (_fn.startswith("generate_") or _fn.startswith("build_")) and _fn.endswith(".py"):
+                                _g_path = os.path.join(_scan_dir, _fn)
+                                if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 180.0):
+                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=40)
+                                    print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
 
             if not executable_present:
                 if not _promise_correction_attempted:
+                    # Check for promised files (.pdf, .zip, .html, etc.)
                     _promised_filenames = set(
                         m.group(0) for m in re.finditer(
-                            r"\b[\w\-]+\.(?:mcaddon|zip|mrpack|apk|jar|exe|dmg|tar\.gz|7z)\b",
+                            r"\b[\w\-]+\.(?:pdf|mcaddon|zip|mrpack|apk|jar|exe|dmg|tar\.gz|7z)\b",
                             iteration_reply, re.IGNORECASE
                         )
+                    )
+                    # Check if model ended with a work-in-progress commitment phrase
+                    _has_wip_phrase = any(
+                        p in iteration_reply.lower() for p in [
+                            "i am compiling", "now i am going to compile", "i will finalize and deliver",
+                            "i will finalize", "in the next step", "let's get to work", "starting to build",
+                            "i am going to fetch", "now i will compile", "now compiling"
+                        ]
                     )
                     _unfulfilled = [f for f in _promised_filenames if f.lower() not in _produced_filenames_this_turn]
                     if export_ext_hint or _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
                         _unfulfilled = [f for f in _unfulfilled if not f.lower().endswith((".zip", ".tar.gz", ".7z", f".{export_ext_hint or ''}"))]
-                    if _unfulfilled:
+                    if _unfulfilled or _has_wip_phrase:
                         _promise_correction_attempted = True
                         working_messages.append({"role": "assistant", "content": iteration_reply})
-                        working_messages.append({"role": "user", "content": (
-                            f"You said {', '.join(sorted(_unfulfilled))} is ready, but no such file was "
-                            f"actually created — you described it without running the real command to "
-                            f"build it. Actually execute the packaging/build command now in a ```bash or "
-                            f"```python block (e.g. the real `zip`/archive command), don't just describe "
-                            f"it again."
-                        )})
+                        continuation_prompt = (
+                            f"Continue immediately and complete the task now. Do not stop halfway or say what you will do next. "
+                            f"Execute the full script and build commands in a ```bash or ```python block, create the final file on disk, "
+                            f"and output the final deliverable."
+                        )
+                        working_messages.append({"role": "user", "content": continuation_prompt})
                         continue
                 break                                                     
             results = []
