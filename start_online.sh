@@ -19,7 +19,7 @@ echo "✓ Backend active on http://127.0.0.1:5000"
 # Check if ngrok is running
 if ! curl -s http://127.0.0.1:4040/api/tunnels >/dev/null 2>&1; then
     echo "[2/2] Starting permanent ngrok tunnel..."
-    "$DIR/ngrok" http --url=balance-onlooker-party.ngrok-free.dev 5000 > /tmp/pratham_ngrok.log 2>&1 &
+    "$DIR/ngrok" http 5000 --url=https://balance-onlooker-party.ngrok-free.dev > /tmp/pratham_ngrok.log 2>&1 &
     sleep 2
 fi
 echo "✓ Live Permanent URL: https://balance-onlooker-party.ngrok-free.dev"
