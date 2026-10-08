@@ -7030,6 +7030,41 @@ def chat_stream():
         resp.headers["X-Accel-Buffering"] = "no"
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
+    _is_pure_greeting = bool(re.match(r"^\s*(?:hi|hello|hey|greetings|hola|namaste|good\s+(?:morning|afternoon|evening|day)|sup|yo)\b[!?.]*$", message.strip(), re.IGNORECASE))
+    if _is_pure_greeting:
+        _append_message(conv_id, "user", message)
+        greeting_reply = "Hello! I'm Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I help you today?"
+        _append_message(conv_id, "assistant", greeting_reply)
+        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
+        log_entry = (
+            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
+            f"User: {message}\n"
+            f"Pratham AI:\n{greeting_reply}\n"
+            f"{'=' * 80}\n"
+        )
+        if GITHUB_TOKEN:
+            try:
+                threading.Thread(
+                    target=_write_to_github_repository,
+                    args=(repo_sync_destination_path, log_entry),
+                    daemon=True
+                ).start()
+            except Exception:
+                pass
+        def generate_instant_greeting():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            words = re.split(r"(\s+)", greeting_reply)
+            for w in words:
+                if w:
+                    yield _sse({"type": "token", "text": w})
+                    time.sleep(0.015)
+            yield _sse({"type": "complete"})
+        resp = Response(stream_with_context(generate_instant_greeting()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
     _last_img_match_iter = re.finditer(
         r'Here\'s your generated image for: "(.*?)"', "\n".join(
             m.get("content", "") for m in _get_messages(conv_id) if m.get("role") == "assistant"
