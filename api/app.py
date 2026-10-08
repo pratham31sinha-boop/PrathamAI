@@ -3594,7 +3594,7 @@ class _WarmAntigravitySession:
                 start_time = time.time()
                 last_heartbeat = start_time
                 last_activity_time = start_time
-                first_token_timeout = 90.0
+                first_token_timeout = 14.0
                 turn_silence_timeout = 60.0
                 written_files = {}
                 accumulated_streamed_text = []
@@ -4472,7 +4472,7 @@ def _stream_antigravity_cli(messages, state=None):
         proc = None
         got_any_token = False
         in_tool_execution = False
-        first_token_timeout = 90.0
+        first_token_timeout = 14.0
         start_time = time.time()
         last_heartbeat = start_time
         last_activity_time = start_time
@@ -7052,6 +7052,16 @@ def chat_stream():
                 ).start()
             except Exception:
                 pass
+        # Proactively warm up and initialize the Antigravity CLI sessions in the background
+        # so that when the user sends their next request after "hi", the agent is primed and replies in < 4 seconds.
+        try:
+            threading.Thread(
+                target=_prewarm_dual_antigravity,
+                daemon=True,
+                name="warm-antigravity-on-greeting"
+            ).start()
+        except Exception:
+            pass
         def generate_instant_greeting():
             yield _sse({"type": "metadata", "conversation_id": conv_id})
             words = re.split(r"(\s+)", greeting_reply)
