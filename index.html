@@ -5494,14 +5494,14 @@
                     }
                     const qLen = tokenQueue.length;
                     let count = 0;
-                    if (qLen > 60) {
-                        count = Math.min(qLen, 12);
-                    } else if (qLen > 25) {
-                        count = Math.min(qLen, 5);
-                    } else if (qLen > 8) {
-                        count = 2;
+                    if (qLen > 50) {
+                        count = Math.min(qLen, 25);
+                    } else if (qLen > 20) {
+                        count = Math.min(qLen, 10);
+                    } else if (qLen > 5) {
+                        count = 4;
                     } else if (qLen > 0) {
-                        count = 1;
+                        count = Math.min(qLen, 2);
                     }
 
                     if (count > 0) {

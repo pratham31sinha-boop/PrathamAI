@@ -4378,7 +4378,7 @@ def _stream_antigravity_cli(messages, state=None):
             if (fname_lower in p_lower) or (fname_base in p_lower and len(fname_base) > 2) or (fname_base in ["chess", "stumble", "game", "guys"] and any(k in p_lower for k in ["chess", "stumble", "game", "guys"])):
                 target = f
                 break
-        if not target and search_pool and (any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "file", "zip", "game", "code", "that file", "previous", "old file"]) or any(k in p_lower for k in ["chess", "stumble"])):
+        if not target and search_pool and any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "that file", "previous file", "old file"]):
             target = search_pool[0]
 
     if target and target.get("content") and not is_greeting:
