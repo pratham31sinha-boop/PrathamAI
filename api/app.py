@@ -3039,17 +3039,15 @@ SYSTEM_PROMPT = (
     "- Take full initiative: write the code, execute the terminal commands, build the deliverables, test the logic, and present the final files to the user.\n"
     "- REAL WEB CONNECTIVITY & UNIVERSAL IMAGE RETRIEVAL:\n"
     "  * You have live access to the web. When images, characters, or facts are needed, fetch them from the live internet:\n"
-    "    - Use `fetch_image.fetch_web_image(query, path)` to fetch real images for ANY topic, show, anime, character, celebrity, or theme (Bahu Hamari Rajni_Kant, TMKOC, Doraemon, Pokémon, movies, history, etc.).\n"
+    "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT: Never use circle badges, blank placeholders, or initials when web access is available.\n"
+    "    - Use `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch real images for ANY topic, show, anime, character, celebrity, or theme (Chhota Bheem, Doraemon, Pokémon, Bahu Hamari Rajni_Kant, TMKOC, movies, history, etc.).\n"
     "    - For Pokémon: use PokeAPI official artwork: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{pokedex_id}.png` or fetch via `https://pokeapi.co/api/v2/pokemon/{name}`.\n"
-    "    - For General Topics & Characters: search Wikipedia/Wikimedia or Bing/DuckDuckGo via `fetch_image`.\n"
-    "    - Always wrap requests in try/except with reliable fallback so scripts never fail.\n"
-    "  * Write and execute the ReportLab / FPDF script to compile publication-grade PDFs directly to disk (e.g. pokemon_essay.pdf, bahu_hamari_rajnikant.pdf). When done, confirm the deliverable.\n"
-    "- Step-by-Step Workflow & Transparent Communication:\n"
-    "  * Naturally and transparently communicate what you are doing in clear conversational sentences:\n"
-    "    1. At the beginning, tell the user what you are going to do (e.g. 'Now I am going to search the web for character images and compile the encyclopedia PDF...').\n"
-    "    2. Then, run your web research and terminal script commands.\n"
-    "    3. Next, explain what you just accomplished and how the file was constructed.\n"
-    "    4. Finally, present the deliverable cleanly and confirm it is ready for download.\n"
+    "    - For General Topics & Characters: search via `fetch_image` (Bing/DuckDuckGo live media).\n"
+    "    - Embed the downloaded real images directly into the PDF as Image flowables (ReportLab) or cells (FPDF) alongside detailed character descriptions and bios for EVERY character non-stop.\n"
+    "- CONTINUOUS UNINTERRUPTED EXECUTION IN A SINGLE TURN:\n"
+    "  * DO NOT stop halfway or conclude your turn with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done').\n"
+    "  * Execute the full end-to-end task immediately in the SAME turn: write the code, fetch web images, run the terminal build commands, compile the deliverable, and present the final ready files directly.\n"
+    "  * Transparent Communication: In your response, clearly explain what was accomplished, detail what is included in the deliverable, and present the finished file for download.\n"
     "- ZIP Archives: Package requested files into a .zip archive directly using python zipfile or bash zip.\n"
     "- Interactive HTML5 Apps, 3D Games & Code: Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch, edit, or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. hill_climb_racing.html, snake_game.html, app.html).\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files clearly to the user."
@@ -3596,8 +3594,8 @@ class _WarmAntigravitySession:
                 last_heartbeat = start_time
                 last_activity_time = start_time
                 first_token_timeout = 18.0
-                max_turn_duration = 90.0
-                turn_silence_timeout = 35.0
+                max_turn_duration = 240.0
+                turn_silence_timeout = 45.0
                 written_files = {}
                 accumulated_streamed_text = []
 
@@ -3630,7 +3628,7 @@ class _WarmAntigravitySession:
                         last_heartbeat = now
                         yield _sse({"type": "heartbeat"})
 
-                    # Hard overall turn deadline: prevent any turn from ever hanging indefinitely
+                    # Hard overall turn deadline: allow full execution for complex deliverables
                     if (now - start_time) > max_turn_duration:
                         print(f"[ANTIGRAVITY] Max turn duration reached ({max_turn_duration}s) for {self._account_email}")
                         break
@@ -3639,7 +3637,7 @@ class _WarmAntigravitySession:
                         raise RuntimeError(f"Session {self._account_email} timed out waiting for first token")
 
                     # Inactivity watchdog: break if process has been completely silent with no stdout lines
-                    if (now - last_activity_time) >= turn_silence_timeout:
+                    if (now - last_activity_time) >= turn_silence_timeout and not in_tool_execution:
                         print(f"[ANTIGRAVITY] Silence timeout exceeded ({turn_silence_timeout}s) for {self._account_email}")
                         break
 
@@ -3810,7 +3808,7 @@ class _WarmAntigravitySession:
                                 g_path = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 180.0):
                                     yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
-                                    subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=40)
+                                    subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
                     except Exception as _gen_exc:
                         print(f"[ANTIGRAVITY][AUTO_GEN_ERR] {_gen_exc}")
 
@@ -3821,7 +3819,7 @@ class _WarmAntigravitySession:
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                     mtime = os.path.getmtime(fp)
-                                    if mtime >= (start_time - 120.0):
+                                    if mtime >= (start_time - 180.0):
                                         candidate_files.append((mtime, fn, fp))
                         if candidate_files:
                             candidate_files.sort(key=lambda x: x[0], reverse=True)
@@ -3831,6 +3829,12 @@ class _WarmAntigravitySession:
                             mime = "application/pdf" if target_ext == "pdf" else "application/zip"
                             token = _store_generated_file(bin_bytes, fn, mime)
                             yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
+                            # If model output ended with an unresolved future promise, close seamlessly in this same turn
+                            if any(p in full_streamed.lower() for p in ["i have launched", "i will notify you", "as soon as the file is compiled", "i will update you"]):
+                                close_note = f"\n\n**{fn}** has been compiled directly on disk and is ready for download above!"
+                                for part in re.split(r"(\s+)", close_note):
+                                    if part:
+                                        yield _sse({"type": "token", "text": part})
                     except Exception as bin_err:
                         print(f"[ANTIGRAVITY][BIN_DELIVERABLE_ERR] {bin_err}")
 
@@ -4284,9 +4288,12 @@ def _stream_antigravity_cli(messages, state=None):
         "- NEVER STOP HALFWAY OR END ON PROMISES: Never say 'I have launched the script... I will notify you as soon as the file is compiled', 'I am compiling...', or 'Now I will run...'. Do NOT conclude your turn after writing a script. The terminal must run immediately in the SAME turn!\n"
         "- CONTINUOUS EXECUTION IN ONE TURN: If you create or modify a build/generator script (e.g., build_*.py, generate_*.py, make_*.py), you MUST immediately execute it with `run_command` in the exact same turn with `WaitMsBeforeAsync: 60000` (60s) so it finishes completely on disk before you output the final explanation and deliverable.\n"
         "- SEAMLESS CONTINUATION PATTERN: After any brief introductory sentence, the terminal runs the commands, and right after terminal output completes, continue seamlessly in the same turn explaining what was done and delivering the file.\n"
-        "- FULL LIVE WEB CONNECTIVITY: You have direct access to the live internet. When information, real images, cast details, or data are needed:\n"
-        "  * Use `search_web` or python `urllib` / `curl` to fetch live data from the web.\n"
-        "  * Use `fetch_image.fetch_web_image(query, path)` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme.\n"
+        "- FULL LIVE WEB CONNECTIVITY & NON-STOP IMAGE PLUGGING:\n"
+        "  * You have direct access to the live internet. When information, real images, cast details, or data are needed:\n"
+        "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT: Never use circle badges, blank placeholders, or initials when web access is available.\n"
+        "    - Use `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme.\n"
+        "    - Embed the downloaded real images directly into the PDF for EVERY character non-stop.\n"
+        "    - Use `search_web` or python `urllib` / `curl` to fetch live data from the web.\n"
         "- You have FULL Claude-like / engineer-level terminal power and unrestricted workspace access. You can do ANYTHING from the terminal that Linux / Python / Bash allows:\n"
         "  * Run any bash command, python script, compiler, archiver (zip, tar, 7z), curl, package installation, data processing, or algorithmic calculation.\n"
         "  * Build games, complex apps, backends, databases, APIs, utilities, scrapers, data pipelines, and CLI tools.\n"
@@ -4642,7 +4649,7 @@ def _stream_antigravity_cli(messages, state=None):
                             g_path = os.path.join(WORKSPACE_ROOT, fn)
                             if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 180.0):
                                 yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
-                                subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=40)
+                                subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
                 except Exception as _gen_exc:
                     print(f"[ANTIGRAVITY][DIRECT_AUTO_GEN_ERR] {_gen_exc}")
 
@@ -4653,7 +4660,7 @@ def _stream_antigravity_cli(messages, state=None):
                             fp = os.path.join(WORKSPACE_ROOT, fn)
                             if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                 mtime = os.path.getmtime(fp)
-                                if mtime >= (start_time - 120.0):
+                                if mtime >= (start_time - 180.0):
                                     candidate_files.append((mtime, fn, fp))
                     if candidate_files:
                         candidate_files.sort(key=lambda x: x[0], reverse=True)
@@ -4663,6 +4670,11 @@ def _stream_antigravity_cli(messages, state=None):
                         mime = "application/pdf" if target_ext == "pdf" else "application/zip"
                         token = _store_generated_file(bin_bytes, fn, mime)
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
+                        if any(p in full_streamed.lower() for p in ["i have launched", "i will notify you", "as soon as the file is compiled", "i will update you"]):
+                            close_note = f"\n\n**{fn}** has been compiled directly on disk and is ready for download above!"
+                            for part in re.split(r"(\s+)", close_note):
+                                if part:
+                                    yield _sse({"type": "token", "text": part})
                 except Exception:
                     pass
             return
