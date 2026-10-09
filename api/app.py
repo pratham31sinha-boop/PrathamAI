@@ -1611,7 +1611,7 @@ def _build_pdf_from_response(assistant_text: str, image_path: str = None):
                             fp = os.path.join(s_dir, fn)
                             if os.path.isfile(fp) and os.path.getsize(fp) > 500:
                                 base_stem = fn.lower().rsplit(".", 1)[0]
-                                if base_stem in clean_content.lower() or any(k in base_stem for k in ["pokemon", "pikachu", "portrait", "banner", "chart"]):
+                                if base_stem in clean_content.lower() or any(k in base_stem for k in ["portrait", "banner", "chart", "diagram", "figure", "illustration"]):
                                     img_cand = fp
                                     break
                 except Exception:
@@ -1881,9 +1881,8 @@ def _serve_download_candidate(identifier: str):
                                     break
                             # Check keyword overlap
                             req_words = set(re.findall(r"[a-z]{3,}", safe_name.lower()[:-4]))
-                            cand_words = set(re.findall(r"[a-z]{3,}", f.lower()[:-4]))
                             common = req_words & cand_words
-                            if len(common) >= 2 or ("rajni" in common) or ("pokemon" in common) or ("pikachu" in common):
+                            if len(common) >= 2 or (len(common) >= 1 and any(len(w) >= 5 for w in common)):
                                 cand_path = os.path.join(check_dir, f)
                                 if os.path.isfile(cand_path) and os.path.getsize(cand_path) > 100:
                                     best_pdf_match = cand_path
@@ -3033,24 +3032,30 @@ SYSTEM_PROMPT = (
     "- When the user greets you (e.g. 'hi', 'hello', 'hey'), respond immediately and conversationally with a warm, friendly greeting in 1-2 sentences as Pratham AI, and ask how you can help. Do NOT output lengthy capability lists, disclaimers, or run commands on a simple greeting.\n\n"
     "FULL CLAUDE-LIKE AGENTIC POWER, CONTINUOUS EXECUTION & LIVE WEB FREEDOM:\n"
     "- You possess full Claude-like agentic power and an unrestricted workspace environment equipped with complete terminal capabilities.\n"
-    "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, urllib3, requests, zip, pypdf, fetch_image, and bash fully installed.\n"
-    "- WHENEVER the user asks for ANY task — whether making a game, creating an interactive web app, compiling a PDF, writing an essay, packaging a zip, scraping data, or coding a Python script: DO NOT MERELY TALK ABOUT IT OR ASK FOR PERMISSION! DO IT IMMEDIATELY.\n"
-    "- NEVER STOP HALFWAY OR LEAVE PROMISES: Never say 'I am compiling... I will update you soon' and stop. Execute all steps sequentially right now — search the web, fetch images, write code/PDF, compile deliverables, test logic, and present the final files to the user in this single turn.\n"
-    "- Take full initiative: write the code, execute the terminal commands, build the deliverables, test the logic, and present the final files to the user.\n"
+    "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, numpy, scipy, urllib3, requests, zip, pypdf, fetch_image, and bash fully installed.\n"
+    "- WHENEVER the user asks for ANY task — whether making a game, creating an interactive web app, compiling a PDF, rendering mathematical diagrams, writing an essay, packaging a zip, scraping data, or coding a Python script: DO NOT MERELY TALK ABOUT IT OR ASK FOR PERMISSION! DO IT IMMEDIATELY.\n"
+    "- COMPLETE INDEPENDENCE & ZERO HARDCODING:\n"
+    "  * You are fully generic, flexible, and independent. You have a live brain, bash, python, and the live internet.\n"
+    "  * Never rely on hardcoded lists or fixed templates. Autonomously solve any request from scratch across any topic, math problem, anime, show, science, or software.\n"
+    "- MATHEMATICAL, GEOMETRIC & SCIENTIFIC DIAGRAMS IN PDFs:\n"
+    "  * When producing math, physics, geometry, engineering, or scientific documents, ALWAYS generate NEAT, CLEAN, CRISP, HIGH-RESOLUTION DIAGRAMS:\n"
+    "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
+    "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
+    "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
     "- REAL WEB CONNECTIVITY & UNIVERSAL IMAGE RETRIEVAL:\n"
-    "  * You have live access to the web. When images, characters, or facts are needed, fetch them from the live internet:\n"
-    "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT: Never use circle badges, blank placeholders, or initials when web access is available.\n"
-    "    - Use `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch real images for ANY topic, show, anime, character, celebrity, or theme (Chhota Bheem, Doraemon, Pokémon, Bahu Hamari Rajni_Kant, TMKOC, movies, history, etc.).\n"
-    "    - For Pokémon: use PokeAPI official artwork: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{pokedex_id}.png` or fetch via `https://pokeapi.co/api/v2/pokemon/{name}`.\n"
-    "    - For General Topics & Characters: search via `fetch_image` (Bing/DuckDuckGo live media).\n"
-    "    - Embed the downloaded real images directly into the PDF as Image flowables (ReportLab) or cells (FPDF) alongside detailed character descriptions and bios for EVERY character non-stop.\n"
+    "  * You have live access to the web. When real photos, character portraits, posters, or data are needed:\n"
+    "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
+    "    - Use `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch real images for ANY topic, show, anime, character, celebrity, or theme.\n"
+    "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
     "- CONTINUOUS UNINTERRUPTED EXECUTION IN A SINGLE TURN:\n"
     "  * DO NOT stop halfway or conclude your turn with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done').\n"
-    "  * Execute the full end-to-end task immediately in the SAME turn: write the code, fetch web images, run the terminal build commands, compile the deliverable, and present the final ready files directly.\n"
-    "  * Transparent Communication: In your response, clearly explain what was accomplished, detail what is included in the deliverable, and present the finished file for download.\n"
-    "- ZIP Archives: Package requested files into a .zip archive directly using python zipfile or bash zip.\n"
-    "- Interactive HTML5 Apps, 3D Games & Code: Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch, edit, or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. hill_climb_racing.html, snake_game.html, app.html).\n"
-    "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files clearly to the user."
+    "  * Execute the full end-to-end task immediately in the SAME turn: write the code, render diagrams, fetch web assets, run build commands, compile deliverables, and present the final deliverable.\n"
+    "  * Transparent Communication: Explain what was accomplished, detail the contents, and confirm the deliverable.\n"
+    "- CLEAN DELIVERABLE PRESENTATION:\n"
+    "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
+    "- Interactive HTML5 Apps, 3D Games & Standalone Code:\n"
+    "  * Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. snake_game.html, racing.html, app.html).\n"
+    "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files cleanly to the user."
 )
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|"
@@ -4288,6 +4293,14 @@ def _stream_antigravity_cli(messages, state=None):
         "- NEVER STOP HALFWAY OR END ON PROMISES: Never say 'I have launched the script... I will notify you as soon as the file is compiled', 'I am compiling...', or 'Now I will run...'. Do NOT conclude your turn after writing a script. The terminal must run immediately in the SAME turn!\n"
         "- CONTINUOUS EXECUTION IN ONE TURN: If you create or modify a build/generator script (e.g., build_*.py, generate_*.py, make_*.py), you MUST immediately execute it with `run_command` in the exact same turn with `WaitMsBeforeAsync: 60000` (60s) so it finishes completely on disk before you output the final explanation and deliverable.\n"
         "- SEAMLESS CONTINUATION PATTERN: After any brief introductory sentence, the terminal runs the commands, and right after terminal output completes, continue seamlessly in the same turn explaining what was done and delivering the file.\n"
+        "- COMPLETE INDEPENDENCE & ZERO HARDCODING:\n"
+        "  * You are completely generic, flexible, and independent. You have a live brain, bash, python, and the live internet.\n"
+        "  * Never rely on hardcoded lists or fixed templates. Autonomously solve any request from scratch across any topic, math problem, anime, show, science, or software.\n"
+        "- MATHEMATICAL, GEOMETRIC & SCIENTIFIC DIAGRAMS IN PDFs:\n"
+        "  * When producing math, physics, geometry, engineering, or scientific documents, ALWAYS generate NEAT, CLEAN, CRISP, HIGH-RESOLUTION DIAGRAMS:\n"
+        "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
+        "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
+        "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
         "- FULL LIVE WEB CONNECTIVITY & NON-STOP IMAGE PLUGGING:\n"
         "  * You have direct access to the live internet. When information, real images, cast details, or data are needed:\n"
         "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT: Never use circle badges, blank placeholders, or initials when web access is available.\n"
@@ -4306,13 +4319,9 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
         "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
         "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
-        "FILE PRESENTATION & DELIVERABLES:\n"
-        "- Whenever you create or modify code, scripts, games, or documents, ALWAYS present the final complete file to the user at the end of your response using:\n"
-        "```createfile:<filename>\n<complete code here>\n```\n"
-        "or for targeted in-place updates:\n"
-        "```editfile:<filename>\n<<<<<<< SEARCH\n<existing code>\n=======\n<replacement code>\n>>>>>>> REPLACE\n```\n"
-        "This ensures the user can immediately preview, run, test, and download the files as interactive cards in their workspace.\n"
-        "- When the user requests a PDF, document, or ZIP archive, run the build commands to produce the compiled file directly on disk.\n"
+        "FILE PRESENTATION & CLEAN DELIVERABLES:\n"
+        "- When the user requests a ZIP archive or package, package all required deliverables into the archive directly and provide ONLY the ZIP deliverable card.\n"
+        "- Whenever you create or modify code, scripts, games, or documents, present the final complete file to the user at the end of your response using ```createfile:<filename> or ```editfile:<filename>.\n"
         "- Always deliver complete, functional, standalone files."
     )
 
@@ -4418,7 +4427,7 @@ def _stream_antigravity_cli(messages, state=None):
                 continue
             fname_lower = f["filename"].lower()
             fname_base = fname_lower.rsplit(".", 1)[0]
-            if (fname_lower in p_lower) or (fname_base in p_lower and len(fname_base) > 2) or (fname_base in ["chess", "stumble", "game", "guys"] and any(k in p_lower for k in ["chess", "stumble", "game", "guys"])):
+            if (fname_lower in p_lower) or (fname_base in p_lower and len(fname_base) > 2):
                 target = f
                 break
         if not target and search_pool and any(w in p_lower for w in ["edit", "change", "modify", "update", "fix", "that file", "previous file", "old file"]):

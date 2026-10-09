@@ -1863,46 +1863,27 @@
                 <!-- Workspace Navigation Tabs -->
                 <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-2 sm:px-3 text-xs font-medium" style="background:var(--bg);">
                     <div class="flex items-center gap-1 overflow-x-auto workspace-scrollpane no-scrollbar py-1">
-                        <button id="tab-btn-preview" onclick="switchWorkspaceTab('preview')" class="wb-nav-tab px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 active-tab">
+                        <button id="tab-btn-preview" onclick="switchWorkspaceTab('preview')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 active-tab">
                             <span>⚡</span><span>Preview</span>
                         </button>
-                        <button id="tab-btn-code" onclick="switchWorkspaceTab('code')" class="wb-nav-tab px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
+                        <button id="tab-btn-code" onclick="switchWorkspaceTab('code')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
                             <span>&lt;/&gt;</span><span>Code</span>
                         </button>
-                        <button id="tab-btn-files" onclick="switchWorkspaceTab('files')" class="wb-nav-tab px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
+                        <button id="tab-btn-files" onclick="switchWorkspaceTab('files')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
                             <span>📁</span><span>Files</span>
                         </button>
-                        <button id="tab-btn-terminal" onclick="switchWorkspaceTab('terminal')" class="wb-nav-tab px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
+                        <button id="tab-btn-terminal" onclick="switchWorkspaceTab('terminal')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
                             <span>&gt;_</span><span>Terminal</span>
                         </button>
-                        <button id="tab-btn-data" onclick="switchWorkspaceTab('data')" class="wb-nav-tab px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
-                            <span>📊</span><span>Data &amp; Charts</span>
-                        </button>
-                        <button id="tab-btn-diff" onclick="switchWorkspaceTab('diff')" class="wb-nav-tab px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
-                            <span>±</span><span>Diff</span>
-                        </button>
-                    </div>
-                    <!-- Viewport toggles for preview -->
-                    <div id="preview-viewport-controls" class="flex items-center gap-1 shrink-0 ml-1">
-                        <button onclick="setPreviewDevice('full')" id="pv-dev-full" class="p-1 rounded text-[10px] text-[var(--text)] border border-[var(--border)] bg-[var(--panel)]" title="Full Width">🖥️</button>
-                        <button onclick="setPreviewDevice('tablet')" id="pv-dev-tablet" class="p-1 rounded text-[10px] text-[var(--text-dim)] hover:text-[var(--text)]" title="Tablet (768px)">📱</button>
-                        <button onclick="setPreviewDevice('mobile')" id="pv-dev-mobile" class="p-1 rounded text-[10px] text-[var(--text-dim)] hover:text-[var(--text)]" title="Mobile (375px)">📲</button>
                     </div>
                 </div>
 
                 <!-- Workspace Tab Panes -->
                 <div class="flex-1 overflow-hidden relative flex flex-col">
-                    <!-- 1. PREVIEW PANE -->
+                    <!-- 1. PREVIEW PANE (Clean full-bleed interactive frame) -->
                     <div id="pane-preview" class="w-full h-full flex flex-col relative" style="background:var(--bg);">
-                        <div id="preview-frame-container" class="flex-1 w-full h-full overflow-hidden flex items-center justify-center p-1 sm:p-2">
-                            <iframe id="live-artifact-iframe" sandbox="allow-scripts allow-modals allow-same-origin allow-forms" class="w-full h-full border border-[var(--border)] rounded-xl bg-white shadow-sm transition-all" style="background:white;"></iframe>
-                        </div>
-                        <div id="preview-console-drawer" class="border-t border-[var(--border)] flex flex-col" style="max-height: 120px; background:var(--terminal-bg);">
-                            <div onclick="toggleConsoleDrawer()" class="h-6 px-3 flex items-center justify-between text-[10px] font-mono text-neutral-400 cursor-pointer hover:bg-neutral-800 select-none">
-                                <span id="console-drawer-label">Console (0 logs)</span>
-                                <span id="console-drawer-arrow">▲</span>
-                            </div>
-                            <div id="preview-console-logs" class="flex-1 overflow-y-auto font-mono text-[10px] text-neutral-300 p-2 space-y-1 workspace-scrollpane hidden"></div>
+                        <div id="preview-frame-container" class="flex-1 w-full h-full overflow-hidden flex items-center justify-center p-0">
+                            <iframe id="live-artifact-iframe" sandbox="allow-scripts allow-modals allow-same-origin allow-forms" class="w-full h-full border-none bg-white shadow-none" style="background:white;"></iframe>
                         </div>
                     </div>
 
@@ -1957,49 +1938,6 @@
                         </form>
                     </div>
 
-                    <!-- 5. DATA & CHARTS PANE -->
-                    <div id="pane-data" class="w-full h-full flex flex-col p-3 hidden overflow-y-auto workspace-scrollpane" style="background:var(--bg);">
-                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)]">
-                            <span class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">Data Analyzer</span>
-                            <select id="data-chart-type" onchange="renderActiveDataChart()" class="text-[11px] bg-[var(--panel)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)]">
-                                <option value="table">Table View</option>
-                                <option value="bar">Bar Chart</option>
-                                <option value="line">Line Chart</option>
-                                <option value="pie">Pie Chart</option>
-                            </select>
-                        </div>
-                        <div id="data-stats-summary" class="grid grid-cols-3 gap-2 mb-3">
-                            <div class="glass p-2 rounded-lg text-center">
-                                <div class="text-[10px] text-[var(--text-dim)] uppercase">Rows</div>
-                                <div id="stat-row-count" class="text-sm font-bold text-[var(--text)]">0</div>
-                            </div>
-                            <div class="glass p-2 rounded-lg text-center">
-                                <div class="text-[10px] text-[var(--text-dim)] uppercase">Columns</div>
-                                <div id="stat-col-count" class="text-sm font-bold text-[var(--text)]">0</div>
-                            </div>
-                            <div class="glass p-2 rounded-lg text-center">
-                                <div class="text-[10px] text-[var(--text-dim)] uppercase">Data Type</div>
-                                <div id="stat-data-type" class="text-sm font-bold text-[var(--text)]">CSV / JSON</div>
-                            </div>
-                        </div>
-                        <div id="data-view-container" class="flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--panel)] p-2">
-                            <canvas id="data-chart-canvas" class="w-full h-64 hidden"></canvas>
-                            <div id="data-table-container" class="overflow-x-auto">
-                                <table id="data-table-element" class="w-full text-xs text-left"></table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 6. DIFF PANE -->
-                    <div id="pane-diff" class="w-full h-full flex flex-col p-3 hidden overflow-y-auto workspace-scrollpane font-mono text-xs" style="background:var(--bg);">
-                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)]">
-                            <span class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">File Diff</span>
-                            <span id="diff-stats-pill" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-semibold">+0 -0</span>
-                        </div>
-                        <div id="diff-content-view" class="flex-1 overflow-auto whitespace-pre leading-relaxed p-2 rounded-lg border border-[var(--border)] bg-[var(--panel)]">
-                            <span class="text-[var(--text-dim)]">No active file diff to display.</span>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Claude-Style Artifact AI Edit Bar -->
@@ -4115,7 +4053,7 @@
 
         function switchWorkspaceTab(tab) {
             currentWorkspaceArtifact.activeTab = tab;
-            const tabs = ['preview', 'code', 'files', 'terminal', 'data', 'diff'];
+            const tabs = ['preview', 'code', 'files', 'terminal'];
             tabs.forEach(t => {
                 const btn = document.getElementById(`tab-btn-${t}`);
                 const pane = document.getElementById(`pane-${t}`);
@@ -5493,16 +5431,7 @@
                         return;
                     }
                     const qLen = tokenQueue.length;
-                    let count = 0;
-                    if (qLen > 50) {
-                        count = Math.min(qLen, 25);
-                    } else if (qLen > 20) {
-                        count = Math.min(qLen, 10);
-                    } else if (qLen > 5) {
-                        count = 4;
-                    } else if (qLen > 0) {
-                        count = Math.min(qLen, 2);
-                    }
+                    const count = qLen; // Immediate real-time rendering as words arrive from Antigravity
 
                     if (count > 0) {
                         for (let k = 0; k < count && tokenQueue.length > 0; k++) {
@@ -5558,11 +5487,11 @@
                     if (lastActivityWatchdog) clearTimeout(lastActivityWatchdog);
                     lastActivityWatchdog = setTimeout(() => {
                         if (!sawCompleteEvent) {
-                            console.warn('[STREAM] Activity silence timeout (40s). Auto-finalizing response.');
+                            console.warn('[STREAM] Activity silence timeout (120s). Auto-finalizing response.');
                             finishResponseTurn();
                             try { reader.cancel(); } catch (e) {}
                         }
-                    }, 40000);
+                    }, 120000);
                 };
 
                 const finishResponseTurn = () => {
@@ -5637,11 +5566,11 @@
 
                 maxTurnWatchdog = setTimeout(() => {
                     if (!sawCompleteEvent) {
-                        console.warn('[STREAM] Maximum turn time guard reached (95s). Auto-finalizing response.');
+                        console.warn('[STREAM] Maximum turn time guard reached (300s). Auto-finalizing response.');
                         finishResponseTurn();
                         try { reader.cancel(); } catch (e) {}
                     }
-                }, 95000);
+                }, 300000);
                 resetActivityWatchdog();
 
                 while (true) {
