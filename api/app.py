@@ -3042,11 +3042,13 @@ SYSTEM_PROMPT = (
     "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
     "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
     "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
-    "- REAL WEB CONNECTIVITY & UNIVERSAL IMAGE RETRIEVAL:\n"
-    "  * You have live access to the web. When real photos, character portraits, posters, or data are needed:\n"
+    "- REAL WEB CONNECTIVITY, INDEPENDENT RESEARCH & CAST ENCYCLOPEDIAS:\n"
+    "  * You have live internet access, python, and bash. When asked for any TV show, serial, movie, anime, or topic:\n"
+    "    - ALWAYS search the web or Wikipedia to autonomously discover the real cast, actors, roles, and character biographies.\n"
+    "    - You can use `from web_research import get_show_cast_and_details, build_character_encyclopedia_pdf` or `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch live cast information and download real web images for every character non-stop.\n"
     "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
-    "    - Use `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch real images for ANY topic, show, anime, character, celebrity, or theme.\n"
     "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
+    "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
     "- CONTINUOUS UNINTERRUPTED EXECUTION IN A SINGLE TURN:\n"
     "  * DO NOT stop halfway or conclude your turn with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done').\n"
     "  * Execute the full end-to-end task immediately in the SAME turn: write the code, render diagrams, fetch web assets, run build commands, compile deliverables, and present the final deliverable.\n"
@@ -3523,7 +3525,7 @@ class _WarmAntigravitySession:
             "--input-format", "stream-json",
             "--output-format", "stream-json",
             "--model", "gemini-3.8-flash",
-            "--effort", "low",
+            "--effort", "medium",
             "--disable-slash-commands",
             "--dangerously-skip-permissions"
         ]
@@ -3811,7 +3813,7 @@ class _WarmAntigravitySession:
                         for fn in os.listdir(WORKSPACE_ROOT):
                             if (fn.startswith("generate_") or fn.startswith("build_")) and fn.endswith(".py"):
                                 g_path = os.path.join(WORKSPACE_ROOT, fn)
-                                if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 180.0):
+                                if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 10.0):
                                     yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
                                     subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
                     except Exception as _gen_exc:
@@ -3819,16 +3821,20 @@ class _WarmAntigravitySession:
 
                     try:
                         candidate_files = []
+                        _stop = {"make", "create", "generate", "build", "pdf", "zip", "containing", "image", "images", "all", "characters", "character", "with", "the", "details", "brief", "now", "try", "to", "and", "file", "please", "can", "you", "a", "an", "of", "in", "on", "for", "breif"}
+                        _q_words = [w for w in re.findall(r"[a-z0-9]+", (user_query or "").lower()) if len(w) > 2 and w not in _stop]
                         for fn in os.listdir(WORKSPACE_ROOT):
                             if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                     mtime = os.path.getmtime(fp)
-                                    if mtime >= (start_time - 180.0):
-                                        candidate_files.append((mtime, fn, fp))
+                                    if mtime >= (start_time - 5.0):
+                                        fn_lower = fn.lower()
+                                        match_cnt = sum(1 for w in _q_words if w in fn_lower)
+                                        candidate_files.append((match_cnt, mtime, fn, fp))
                         if candidate_files:
-                            candidate_files.sort(key=lambda x: x[0], reverse=True)
-                            _, fn, fp = candidate_files[0]
+                            candidate_files.sort(key=lambda x: (x[0], x[1]), reverse=True)
+                            _, _, fn, fp = candidate_files[0]
                             with open(fp, "rb") as bin_fh:
                                 bin_bytes = bin_fh.read()
                             mime = "application/pdf" if target_ext == "pdf" else "application/zip"
@@ -4457,6 +4463,15 @@ def _stream_antigravity_cli(messages, state=None):
         elif role == "assistant":
             prompt_sections.append(f"Pratham AI: {c}")
 
+    if last_user_prompt:
+        prompt_sections.append(
+            f"[ACTIVE USER REQUEST - TOP PRIORITY]\n"
+            f"The user's latest request right now is: \"{last_user_prompt}\".\n"
+            f"- Fulfill THIS specific request independently and completely from scratch.\n"
+            f"- If the user asks for a TV show, movie, characters, or cast (e.g. searching or creating a PDF/encyclopedia), conduct real web research for THAT specific subject immediately. Fetch real web images and build the deliverable for THIS request. Do not confuse it with or reuse files from previous conversation turns.\n"
+            f"- You have Python, bash, `web_research.py`, and `fetch_image.py` available in the workspace. Run scripts directly to research, fetch images, compile the final deliverable, and present it."
+        )
+
     formatted_prompt = "\n\n".join(prompt_sections)
 
     # 1. Dual Antigravity Warm Persistent Sessions with instant sub-second failover
@@ -4504,7 +4519,7 @@ def _stream_antigravity_cli(messages, state=None):
             agy_bin,
             "-p", formatted_prompt,
             "--model", "gemini-3.8-flash",
-            "--effort", "low",
+            "--effort", "medium",
             "--output-format", "stream-json",
             "--disable-slash-commands",
             "--dangerously-skip-permissions"
@@ -4656,7 +4671,7 @@ def _stream_antigravity_cli(messages, state=None):
                     for fn in os.listdir(WORKSPACE_ROOT):
                         if (fn.startswith("generate_") or fn.startswith("build_")) and fn.endswith(".py"):
                             g_path = os.path.join(WORKSPACE_ROOT, fn)
-                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 180.0):
+                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 10.0):
                                 yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
                                 subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
                 except Exception as _gen_exc:
@@ -4664,16 +4679,20 @@ def _stream_antigravity_cli(messages, state=None):
 
                 try:
                     candidate_files = []
+                    _stop = {"make", "create", "generate", "build", "pdf", "zip", "containing", "image", "images", "all", "characters", "character", "with", "the", "details", "brief", "now", "try", "to", "and", "file", "please", "can", "you", "a", "an", "of", "in", "on", "for", "breif"}
+                    _q_words = [w for w in re.findall(r"[a-z0-9]+", (user_query or "").lower()) if len(w) > 2 and w not in _stop]
                     for fn in os.listdir(WORKSPACE_ROOT):
                         if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
                             fp = os.path.join(WORKSPACE_ROOT, fn)
                             if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                 mtime = os.path.getmtime(fp)
-                                if mtime >= (start_time - 180.0):
-                                    candidate_files.append((mtime, fn, fp))
+                                if mtime >= (start_time - 5.0):
+                                    fn_lower = fn.lower()
+                                    match_cnt = sum(1 for w in _q_words if w in fn_lower)
+                                    candidate_files.append((match_cnt, mtime, fn, fp))
                     if candidate_files:
-                        candidate_files.sort(key=lambda x: x[0], reverse=True)
-                        _, fn, fp = candidate_files[0]
+                        candidate_files.sort(key=lambda x: (x[0], x[1]), reverse=True)
+                        _, _, fn, fp = candidate_files[0]
                         with open(fp, "rb") as bin_fh:
                             bin_bytes = bin_fh.read()
                         mime = "application/pdf" if target_ext == "pdf" else "application/zip"
@@ -7637,7 +7656,7 @@ def chat_stream():
                         for _fn in os.listdir(_scan_dir):
                             if (_fn.startswith("generate_") or _fn.startswith("build_")) and _fn.endswith(".py"):
                                 _g_path = os.path.join(_scan_dir, _fn)
-                                if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 180.0):
+                                if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 10.0):
                                     _cmd_run = subprocess.run(["python3", _g_path], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=40)
                                     print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
             except Exception as _ge:
