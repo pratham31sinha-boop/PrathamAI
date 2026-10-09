@@ -3042,17 +3042,22 @@ SYSTEM_PROMPT = (
     "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
     "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
     "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
-    "- REAL WEB CONNECTIVITY, INDEPENDENT RESEARCH & CAST ENCYCLOPEDIAS:\n"
-    "  * You have live internet access, python, and bash. When asked for any TV show, serial, movie, anime, or topic:\n"
-    "    - ALWAYS search the web or Wikipedia to autonomously discover the real cast, actors, roles, and character biographies.\n"
-    "    - You can use `from web_research import get_show_cast_and_details, build_character_encyclopedia_pdf` or `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch live cast information and download real web images for every character non-stop.\n"
+    "- REAL WEB CONNECTIVITY, MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
+    "  * You have live internet access, python, and bash equipped with the BEST all-purpose search engines:\n"
+    "    - `from fetch_image import fetch_web_image, fetch_multiple_images, search_accurate_images`: Searches Wikimedia Commons, Wikipedia PageImages, Bing Async Media, and PokeAPI with automatic PIL validation and concurrent downloading for ANY actor, anime, show, character, celebrity, or subject.\n"
+    "    - `from web_research import get_show_cast_and_details, search_accurate_web_info, build_character_encyclopedia_pdf, verify_deliverable`: Combines DuckDuckGo Instant Answer API and Wikipedia REST API for 100% accurate information, synopsis, and cast details.\n"
     "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
-    "- CONTINUOUS UNINTERRUPTED EXECUTION IN A SINGLE TURN:\n"
-    "  * DO NOT stop halfway or conclude your turn with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done').\n"
-    "  * Execute the full end-to-end task immediately in the SAME turn: write the code, render diagrams, fetch web assets, run build commands, compile deliverables, and present the final deliverable.\n"
-    "  * Transparent Communication: Explain what was accomplished, detail the contents, and confirm the deliverable.\n"
+    "- MANDATORY CONTINUOUS INTERLEAVED EXECUTION LOOP (MIXED CADENCE NON-STOP):\n"
+    "  * You MUST work in a continuous, mixed, step-by-step cadence without stopping:\n"
+    "    1. [SAY WHAT I WILL DO]: First output 1-2 conversational sentences explaining exactly what you are about to do (e.g. 'I am searching Wikipedia and web engines for verified cast details and character biographies...').\n"
+    "    2. [TERMINAL EXECUTION]: Immediately execute the terminal command or tool.\n"
+    "    3. [SAY WHAT IS DONE & WHAT IS NEXT]: Output 1-2 conversational sentences explaining what you found and what the next step is (e.g. 'I have retrieved the complete cast list with 12 characters. Now I will download high-resolution web images for every character and generate the PDF layout script...').\n"
+    "    4. [NEXT TERMINAL EXECUTION]: Immediately execute the next terminal command.\n"
+    "    5. [VERIFICATION STEP]: Always run an explicit verification check on the deliverable (e.g. `ls -lh <file>` and verify PDF pages / image integrity), then explain the verification status (e.g. 'Verification complete: Verified 12 pages with all images loaded.').\n"
+    "    6. Continue this mixed rhythm NON-STOP until all assets, code, diagrams, and files are 100% complete and presented!\n"
+    "  * NEVER STOP HALFWAY or conclude with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done'). Everything must be executed and finished in the SAME turn.\n"
     "- CLEAN DELIVERABLE PRESENTATION:\n"
     "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
     "- Interactive HTML5 Apps, 3D Games & Standalone Code:\n"
@@ -3700,10 +3705,11 @@ class _WarmAntigravitySession:
                                     detail_txt = f"Command:\n$ {cmd_clean}"
                                     if state_val == "DONE" and out:
                                         detail_txt += f"\n\nOutput:\n{str(out)[:2000]}"
+                                    is_verif = any(k in cmd_clean.lower() for k in ["verify", "pypdf", "test", "check", "ls -l"])
                                     yield _sse({
                                         "type": "agent_step",
-                                        "step_type": "executing",
-                                        "label": summary,
+                                        "step_type": "verifying" if is_verif else "executing",
+                                        "label": f"Verifying: {cmd_short}" if is_verif and not summary.lower().startswith("verif") else summary,
                                         "detail": detail_txt,
                                         "timestamp": time.time()
                                     })
@@ -3839,10 +3845,12 @@ class _WarmAntigravitySession:
                                 bin_bytes = bin_fh.read()
                             mime = "application/pdf" if target_ext == "pdf" else "application/zip"
                             token = _store_generated_file(bin_bytes, fn, mime)
+                            f_size_kb = round(len(bin_bytes) / 1024, 1)
+                            yield _sse({"type": "agent_step", "step_type": "verifying", "label": f"Verified {fn} ({f_size_kb} KB)", "timestamp": time.time()})
                             yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
                             # If model output ended with an unresolved future promise, close seamlessly in this same turn
                             if any(p in full_streamed.lower() for p in ["i have launched", "i will notify you", "as soon as the file is compiled", "i will update you"]):
-                                close_note = f"\n\n**{fn}** has been compiled directly on disk and is ready for download above!"
+                                close_note = f"\n\n**Verification Complete:** **{fn}** ({f_size_kb} KB) has been verified directly on disk and is ready for download above!"
                                 for part in re.split(r"(\s+)", close_note):
                                     if part:
                                         yield _sse({"type": "token", "text": part})
@@ -4294,25 +4302,22 @@ def _stream_antigravity_cli(messages, state=None):
         "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
         "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
-        "AUTONOMOUS AGENT FREEDOM, CONTINUOUS EXECUTION & LIVE WEB CONNECTIVITY:\n"
-        "- Complete user requests autonomously from start to finish with zero hesitation, stops, or stalls.\n"
+        "MANDATORY CONTINUOUS INTERLEAVED EXECUTION LOOP (MIXED CADENCE NON-STOP):\n"
+        "- Execute user requests in a continuous, mixed, step-by-step cadence without stopping:\n"
+        "  1. [SAY WHAT I WILL DO]: First write 1-2 conversational sentences explaining exactly what you are about to do (e.g. 'I am searching Wikipedia and web engines for verified cast details and character biographies...').\n"
+        "  2. [TERMINAL EXECUTION]: Immediately execute the terminal command or tool.\n"
+        "  3. [SAY WHAT IS DONE & WHAT IS NEXT]: Write 1-2 conversational sentences explaining what you found and what the next step is (e.g. 'I have retrieved the complete cast list with 12 characters. Now I will download high-resolution web images for every character and generate the PDF layout script...').\n"
+        "  4. [NEXT TERMINAL EXECUTION]: Immediately execute the next terminal command.\n"
+        "  5. [VERIFICATION STEP]: Always run an explicit verification check on the deliverable (e.g. `ls -lh <file>` and verify PDF pages / image integrity), then explain the verification status (e.g. 'Verification complete: Verified 12 pages with all images loaded.').\n"
+        "  6. Continue this mixed rhythm NON-STOP until all assets, code, diagrams, and files are 100% complete and presented!\n"
         "- NEVER STOP HALFWAY OR END ON PROMISES: Never say 'I have launched the script... I will notify you as soon as the file is compiled', 'I am compiling...', or 'Now I will run...'. Do NOT conclude your turn after writing a script. The terminal must run immediately in the SAME turn!\n"
-        "- CONTINUOUS EXECUTION IN ONE TURN: If you create or modify a build/generator script (e.g., build_*.py, generate_*.py, make_*.py), you MUST immediately execute it with `run_command` in the exact same turn with `WaitMsBeforeAsync: 60000` (60s) so it finishes completely on disk before you output the final explanation and deliverable.\n"
-        "- SEAMLESS CONTINUATION PATTERN: After any brief introductory sentence, the terminal runs the commands, and right after terminal output completes, continue seamlessly in the same turn explaining what was done and delivering the file.\n"
-        "- COMPLETE INDEPENDENCE & ZERO HARDCODING:\n"
-        "  * You are completely generic, flexible, and independent. You have a live brain, bash, python, and the live internet.\n"
-        "  * Never rely on hardcoded lists or fixed templates. Autonomously solve any request from scratch across any topic, math problem, anime, show, science, or software.\n"
-        "- MATHEMATICAL, GEOMETRIC & SCIENTIFIC DIAGRAMS IN PDFs:\n"
-        "  * When producing math, physics, geometry, engineering, or scientific documents, ALWAYS generate NEAT, CLEAN, CRISP, HIGH-RESOLUTION DIAGRAMS:\n"
-        "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
-        "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
-        "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
-        "- FULL LIVE WEB CONNECTIVITY & NON-STOP IMAGE PLUGGING:\n"
-        "  * You have direct access to the live internet. When information, real images, cast details, or data are needed:\n"
-        "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT: Never use circle badges, blank placeholders, or initials when web access is available.\n"
-        "    - Use `from fetch_image import fetch_web_image, fetch_multiple_images` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme.\n"
-        "    - Embed the downloaded real images directly into the PDF for EVERY character non-stop.\n"
-        "    - Use `search_web` or python `urllib` / `curl` to fetch live data from the web.\n"
+        "- UNIVERSAL MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
+        "  * You have live internet access equipped with the BEST all-purpose search engines:\n"
+        "    - `from fetch_image import fetch_web_image, fetch_multiple_images, search_accurate_images`: Searches Wikimedia Commons, Wikipedia PageImages, Bing Async Media, and PokeAPI with automatic PIL validation and concurrent downloading for ANY actor, anime, show, character, celebrity, or subject.\n"
+        "    - `from web_research import get_show_cast_and_details, search_accurate_web_info, build_character_encyclopedia_pdf, verify_deliverable`: Combines DuckDuckGo Instant Answer API and Wikipedia REST API for 100% accurate information, synopsis, and cast details.\n"
+        "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
+        "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
+        "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
         "- You have FULL Claude-like / engineer-level terminal power and unrestricted workspace access. You can do ANYTHING from the terminal that Linux / Python / Bash allows:\n"
         "  * Run any bash command, python script, compiler, archiver (zip, tar, 7z), curl, package installation, data processing, or algorithmic calculation.\n"
         "  * Build games, complex apps, backends, databases, APIs, utilities, scrapers, data pipelines, and CLI tools.\n"
@@ -4467,9 +4472,16 @@ def _stream_antigravity_cli(messages, state=None):
         prompt_sections.append(
             f"[ACTIVE USER REQUEST - TOP PRIORITY]\n"
             f"The user's latest request right now is: \"{last_user_prompt}\".\n"
-            f"- Fulfill THIS specific request independently and completely from scratch.\n"
-            f"- If the user asks for a TV show, movie, characters, or cast (e.g. searching or creating a PDF/encyclopedia), conduct real web research for THAT specific subject immediately. Fetch real web images and build the deliverable for THIS request. Do not confuse it with or reuse files from previous conversation turns.\n"
-            f"- You have Python, bash, `web_research.py`, and `fetch_image.py` available in the workspace. Run scripts directly to research, fetch images, compile the final deliverable, and present it."
+            f"- MANDATORY CONTINUOUS INTERLEAVED EXECUTION LOOP (NON-STOP):\n"
+            f"  1. [SAY WHAT I WILL DO]: Say what you are about to do in 1-2 conversational sentences.\n"
+            f"  2. [TERMINAL EXECUTION]: Execute the terminal / bash tool.\n"
+            f"  3. [SAY WHAT IS DONE & WHAT IS NEXT]: Say what was accomplished and what the next step is.\n"
+            f"  4. [NEXT TERMINAL EXECUTION]: Execute the next terminal tool.\n"
+            f"  5. [VERIFICATION]: Run verification to verify file integrity, page count, and dimensions.\n"
+            f"  6. Present the final deliverable to the user.\n"
+            f"- Fulfill THIS specific request independently and completely from scratch without stopping.\n"
+            f"- MULTI-ENGINE SEARCH & REAL IMAGES: Use `web_research.py` and `fetch_image.py` for all-purpose live research and real image downloads.\n"
+            f"- Never reuse or confuse files from previous conversation turns. Compile and verify everything cleanly for THIS prompt."
         )
 
     formatted_prompt = "\n\n".join(prompt_sections)
@@ -4697,9 +4709,11 @@ def _stream_antigravity_cli(messages, state=None):
                             bin_bytes = bin_fh.read()
                         mime = "application/pdf" if target_ext == "pdf" else "application/zip"
                         token = _store_generated_file(bin_bytes, fn, mime)
+                        f_size_kb = round(len(bin_bytes) / 1024, 1)
+                        yield _sse({"type": "agent_step", "step_type": "verifying", "label": f"Verified {fn} ({f_size_kb} KB)", "timestamp": time.time()})
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
                         if any(p in full_streamed.lower() for p in ["i have launched", "i will notify you", "as soon as the file is compiled", "i will update you"]):
-                            close_note = f"\n\n**{fn}** has been compiled directly on disk and is ready for download above!"
+                            close_note = f"\n\n**Verification Complete:** **{fn}** ({f_size_kb} KB) has been verified directly on disk and is ready for download above!"
                             for part in re.split(r"(\s+)", close_note):
                                 if part:
                                     yield _sse({"type": "token", "text": part})

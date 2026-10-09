@@ -5639,6 +5639,7 @@
                             if (payload.step_type === 'searching') stepIcon = 'search';
                             else if (payload.step_type === 'executing') stepIcon = 'terminal';
                             else if (payload.step_type === 'thinking' || payload.step_type === 'planning') stepIcon = 'inspect';
+                            else if (payload.step_type === 'verifying') stepIcon = 'check';
 
                             if (payload.step_type === 'executing') {
                                 const execRow = addStep(modelWrapper, stepIcon, currentLabel);
