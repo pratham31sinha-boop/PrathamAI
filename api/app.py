@@ -4237,274 +4237,11 @@ def _get_planning_steps_for_prompt(prompt: str, attached_files: list = None) -> 
 
 def _handle_autonomous_document_generation(last_user_prompt, conv_id="", user_email=""):
     """
-    Directly compiles rich publication-grade deliverables (Pokémon 151 Pokédex,
-    Bahu Hamari Rajni_Kant cast guide, Doraemon complete guide, TMKOC Gokuldham encyclopedia)
-    synchronously in under 15 seconds with live real-time step streaming.
-    Ensures zero 30-minute hangs and delivers authentic PDFs and cast briefs immediately.
+    Autonomous document handler - kept clean and independent without any hardcoded show or character lists.
+    Allows all requests to flow naturally through the dynamic terminal/agentic pipeline.
     """
-    p_lower = last_user_prompt.lower()
-
-    # 1. POKÉMON ENCYCLOPEDIA / POKÉDEX
-    is_pokemon = bool(re.search(r"\b(?:pokemon|pokémon|pokedex|pokédex)\b", p_lower)) and any(
-        w in p_lower for w in ["pdf", "brief", "img", "image", "photo", "book", "list", "all", "generate", "make", "create", "leave it", "can u make"]
-    )
-    if is_pokemon:
-        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Querying PokeAPI for 151 Generation 1 Pokémon sprites & stats...", "timestamp": time.time()})
-        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_pokemon_pdf.py with ReportLab...", "timestamp": time.time()})
-        try:
-            res = subprocess.run(
-                ["python3", "generate_pokemon_pdf.py"],
-                cwd=WORKSPACE_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            print(f"[AUTONOMOUS_DOC][POKEMON] stdout: {res.stdout.strip()} | stderr: {res.stderr.strip()[:200]}")
-        except Exception as e:
-            print(f"[AUTONOMOUS_DOC][POKEMON] Run error: {e}")
-
-        pdf_path = os.path.join(WORKSPACE_ROOT, "all_pokemon_pokedex.pdf")
-        if not os.path.exists(pdf_path):
-            pdf_path = os.path.join(WORKSPACE_ROOT, "pokemon_encyclopedia.pdf")
-
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved all_pokemon_pokedex.pdf to workspace", "timestamp": time.time()})
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            token = _store_generated_file(pdf_bytes, "all_pokemon_pokedex.pdf", "application/pdf")
-            if user_email and conv_id:
-                _save_user_chat_file(user_email, conv_id, "all_pokemon_pokedex.pdf", pdf_bytes)
-
-            reply_text = (
-                "Here is the complete **151 Generation 1 Pokémon Pokédex & Encyclopedia**! 🎮📖\n\n"
-                "### What is Included:\n"
-                "- **All 151 Original Pokémon:** From Bulbasaur (#001) through Mew (#151).\n"
-                "- **High-Quality Sprites & Artwork:** Official sprite imagery downloaded from PokeAPI for every single Pokémon.\n"
-                "- **Key Typings & Attributes:** Formatted with elemental color codes (Grass, Fire, Water, Electric, Psychic, etc.).\n"
-                "- **Brief Lore & Pokédex Descriptions:** Concise behavioral summaries and biological lore for each entry.\n"
-                "- **Publication-Grade Grid Layout:** Compiled into a crisp multi-page document using ReportLab.\n\n"
-                "You can preview and download your complete PDF below:"
-            )
-            for w in re.split(r"(\s+)", reply_text):
-                if w:
-                    yield _sse({"type": "token", "text": w})
-            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "all_pokemon_pokedex.pdf"})
-            return
-
-    # 2. BAHU HAMARI RAJNI_KANT GUIDE
-    is_rajni = bool(re.search(r"\b(?:bahu\s*hamari\s*rajni|rajnikant|rajni_kant|rajni\s*kant|bahu\s*rajni)\b", p_lower)) and any(
-        w in p_lower for w in ["pdf", "character", "cast", "brief", "photo", "img", "guide", "show", "generate", "make", "create"]
-    )
-    if is_rajni:
-        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Gathering Bahu Hamari Rajni_Kant character profiles & images...", "timestamp": time.time()})
-        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_bahu_hamari_rajnikant_pdf.py...", "timestamp": time.time()})
-        try:
-            subprocess.run(
-                ["python3", "generate_bahu_hamari_rajnikant_pdf.py"],
-                cwd=WORKSPACE_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=25
-            )
-        except Exception as e:
-            print(f"[AUTONOMOUS_DOC][RAJNI] Run error: {e}")
-
-        pdf_path = os.path.join(WORKSPACE_ROOT, "bahu_hamari_rajnikant_guide.pdf")
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved bahu_hamari_rajnikant_guide.pdf to workspace", "timestamp": time.time()})
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            token = _store_generated_file(pdf_bytes, "bahu_hamari_rajnikant_guide.pdf", "application/pdf")
-            if user_email and conv_id:
-                _save_user_chat_file(user_email, conv_id, "bahu_hamari_rajnikant_guide.pdf", pdf_bytes)
-
-            reply_text = (
-                "Here is the complete **Bahu Hamari Rajni_Kant Character Encyclopedia & Cast Guide**! 🤖✨\n\n"
-                "### What is Included:\n"
-                "- **Rajni (Ridhima Pandit):** The Super Humanoid Robot (R.A.J.N.I.) with 10x human strength and literal interpretation of domestic duties.\n"
-                "- **Shaantanu Kant (Karan V Grover / Raqesh Bapat):** Genius robotics scientist who created Rajni.\n"
-                "- **Kant Family Ensemble:** Surili Kant, Amrish Kant, Dhyan, Gyan, Sharmila, and Maggie.\n"
-                "- **Character Photos & Profiles:** Complete biographical summaries, quirks, and storylines.\n\n"
-                "Download your publication-grade guide below:"
-            )
-            for w in re.split(r"(\s+)", reply_text):
-                if w:
-                    yield _sse({"type": "token", "text": w})
-            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "bahu_hamari_rajnikant_guide.pdf"})
-            return
-
-    # 3. DORAEMON COMPLETE GUIDE
-    is_doraemon = bool(re.search(r"\b(?:doraemon)\b", p_lower)) and any(
-        w in p_lower for w in ["pdf", "character", "gadget", "brief", "photo", "img", "guide", "all", "generate", "make", "create"]
-    )
-    if is_doraemon:
-        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Fetching Doraemon character archives and iconic 22nd-century gadgets...", "timestamp": time.time()})
-        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_doraemon_pdf.py...", "timestamp": time.time()})
-        try:
-            subprocess.run(
-                ["python3", "generate_doraemon_pdf.py"],
-                cwd=WORKSPACE_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=25
-            )
-        except Exception as e:
-            print(f"[AUTONOMOUS_DOC][DORAEMON] Run error: {e}")
-
-        pdf_path = os.path.join(WORKSPACE_ROOT, "doraemon_characters_complete_guide.pdf")
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved doraemon_characters_complete_guide.pdf to workspace", "timestamp": time.time()})
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            token = _store_generated_file(pdf_bytes, "doraemon_characters_complete_guide.pdf", "application/pdf")
-            if user_email and conv_id:
-                _save_user_chat_file(user_email, conv_id, "doraemon_characters_complete_guide.pdf", pdf_bytes)
-
-            reply_text = (
-                "Here is the complete **Doraemon Characters & Gadgets Guide**! 🐱🔔\n\n"
-                "### What is Included:\n"
-                "- **Main Characters:** Doraemon, Nobita Nobi, Shizuka Minamoto, Takeshi 'Gian' Goda, and Suneo Honekawa.\n"
-                "- **Iconic Gadgets:** Anywhere Door (Dokodemo Door), Take-Copter (Bamboo Copter), Time Machine, Translation Gummy, and Small Light.\n"
-                "- **Visuals & Descriptions:** High-resolution card illustrations and detailed descriptions.\n\n"
-                "Download your publication-grade guide below:"
-            )
-            for w in re.split(r"(\s+)", reply_text):
-                if w:
-                    yield _sse({"type": "token", "text": w})
-            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "doraemon_characters_complete_guide.pdf"})
-            return
-
-    # 4. TMKOC GOKULDHAM ENCYCLOPEDIA
-    is_tmkoc = bool(re.search(r"\b(?:tmkoc|taarak\s*mehta|ooltah\s*chashmah|gokuldham|jethalal)\b", p_lower)) and any(
-        w in p_lower for w in ["pdf", "character", "cast", "brief", "photo", "img", "guide", "generate", "make", "create"]
-    )
-    if is_tmkoc:
-        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Gathering Gokuldham Society cast & character archives...", "timestamp": time.time()})
-        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_tmkoc_pdf.py...", "timestamp": time.time()})
-        try:
-            subprocess.run(
-                ["python3", "generate_tmkoc_pdf.py"],
-                cwd=WORKSPACE_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=25
-            )
-        except Exception as e:
-            print(f"[AUTONOMOUS_DOC][TMKOC] Run error: {e}")
-
-        pdf_path = os.path.join(WORKSPACE_ROOT, "tmkoc_encyclopedia.pdf")
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved tmkoc_encyclopedia.pdf to workspace", "timestamp": time.time()})
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            token = _store_generated_file(pdf_bytes, "tmkoc_encyclopedia.pdf", "application/pdf")
-            if user_email and conv_id:
-                _save_user_chat_file(user_email, conv_id, "tmkoc_encyclopedia.pdf", pdf_bytes)
-
-            reply_text = (
-                "Here is the complete **Taarak Mehta Ka Ooltah Chashmah Character Encyclopedia & Cast Guide**! 📺🌟\n\n"
-                "### What is Included:\n"
-                "- **Gada Family:** Jethalal Gada (Dilip Joshi), Daya Ben (Disha Vakani), Champaklal Gada / Bapuji (Amit Bhatt), Tapu Sena.\n"
-                "- **Mehta & Iyer Families:** Taarak Mehta (Shailesh Lodha/Sachin Shroff), Anjali Mehta, Krishnan Iyer, Babita Ji (Munmun Dutta).\n"
-                "- **Bhide, Hathi & Sodhi Families:** Aatmaram Tukaram Bhide ('Ekmev Secretary'), Madhavi, Dr. Hathi, Popatlal ('Duniya Hila Dunga!'), Sodhi.\n"
-                "- **Gada Electronics:** Natu Kaka & Bagha.\n\n"
-                "Download your publication-grade guide below:"
-            )
-            for w in re.split(r"(\s+)", reply_text):
-                if w:
-                    yield _sse({"type": "token", "text": w})
-            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "tmkoc_encyclopedia.pdf"})
-            return
-
-    # 5. PERMAN ALL CHARACTERS GUIDE
-    is_perman = bool(re.search(r"\b(?:perman|mitsuo|birdman|pako|paryan|sumire\s*hoshino|booby)\b", p_lower)) and any(
-        w in p_lower for w in ["pdf", "character", "brief", "photo", "img", "image", "guide", "all", "generate", "make", "create", "book"]
-    )
-    if is_perman:
-        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Gathering Perman superhero team archives & character profiles...", "timestamp": time.time()})
-        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_perman_pdf.py...", "timestamp": time.time()})
-        try:
-            subprocess.run(
-                ["python3", "generate_perman_pdf.py"],
-                cwd=WORKSPACE_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-        except Exception as e:
-            print(f"[AUTONOMOUS_DOC][PERMAN] Run error: {e}")
-
-        pdf_path = os.path.join(WORKSPACE_ROOT, "perman_all_characters_guide.pdf")
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved perman_all_characters_guide.pdf to workspace", "timestamp": time.time()})
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            token = _store_generated_file(pdf_bytes, "perman_all_characters_guide.pdf", "application/pdf")
-            if user_email and conv_id:
-                _save_user_chat_file(user_email, conv_id, "perman_all_characters_guide.pdf", pdf_bytes)
-
-            reply_text = (
-                "Here is the complete **Perman All Characters Guide & Superhero Compendium**! 🦸‍♂️✨\n\n"
-                "### What is Included:\n"
-                "- **Perman 1 / Mitsuo Suwa:** The courageous leader whose helmet multiplies strength by 6,600x.\n"
-                "- **Perman 2 / Booby:** The hyper-intelligent chimpanzee whose agility and keen senses save the team.\n"
-                "- **Perman 3 / Pako (Sumire Hoshino):** Celebrity child idol living a double life as a sharp superhero.\n"
-                "- **Perman 4 / Paryan (Housen Oyama):** Shrewd Buddhist monk-in-training with pragmatic tactical genius.\n"
-                "- **Birdman:** The galactic guardian and mentor who bestowed their super suits and gadgets.\n"
-                "- **Copy Robot:** The iconic doppelgänger android that substitutes for Mitsuo at home and school.\n"
-                "- **Allies & Supporting Cast:** Michiko Sawada (Mitchie), Kabao, Sabu, and Ganko Suwa.\n"
-                "- **Official Profile Cards & Visuals:** Complete breakdown of equipment, secret identities, and lore.\n\n"
-                "Download your publication-grade guide below:"
-            )
-            for w in re.split(r"(\s+)", reply_text):
-                if w:
-                    yield _sse({"type": "token", "text": w})
-            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "perman_all_characters_guide.pdf"})
-            return
-
-    # 6. ULTRA B (ウルトラB) ENCYCLOPEDIA
-    is_ultra_b = bool(re.search(r"\b(?:ultra\s*b|ultrab|ub|uchuujin\s*pii\s*suke)\b", p_lower)) and any(
-        w in p_lower for w in ["pdf", "character", "brief", "photo", "img", "image", "guide", "all", "generate", "make", "create", "book"]
-    )
-    if is_ultra_b:
-        yield _sse({"type": "agent_step", "step_type": "searching", "label": "Gathering Ultra B character archives & artwork...", "timestamp": time.time()})
-        yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing generate_ultra_b_pdf.py...", "timestamp": time.time()})
-        try:
-            subprocess.run(
-                ["python3", "generate_ultra_b_pdf.py"],
-                cwd=WORKSPACE_ROOT,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-        except Exception as e:
-            print(f"[AUTONOMOUS_DOC][ULTRA_B] Run error: {e}")
-
-        pdf_path = os.path.join(WORKSPACE_ROOT, "ultra_b_characters_encyclopedia.pdf")
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            yield _sse({"type": "agent_step", "step_type": "writing", "label": "Saved ultra_b_characters_encyclopedia.pdf to workspace", "timestamp": time.time()})
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            token = _store_generated_file(pdf_bytes, "ultra_b_characters_encyclopedia.pdf", "application/pdf")
-            if user_email and conv_id:
-                _save_user_chat_file(user_email, conv_id, "ultra_b_characters_encyclopedia.pdf", pdf_bytes)
-
-            reply_text = (
-                "Here is the complete **Ultra B (ウルトラB) Character & Series Encyclopedia**! 🛸🍼✨\n\n"
-                "### What is Included in the PDF:\n"
-                "- **Ultra B (UB / ユービー):** Mysterious psychic infant alien from the Black Hole quadrant powered by 1-liter milk cartons.\n"
-                "- **Michio Suzumoto (鈴木 ミチオ):** Kind elementary school boy who discovered UB and serves as his guardian brother.\n"
-                "- **Suzumoto Family (Mama Kazuyo & Papa Shinichi):** UB's hilarious foster parents.\n"
-                "- **Classmates & Friends:** Takeomi Aoba (UB's crush), Tateo Tosaka, Daibutsu Narano, and Mr. Kabayama.\n"
-                "- **Villains & Antagonists:** Dictator BB (ベーベー / B・B) and Muscle Bird.\n"
-                "- **Production & Historical Archive:** Fujiko Fujio A's 1984–1989 manga, Shin-Ei Animation anime, and 3D movie history.\n\n"
-                "Download your publication-grade guide below:"
-            )
-            for w in re.split(r"(\s+)", reply_text):
-                if w:
-                    yield _sse({"type": "token", "text": w})
-            yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": "ultra_b_characters_encyclopedia.pdf"})
-            return
+    return
+    yield
 
 def _stream_antigravity_cli(messages, state=None):
     """
@@ -4544,23 +4281,19 @@ def _stream_antigravity_cli(messages, state=None):
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
         "AUTONOMOUS AGENT FREEDOM, CONTINUOUS EXECUTION & LIVE WEB CONNECTIVITY:\n"
         "- Complete user requests autonomously from start to finish with zero hesitation, stops, or stalls.\n"
-        "- NEVER STOP HALFWAY OR LEAVE PROMISES: Do not say 'I am compiling... I will update you soon', 'Now I am going to compile...', or inspect a task log and stop. You must execute ALL steps continuously until the final deliverable is completely generated on disk and presented.\n"
-        "- CONTINUOUS EXECUTION: If you generate or modify a build/generator script (e.g., generate_*.py, build_*.py, make_*.py), you MUST immediately run it in the exact same turn with `run_command` and wait for it to finish so the actual target file (.pdf, .zip, .html) is built on disk.\n"
-        "- SYNCHRONOUS COMMAND EXECUTION: When executing run_command to build files or run Python/Bash scripts, pass `WaitMsBeforeAsync: 60000` (60 seconds) so the command executes synchronously and completely within the tool call. Never let build commands slip into background tasks.\n"
+        "- NEVER STOP HALFWAY OR END ON PROMISES: Never say 'I have launched the script... I will notify you as soon as the file is compiled', 'I am compiling...', or 'Now I will run...'. Do NOT conclude your turn after writing a script. The terminal must run immediately in the SAME turn!\n"
+        "- CONTINUOUS EXECUTION IN ONE TURN: If you create or modify a build/generator script (e.g., build_*.py, generate_*.py, make_*.py), you MUST immediately execute it with `run_command` in the exact same turn with `WaitMsBeforeAsync: 60000` (60s) so it finishes completely on disk before you output the final explanation and deliverable.\n"
+        "- SEAMLESS CONTINUATION PATTERN: After any brief introductory sentence, the terminal runs the commands, and right after terminal output completes, continue seamlessly in the same turn explaining what was done and delivering the file.\n"
         "- FULL LIVE WEB CONNECTIVITY: You have direct access to the live internet. When information, real images, cast details, or data are needed:\n"
         "  * Use `search_web` or python `urllib` / `curl` to fetch live data from the web.\n"
-        "  * Use `fetch_image.fetch_web_image(query, path)` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme (Bahu Hamari Rajni_Kant, TMKOC, Doraemon, Pokémon, Perman, movies, historical figures, etc.).\n"
+        "  * Use `fetch_image.fetch_web_image(query, path)` to fetch real images from the live web for ANY topic, show, anime, character, celebrity, or theme.\n"
         "- You have FULL Claude-like / engineer-level terminal power and unrestricted workspace access. You can do ANYTHING from the terminal that Linux / Python / Bash allows:\n"
         "  * Run any bash command, python script, compiler, archiver (zip, tar, 7z), curl, package installation, data processing, or algorithmic calculation.\n"
         "  * Build games, complex apps, backends, databases, APIs, utilities, scrapers, data pipelines, and CLI tools.\n"
         "  * Synthesize publication-grade PDFs, full responsive HTML5 applications, vector graphics, canvas simulations, or zip chains.\n"
-        "- WORKFLOW & REAL-TIME TRANSPARENCY:\n"
-        "  1. Start by planning and executing the terminal web search and compilation commands cleanly and synchronously.\n"
-        "  2. Once execution completes, explain what you accomplished.\n"
-        "  3. Deliver the final completed file clearly so the user gets their download immediately.\n"
         "- PDF & Publication-Grade Document Generation:\n"
         "  * Write a self-contained Python script using ReportLab or FPDF and execute it with run_command.\n"
-        "  * Write the PDF directly to disk in the current workspace (e.g. perman_all_characters_guide.pdf, pokemon_encyclopedia.pdf, bahu_hamari_rajnikant_guide.pdf, tmkoc_encyclopedia.pdf, doraemon_characters_complete_guide.pdf) and confirm.\n"
+        "  * Write the PDF directly to disk in the current workspace and verify it exists.\n"
         "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
         "- Interactive HTML5 Apps, 3D Games & Code:\n"
         "  * Write full, production-ready code with no shortcuts or placeholders.\n"
@@ -7903,7 +7636,10 @@ def chat_stream():
                         p in iteration_reply.lower() for p in [
                             "i am compiling", "now i am going to compile", "i will finalize and deliver",
                             "i will finalize", "in the next step", "let's get to work", "starting to build",
-                            "i am going to fetch", "now i will compile", "now compiling"
+                            "i am going to fetch", "now i will compile", "now compiling",
+                            "i have launched", "i will notify you", "as soon as the file is compiled",
+                            "launched the pdf generation script", "launched the generation script",
+                            "i will update you"
                         ]
                     )
                     _unfulfilled = [f for f in _promised_filenames if f.lower() not in _produced_filenames_this_turn]
