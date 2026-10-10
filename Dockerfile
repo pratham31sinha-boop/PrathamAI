@@ -21,13 +21,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
 COPY . .
+RUN chmod +x start.sh
 
 # Set environment
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
+ENV PORT=10000
 
-# Expose Koyeb standard port
-EXPOSE 8000
+# Expose port
+EXPOSE 10000
 
-# Start Pratham AI server
-CMD ["python3", "api/app.py"]
+# Start Pratham AI server with production gunicorn
+CMD ["./start.sh"]

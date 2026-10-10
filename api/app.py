@@ -68,6 +68,11 @@ import zipfile
 import urllib.request
 import urllib.parse
 import sys
+_CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_CURR_DIR)
+for _p in [_ROOT_DIR, _CURR_DIR]:
+    if _p and _p not in sys.path:
+        sys.path.insert(0, _p)
 import subprocess
 import tempfile
 import shutil
@@ -344,6 +349,10 @@ def _handle_cors_headers(response):
         response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-Gemini-Access-Token, X-Gemini-Key, X-Groq-Key, ngrok-skip-browser-warning, X-Daytona-Skip-Preview-Warning, X-Daytona-Preview-Token"
+    if "text/event-stream" in response.headers.get("Content-Type", ""):
+        response.headers["Cache-Control"] = "no-cache, no-transform"
+        response.headers["X-Accel-Buffering"] = "no"
+        response.headers["Connection"] = "keep-alive"
     return response
 
 GEMINI_API_KEY       = os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip()

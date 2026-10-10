@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: pratham-ai-backend
+    name: pratham-ai
     env: python
     region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 180 "app:app"
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 180 "api.app:app"
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
