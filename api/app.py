@@ -1059,7 +1059,7 @@ def _build_zip_from_response(assistant_text: str, workdir: str = None, deliverab
 
     # 4. Extract code blocks from assistant reply
     for lang_match, code_match in _CODE_BLOCK_RE.findall(assistant_text):
-        if (lang_match or "").lower() in ("finaldoc", "bash", "sh", "shell", "web", "websearch", "search"):
+        if (lang_match or "").lower() in ("finaldoc", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"):
             continue
         if (lang_match or "").lower().startswith("createfile:"):
             continue
@@ -2482,17 +2482,145 @@ def _google_cse_snippets(query: str, max_results: int = 4):
     except Exception as exc:
         print(f"[WEB][GOOGLE CSE FAULT] {exc}")
         return []
+def _search_real_images(query: str, max_results: int = 8, download_to_dir: str = None) -> list:
+    """Real multi-engine image search engine.
+    Queries PokeAPI, Wikimedia Commons / Wikipedia PageImages, and Bing Media.
+    Optionally downloads verified images directly to download_to_dir.
+    Returns list of dicts: [{'title': ..., 'url': ..., 'source': ..., 'local_path': ...}].
+    """
+    clean_q = re.sub(r'\b(?:make|create|pdf|containing|images?|all|characters?|details?|breif|brief|with)\b', '', query, flags=re.I).strip()
+    if not clean_q:
+        clean_q = query
+
+    results = []
+    seen = set()
+
+    # 1. Specialized handling for Pokémon PokeAPI sprites & artwork
+    poke_match = re.search(r'\b(?:pokemon|pokémon)\s*(?:#?(\d+)|([a-zA-Z]+))\b', query, re.IGNORECASE)
+    if poke_match:
+        p_id_or_name = (poke_match.group(1) or poke_match.group(2)).lower()
+        official_art = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{p_id_or_name}.png"
+        sprite_art = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{p_id_or_name}.png"
+        for art_url in [official_art, sprite_art]:
+            if art_url not in seen:
+                seen.add(art_url)
+                results.append({"title": f"Pokemon {p_id_or_name.title()} Official Artwork", "url": art_url, "source": "PokeAPI"})
+
+    # 2. Wikipedia / Wikimedia Commons PageImages (High authority, official portraits/stills)
+    for api_endpoint in [
+        f"https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=5&prop=pageimages&pithumbsize=800&format=json",
+        f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=5&prop=pageimages&pithumbsize=800&format=json"
+    ]:
+        try:
+            req = urllib.request.Request(api_endpoint, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
+            with urllib.request.urlopen(req, timeout=3.5) as r:
+                data = json.loads(r.read().decode("utf-8", errors="ignore"))
+                pages = data.get("query", {}).get("pages", {})
+                for p in pages.values():
+                    thumb = p.get("thumbnail", {}).get("source")
+                    title = p.get("title", clean_q)
+                    if thumb and thumb not in seen:
+                        seen.add(thumb)
+                        results.append({"title": title, "url": thumb, "source": "Wikipedia/Wikimedia"})
+        except Exception as exc:
+            print(f"[SEARCH_IMAGE][WIKI FAULT] {exc}")
+
+    # 3. Bing Async Media Search (Real production stills, anime, wallpapers, live photos)
+    try:
+        b_url = f"https://www.bing.com/images/async?q={urllib.parse.quote(clean_q)}&first=0&count=12&mmasync=1"
+        req2 = urllib.request.Request(b_url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        })
+        with urllib.request.urlopen(req2, timeout=4.0) as r2:
+            html = r2.read().decode("utf-8", errors="ignore")
+            murls = re.findall(r'murl&quot;:&quot;(https?://[^&]+)&quot;', html) or re.findall(r'\"murl\":\"(https?://[^\"]+)\"', html)
+            titles = re.findall(r't1&quot;:&quot;([^&]+)&quot;', html) or re.findall(r'\"t1\":\"([^\"]+)\"', html)
+            for i, m in enumerate(murls):
+                if m not in seen:
+                    seen.add(m)
+                    t = titles[i] if i < len(titles) else clean_q
+                    results.append({"title": t, "url": m, "source": "Bing Media"})
+    except Exception as exc:
+        print(f"[SEARCH_IMAGE][BING FAULT] {exc}")
+
+    final_results = results[:max_results]
+
+    # Optional local download with PIL validation
+    if download_to_dir and final_results:
+        os.makedirs(download_to_dir, exist_ok=True)
+        from PIL import Image as PILImage
+        import io
+        for item in final_results:
+            safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', item["title"][:30]).strip('_') or "image"
+            local_file = os.path.join(download_to_dir, f"{safe_name}.jpg")
+            try:
+                d_req = urllib.request.Request(item["url"], headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "image/*"
+                })
+                with urllib.request.urlopen(d_req, timeout=4.0) as d_resp:
+                    img_bytes = d_resp.read()
+                if len(img_bytes) >= 800:
+                    img = PILImage.open(io.BytesIO(img_bytes))
+                    if img.width >= 50 and img.height >= 50:
+                        if img.mode in ("RGBA", "P", "LA"):
+                            img = img.convert("RGB")
+                        img.save(local_file, "JPEG", quality=90)
+                        item["local_path"] = local_file
+            except Exception as dl_exc:
+                print(f"[SEARCH_IMAGE][DL FAULT] {item['url']} -> {dl_exc}")
+
+    return final_results
+
 def _web_search_snippets(query: str, max_results: int = 5, _retries: int = 2):
-    """Enhanced web search with retry logic, multiple parsing strategies,
-    and DuckDuckGo lite fallback. Tries Google CSE first (if configured),
-    then DuckDuckGo HTML, then DuckDuckGo Lite as a final fallback.
-    Retries on transient failures before giving up and returning []."""
+    """Real multi-engine web search with retry logic and multi-source fallbacks:
+    1. Google Custom Search (if configured)
+    2. Wikipedia REST API & Search API (authoritative facts, summaries, biographies)
+    3. DuckDuckGo HTML and DuckDuckGo Lite
+    """
+    clean_q = re.sub(r'\b(?:search|the|web|online|google|who|is|what|tell|me|about)\b', '', query, flags=re.I).strip()
+    if not clean_q:
+        clean_q = query
+
+    results = []
+
+    # 1. Google CSE if available
     if GOOGLE_CSE_CONFIGURED:
         results = _google_cse_snippets(query, max_results)
         if results:
             return results
-    clean = lambda s: re.sub('<[^<]+?>', '', s).replace('&', '&').replace('"', '"').replace('&#x27;', "'").strip()
+
+    # 2. Wikipedia Direct Knowledge & Verification (100% accurate summaries)
+    try:
+        w_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(clean_q.replace(' ', '_'))}"
+        req_wiki = urllib.request.Request(w_url, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
+        with urllib.request.urlopen(req_wiki, timeout=3.5) as r_wiki:
+            data_wiki = json.loads(r_wiki.read().decode("utf-8", errors="ignore"))
+            title_w = data_wiki.get("title")
+            extract_w = data_wiki.get("extract")
+            if extract_w:
+                results.append(f"- [Wikipedia] {title_w}: {extract_w}")
+    except Exception:
+        pass
+
+    # 3. DuckDuckGo Instant Answer API
+    try:
+        ddg_api_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(clean_q)}&format=json&no_html=1&skip_disambig=1"
+        req_ddg_api = urllib.request.Request(ddg_api_url, headers={"User-Agent": "PrathamAI/2.0"})
+        with urllib.request.urlopen(req_ddg_api, timeout=3.0) as r_ddg_api:
+            data_ddg = json.loads(r_ddg_api.read().decode("utf-8", errors="ignore"))
+            heading = data_ddg.get("Heading")
+            abstract = data_ddg.get("Abstract")
+            if abstract and heading:
+                results.append(f"- [DuckDuckGo Instant Answer] {heading}: {abstract}")
+    except Exception:
+        pass
+
+    # 4. DuckDuckGo HTML & Lite Search Scrape
+    clean = lambda s: re.sub('<[^<]+?>', '', s).replace('&amp;', '&').replace('&quot;', '"').replace('&#x27;', "'").strip()
     for attempt in range(_retries + 1):
+        if len(results) >= max_results:
+            break
         try:
             encoded = urllib.parse.quote(query)
             req = urllib.request.Request(
@@ -2505,31 +2633,15 @@ def _web_search_snippets(query: str, max_results: int = 5, _retries: int = 2):
             )
             with urllib.request.urlopen(req, timeout=8) as resp:
                 html_body = resp.read().decode('utf-8', errors='ignore')
-            results = []
             titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html_body, re.DOTALL)
             snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</(?:a|td|div|span)', html_body, re.DOTALL)
             for i in range(min(max_results, len(titles))):
                 title = clean(titles[i])
                 snippet = clean(snippets[i]) if i < len(snippets) else ""
-                if title:
+                if title and not any(title.lower() in r.lower() for r in results):
                     results.append(f"- {title}: {snippet}")
-            if not results:
-                title_matches = re.findall(r'data-title="([^"]+)"', html_body)
-                snippet_matches = re.findall(r'class="result__snippet"[^>]*>(.*?)</(?:td|div)', html_body, re.DOTALL)
-                for i in range(min(max_results, len(title_matches))):
-                    title = clean(title_matches[i])
-                    snippet = clean(snippet_matches[i]) if i < len(snippet_matches) else ""
-                    if title:
-                        results.append(f"- {title}: {snippet}")
-            if not results:
-                link_blocks = re.findall(r'<a[^>]+class="result-link"[^>]*>(.*?)</a>.*?<td[^>]*class="result-snippet"[^>]*>(.*?)</td>', html_body, re.DOTALL)
-                for i in range(min(max_results, len(link_blocks))):
-                    title = clean(link_blocks[i][0])
-                    snippet = clean(link_blocks[i][1])
-                    if title:
-                        results.append(f"- {title}: {snippet}")
-            if results:
-                return results
+            if len(results) >= max_results:
+                return results[:max_results]
         except Exception as exc:
             print(f"[WEB][DDG HTML attempt {attempt+1} FAULT] {exc}")
         try:
@@ -2543,22 +2655,26 @@ def _web_search_snippets(query: str, max_results: int = 5, _retries: int = 2):
             )
             with urllib.request.urlopen(req, timeout=8) as resp:
                 html_body = resp.read().decode('utf-8', errors='ignore')
-            results = []
             link_matches = re.findall(r'<a[^>]+class="result-link"[^>]*>(.*?)</a>', html_body, re.DOTALL)
             snippet_matches = re.findall(r'<td[^>]*class="result-snippet"[^>]*>(.*?)</td>', html_body, re.DOTALL)
             for i in range(min(max_results, len(link_matches))):
                 title = clean(link_matches[i])
                 snippet = clean(snippet_matches[i]) if i < len(snippet_matches) else ""
-                if title:
+                if title and not any(title.lower() in r.lower() for r in results):
                     results.append(f"- {title}: {snippet}")
-            if results:
-                return results
+            if len(results) >= max_results:
+                return results[:max_results]
         except Exception as exc:
             print(f"[WEB][DDG Lite attempt {attempt+1} FAULT] {exc}")
         if attempt < _retries:
-            time.sleep(0.5)                            
-    print(f"[WEB] All search strategies failed for query: {query[:80]}")
+            time.sleep(0.5)
+
+    if results:
+        return results[:max_results]
+
+    print(f"[WEB] All search strategies returned 0 results for query: {query[:80]}")
     return []
+
 def _get_token():
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
@@ -3080,17 +3196,19 @@ SYSTEM_PROMPT = (
     "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
     "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
     "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
-    "- REAL WEB CONNECTIVITY, MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
-    "  * You have live internet access, python, and bash equipped with the BEST all-purpose search engines:\n"
-    "    - `from fetch_image import fetch_web_image, fetch_multiple_images, search_accurate_images`: Searches Wikimedia Commons, Wikipedia PageImages, Bing Async Media, and PokeAPI with automatic PIL validation and concurrent downloading for ANY actor, anime, show, character, celebrity, or subject.\n"
-    "    - `from web_research import get_show_cast_and_details, search_accurate_web_info, build_character_encyclopedia_pdf, verify_deliverable`: Combines DuckDuckGo Instant Answer API and Wikipedia REST API for 100% accurate information, synopsis, and cast details.\n"
-    "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
-    "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
+    "- REAL WEB CONNECTIVITY, BUILT-IN MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
+    "  * You possess genuine, built-in search engines directly integrated into your agent environment:\n"
+    "    - Native Web Search (```websearch <query>```): Live web intelligence powered by Wikipedia REST API, DuckDuckGo Instant Answer API, and web search index for verified facts, summaries, biographies, lore, and current events.\n"
+    "    - Native Image Search (```imagesearch <query>```): Real image search engine powered by Wikipedia PageImages, Wikimedia Commons, Bing Media, and PokeAPI with automatic resolution validation and live URL discovery for ANY actor, anime, game, character, celebrity, or subject.\n"
+    "    - Python & Bash utilities are ALSO available if needed (`from fetch_image import search_accurate_images, fetch_web_image` and `from web_research import get_show_cast_and_details`).\n"
+    "    - Whenever you need facts, biographies, news, or images, run a ```websearch <query>``` or ```imagesearch <query>``` block (or bash/python) right away — never guess or hallucinate facts or images!\n"
+    "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES: Never use circle badges, blank boxes, or initials when web access is available.\n"
+    "    - Embed real images directly into PDFs, HTML games, or web applications.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
     "- AUTONOMOUS CONTINUOUS EXECUTION CADENCE (DYNAMIC MIX — NEVER STOP HALFWAY):\n"
     "  * Work continuously and dynamically without stopping halfway until the user request is 100% complete and verified on disk:\n"
     "    - 1st: State what you will do in 1-2 conversational, natural sentences (in your own genuine voice, never robotic or hardcoded).\n"
-    "    - 2nd: Execute terminal commands in a ```bash or ```python block immediately to search the live web or fetch needed sprites/images using `python3 fetch_image.py \"<query>\" \"<file>\"`, PokeAPI, or `web_research.py`.\n"
+    "    - 2nd: Execute search or terminal commands immediately in a ```websearch, ```imagesearch, ```bash, or ```python block to retrieve authentic live data and real images.\n"
     "    - 3rd: Explain what was gathered and what you will do next in the next step.\n"
     "    - 4th: Synthesize the complete, standalone deliverable inside a ```createfile:<filename> block.\n"
     "    - 5th: Run verification terminal commands to check that the file exists and is valid on disk.\n"
@@ -5839,7 +5957,7 @@ def _do_stream(messages):
     yield _sse({"type":"error","error":{"code":code,"message":friendly}})
     yield _sse({"type":"complete"})
 
-_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search"}
+_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 8                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 45                                                                            
@@ -6120,7 +6238,7 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
     would otherwise have no way to work around.
     """
     if EXECUTOR_CONFIGURED:
-        stdout, stderr, rc, ok = _run_code_block_remote(lang, _sanitize_shell_script(code) if lang not in ("python", "py", "web", "websearch", "search") else code, cwd)
+        stdout, stderr, rc, ok = _run_code_block_remote(lang, _sanitize_shell_script(code) if lang not in ("python", "py", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search") else code, cwd)
         if ok:
             return stdout, stderr, rc
     exec_env = dict(os.environ)
@@ -6139,6 +6257,17 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
         if lang in ("web", "websearch", "search"):
             results = _web_search_snippets(code.strip())
             out = "\n".join(results) if results else "No web search results found."
+            return out, "", 0
+        if lang in ("imagesearch", "imgsearch", "image_search"):
+            img_results = _search_real_images(code.strip(), max_results=8, download_to_dir=os.path.join(cwd, "assets") if cwd else None)
+            if img_results:
+                lines = []
+                for idx, item in enumerate(img_results, 1):
+                    local_info = f" (Saved to: {item['local_path']})" if item.get('local_path') else ""
+                    lines.append(f"{idx}. {item['title']}: {item['url']}{local_info} [Source: {item['source']}]")
+                out = "\n".join(lines)
+            else:
+                out = f"No images found for query: {code.strip()}"
             return out, "", 0
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
@@ -7849,6 +7978,13 @@ def chat_stream():
                         "type": "agent_step",
                         "step_type": "searching",
                         "label": f"Searching web: {code.strip()[:60]}...",
+                        "timestamp": time.time()
+                    })
+                elif lang in ("imagesearch", "imgsearch", "image_search"):
+                    yield _sse({
+                        "type": "agent_step",
+                        "step_type": "searching",
+                        "label": f"Searching images: {code.strip()[:60]}...",
                         "timestamp": time.time()
                     })
                 else:
