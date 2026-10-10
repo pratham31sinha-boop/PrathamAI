@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ash Ketchum's Pokémon Journey</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+        #game-container {
+            width: 100%;
+            max-width: 480px;
+            height: 100%;
+            max-height: 850px;
+            background: #222;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 4px solid #444;
+        }
+        #screen {
+            flex: 1;
+            background: #70c1b3;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            background: #98e5c8;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 100%;
+            height: 100%;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            border: 2px solid #ffcc00;
+            z-index: 10;
+        }
+        #dialogue-box {
+            position: absolute;
+            bottom: 150px;
+            left: 10px;
+            right: 10px;
+            background: rgba(16, 24, 48, 0.95);
+            border: 3px solid #ffcc00;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            min-height: 60px;
+            display: none;
+            z-index: 20;
+            color: #fff;
+        }
+        #controls {
+            height: 220px;
+            background: #1c1c1c;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 8px;
+            padding: 15px;
+            border-top: 4px solid #333;
+        }
+        .control-btn {
+            background: #333;
+            color: #ffcc00;
+            border: 3px solid #555;
+            border-radius: 12px;
+            font-size: 22px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px #111;
+            transition: all 0.1s;
+        }
+        .control-btn:active {
+            background: #444;
+            transform: translateY(3px);
+            box-shadow: 0 1px #111;
+        }
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+        #action-panel {
+            grid-column: 3;
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .action-btn {
+            background: #d9534f;
+            color: white;
+            border: 2px solid #b52b27;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            flex: 1;
+            cursor: pointer;
+        }
+        .action-btn:active { background: #c9302c; }
+        #battle-menu {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 150px;
+            background: #112233;
+            border-top: 4px solid #ffcc00;
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            padding: 15px;
+            z-index: 30;
+        }
+        .battle-btn {
+            background: #ffcc00;
+            color: #111;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px #b38f00;
+        }
+        .battle-btn:active { transform: translateY(2px); box-shadow: 0 2px #b38f00; }
+        #start-screen {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            text-align: center;
+            padding: 20px;
+        }
+        #start-screen h1 { color: #ffcc00; font-size: 28px; text-shadow: 2px 2px #000; margin-bottom: 10px; }
+        #start-screen p { color: #fff; font-size: 14px; margin-bottom: 30px; }
+        #start-btn {
+            background: #ffcc00;
+            color: #111;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 6px #b38f00;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="start-screen">
+            <h1>POKÉMON JOURNEY</h1>
+            <p>Ash Ketchum's Quest to be a Pokémon Master!</p>
+            <button id="start-btn" onclick="startGame()">START ADVENTURE</button>
+        </div>
+
+        <div id="screen">
+            <div id="hud">
+                <span id="hud-name">Ash (Pikachu)</span>
+                <span id="hud-badges">Badges: 0/3</span>
+            </div>
+            <div id="dialogue-box">Welcome to Pallet Town! Explore the tall grass to battle wild Pokémon.</div>
+            <canvas id="gameCanvas" width="360" height="420"></canvas>
+            
+            <div id="battle-menu">
+                <button class="battle-btn" onclick="battleAction('fight')">⚡ THUNDERBOLT</button>
+                <button class="battle-btn" onclick="battleAction('quick')">💨 QUICK ATTACK</button>
+                <button class="battle-btn" onclick="battleAction('item')">🧪 POTION</button>
+                <button class="battle-btn" onclick="battleAction('run')">🏃 RUN</button>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div class="control-btn" id="btn-up" ontouchstart="setDir(0,-1)" onmousedown="setDir(0,-1)">⬆️</div>
+            <div class="control-btn" id="btn-left" ontouchstart="setDir(-1,0)" onmousedown="setDir(-1,0)">⬅️</div>
+            <div class="control-btn" id="btn-down" ontouchstart="setDir(0,1)" onmousedown="setDir(0,1)">⬇️</div>
+            <div class="control-btn" id="btn-right" ontouchstart="setDir(1,0)" onmousedown="setDir(1,0)">➡️</div>
+            <div id="action-panel">
+                <button class="action-btn" onclick="triggerAction()">ACTION</button>
+                <button class="action-btn" onclick="healPokemon()" style="background:#4cae4c; border-color:#398439;">CENTER</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let gameState = "START"; // START, OVERWORLD, BATTLE, DIALOGUE
+        let badges = 0;
+        let ash = {
+            x: 180,
+            y: 200,
+            size: 24,
+            speed: 3,
+            dirX: 0,
+            dirY: 0,
+            pokemon: { name: "Pikachu", level: 10, hp: 45, maxHp: 45, attack: 18 }
+        };
+
+        let wildPokemon = null;
+        let dialogueTimer = null;
+
+        // Map elements (Grass, Trees, Gym, PokeCenter)
+        const obstacles = [
+            { x: 0, y: 0, w: 360, h: 40, type: "tree" }, // Top border
+            { x: 0, y: 380, w: 360, h: 40, type: "tree" }, // Bottom border
+            { x: 0, y: 0, w: 40, h: 420, type: "tree" }, // Left border
+            { x: 320, y: 0, w: 40, h: 420, type: "tree" }, // Right border
+            { x: 140, y: 140, w: 80, h: 60, type: "gym", name: "Gym" },
+            { x: 60, y: 80, w: 60, h: 50, type: "center", name: "PokeCenter" }
+        ];
+
+        const grassPatches = [
+            { x: 60, y: 240, w: 100, h: 100 },
+            { x: 200, y: 240, w: 100, h: 100 }
+        ];
+
+        const wildPool = [
+            { name: "Pidgey", level: 5, hp: 25, maxHp: 25, attack: 10 },
+            { name: "Caterpie", level: 4, hp: 20, maxHp: 20, attack: 8 },
+            { name: "Rattata", level: 6, hp: 28, maxHp: 28, attack: 12 },
+            { name: "Mankey", level: 8, hp: 35, maxHp: 35, attack: 15 }
+        ];
+
+        function startGame() {
+            document.getElementById("start-screen").style.display = "none";
+            gameState = "OVERWORLD";
+            showDialogue("Ash: Let's explore Pallet Town and win 3 Gym Badges!");
+            gameLoop();
+        }
+
+        function showDialogue(text, duration = 3000) {
+            const box = document.getElementById("dialogue-box");
+            box.innerText = text;
+            box.style.display = "block";
+            if (dialogueTimer) clearTimeout(dialogueTimer);
+            if (duration > 0) {
+                dialogueTimer = setTimeout(() => {
+                    box.style.display = "none";
+                }, duration);
+            }
+        }
+
+        function setDir(dx, dy) {
+            if (gameState !== "OVERWORLD") return;
+            ash.dirX = dx;
+            ash.dirY = dy;
+        }
+
+        document.addEventListener("keyup", (e) => {
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") ash.dirY = 0;
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") ash.dirX = 0;
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowUp") setDir(0, -1);
+            if (e.key === "ArrowDown") setDir(0, 1);
+            if (e.key === "ArrowLeft") setDir(-1, 0);
+            if (e.key === "ArrowRight") setDir(1, 0);
+            if (e.key === " ") triggerAction();
+        });
+
+        function update() {
+            if (gameState !== "OVERWORLD") return;
+
+            let nextX = ash.x + ash.dirX * ash.speed;
+            let nextY = ash.y + ash.dirY * ash.speed;
+
+            // Collision check
+            let collide = false;
+            for (let obs of obstacles) {
+                if (nextX < obs.x + obs.w && nextX + ash.size > obs.x &&
+                    nextY < obs.y + obs.h && nextY + ash.size > obs.y) {
+                    collide = true;
+                    break;
+                }
+            }
+
+            if (!collide) {
+                ash.x = nextX;
+                ash.y = nextY;
+
+                // Check grass encounter
+                if (ash.dirX !== 0 || ash.dirY !== 0) {
+                    for (let g of grassPatches) {
+                        if (ash.x > g.x && ash.x < g.x + g.w && ash.y > g.y && ash.y < g.y + g.h) {
+                            if (Math.random() < 0.03) {
+                                startBattle();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function triggerAction() {
+            if (gameState !== "OVERWORLD") return;
+            // Check proximity to Gym or PokeCenter
+            for (let obs of obstacles) {
+                if (Math.abs(ash.x - obs.x) < 50 && Math.abs(ash.y - obs.y) < 50) {
+                    if (obs.type === "center") {
+                        healPokemon();
+                    } else if (obs.type === "gym") {
+                        startGymBattle();
+                    }
+                }
+            }
+        }
+
+        function healPokemon() {
+            ash.pokemon.hp = ash.pokemon.maxHp;
+            showDialogue("Nurse Joy: Your Pokémon is fully healed! ✨");
+        }
+
+        function startGymBattle() {
+            gameState = "BATTLE";
+            wildPokemon = { name: "Gym Leader's Onix", level: 15, hp: 60, maxHp: 60, attack: 22, isGym: true };
+            document.getElementById("battle-menu").style.display = "grid";
+            showDialogue(`Challenging Gym Leader! Wild ${wildPokemon.name} appeared!`);
+        }
+
+        function startBattle() {
+            gameState = "BATTLE";
+            let template = wildPool[Math.floor(Math.random() * wildPool.length)];
+            wildPokemon = JSON.parse(JSON.stringify(template));
+            document.getElementById("battle-menu").style.display = "grid";
+            showDialogue(`A wild ${wildPokemon.name} (Lv.${wildPokemon.level}) appeared!`);
+        }
+
+        function battleAction(type) {
+            if (gameState !== "BATTLE") return;
+
+            if (type === 'run') {
+                if (wildPokemon.isGym) {
+                    showDialogue("Can't run from a Gym Battle!");
+                    return;
+                }
+                endBattle("Got away safely!");
+                return;
+            }
+
+            if (type === 'item') {
+                ash.pokemon.hp = Math.min(ash.pokemon.maxHp, ash.pokemon.hp + 25);
+                showDialogue(`Used Potion! Restored 25 HP.`);
+            } else {
+                let dmg = type === 'fight' ? ash.pokemon.attack : Math.floor(ash.pokemon.attack * 0.7);
+                wildPokemon.hp -= dmg;
+                showDialogue(`Pikachu used attack! Dealt ${dmg} damage.`);
+            }
+
+            if (wildPokemon.hp <= 0) {
+                setTimeout(() => {
+                    if (wildPokemon.isGym) {
+                        badges++;
+                        document.getElementById("hud-badges").innerText = `Badges: ${badges}/3`;
+                        if (badges >= 3) {
+                            alert("🏆 CONGRATULATIONS! You collected all 3 Badges and became the Pokémon Champion!");
+                        }
+                    }
+                    endBattle(`Won the battle against ${wildPokemon.name}! 🎉`);
+                }, 1000);
+                return;
+            }
+
+            // Enemy turn
+            setTimeout(() => {
+                let enemyDmg = wildPokemon.attack;
+                ash.pokemon.hp -= enemyDmg;
+                showDialogue(`${wildPokemon.name} counterattacked for ${enemyDmg} damage!`);
+
+                if (ash.pokemon.hp <= 0) {
+                    setTimeout(() => {
+                        ash.pokemon.hp = ash.pokemon.maxHp;
+                        endBattle("Pikachu fainted! Healed at Pokémon Center.");
+                    }, 1200);
+                }
+            }, 1000);
+        }
+
+        function endBattle(msg) {
+            document.getElementById("battle-menu").style.display = "none";
+            gameState = "OVERWORLD";
+            showDialogue(msg);
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Ground / Grass
+            ctx.fillStyle = "#98e5c8";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Tall Grass
+            ctx.fillStyle = "#66cc99";
+            for (let g of grassPatches) {
+                ctx.fillRect(g.x, g.y, g.w, g.h);
+                ctx.fillStyle = "#55bb88";
+                ctx.fillRect(g.x + 5, g.y + 5, g.w - 10, g.h - 10);
+                ctx.fillStyle = "#66cc99";
+            }
+
+            // Draw Obstacles (Trees, Gym, Center)
+            for (let obs of obstacles) {
+                if (obs.type === "tree") {
+                    ctx.fillStyle = "#2e7d32";
+                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                    ctx.fillStyle = "#388e3c";
+                    ctx.fillRect(obs.x + 4, obs.y + 4, obs.w - 8, obs.h - 8);
+                } else if (obs.type === "gym") {
+                    ctx.fillStyle = "#b71c1c";
+                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "12px Courier New";
+                    ctx.fillText("GYM", obs.x + 25, obs.y + 35);
+                } else if (obs.type === "center") {
+                    ctx.fillStyle = "#0277bd";
+                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "10px Courier New";
+                    ctx.fillText("🏥 CENTER", obs.x + 2, obs.y + 30);
+                }
+            }
+
+            // Draw Ash (Player)
+            ctx.fillStyle = "#ff3b30"; // Ash's cap
+            ctx.fillRect(ash.x + 4, ash.y, 16, 8);
+            ctx.fillStyle = "#ffcc00"; // Hair
+            ctx.fillRect(ash.x + 4, ash.y + 8, 16, 6);
+            ctx.fillStyle = "#007aff"; // Shirt
+            ctx.fillRect(ash.x + 2, ash.y + 14, 20, 10);
+
+            // Render Battle screen if in battle
+            if (gameState === "BATTLE" && wildPokemon) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+                ctx.fillRect(20, 40, 320, 200);
+
+                // Wild Enemy Info
+                ctx.fillStyle = "#fff";
+                ctx.font = "14px Courier New";
+                ctx.fillText(`${wildPokemon.name} (Lv.${wildPokemon.level})`, 40, 70);
+                ctx.fillStyle = "#555";
+                ctx.fillRect(40, 80, 150, 12);
+                ctx.fillStyle = "#ff3b30";
+                ctx.fillRect(40, 80, (wildPokemon.hp / wildPokemon.maxHp) * 150, 12);
+
+                // Ash's Pikachu Info
+                ctx.fillText(`Pikachu (Lv.${ash.pokemon.level})`, 160, 180);
+                ctx.fillStyle = "#555";
+                ctx.fillRect(160, 190, 150, 12);
+                ctx.fillStyle = "#4cd964";
+                ctx.fillRect(160, 190, (ash.pokemon.hp / ash.pokemon.maxHp) * 150, 12);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
