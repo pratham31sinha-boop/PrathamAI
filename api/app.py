@@ -5735,7 +5735,6 @@ def _stream_cloudflare_tunnel(messages, state=None):
 
 _PROVIDER_CHAIN = [
     ("antigravity_cli", _stream_antigravity_cli),
-    ("cloudflare_tunnel", _stream_cloudflare_tunnel),
     ("google_gemini_oauth", _stream_google_oauth_gemini),
     ("gemini_api_key", _stream_gemini_api_key),
     ("groq", _stream_groq),
@@ -5765,9 +5764,9 @@ def _do_stream(messages):
         continuation_count = 0
         try:
             # Emit planning and asset search indicators for cloud providers on Render
-            if not shutil.which("agy") and name != "cloudflare_tunnel":
+            if not shutil.which("agy"):
                 yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
-                if any(k in user_query_lower for k in ["image", "images", "cast", "pokemon", "character", "sprite", "asset", "web"]):
+                if any(k in user_query_lower for k in ["image", "images", "cast", "pokemon", "character", "sprite", "asset", "web", "pdf"]):
                     yield _sse({"type": "agent_step", "step_type": "searching", "label": "Searching web assets & references...", "timestamp": time.time()})
 
             while True:
@@ -5805,7 +5804,7 @@ def _do_stream(messages):
                 full_streamed = "".join(accumulated_text)
 
                 # Render Autonomous Deliverable Execution & Verification
-                if name not in ("antigravity_cli", "cloudflare_tunnel") and is_deliverable_req:
+                if name != "antigravity_cli":
                     # 1. Extract createfile blocks directly to WORKSPACE_ROOT
                     for cf_m in re.finditer(r"```createfile:([^\n`]+)\n([\s\S]*?)```", full_streamed):
                         fname = os.path.basename(cf_m.group(1).strip())
@@ -5815,10 +5814,38 @@ def _do_stream(messages):
                                 fpath = os.path.join(WORKSPACE_ROOT, fname)
                                 with open(fpath, "w", encoding="utf-8") as wf:
                                     wf.write(fcode)
+                                yield _sse({
+                                    "type": "terminal_output", "ordinal": 0,
+                                    "stdout": f"Saved {fname} ({len(fcode)} bytes).",
+                                    "stderr": "", "returncode": 0
+                                })
                             except Exception:
                                 pass
 
-                    # 2. If user asked for an HTML game/app but model emitted plain ```html ... ```, auto-register as createfile
+                    # 2. Extract and execute bash / python code blocks directly in WORKSPACE_ROOT
+                    for lang, code_body in re.findall(r"```(bash|sh|python|py)\s*\n([\s\S]*?)```", full_streamed, re.IGNORECASE):
+                        clean_code = code_body.strip()
+                        if not clean_code:
+                            continue
+                        lang_lower = lang.lower()
+                        try:
+                            if lang_lower in ("bash", "sh"):
+                                yield _sse({"type": "agent_step", "step_type": "executing", "label": "Running terminal command...", "timestamp": time.time()})
+                                run_res = subprocess.run(clean_code, shell=True, cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=60)
+                            else:
+                                yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing Python script...", "timestamp": time.time()})
+                                run_res = subprocess.run([sys.executable, "-c", clean_code], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=60)
+                            yield _sse({
+                                "type": "terminal_output", "ordinal": 0,
+                                "code": clean_code[:120],
+                                "stdout": (run_res.stdout or "")[:3000],
+                                "stderr": (run_res.stderr or "")[:1500],
+                                "returncode": run_res.returncode
+                            })
+                        except Exception as exec_err:
+                            print(f"[RENDER_EXEC_ERR] {exec_err}")
+
+                    # 3. If user asked for an HTML game/app but model emitted plain ```html ... ```, auto-register as createfile
                     if dt_req.get("is_html") and "```createfile:" not in full_streamed:
                         html_blocks = re.findall(r"```(?:html)?\s*\n([\s\S]*?<!DOCTYPE html[\s\S]*?)```", full_streamed, re.IGNORECASE)
                         if not html_blocks:
@@ -5837,21 +5864,33 @@ def _do_stream(messages):
                                     for p in re.split(r"(\s+)", cf_block):
                                         if p:
                                             yield _sse({"type": "token", "text": p})
+                                    yield _sse({
+                                        "type": "terminal_output", "ordinal": 0,
+                                        "stdout": f"Saved {auto_name} ({len(h_code)} bytes).",
+                                        "stderr": "", "returncode": 0
+                                    })
                                 except Exception:
                                     pass
 
-                    # 3. If Python build / generator scripts were created, execute them on disk
+                    # 4. If Python build / generator scripts were created, execute them on disk
                     for fn in os.listdir(WORKSPACE_ROOT):
                         if (fn.startswith("generate_") or fn.startswith("build_") or fn.startswith("fetch_")) and fn.endswith(".py"):
                             g_path = os.path.join(WORKSPACE_ROOT, fn)
                             if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (turn_start_time - 1.0):
                                 yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
                                 try:
-                                    subprocess.run([sys.executable, fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
+                                    g_res = subprocess.run([sys.executable, fn], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=90)
+                                    yield _sse({
+                                        "type": "terminal_output", "ordinal": 0,
+                                        "code": f"python3 {fn}",
+                                        "stdout": (g_res.stdout or "")[:3000],
+                                        "stderr": (g_res.stderr or "")[:1500],
+                                        "returncode": g_res.returncode
+                                    })
                                 except Exception as _p_err:
                                     print(f"[PYTHON_EXEC_ERR] {_p_err}")
 
-                    # 4. Discover and verify candidate deliverables (.html, .pdf, .zip) on disk
+                    # 5. Discover and verify candidate deliverables (.html, .pdf, .zip) on disk
                     target_ext = "html" if dt_req.get("is_html") else ("pdf" if dt_req.get("is_pdf") else ("zip" if dt_req.get("is_zip") else None))
                     if target_ext:
                         try:
