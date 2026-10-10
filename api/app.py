@@ -5687,9 +5687,17 @@ def _summarize_old_messages(messages: list, conv_id: str = None) -> list:
 DEFAULT_TUNNEL_URL = os.environ.get("TUNNEL_URL", "https://balance-onlooker-party.ngrok-free.dev").strip().rstrip("/")
 
 def _stream_cloudflare_tunnel(messages, state=None):
-    if shutil.which("agy"):
+    if shutil.which("agy") or os.path.exists("/root/.local/bin/agy"):
         return
-    tunnel = DEFAULT_TUNNEL_URL
+    tunnel = ""
+    try:
+        latest_worker = _worker_get_latest()
+        if latest_worker and _worker_is_online(latest_worker):
+            tunnel = (latest_worker.get("tunnel_url") or latest_worker.get("url") or "").strip().rstrip("/")
+    except Exception:
+        pass
+    if not tunnel:
+        tunnel = os.environ.get("TUNNEL_URL", DEFAULT_TUNNEL_URL).strip().rstrip("/")
     if not tunnel:
         return
     import urllib.request, json
@@ -5700,48 +5708,55 @@ def _stream_cloudflare_tunnel(messages, state=None):
             break
     if not user_msg:
         return
-    target_url = f"{tunnel}/chat-stream"
-    payload = json.dumps({
-        "message": user_msg,
-        "conversation_id": (state or {}).get("conversation_id", "")
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        target_url,
-        data=payload,
-        headers={"Content-Type": "application/json", "Accept": "text/event-stream", "ngrok-skip-browser-warning": "true"},
-        method="POST"
-    )
-    with urllib.request.urlopen(req, timeout=50) as resp:
-        for line in resp:
-            line_str = line.decode("utf-8", "ignore")
-            if line_str.startswith("data: "):
-                yield line_str
+    try:
+        target_url = f"{tunnel}/chat-stream"
+        payload = json.dumps({
+            "message": user_msg,
+            "conversation_id": (state or {}).get("conversation_id", "")
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            target_url,
+            data=payload,
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream", "ngrok-skip-browser-warning": "true", "X-Daytona-Skip-Preview-Warning": "true"},
+            method="POST"
+        )
+        got_any = False
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            for line in resp:
+                line_str = line.decode("utf-8", "ignore")
+                if line_str.startswith("data: "):
+                    got_any = True
+                    yield line_str
+        if got_any:
+            return
+    except Exception as tunnel_exc:
+        print(f"[TUNNEL_FAILOVER] Live tunnel ({tunnel}) unreachable: {tunnel_exc}. Falling over to cloud agent chain...")
+        return
 
 _PROVIDER_CHAIN = [
     ("antigravity_cli", _stream_antigravity_cli),
+    ("cloudflare_tunnel", _stream_cloudflare_tunnel),
     ("google_gemini_oauth", _stream_google_oauth_gemini),
     ("gemini_api_key", _stream_gemini_api_key),
     ("groq", _stream_groq),
     ("openrouter", _stream_openrouter),
     ("cerebras", _stream_cerebras),
     ("mistral", _stream_mistral),
-    ("cloudflare_tunnel", _stream_cloudflare_tunnel),
     ("qwen_ollama", _stream_qwen_ollama),
     ("pratham_fast_engine", _stream_pratham_fast_engine)
 ]
 _MAX_AUTO_CONTINUATIONS = 6                                                                     
 def _do_stream(messages):
-    """Streams a reply from the first available provider, then — this is
-    the fix for "it stops making the HTML in the middle" — automatically
-    detects when the provider cut the response short purely because it hit
-    its token limit (finish_reason == 'length', NOT a real stop) and keeps
-    requesting continuations from the SAME provider, feeding back exactly
-    what's been generated so far and asking it to continue seamlessly with
-    no repetition, until the response actually finishes normally or the
-    continuation cap is hit. The continued tokens are streamed to the
-    frontend exactly like the original ones, so a file that would have been
-    cut off mid-file now keeps going until it's actually complete."""
+    """Streams a reply from the first available provider with automatic length continuation
+    and autonomous deliverable compilation & verification parity on Render."""
     _failure_log = []                                                                                
+    turn_start_time = time.time()
+    user_msgs = [m.get("content", "") for m in (messages or []) if m.get("role") == "user"]
+    last_user_query = user_msgs[-1].strip() if user_msgs else ""
+    user_query_lower = last_user_query.lower()
+    dt_req = _classify_requested_deliverable_types(user_query_lower)
+    is_deliverable_req = bool(dt_req.get("is_html") or dt_req.get("is_pdf") or dt_req.get("is_zip") or dt_req.get("explicit_name"))
+
     for name, fn in _PROVIDER_CHAIN:
         state = {"temperature": getattr(_do_stream, '_current_temperature', 0.4)}
         accumulated_text = []
@@ -5749,6 +5764,12 @@ def _do_stream(messages):
         working_messages = list(messages)
         continuation_count = 0
         try:
+            # Emit planning and asset search indicators for cloud providers on Render
+            if not shutil.which("agy") and name != "cloudflare_tunnel":
+                yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
+                if any(k in user_query_lower for k in ["image", "images", "cast", "pokemon", "character", "sprite", "asset", "web"]):
+                    yield _sse({"type": "agent_step", "step_type": "searching", "label": "Searching web assets & references...", "timestamp": time.time()})
+
             while True:
                 state.clear()
                 got_tokens_this_round = False
@@ -5781,6 +5802,89 @@ def _do_stream(messages):
                 ]
             if any_token_yielded:
                 _do_stream._last_successful_provider = name
+                full_streamed = "".join(accumulated_text)
+
+                # Render Autonomous Deliverable Execution & Verification
+                if name not in ("antigravity_cli", "cloudflare_tunnel") and is_deliverable_req:
+                    # 1. Extract createfile blocks directly to WORKSPACE_ROOT
+                    for cf_m in re.finditer(r"```createfile:([^\n`]+)\n([\s\S]*?)```", full_streamed):
+                        fname = os.path.basename(cf_m.group(1).strip())
+                        fcode = cf_m.group(2)
+                        if fname and fcode and fname.lower() not in _IGNORE_FILE_NAMES:
+                            try:
+                                fpath = os.path.join(WORKSPACE_ROOT, fname)
+                                with open(fpath, "w", encoding="utf-8") as wf:
+                                    wf.write(fcode)
+                            except Exception:
+                                pass
+
+                    # 2. If user asked for an HTML game/app but model emitted plain ```html ... ```, auto-register as createfile
+                    if dt_req.get("is_html") and "```createfile:" not in full_streamed:
+                        html_blocks = re.findall(r"```(?:html)?\s*\n([\s\S]*?<!DOCTYPE html[\s\S]*?)```", full_streamed, re.IGNORECASE)
+                        if not html_blocks:
+                            html_blocks = re.findall(r"```html\s*\n([\s\S]*?)```", full_streamed, re.IGNORECASE)
+                        if html_blocks:
+                            h_code = html_blocks[0]
+                            auto_name = dt_req.get("explicit_name") or "game.html"
+                            if not auto_name.endswith(".html"):
+                                auto_name += ".html"
+                            if auto_name.lower() not in _IGNORE_FILE_NAMES:
+                                try:
+                                    h_path = os.path.join(WORKSPACE_ROOT, auto_name)
+                                    with open(h_path, "w", encoding="utf-8") as hwf:
+                                        hwf.write(h_code)
+                                    cf_block = f"\n\n```createfile:{auto_name}\n{h_code}\n```\n"
+                                    for p in re.split(r"(\s+)", cf_block):
+                                        if p:
+                                            yield _sse({"type": "token", "text": p})
+                                except Exception:
+                                    pass
+
+                    # 3. If Python build / generator scripts were created, execute them on disk
+                    for fn in os.listdir(WORKSPACE_ROOT):
+                        if (fn.startswith("generate_") or fn.startswith("build_") or fn.startswith("fetch_")) and fn.endswith(".py"):
+                            g_path = os.path.join(WORKSPACE_ROOT, fn)
+                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (turn_start_time - 1.0):
+                                yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
+                                try:
+                                    subprocess.run([sys.executable, fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
+                                except Exception as _p_err:
+                                    print(f"[PYTHON_EXEC_ERR] {_p_err}")
+
+                    # 4. Discover and verify candidate deliverables (.html, .pdf, .zip) on disk
+                    target_ext = "html" if dt_req.get("is_html") else ("pdf" if dt_req.get("is_pdf") else ("zip" if dt_req.get("is_zip") else None))
+                    if target_ext:
+                        try:
+                            candidate_files = []
+                            _stop = {"make", "create", "generate", "build", "pdf", "zip", "containing", "image", "images", "all", "characters", "character", "with", "the", "details", "brief", "now", "try", "to", "and", "file", "please", "can", "you", "a", "an", "of", "in", "on", "for", "breif", "game"}
+                            _q_words = [w for w in re.findall(r"[a-z0-9]+", user_query_lower) if len(w) > 2 and w not in _stop]
+                            for fn in os.listdir(WORKSPACE_ROOT):
+                                if fn.lower().endswith(f".{target_ext}") and not fn.startswith(".") and fn.lower() not in _IGNORE_FILE_NAMES:
+                                    fp = os.path.join(WORKSPACE_ROOT, fn)
+                                    if os.path.isfile(fp) and os.path.getsize(fp) > 50:
+                                        mtime = os.path.getmtime(fp)
+                                        if mtime >= (turn_start_time - 1.0):
+                                            fn_lower = fn.lower()
+                                            match_cnt = sum(1 for w in _q_words if w in fn_lower)
+                                            candidate_files.append((match_cnt, mtime, fn, fp))
+                            if candidate_files:
+                                candidate_files.sort(key=lambda x: (x[0], x[1]), reverse=True)
+                                _, _, fn, fp = candidate_files[0]
+                                with open(fp, "rb") as bin_fh:
+                                    bin_bytes = bin_fh.read()
+                                mime = "text/html" if target_ext == "html" else ("application/pdf" if target_ext == "pdf" else "application/zip")
+                                token = _store_generated_file(bin_bytes, fn, mime)
+                                f_size_kb = round(len(bin_bytes) / 1024, 1)
+                                yield _sse({"type": "agent_step", "step_type": "verifying", "label": f"Verified {fn} ({f_size_kb} KB)", "timestamp": time.time()})
+                                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
+                                if any(p in full_streamed.lower() for p in ["i have launched", "i will notify you", "as soon as the file is compiled", "i will update you"]):
+                                    close_note = f"\n\n**Verification Complete:** **{fn}** ({f_size_kb} KB) has been verified directly on disk and is ready for download above!"
+                                    for part in re.split(r"(\s+)", close_note):
+                                        if part:
+                                            yield _sse({"type": "token", "text": part})
+                        except Exception as bin_err:
+                            print(f"[RENDER_DELIVERABLE_ERR] {bin_err}")
+
                 yield _sse({"type": "complete"})
                 return
         except Exception as exc:
