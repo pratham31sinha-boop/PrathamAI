@@ -2572,6 +2572,80 @@ def _search_real_images(query: str, max_results: int = 8, download_to_dir: str =
 
     return final_results
 
+def _search_and_download_web_pdfs(query: str, max_results: int = 4, download_to_dir: str = None) -> list:
+    """Real multi-engine PDF search & download engine.
+    Finds real publicly accessible PDFs from authoritative web sources via DuckDuckGo,
+    validates the file magic header (%PDF), and downloads to download_to_dir.
+    Returns list of dicts: [{'title': ..., 'url': ..., 'local_path': ..., 'size_bytes': ...}]
+    """
+    clean_q = re.sub(r'\b(?:download|fetch|get|pdf|file|from|web|online|internet|please)\b', '', query, flags=re.I).strip()
+    if not clean_q:
+        clean_q = query
+
+    search_q = f"{clean_q} filetype:pdf"
+    results = []
+    seen = set()
+
+    try:
+        encoded = urllib.parse.quote(search_q)
+        req = urllib.request.Request(
+            f"https://html.duckduckgo.com/html/?q={encoded}",
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=6.0) as resp:
+            html = resp.read().decode('utf-8', errors='ignore')
+
+        links = re.findall(r'href=\"([^\"]+uddg=([^\"]+))\"', html)
+        titles = re.findall(r'class=\"result__a\"[^>]*>(.*?)</a>', html, re.DOTALL)
+        clean_fn = lambda s: re.sub('<[^<]+?>', '', s).replace('&amp;', '&').replace('&quot;', '"').strip()
+
+        for idx, (full, uddg) in enumerate(links):
+            url = urllib.parse.unquote(uddg).split('&rut=')[0].split('&')[0]
+            if '.pdf' in url.lower() and url.startswith(('http://', 'https://')) and url not in seen:
+                seen.add(url)
+                t = clean_fn(titles[idx]) if idx < len(titles) else f"{clean_q} Document {len(results)+1}"
+                results.append({"title": t, "url": url})
+                if len(results) >= max_results:
+                    break
+    except Exception as exc:
+        print(f"[SEARCH_PDF][DDG FAULT] {exc}")
+
+    # Fallback to direct URL if query itself was a link
+    if not results and (query.startswith("http://") or query.startswith("https://")) and ".pdf" in query.lower():
+        results.append({"title": os.path.basename(urllib.parse.urlparse(query).path) or "document.pdf", "url": query})
+
+    final_results = results[:max_results]
+
+    if download_to_dir and final_results:
+        os.makedirs(download_to_dir, exist_ok=True)
+        for item in final_results:
+            safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', item["title"][:40]).strip('_')
+            if not safe_name.lower().endswith(".pdf"):
+                safe_name += ".pdf"
+            local_path = os.path.join(download_to_dir, safe_name)
+            try:
+                dl_req = urllib.request.Request(item["url"], headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/pdf,*/*"
+                })
+                with urllib.request.urlopen(dl_req, timeout=7.0) as dl_resp:
+                    pdf_data = dl_resp.read()
+                if len(pdf_data) >= 500 and (pdf_data.startswith(b'%PDF-') or b'%PDF-' in pdf_data[:1024]):
+                    with open(local_path, "wb") as pf:
+                        pf.write(pdf_data)
+                    item["local_path"] = local_path
+                    item["size_bytes"] = len(pdf_data)
+                    print(f"[SEARCH_PDF][DOWNLOADED] {item['url']} -> {local_path} ({len(pdf_data)} bytes)")
+            except Exception as dl_err:
+                print(f"[SEARCH_PDF][DL FAULT] {item['url']} -> {dl_err}")
+
+    return final_results
+
+
 def _web_search_snippets(query: str, max_results: int = 5, _retries: int = 2):
     """Real multi-engine web search with retry logic and multi-source fallbacks:
     1. Google Custom Search (if configured)
@@ -3200,8 +3274,9 @@ SYSTEM_PROMPT = (
     "  * You possess genuine, built-in search engines directly integrated into your agent environment:\n"
     "    - Native Web Search (```websearch <query>```): Live web intelligence powered by Wikipedia REST API, DuckDuckGo Instant Answer API, and web search index for verified facts, summaries, biographies, lore, and current events.\n"
     "    - Native Image Search (```imagesearch <query>```): Real image search engine powered by Wikipedia PageImages, Wikimedia Commons, Bing Media, and PokeAPI with automatic resolution validation and live URL discovery for ANY actor, anime, game, character, celebrity, or subject.\n"
-    "    - Python & Bash utilities are ALSO available if needed (`from fetch_image import search_accurate_images, fetch_web_image` and `from web_research import get_show_cast_and_details`).\n"
-    "    - Whenever you need facts, biographies, news, or images, run a ```websearch <query>``` or ```imagesearch <query>``` block (or bash/python) right away — never guess or hallucinate facts or images!\n"
+    "    - Native PDF Search & Download (```pdfsearch <query>```): Search and download real publicly available PDF documents directly from the web with `%PDF` header validation.\n"
+    "    - Python & Bash utilities are ALSO available if needed (`from fetch_image import search_accurate_images, fetch_web_image` and `from web_research import get_show_cast_and_details`). You can also download any web PDF via bash using `curl -L \"<url>\" -o <file.pdf>` or python `urllib.request.urlretrieve`.\n"
+    "    - Whenever you need facts, biographies, news, images, or PDFs, run a ```websearch <query>```, ```imagesearch <query>```, or ```pdfsearch <query>``` block (or bash/python) right away — never guess or hallucinate facts or images!\n"
     "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed real images directly into PDFs, HTML games, or web applications.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
@@ -5957,7 +6032,7 @@ def _do_stream(messages):
     yield _sse({"type":"error","error":{"code":code,"message":friendly}})
     yield _sse({"type":"complete"})
 
-_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"}
+_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search", "pdfsearch", "pdf_search", "download_pdf"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 8                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 45                                                                            
@@ -6268,6 +6343,17 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
                 out = "\n".join(lines)
             else:
                 out = f"No images found for query: {code.strip()}"
+            return out, "", 0
+        if lang in ("pdfsearch", "pdf_search", "download_pdf"):
+            pdf_results = _search_and_download_web_pdfs(code.strip(), max_results=4, download_to_dir=cwd)
+            if pdf_results:
+                lines = []
+                for idx, item in enumerate(pdf_results, 1):
+                    local_info = f" (Downloaded to: {os.path.basename(item['local_path'])})" if item.get('local_path') else ""
+                    lines.append(f"{idx}. {item['title']}: {item['url']}{local_info}")
+                out = "\n".join(lines)
+            else:
+                out = f"No PDF documents found for query: {code.strip()}"
             return out, "", 0
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
@@ -7985,6 +8071,13 @@ def chat_stream():
                         "type": "agent_step",
                         "step_type": "searching",
                         "label": f"Searching images: {code.strip()[:60]}...",
+                        "timestamp": time.time()
+                    })
+                elif lang in ("pdfsearch", "pdf_search", "download_pdf"):
+                    yield _sse({
+                        "type": "agent_step",
+                        "step_type": "searching",
+                        "label": f"Searching & downloading PDFs: {code.strip()[:60]}...",
                         "timestamp": time.time()
                     })
                 else:
