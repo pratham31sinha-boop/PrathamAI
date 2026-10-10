@@ -3058,16 +3058,19 @@ SYSTEM_PROMPT = (
     "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
-    "- DYNAMIC CONTINUOUS EXECUTION LOOP (NON-STOP CADENCE):\n"
-    "  * Work continuously and dynamically without stopping halfway until the user request is 100% complete:\n"
-    "    - Naturally explain what you are doing, run terminal tools/scripts immediately to fetch needed web assets or code, inspect results, and write complete deliverables.\n"
-    "    - Never stop halfway or conclude with future promises (e.g. \x27I am compiling...\x27, \x27I have launched the script...\x27). Build, execute, and verify everything in the SAME turn.\n"
+    "- AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
+    "  * Work continuously and dynamically without stopping halfway until the user request is 100% complete and verified:\n"
+    "    - Naturally explain what you are doing in conversational language.\n"
+    "    - Run terminal tools/scripts immediately to fetch needed web assets (e.g. PokeAPI or fetch_image for sprites/images) or process code.\n"
+    "    - Explain what was done and synthesize the complete standalone deliverable inside ```createfile:<filename>.\n"
+    "    - Verify the deliverable exists and is functional on disk before concluding.\n"
+    "    - Never stop halfway or conclude with future promises (e.g. 'I am compiling...', 'I have launched the script...'). Build, execute, and verify everything in the SAME turn.\n"
     "- CLEAN DELIVERABLE PRESENTATION:\n"
     "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
     "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
     "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
-    "    - NEVER waste turns running `ls -la`, checking directories, or stalling on inspections!\n"
-    "    - Immediately write and deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in your first response!\n"
+    "    - Follow the dynamic cadence: state what you are doing, run terminal commands to fetch needed sprites/assets from web/PokeAPI or prepare them via python script, and synthesize the full game.\n"
+    "    - Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in this turn!\n"
     "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
     "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files cleanly to the user."
@@ -3831,7 +3834,7 @@ class _WarmAntigravitySession:
                         for fn in os.listdir(WORKSPACE_ROOT):
                             if fn.lower().endswith(".html") and fn.lower() not in _IGNORE_FILE_NAMES:
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
-                                if os.path.isfile(fp) and os.path.getmtime(fp) >= (start_time - 5.0):
+                                if os.path.isfile(fp) and os.path.getmtime(fp) >= (start_time - 1.0):
                                     with open(fp, "r", encoding="utf-8", errors="replace") as fh:
                                         hcode = fh.read()
                                     if len(hcode) > 20:
@@ -3851,7 +3854,7 @@ class _WarmAntigravitySession:
                         for fn in os.listdir(WORKSPACE_ROOT):
                             if (fn.startswith("generate_") or fn.startswith("build_")) and fn.endswith(".py"):
                                 g_path = os.path.join(WORKSPACE_ROOT, fn)
-                                if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 10.0):
+                                if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 1.0):
                                     yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
                                     subprocess.run(["python3", fn], cwd=WORKSPACE_ROOT, capture_output=True, timeout=90)
                     except Exception as _gen_exc:
@@ -3866,7 +3869,7 @@ class _WarmAntigravitySession:
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                     mtime = os.path.getmtime(fp)
-                                    if mtime >= (start_time - 5.0):
+                                    if mtime >= (start_time - 1.0):
                                         fn_lower = fn.lower()
                                         match_cnt = sum(1 for w in _q_words if w in fn_lower)
                                         candidate_files.append((match_cnt, mtime, fn, fp))
@@ -3901,13 +3904,17 @@ class _WarmAntigravitySession:
                     raise AntigravityRateLimitError(f"{self._account_email} rate limit hit: {exc}")
                 raise
             finally:
-                if self._in_turn and self._proc:
+                if self._proc:
                     try:
                         self._proc.kill()
                     except Exception:
                         pass
                     self._proc = None
-                    self._in_turn = False
+                self._in_turn = False
+                try:
+                    threading.Thread(target=self._ensure_proc, daemon=True).start()
+                except Exception:
+                    pass
 
 _ANTIGRAVITY_ACCOUNT_1 = "manojkumarsinha1972@gmail.com"
 _ANTIGRAVITY_HOME_1 = "/root/.gemini/antigravity_accounts/primary"
@@ -4311,7 +4318,7 @@ def _stream_antigravity_cli(messages, state=None):
 
     real_user_msgs = [
         m.get("content", "") for m in (messages or [])
-        if m.get("role") == "user" and not m.get("content", "").strip().startswith("[Terminal") and not m.get("content", "").strip().startswith("Continue immediately")
+        if m.get("role") == "user" and not m.get("content", "").strip().startswith("[Terminal") and not m.get("content", "").strip().startswith("Continue immediately") and not m.get("content", "").strip().startswith("[MANDATORY CONTINUATION")
     ]
     if not real_user_msgs:
         real_user_msgs = [m.get("content", "") for m in (messages or []) if m.get("role") == "user"]
@@ -4339,10 +4346,15 @@ def _stream_antigravity_cli(messages, state=None):
         "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
         "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
-        "DYNAMIC CONTINUOUS EXECUTION LOOP (NON-STOP CADENCE):\n"
+        "AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
         "- Execute user requests dynamically and continuously without stopping halfway:\n"
-        "  - Speak naturally as an engineer, run terminal tools/scripts, fetch any required web assets, synthesize deliverables, and verify on disk.\n"
-        "  - NEVER stop halfway or conclude with future promises (e.g. \x27I am compiling...\x27, \x27I have launched...\x27). Everything must be executed, completed, and verified in the SAME turn!\n"
+        "  - Speak naturally as an engineer explaining what you will do.\n"
+        "  - Execute terminal commands/scripts (downloading any needed web assets or sprites, e.g. via PokeAPI or fetch_image).\n"
+        "  - Explain what was done and synthesize the complete standalone code deliverable.\n"
+        "  - Deliver the complete standalone playable code inside ```createfile:<filename> directly.\n"
+        "  - Verify the deliverable exists and is fully functional on disk before concluding.\n"
+        "  - Work continuously and dynamically without stopping halfway until the task is 100% complete and verified!\n"
+        "  - NEVER stop halfway or conclude with future promises (e.g. 'I am compiling...', 'I have launched...'). Everything must be executed, completed, and verified in the SAME turn!\n"
         "- UNIVERSAL MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
         "  * You have live internet access equipped with the BEST all-purpose search engines:\n"
         "    - `from fetch_image import fetch_web_image, fetch_multiple_images, search_accurate_images`: Searches Wikimedia Commons, Wikipedia PageImages, Bing Async Media, and PokeAPI with automatic PIL validation and concurrent downloading for ANY actor, anime, show, character, celebrity, or subject.\n"
@@ -4360,8 +4372,8 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
         "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
         "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
-        "    - NEVER waste turns running `ls -la`, checking directories, or stalling on inspections!\n"
-        "    - Immediately write and deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in your first response!\n"
+        "    - Follow the dynamic cadence: state what you are doing, run terminal commands to fetch needed sprites/assets from web/PokeAPI or prepare them via python script, and synthesize the full game.\n"
+        "    - Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in this turn!\n"
         "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always create a new, distinct filename (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
         "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n\n"
         "FILE PRESENTATION & CLEAN DELIVERABLES:\n"
@@ -4506,12 +4518,24 @@ def _stream_antigravity_cli(messages, state=None):
         prompt_sections.append(
             f"[ACTIVE USER REQUEST - TOP PRIORITY]\n"
             f"The user's latest request right now is: \"{last_user_prompt}\".\n"
-            f"- DYNAMIC CONTINUOUS EXECUTION LOOP (NON-STOP CADENCE):\n"
+            f"- AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
             f"  - Autonomously research, execute terminal commands, write the complete code, and verify the file on disk.\n"
             f"  - Do not stop halfway. Present the verified deliverable directly in this turn.\n"
             f"- Fulfill THIS specific request independently and completely from scratch without stopping.\n"
             f"- MULTI-ENGINE SEARCH & REAL IMAGES: Use `web_research.py` and `fetch_image.py` for all-purpose live research and real image downloads.\n"
             f"- Never reuse or confuse files from previous conversation turns. Compile and verify everything cleanly for THIS prompt."
+        )
+
+    is_continuation_turn = any(
+        m.get("role") == "user" and m.get("content", "").strip().startswith("[MANDATORY CONTINUATION")
+        for m in (messages or [])
+    )
+    if is_continuation_turn:
+        prompt_sections.append(
+            "[ACTIVE CONTINUATION - DELIVERABLE MISSING / NOT YET VERIFIED]\n"
+            "You are in the middle of executing the user's request. No complete, verified deliverable has been written to disk yet!\n"
+            "Do NOT stop or state future intentions. Immediately execute terminal commands in a ```python or ```bash block, "
+            "or output the complete deliverable code in ```createfile:<filename>, and verify it on disk in this turn!"
         )
 
     formatted_prompt = "\n\n".join(prompt_sections)
@@ -7736,7 +7760,7 @@ def chat_stream():
                             continue
                         s_ext = s_fn.rsplit(".", 1)[-1].lower() if "." in s_fn else ""
                         if s_ext in target_types_active or (dt_active.get("explicit_name") and s_fn.lower() == dt_active["explicit_name"].lower()):
-                            if os.path.getmtime(s_fp) >= (turn_start_time - 30.0):
+                            if os.path.getmtime(s_fp) >= (turn_start_time - 1.0):
                                 v_res = verify_deliverable(s_fp)
                                 if v_res.get("ok"):
                                     deliverable_verified = True
@@ -7944,7 +7968,7 @@ def chat_stream():
                                 fp = os.path.join(s_dir, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 100:
                                     try:
-                                        if os.path.getmtime(fp) >= (turn_start_time - 15.0):
+                                        if os.path.getmtime(fp) >= (turn_start_time - 1.0):
                                             pdf_cand = {"filename": fn, "path": fp, "size_bytes": os.path.getsize(fp), "ext": "pdf"}
                                             break
                                     except Exception:
@@ -8109,8 +8133,12 @@ def chat_stream():
                 if cand["filename"].lower() == exp_name.lower():
                     matched_cand = cand
                     break
-            if not matched_cand and os.path.isfile(os.path.join(WORKSPACE_ROOT, exp_name)):
-                matched_cand = {"filename": exp_name, "path": os.path.join(WORKSPACE_ROOT, exp_name)}
+            if not matched_cand:
+                for s_dir in search_dirs:
+                    cand_fp = os.path.join(s_dir, exp_name)
+                    if os.path.isfile(cand_fp) and os.path.getmtime(cand_fp) >= (turn_start_time - 1.0):
+                        matched_cand = {"filename": exp_name, "path": cand_fp}
+                        break
             if matched_cand and os.path.isfile(matched_cand.get("path", "")):
                 v_res = verify_deliverable(matched_cand["path"])
                 if v_res.get("ok"):

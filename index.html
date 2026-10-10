@@ -1860,20 +1860,14 @@
                     </div>
                 </div>
 
-                <!-- Workspace Navigation Tabs -->
-                <div class="h-10 border-b border-[var(--border)] flex items-center justify-between px-2 sm:px-3 text-xs font-medium" style="background:var(--bg);">
-                    <div class="flex items-center gap-1 overflow-x-auto workspace-scrollpane no-scrollbar py-1">
+                <!-- Workspace Navigation Tabs (Clean Preview / Code toggle) -->
+                <div class="h-9 border-b border-[var(--border)] flex items-center justify-between px-2 sm:px-3 text-xs font-medium" style="background:var(--bg);">
+                    <div class="flex items-center gap-1 py-1">
                         <button id="tab-btn-preview" onclick="switchWorkspaceTab('preview')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 active-tab">
                             <span>⚡</span><span>Preview</span>
                         </button>
                         <button id="tab-btn-code" onclick="switchWorkspaceTab('code')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
                             <span>&lt;/&gt;</span><span>Code</span>
-                        </button>
-                        <button id="tab-btn-files" onclick="switchWorkspaceTab('files')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
-                            <span>📁</span><span>Files</span>
-                        </button>
-                        <button id="tab-btn-terminal" onclick="switchWorkspaceTab('terminal')" class="wb-nav-tab px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-[var(--text-dim)]">
-                            <span>&gt;_</span><span>Terminal</span>
                         </button>
                     </div>
                 </div>
@@ -1904,55 +1898,6 @@
                             <textarea id="active-code-editor-textarea" spellcheck="false" class="flex-1 p-3 bg-transparent border-none outline-none text-[var(--text)] resize-none font-mono leading-[1.6] workspace-scrollpane whitespace-pre overflow-auto" placeholder="Write or edit code here..."></textarea>
                         </div>
                     </div>
-
-                    <!-- 3. FILES EXPLORER PANE -->
-                    <div id="pane-files" class="w-full h-full flex flex-col p-3 hidden overflow-y-auto workspace-scrollpane" style="background:var(--bg);">
-                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border)]">
-                            <span class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">Workspace Files</span>
-                            <div class="flex items-center gap-1.5">
-                                <button onclick="promptCreateNewFile()" class="p-1 rounded text-xs hover:bg-[var(--hover)] text-[var(--text)] border border-[var(--border)]" title="New File">+ File</button>
-                                <button onclick="refreshWorkbenchFiles()" class="p-1 rounded text-xs hover:bg-[var(--hover)] text-[var(--text)] border border-[var(--border)]" title="Refresh">🔄</button>
-                            </div>
-                        </div>
-                        <div id="workbench-file-tree" class="flex flex-col gap-1.5">
-                            <div class="text-xs text-[var(--text-dim)] py-6 text-center">No files in current workspace yet.</div>
-                        </div>
-                    </div>
-
-                    <!-- 4. TERMINAL PANE -->
-                    <div id="pane-terminal" class="w-full h-full flex flex-col font-mono text-[11px] hidden" style="background:var(--terminal-bg); color:var(--terminal-text);">
-                        <div class="h-8 border-b border-neutral-700 px-3 flex items-center justify-between text-neutral-400 select-none">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-emerald-500 glow-pulse"></span>
-                                <span class="font-bold">Pratham AI Developer Terminal</span>
-                            </div>
-                            <button onclick="clearTerminalOutput()" class="text-[10px] hover:text-white px-2 py-0.5 rounded border border-neutral-700">Clear</button>
-                        </div>
-                        <div id="active-terminal-output" class="flex-1 overflow-y-auto p-3 workspace-scrollpane whitespace-pre-wrap leading-relaxed select-text font-mono text-[12px] space-y-1">
-                            <div class="text-neutral-500">Pratham AI Terminal Ready. Type any command or code to run.</div>
-                        </div>
-                        <form id="terminal-command-form" onsubmit="submitTerminalCommand(event)" class="h-9 border-t border-neutral-700 flex items-center px-2 bg-neutral-900">
-                            <span class="text-emerald-400 font-bold mr-2 select-none">$</span>
-                            <input id="terminal-command-input" type="text" placeholder="Run command (e.g. ls, python3 script.py, git status)..." class="flex-1 bg-transparent border-none outline-none text-neutral-200 font-mono text-xs">
-                            <button type="submit" class="text-[10px] bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded">Run</button>
-                        </form>
-                    </div>
-
-                </div>
-
-                <!-- Claude-Style Artifact AI Edit Bar -->
-                <div id="workbench-ai-edit-bar" class="border-t border-[var(--border)] p-2 sm:p-2.5 flex items-center gap-2 shrink-0" style="background:var(--sidebar);">
-                    <div class="flex items-center gap-1 text-[11px] text-[var(--accent)] font-semibold shrink-0">
-                        <span>✨</span>
-                        <span class="hidden sm:inline">Ask AI to edit:</span>
-                    </div>
-                    <div class="flex-1 relative flex items-center">
-                        <input id="workbench-edit-input" type="text" placeholder="e.g. Make dark neon theme, add score counter, fix mobile controls..." class="w-full text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--panel)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-all" onkeydown="if(event.key==='Enter'){event.preventDefault();submitWorkbenchAiEdit();}" />
-                    </div>
-                    <button type="button" onclick="submitWorkbenchAiEdit()" id="workbench-edit-submit-btn" class="px-3 py-1.5 text-xs font-semibold rounded-lg accent-gradient text-white hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1 shrink-0 shadow-xs">
-                        <span>Update File</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                    </button>
                 </div>
             </div>
         </main>
@@ -4053,7 +3998,7 @@
 
         function switchWorkspaceTab(tab) {
             currentWorkspaceArtifact.activeTab = tab;
-            const tabs = ['preview', 'code', 'files', 'terminal'];
+            const tabs = ['preview', 'code'];
             tabs.forEach(t => {
                 const btn = document.getElementById(`tab-btn-${t}`);
                 const pane = document.getElementById(`pane-${t}`);
@@ -4067,16 +4012,6 @@
                 }
             });
 
-            const vpControls = document.getElementById('preview-viewport-controls');
-            if (vpControls) {
-                vpControls.style.display = (tab === 'preview') ? 'flex' : 'none';
-            }
-
-            if (tab === 'files') refreshWorkbenchFiles();
-            if (tab === 'terminal') {
-                const termInput = document.getElementById('terminal-command-input');
-                if (termInput) setTimeout(() => termInput.focus(), 50);
-            }
             if (tab === 'preview' && currentWorkspaceArtifact.code) {
                 compileAndRunPreview(currentWorkspaceArtifact.code);
             }
