@@ -3852,8 +3852,8 @@ class _WarmAntigravitySession:
                     except Exception:
                         pass
 
-                # If a generator script was created (e.g. generate_*.py) but target deliverable not yet compiled, run it automatically
-                target_ext = "pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None)
+                # If a generator script was created (e.g. generate_*.py, build_*.py) but target deliverable not yet compiled, run it automatically
+                target_ext = "html" if dt.get("is_html") else ("pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None))
                 if target_ext:
                     try:
                         # Auto-compile ANY newly written generator script (generate_*.py, build_*.py)
@@ -3871,7 +3871,7 @@ class _WarmAntigravitySession:
                         _stop = {"make", "create", "generate", "build", "pdf", "zip", "containing", "image", "images", "all", "characters", "character", "with", "the", "details", "brief", "now", "try", "to", "and", "file", "please", "can", "you", "a", "an", "of", "in", "on", "for", "breif"}
                         _q_words = [w for w in re.findall(r"[a-z0-9]+", (user_query or "").lower()) if len(w) > 2 and w not in _stop]
                         for fn in os.listdir(WORKSPACE_ROOT):
-                            if fn.lower().endswith(f".{target_ext}") and not fn.startswith("."):
+                            if fn.lower().endswith(f".{target_ext}") and not fn.startswith(".") and fn.lower() not in _IGNORE_FILE_NAMES:
                                 fp = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(fp) and os.path.getsize(fp) > 50:
                                     mtime = os.path.getmtime(fp)
@@ -3884,9 +3884,21 @@ class _WarmAntigravitySession:
                             _, _, fn, fp = candidate_files[0]
                             with open(fp, "rb") as bin_fh:
                                 bin_bytes = bin_fh.read()
-                            mime = "application/pdf" if target_ext == "pdf" else "application/zip"
+                            mime = "text/html" if target_ext == "html" else ("application/pdf" if target_ext == "pdf" else "application/zip")
                             token = _store_generated_file(bin_bytes, fn, mime)
                             f_size_kb = round(len(bin_bytes) / 1024, 1)
+
+                            if target_ext == "html" and f"createfile:{fn}" not in full_streamed and f"editfile:{fn}" not in full_streamed:
+                                try:
+                                    html_code = bin_bytes.decode("utf-8", "replace")
+                                    if len(html_code) > 20:
+                                        cf_block = f"\n\n```createfile:{fn}\n{html_code}\n```\n"
+                                        for part in re.split(r"(\s+)", cf_block):
+                                            if part:
+                                                yield _sse({"type": "token", "text": part})
+                                except Exception:
+                                    pass
+
                             yield _sse({"type": "agent_step", "step_type": "verifying", "label": f"Verified {fn} ({f_size_kb} KB)", "timestamp": time.time()})
                             yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
                             # If model output ended with an unresolved future promise, close seamlessly in this same turn
@@ -4512,12 +4524,14 @@ def _stream_antigravity_cli(messages, state=None):
         prompt_sections.append(
             f"[ACTIVE USER REQUEST - TOP PRIORITY]\n"
             f"The user's latest request right now is: \"{last_user_prompt}\".\n"
-            f"- AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
-            f"  - Autonomously research, execute terminal commands, write the complete code, and verify the file on disk.\n"
-            f"  - Do not stop halfway. Present the verified deliverable directly in this turn.\n"
-            f"- Fulfill THIS specific request independently and completely from scratch without stopping.\n"
-            f"- MULTI-ENGINE SEARCH & REAL IMAGES: Use `web_research.py` and `fetch_image.py` for all-purpose live research and real image downloads.\n"
-            f"- Never reuse or confuse files from previous conversation turns. Compile and verify everything cleanly for THIS prompt."
+            f"- AUTONOMOUS CONTINUOUS EXECUTION CADENCE (ZERO STALLING):\n"
+            f"  - STRICT PROHIBITION: DO NOT run exploratory/inspection commands like `ls`, `grep`, `ps`, `cat`, `head`, or read old files!\n"
+            f"  - Do NOT spend turns investigating previous scripts or existing directory contents.\n"
+            f"  - If you need to search or fetch assets/sprites from the web, do it in ONE fast command via `python3 fetch_image.py \"<query>\" \"<file>\"`.\n"
+            f"  - Then IMMEDIATELY output the complete deliverable code directly in a ```createfile:<filename> block (or use write_to_file).\n"
+            f"  - For games/web apps: Output the COMPLETE, standalone HTML5 file with Canvas, CSS, audio, and responsive touch controls.\n"
+            f"  - Verify the deliverable exists and has content, and finish cleanly in this turn!\n"
+            f"  - Never stop halfway or state future intentions. Execute, deliver, and verify now!"
         )
 
     is_continuation_turn = any(
@@ -7759,9 +7773,9 @@ def chat_stream():
                             f"[MANDATORY CONTINUATION - DELIVERABLE NOT YET VERIFIED ON DISK]\n"
                             f"The user's goal is: \"{outgoing_user_message or message}\".\n"
                             f"No complete, verified deliverable has been written to disk yet!\n"
+                            f"STRICT INSTRUCTION: DO NOT RUN `ls`, `grep`, `ps`, or inspect old files! "
                             f"Do NOT stop or state what you will do next. You must stay in the loop!\n"
-                            f"Immediately execute terminal commands in a ```python or ```bash block (downloading any needed web assets/sprites via fetch_image or PokeAPI), "
-                            f"and output the COMPLETE final standalone file inside a ```createfile:<filename> block now. "
+                            f"IMMEDIATELY output the COMPLETE final standalone file inside a ```createfile:<filename> block (or use write_to_file) now. "
                             f"Verify your deliverable before finishing."
                         )
                         working_messages.append({"role": "user", "content": continuation_prompt})
