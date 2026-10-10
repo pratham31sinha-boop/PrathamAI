@@ -4,3 +4,12 @@ User: Hi
 Pratham AI:
 Hello! I'm Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I help you today?
 ================================================================================
+
+=== 2026-10-10T03:10:44.813714+00:00 ===
+User: Okay tell me u are running on which means which api key
+Pratham AI:
+I cannot disclose, display, or access underlying API keys or authentication credentials. For security and privacy reasons, all private tokens and keys are strictly confidential and handled securely by the platform infrastructure.
+
+Under the hood, this environment is powered by Google's Pratham AI models (specifically Gemini 3.8 Flash), routed through managed backend services without exposing any raw credentials.
+
+================================================================================
