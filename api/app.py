@@ -794,15 +794,16 @@ _IGNORE_EXTS = {".log", ".tmp", ".pyc", ".git", ".map", ".bak"}
 def _classify_requested_deliverable_types(user_prompt: str) -> dict:
     """Classifies user's prompt to determine what deliverable file was asked for."""
     q = (user_prompt or "").lower().strip()
-    explicit_matches = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:pdf|zip|html|py|apk|csv|json|txt|md|js|css))\b", q)
+    explicit_matches = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:pdf|zip|html|py|apk|csv|json|txt|md|js|css|png|jpg|jpeg|webp|svg))\b", q)
     explicit_name = explicit_matches[0] if explicit_matches and explicit_matches[0].lower() not in _IGNORE_FILE_NAMES else None
 
     is_pdf = bool(re.search(r"\b(?:pdf|document|report|essay)\b|\.pdf\b", q))
     is_zip = bool(re.search(r"\b(?:zip|archive|package|bundle|tar\.gz)\b|\.zip\b", q)) and not is_pdf
     is_apk = bool(re.search(r"\b(?:apk|android\s*app)\b|\.apk\b", q))
     is_csv = bool(re.search(r"\b(?:csv|dataset|spreadsheet|excel)\b|\.csv\b", q))
-    is_html = bool(re.search(r"\b(?:game|arcade|play|3d|html|web\s*app|webapp|website|simulator|dashboard|canvas|stumble|chess|racing|flappy|platformer)\b|\.html\b", q)) and not (is_pdf or is_zip or is_apk)
-    is_script = bool(re.search(r"\b(?:python\s*script|python\s*code|script|backend|scraper|bot)\b|\.py\b", q)) and not (is_pdf or is_zip or is_html or is_apk)
+    is_image = bool(re.search(r"\b(?:image|img|picture|pic|photo|wallpaper|poster|icon|logo|avatar|screenshot)s?\b|\.(?:png|jpg|jpeg|webp|svg)\b", q)) and not (is_pdf or is_zip or is_apk)
+    is_html = bool(re.search(r"\b(?:game|arcade|play|3d|html|web\s*app|webapp|website|simulator|dashboard|canvas|stumble|chess|racing|flappy|platformer)\b|\.html\b", q)) and not (is_pdf or is_zip or is_apk or is_image)
+    is_script = bool(re.search(r"\b(?:python\s*script|python\s*code|script|backend|scraper|bot)\b|\.py\b", q)) and not (is_pdf or is_zip or is_html or is_apk or is_image)
 
     primary_type = "any"
     target_exts = set()
@@ -815,6 +816,9 @@ def _classify_requested_deliverable_types(user_prompt: str) -> dict:
     elif is_apk:
         primary_type = "apk"
         target_exts = {"apk"}
+    elif is_image:
+        primary_type = "img"
+        target_exts = {"png", "jpg", "jpeg", "webp", "svg"}
     elif is_html:
         primary_type = "html"
         target_exts = {"html"}
@@ -838,6 +842,7 @@ def _classify_requested_deliverable_types(user_prompt: str) -> dict:
         "is_html": is_html,
         "is_apk": is_apk,
         "is_csv": is_csv,
+        "is_image": is_image,
         "is_script": is_script,
     }
 
@@ -863,6 +868,8 @@ def _is_intermediate_helper_file(filename: str, user_prompt: str) -> bool:
         return ext not in ("zip", "tar.gz", "7z")
     if dt.get("is_apk"):
         return ext != "apk"
+    if dt.get("is_image"):
+        return ext not in ("png", "jpg", "jpeg", "webp", "svg")
     if dt.get("is_html"):
         return ext != "html"
     if dt.get("is_csv"):
@@ -6334,11 +6341,21 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
             out = "\n".join(results) if results else "No web search results found."
             return out, "", 0
         if lang in ("imagesearch", "imgsearch", "image_search"):
-            img_results = _search_real_images(code.strip(), max_results=8, download_to_dir=os.path.join(cwd, "assets") if cwd else None)
+            target_dir = cwd or WORKSPACE_ROOT
+            img_results = _search_real_images(code.strip(), max_results=8, download_to_dir=target_dir)
             if img_results:
+                assets_dir = os.path.join(target_dir, "assets")
+                if os.path.isdir(assets_dir):
+                    for item in img_results:
+                        lp = item.get("local_path")
+                        if lp and os.path.isfile(lp):
+                            try:
+                                shutil.copy2(lp, os.path.join(assets_dir, os.path.basename(lp)))
+                            except Exception:
+                                pass
                 lines = []
                 for idx, item in enumerate(img_results, 1):
-                    local_info = f" (Saved to: {item['local_path']})" if item.get('local_path') else ""
+                    local_info = f" (Saved to: {os.path.basename(item['local_path'])})" if item.get('local_path') else ""
                     lines.append(f"{idx}. {item['title']}: {item['url']}{local_info} [Source: {item['source']}]")
                 out = "\n".join(lines)
             else:
@@ -7566,10 +7583,48 @@ def chat_stream():
         if image_url:
             assistant_note = image_text or f'Generated image for: "{image_prompt}"'
             _append_message(conv_id, 'assistant', assistant_note + '\n[generated image delivered to browser]')
+
+            gen_bytes = None
+            gen_mime = "image/png"
+            gen_ext = "png"
+            try:
+                if image_url.startswith("data:"):
+                    header, b64part = image_url.split(",", 1)
+                    gen_bytes = base64.b64decode(b64part)
+                    if "image/jpeg" in header or "image/jpg" in header:
+                        gen_mime = "image/jpeg"
+                        gen_ext = "jpg"
+                    elif "image/webp" in header:
+                        gen_mime = "image/webp"
+                        gen_ext = "webp"
+                elif image_url.startswith("http"):
+                    dl_req = urllib.request.Request(image_url, headers={"User-Agent": "PrathamAI/2.0"})
+                    with urllib.request.urlopen(dl_req, timeout=12) as dl_resp:
+                        gen_bytes = dl_resp.read()
+                        ctype = dl_resp.headers.get("Content-Type", "").lower()
+                        if "jpeg" in ctype or "jpg" in ctype:
+                            gen_mime = "image/jpeg"
+                            gen_ext = "jpg"
+                        elif "webp" in ctype:
+                            gen_mime = "image/webp"
+                            gen_ext = "webp"
+            except Exception as dl_err:
+                print(f"[IMAGE][GEN_EXTRACT_ERR] {dl_err}")
+
+            gen_dl_token = None
+            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', image_prompt[:25]).strip('_') or "generated_image"
+            dl_filename = f"{clean_name}_{int(time.time())}.{gen_ext}"
+            if gen_bytes:
+                gen_dl_token = _store_generated_file(gen_bytes, dl_filename, gen_mime)
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, dl_filename, gen_bytes)
+
             def generate_image():
                 yield _sse({"type": "metadata", "conversation_id": conv_id})
                 if assistant_note: yield _sse({"type": "token", "text": assistant_note + '\n\n'})
                 yield _sse({"type": "image", "url": image_url, "prompt": enriched_image_prompt, "model": used_model})
+                if gen_dl_token:
+                    yield _sse({"type": "file_ready", "url": f"/download/{gen_dl_token}", "filename": dl_filename})
                 yield _sse({"type": "complete"})
             resp = Response(stream_with_context(generate_image()), content_type='text/event-stream')
             resp.headers['Cache-Control'] = 'no-cache, no-transform'; resp.headers['X-Accel-Buffering'] = 'no'; resp.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -8418,6 +8473,59 @@ def chat_stream():
                     if user_email:
                         _save_user_chat_file(user_email, conv_id, html_name, hbytes)
 
+        elif dt.get("is_image"):
+            img_cands = [
+                cand for cand in valid_disk_candidates
+                if cand.get("ext") in ("png", "jpg", "jpeg", "webp", "svg")
+            ]
+            if not img_cands:
+                for s_dir in search_dirs:
+                    try:
+                        for fn in os.listdir(s_dir):
+                            if fn.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".svg")) and not fn.startswith("."):
+                                fp = os.path.join(s_dir, fn)
+                                if os.path.isfile(fp) and os.path.getsize(fp) > 400:
+                                    try:
+                                        if os.path.getmtime(fp) >= (turn_start_time - 1.0):
+                                            img_cands.append({"filename": fn, "path": fp, "size_bytes": os.path.getsize(fp), "ext": fn.rsplit(".", 1)[-1].lower()})
+                                    except Exception:
+                                        pass
+                    except Exception:
+                        pass
+            if not img_cands:
+                img_query = re.sub(r'\b(?:download|fetch|get|save|images?|pictures?|photos?|of|the|for|please|required|requested|by|user)\b', '', outgoing_user_message or message, flags=re.I).strip()
+                if not img_query:
+                    sub_match = re.search(r'(?:image|picture|photo)\s+of\s+([a-zA-Z0-9_\s]{2,30})', assistant_response, re.I)
+                    if sub_match:
+                        img_query = sub_match.group(1).strip()
+                    else:
+                        img_query = outgoing_user_message or message
+                target_dl_dir = terminal_workdir or WORKSPACE_ROOT
+                downloaded_imgs = _search_real_images(img_query, max_results=4, download_to_dir=target_dl_dir)
+                for dl_item in downloaded_imgs:
+                    lp = dl_item.get("local_path")
+                    if lp and os.path.isfile(lp) and os.path.getsize(lp) > 400:
+                        fn = os.path.basename(lp)
+                        img_cands.append({
+                            "filename": fn,
+                            "path": lp,
+                            "size_bytes": os.path.getsize(lp),
+                            "ext": fn.rsplit(".", 1)[-1].lower()
+                        })
+            for ic in img_cands:
+                i_name = ic["filename"]
+                with open(ic["path"], "rb") as if_h:
+                    i_bytes = if_h.read()
+                i_mime = mimetypes.guess_type(i_name)[0] or "image/png"
+                i_token = _store_generated_file(i_bytes, i_name, i_mime)
+                final_deliverables.append({
+                    "filename": i_name, "url": f"/download/{i_token}", "download_url": f"/download/{i_token}",
+                    "size_bytes": len(i_bytes), "lang": ic.get("ext", "png")
+                })
+                yield _sse({"type": "file_ready", "url": f"/download/{i_token}", "filename": i_name})
+                if user_email:
+                    _save_user_chat_file(user_email, conv_id, i_name, i_bytes)
+
         elif dt.get("explicit_name"):
             exp_name = dt["explicit_name"]
             matched_cand = None
@@ -8455,7 +8563,7 @@ def chat_stream():
 
         # Check for ANY file explicitly written in this turn that exists on disk
         # (Must have been modified during this turn to prevent presenting stale files from old turns)
-        referenced_files = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json|tar\.gz|7z))\b", assistant_response, re.IGNORECASE)
+        referenced_files = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json|tar\.gz|7z|png|jpg|jpeg|webp|svg))\b", assistant_response, re.IGNORECASE)
         for r_fn in referenced_files:
             if _is_intermediate_helper_file(r_fn, outgoing_user_message or message):
                 continue
