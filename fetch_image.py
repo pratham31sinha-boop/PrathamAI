@@ -90,21 +90,22 @@ def fetch_web_image(query: str, save_path: str, timeout: float = 5.0) -> bool:
                 img = PILImage.open(io.BytesIO(data))
                 if img.width < 60 or img.height < 60:
                     continue
-                # Convert RGBA/P to RGB for clean ReportLab and disk compatibility
-                if img.mode in ("RGBA", "P", "LA"):
-                    rgb_img = PILImage.new("RGB", img.size, (255, 255, 255))
-                    if img.mode == "RGBA":
-                        rgb_img.paste(img, mask=img.split()[3])
-                    else:
-                        rgb_img.paste(img.convert("RGBA"))
-                    img = rgb_img
-                elif img.mode != "RGB":
-                    img = img.convert("RGB")
-
-                # Save directly to requested path
+                # For PNG deliverables (e.g. game sprites), preserve transparency (RGBA)
                 if save_path.lower().endswith(".png"):
+                    if img.mode not in ("RGBA", "RGB"):
+                        img = img.convert("RGBA")
                     img.save(save_path, "PNG", optimize=True)
                 else:
+                    # Convert RGBA/P to RGB for JPEG / ReportLab compatibility
+                    if img.mode in ("RGBA", "P", "LA"):
+                        rgb_img = PILImage.new("RGB", img.size, (255, 255, 255))
+                        if img.mode == "RGBA":
+                            rgb_img.paste(img, mask=img.split()[3])
+                        else:
+                            rgb_img.paste(img.convert("RGBA"))
+                        img = rgb_img
+                    elif img.mode != "RGB":
+                        img = img.convert("RGB")
                     img.save(save_path, "JPEG", quality=92)
                 return True
         except Exception:
@@ -132,3 +133,17 @@ def fetch_multiple_images(query_path_pairs, max_workers: int = 8) -> list:
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(fetch_web_image, q, p) for q, p in query_path_pairs]
         return [f.result() for f in futures]
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) >= 3:
+        q = sys.argv[1]
+        p = sys.argv[2]
+        ok = fetch_web_image(q, p)
+        print(f"[{'OK' if ok else 'FAIL'}] Fetched '{q}' -> {p} ({os.path.getsize(p) if os.path.exists(p) else 0} bytes)")
+    elif len(sys.argv) == 2:
+        urls = search_accurate_images(sys.argv[1])
+        print(json.dumps(urls, indent=2))
+    else:
+        print("Usage: python3 fetch_image.py <query> <save_path>")
+

@@ -1783,6 +1783,17 @@ def _serve_download_candidate(identifier: str):
         except Exception:
             pass
 
+    # Check case-insensitive match in WORKSPACE_ROOT root
+    try:
+        for f in os.listdir(WORKSPACE_ROOT):
+            if f.lower() == safe_name.lower():
+                cand = os.path.join(WORKSPACE_ROOT, f)
+                if os.path.isfile(cand):
+                    with open(cand, "rb") as fh:
+                        return _make_download_response(fh.read(), f)
+    except Exception:
+        pass
+
     # 3. Check /tmp and /tmp/pratham_downloads directly
     for tmp_dir in ["/tmp", os.path.join(tempfile.gettempdir(), "pratham_downloads")]:
         for candidate_name in [safe_name, raw_ident, identifier]:
@@ -2719,7 +2730,16 @@ def _worker_is_online(entry: dict) -> bool:
     if entry.get("worker_id") == "static-worker":
         return True
     age = time.time() - entry.get("last_seen_epoch", 0)
-    return age <= WORKER_ONLINE_TIMEOUT_SECONDS
+@app.route("/health", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/health", methods=["GET", "OPTIONS"], strict_slashes=False)
+@app.route("/api/app/health", methods=["GET", "OPTIONS"], strict_slashes=False)
+def health_check():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    resp = jsonify({"ok": True, "status": "healthy", "service": "Pratham AI", "timestamp": datetime.now(timezone.utc).isoformat()})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
+
 @app.route("/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/app/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
 @app.route("/api/worker/status", methods=["GET", "OPTIONS"], strict_slashes=False)
@@ -3058,20 +3078,22 @@ SYSTEM_PROMPT = (
     "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
-    "- AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
-    "  * Work continuously and dynamically without stopping halfway until the user request is 100% complete and verified:\n"
-    "    - Naturally explain what you are doing in conversational language.\n"
-    "    - Run terminal tools/scripts immediately to fetch needed web assets (e.g. PokeAPI or fetch_image for sprites/images) or process code.\n"
-    "    - Explain what was done and synthesize the complete standalone deliverable inside ```createfile:<filename>.\n"
-    "    - Verify the deliverable exists and is functional on disk before concluding.\n"
+    "- AUTONOMOUS CONTINUOUS EXECUTION CADENCE (DYNAMIC MIX — NEVER STOP HALFWAY):\n"
+    "  * Work continuously and dynamically without stopping halfway until the user request is 100% complete and verified on disk:\n"
+    "    - 1st: State what you will do in 1-2 conversational, natural sentences (in your own genuine voice, never robotic or hardcoded).\n"
+    "    - 2nd: Execute terminal commands in a ```bash or ```python block immediately to search the live web or fetch needed sprites/images using `python3 fetch_image.py \"<query>\" \"<file>\"`, PokeAPI, or `web_research.py`.\n"
+    "    - 3rd: Explain what was gathered and what you will do next in the next step.\n"
+    "    - 4th: Synthesize the complete, standalone deliverable inside a ```createfile:<filename> block.\n"
+    "    - 5th: Run verification terminal commands to check that the file exists and is valid on disk.\n"
+    "    - Stay in this continuous execution loop nonstop until the request is completely done and verified!\n"
     "    - Never stop halfway or conclude with future promises (e.g. 'I am compiling...', 'I have launched the script...'). Build, execute, and verify everything in the SAME turn.\n"
     "- CLEAN DELIVERABLE PRESENTATION:\n"
     "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
     "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
     "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
-    "    - Follow the dynamic cadence: state what you are doing, run terminal commands to fetch needed sprites/assets from web/PokeAPI or prepare them via python script, and synthesize the full game.\n"
+    "    - Follow the dynamic cadence: state what you will do, fetch real sprites/images from the web/PokeAPI via terminal, and synthesize the full game.\n"
     "    - Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in this turn!\n"
-    "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
+    "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. pokemon_adventure.html, pokemon_game.html, racing.html, app.html).\n"
     "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files cleanly to the user."
 )
@@ -3504,18 +3526,29 @@ class _WarmAntigravitySession:
             return False
         return True
 
+    def _kill_proc(self):
+        if self._proc:
+            try:
+                try:
+                    os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+                except Exception:
+                    self._proc.kill()
+            except Exception:
+                pass
+            self._proc = None
+        self._in_turn = False
+        try:
+            import gc
+            gc.collect()
+        except Exception:
+            pass
+
     def mark_rate_limited(self, cooldown_seconds: float = None):
         if cooldown_seconds is not None:
             self._cooldown_seconds = float(cooldown_seconds)
         self._last_rate_limited = time.time()
         print(f"[ANTIGRAVITY][RATE_LIMIT] Account {self._account_email} cool-down active for {self._cooldown_seconds}s.")
-        if self._proc:
-            try:
-                self._proc.kill()
-            except Exception:
-                pass
-            self._proc = None
-            self._in_turn = False
+        self._kill_proc()
 
     def _ensure_proc(self):
         if self._proc is not None:
@@ -3562,6 +3595,7 @@ class _WarmAntigravitySession:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                start_new_session=True,
                 env=env
             )
             self._proc = proc
@@ -3577,13 +3611,7 @@ class _WarmAntigravitySession:
 
         with self._lock:
             if self._in_turn:
-                if self._proc:
-                    try:
-                        self._proc.kill()
-                    except Exception:
-                        pass
-                self._proc = None
-                self._in_turn = False
+                self._kill_proc()
 
             self._in_turn = True
             try:
@@ -3599,11 +3627,7 @@ class _WarmAntigravitySession:
                     proc.stdin.write(json.dumps(msg) + "\n")
                     proc.stdin.flush()
                 except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
-                    self._proc = None
+                    self._kill_proc()
                     proc = self._ensure_proc()
                     if not proc:
                         raise RuntimeError(f"Reconnect failed for {self._account_email}")
@@ -3622,27 +3646,6 @@ class _WarmAntigravitySession:
                 written_files = {}
                 accumulated_streamed_text = []
 
-                # Live planning step indicator based on the actual user query (never falling back to system prompt text)
-                uq = (user_query or "").strip().lower()
-                if not uq:
-                    user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
-                    uq = user_matches[-1].lower() if user_matches else ""
-
-                is_greeting = bool(re.match(r"^(?:hi|hello|hey|greetings|hola|namaste|good\s+(?:morning|afternoon|evening|day)|sup|yo)\b[!?.]*$", uq.strip(), re.IGNORECASE))
-
-                if not is_greeting:
-                    if any(k in uq for k in ["pdf", "document", "report", "essay"]):
-                        step_lbl = "Synthesizing publication-grade document deliverable..."
-                    elif any(k in uq for k in ["game", "arcade", "stumble", "gta", "canvas"]):
-                        step_lbl = "Architecting game mechanics & responsive controls..."
-                    elif any(k in uq for k in ["html", "website", "web page", "webpage", "app"]):
-                        step_lbl = "Synthesizing full web application components..."
-                    elif any(k in uq for k in ["python", "script", "code", "backend", "algorithm"]):
-                        step_lbl = "Engineering production code deliverable..."
-                    else:
-                        step_lbl = "Deconstructing query & generating comprehensive response..."
-
-                    yield _sse({"type": "agent_step", "step_type": "planning", "label": step_lbl, "timestamp": time.time()})
                 yield _sse({"type": "heartbeat"})
 
                 while True:
@@ -3907,13 +3910,7 @@ class _WarmAntigravitySession:
                     raise AntigravityRateLimitError(f"{self._account_email} rate limit hit: {exc}")
                 raise
             finally:
-                if self._proc:
-                    try:
-                        self._proc.kill()
-                    except Exception:
-                        pass
-                    self._proc = None
-                self._in_turn = False
+                self._kill_proc()
                 try:
                     threading.Thread(target=self._ensure_proc, daemon=True).start()
                 except Exception:
@@ -3944,7 +3941,7 @@ _WARM_ANTIGRAVITY_ACC2 = _WarmAntigravitySession(_ANTIGRAVITY_ACCOUNT_2, _ANTIGR
 _WARM_ANTIGRAVITY = _WARM_ANTIGRAVITY_ACC1  # Backwards-compatibility alias
 
 def _prewarm_dual_antigravity():
-    # Only prewarm if agy is present in path or root
+    # Only prewarm primary account on startup to prevent RAM exhaustion in PRoot / Android
     if not (shutil.which("agy") or os.path.exists("/root/.local/bin/agy")):
         return
     def _pw1():
@@ -3952,14 +3949,8 @@ def _prewarm_dual_antigravity():
             _WARM_ANTIGRAVITY_ACC1._ensure_proc()
         except Exception:
             pass
-    def _pw2():
-        try:
-            _WARM_ANTIGRAVITY_ACC2._ensure_proc()
-        except Exception:
-            pass
     try:
         threading.Thread(target=_pw1, daemon=True, name="prewarm-antigravity-1").start()
-        threading.Thread(target=_pw2, daemon=True, name="prewarm-antigravity-2").start()
     except Exception:
         pass
 
@@ -7473,19 +7464,6 @@ def chat_stream():
         if is_deep_research:
             yield _sse({"type": "agent_step", "step_type": "searching", "label": "Deep Research: Gathering multi-source intelligence...", "timestamp": time.time()})
             yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing cross-verified research report with citations...", "timestamp": time.time()})
-        elif not _is_user_greeting and not _emit_searching_step:
-            uq_low = (outgoing_user_message or message).lower()
-            if any(k in uq_low for k in ["pdf", "document", "report", "essay"]):
-                plan_lbl = "Synthesizing publication-grade document deliverable..."
-            elif any(k in uq_low for k in ["game", "arcade", "stumble", "gta", "canvas"]):
-                plan_lbl = "Architecting game mechanics & responsive controls..."
-            elif any(k in uq_low for k in ["html", "website", "web page", "webpage", "app"]):
-                plan_lbl = "Synthesizing full web application components..."
-            elif any(k in uq_low for k in ["python", "script", "code", "backend", "algorithm"]):
-                plan_lbl = "Engineering production code deliverable..."
-            else:
-                plan_lbl = "Deconstructing query & generating comprehensive response..."
-            yield _sse({"type": "agent_step", "step_type": "planning", "label": plan_lbl, "timestamp": time.time()})
         _tasks_emitted = {}                                                   
         if _MULTI_STEP_INTENT_RE.search(message):
             yield _sse({"type": "planning_started", "label": "Task Plan", "timestamp": time.time()})
@@ -9229,8 +9207,22 @@ if __name__ == "__main__":
                             pass
             except Exception:
                 pass
-            time.sleep(0.8)
+            # Wait up to 3 seconds for port to clear
+            for _ in range(6):
+                if not _is_port_in_use(port):
+                    break
+                time.sleep(0.5)
         except Exception as e:
             print("Port cleanup note:", e)
 
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+    from werkzeug.serving import run_simple
+    for attempt in range(5):
+        try:
+            run_simple("0.0.0.0", port, app, threaded=True, use_reloader=False)
+            break
+        except OSError as oe:
+            if "Address already in use" in str(oe) and attempt < 4:
+                print(f"[PORT RETRY] Port {port} busy, retrying in 1s ({attempt + 1}/5)...")
+                time.sleep(1.0)
+            else:
+                raise
