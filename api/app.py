@@ -103,6 +103,15 @@ try:
     _PDF_WRITE_SUPPORTED = True
 except ImportError:
     _PDF_WRITE_SUPPORTED = False
+try:
+    from web_research import verify_deliverable
+except Exception:
+    def verify_deliverable(fp):
+        if not fp or not os.path.isfile(fp):
+            return {"ok": False, "error": f"File '{fp}' does not exist on disk"}
+        if os.path.getsize(fp) < 50:
+            return {"ok": False, "error": f"File '{fp}' is empty"}
+        return {"ok": True, "details": f"File verified on disk ({os.path.getsize(fp)} bytes)"}
 from flask import Flask, request, Response, jsonify, stream_with_context, send_file, send_from_directory
 from flask_cors import CORS
 try:
@@ -3717,6 +3726,15 @@ class _WarmAntigravitySession:
                                         "detail": detail_txt,
                                         "timestamp": time.time()
                                     })
+                                    if state_val == "DONE":
+                                        yield _sse({
+                                            "type": "terminal_output",
+                                            "ordinal": 0,
+                                            "code": cmd_clean,
+                                            "stdout": str(out or "")[:2000],
+                                            "stderr": "",
+                                            "returncode": 0
+                                        })
                                 elif tool_name in ("write_to_file", "replace_file_content"):
                                     target_file = params.get("TargetFile", "")
                                     target_name = os.path.basename(target_file) if target_file else "file"
@@ -3727,6 +3745,12 @@ class _WarmAntigravitySession:
                                         detail_txt += f"\n\nCode Preview:\n{code_snippet[:600]}"
                                     if target_name and code_snippet and len(code_snippet) > 10 and target_name.lower() not in _IGNORE_FILE_NAMES:
                                         written_files[target_name] = code_snippet
+                                        try:
+                                            _w_path = os.path.join(WORKSPACE_ROOT, target_name)
+                                            with open(_w_path, "w", encoding="utf-8") as _wf:
+                                                _wf.write(code_snippet)
+                                        except Exception:
+                                            pass
                                     yield _sse({
                                         "type": "agent_step",
                                         "step_type": "writing",
@@ -3734,6 +3758,15 @@ class _WarmAntigravitySession:
                                         "detail": detail_txt,
                                         "timestamp": time.time()
                                     })
+                                    if state_val == "DONE":
+                                        yield _sse({
+                                            "type": "terminal_output",
+                                            "ordinal": 0,
+                                            "code": f"write {target_name}",
+                                            "stdout": f"Saved {target_name} ({len(code_snippet)} bytes).",
+                                            "stderr": "",
+                                            "returncode": 0
+                                        })
                                 elif tool_name in ("view_file", "read_url_content"):
                                     path = params.get("AbsolutePath") or params.get("Url", "")
                                     name = os.path.basename(path) if path else "workspace files"
@@ -5727,10 +5760,13 @@ def _do_stream(messages):
             err_str = str(exc) or exc.__class__.__name__
             print(f"[FAILOVER] {name} dropped: {err_str}")
             _failure_log.append((name, err_str))
-            if any_token_yielded:
-                yield _sse({"type": "complete"})
-                return
             _cool(name)
+            # If provider dropped mid-sentence or mid-code, do not abort turn! Fail over to next provider seamlessly.
+            if any_token_yielded and accumulated_text:
+                working_messages = list(messages) + [
+                    {"role": "assistant", "content": "".join(accumulated_text)},
+                    {"role": "user", "content": "Continue exactly where you left off. Do not repeat any earlier text. Seamlessly produce the remaining code/response."}
+                ]
             continue
     print(f"[FAILOVER] ALL PROVIDERS FAILED: {_failure_log}")
     last_err = _failure_log[0][1] if _failure_log else "AI engine unavailable"
@@ -5751,8 +5787,8 @@ def _do_stream(messages):
 
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
-_TERMINAL_MAX_ITERATIONS = 4                                                                     
-_TERMINAL_BLOCK_TIMEOUT = 30                                                                            
+_TERMINAL_MAX_ITERATIONS = 8                                                                     
+_TERMINAL_BLOCK_TIMEOUT = 45                                                                            
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000                                                                
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
 _MULTI_STEP_INTENT_RE = re.compile(
@@ -7687,36 +7723,55 @@ def chat_stream():
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
 
+            # Verification check: Check if user requested a deliverable, and whether it has been verified on disk
+            dt_active = _classify_requested_deliverable_types(outgoing_user_message or message)
+            target_types_active = set()
+            if dt_active.get("is_pdf"): target_types_active.add("pdf")
+            if dt_active.get("is_zip"): target_types_active.update(["zip", "tar.gz", "7z"])
+            if dt_active.get("is_html"): target_types_active.update(["html", "htm"])
+            if dt_active.get("is_apk"): target_types_active.add("apk")
+            if dt_active.get("explicit_name"):
+                _exp = dt_active["explicit_name"].lower()
+                target_types_active.add(_exp.rsplit(".", 1)[-1] if "." in _exp else "")
+
+            deliverable_requested = bool(target_types_active)
+            deliverable_verified = False
+            for s_dir in search_dirs:
+                if not s_dir or not os.path.isdir(s_dir):
+                    continue
+                try:
+                    for s_fn in os.listdir(s_dir):
+                        if s_fn.lower() in _IGNORE_FILE_NAMES or s_fn.startswith("."):
+                            continue
+                        if _is_intermediate_helper_file(s_fn, outgoing_user_message or message):
+                            continue
+                        s_fp = os.path.join(s_dir, s_fn)
+                        if not os.path.isfile(s_fp):
+                            continue
+                        s_ext = s_fn.rsplit(".", 1)[-1].lower() if "." in s_fn else ""
+                        if s_ext in target_types_active or (dt_active.get("explicit_name") and s_fn.lower() == dt_active["explicit_name"].lower()):
+                            if os.path.getmtime(s_fp) >= (turn_start_time - 30.0):
+                                v_res = verify_deliverable(s_fp)
+                                if v_res.get("ok"):
+                                    deliverable_verified = True
+                                    break
+                except Exception:
+                    pass
+                if deliverable_verified:
+                    break
+
             if not executable_present:
-                if not _promise_correction_attempted:
-                    # Check for promised files (.pdf, .zip, .html, etc.)
-                    _promised_filenames = set(
-                        m.group(0) for m in re.finditer(
-                            r"\b[\w\-]+\.(?:pdf|mcaddon|zip|mrpack|apk|jar|exe|dmg|tar\.gz|7z)\b",
-                            iteration_reply, re.IGNORECASE
-                        )
-                    )
-                    # Check if model ended with a work-in-progress commitment phrase
-                    _has_wip_phrase = any(
-                        p in iteration_reply.lower() for p in [
-                            "i am compiling", "now i am going to compile", "i will finalize and deliver",
-                            "i will finalize", "in the next step", "let's get to work", "starting to build",
-                            "i am going to fetch", "now i will compile", "now compiling",
-                            "i have launched", "i will notify you", "as soon as the file is compiled",
-                            "launched the pdf generation script", "launched the generation script",
-                            "i will update you"
-                        ]
-                    )
-                    _unfulfilled = [f for f in _promised_filenames if f.lower() not in _produced_filenames_this_turn]
-                    if export_ext_hint or _is_export_intent(export_intent_check_message, _ZIP_INTENT_RE):
-                        _unfulfilled = [f for f in _unfulfilled if not f.lower().endswith((".zip", ".tar.gz", ".7z", f".{export_ext_hint or ''}"))]
-                    if _unfulfilled or _has_wip_phrase:
-                        _promise_correction_attempted = True
+                if deliverable_requested and not deliverable_verified:
+                    if iteration < (_TERMINAL_MAX_ITERATIONS - 1):
                         working_messages.append({"role": "assistant", "content": iteration_reply})
                         continuation_prompt = (
-                            f"Continue immediately and complete the task now. Do not stop halfway or say what you will do next. "
-                            f"Execute the full script and build commands in a ```bash or ```python block, create the final file on disk, "
-                            f"and output the final deliverable."
+                            f"[MANDATORY CONTINUATION - DELIVERABLE NOT YET VERIFIED ON DISK]\n"
+                            f"The user's goal is: \"{outgoing_user_message or message}\".\n"
+                            f"No complete, verified deliverable has been written to disk yet!\n"
+                            f"Do NOT stop or state what you will do next. You must stay in the loop!\n"
+                            f"Immediately execute terminal commands in a ```python or ```bash block (downloading any needed web assets/sprites via fetch_image or PokeAPI), "
+                            f"and output the COMPLETE final standalone file inside a ```createfile:<filename> block now. "
+                            f"Verify your deliverable before finishing."
                         )
                         working_messages.append({"role": "user", "content": continuation_prompt})
                         continue
@@ -8041,16 +8096,25 @@ def chat_stream():
 
             if html_cand and os.path.isfile(html_cand.get("path", "")):
                 html_name = html_cand["filename"]
-                with open(html_cand["path"], "rb") as hf_h:
-                    hbytes = hf_h.read()
-                token = _store_generated_file(hbytes, html_name, "text/html")
-                final_deliverables = [{
-                    "filename": html_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                    "size_bytes": len(hbytes), "lang": "html"
-                }]
-                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": html_name})
-                if user_email:
-                    _save_user_chat_file(user_email, conv_id, html_name, hbytes)
+                v_res = verify_deliverable(html_cand["path"])
+                if v_res.get("ok"):
+                    with open(html_cand["path"], "rb") as hf_h:
+                        hbytes = hf_h.read()
+                    token = _store_generated_file(hbytes, html_name, "text/html")
+                    final_deliverables = [{
+                        "filename": html_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": len(hbytes), "lang": "html"
+                    }]
+                    yield _sse({"type": "verification_started", "filename": html_name})
+                    yield _sse({
+                        "type": "verification_completed",
+                        "filename": html_name,
+                        "ok": True,
+                        "details": v_res.get("details", f"Verified valid HTML deliverable ({len(hbytes)} bytes)")
+                    })
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": html_name})
+                    if user_email:
+                        _save_user_chat_file(user_email, conv_id, html_name, hbytes)
 
         elif dt.get("explicit_name"):
             exp_name = dt["explicit_name"]
@@ -8062,20 +8126,29 @@ def chat_stream():
             if not matched_cand and os.path.isfile(os.path.join(WORKSPACE_ROOT, exp_name)):
                 matched_cand = {"filename": exp_name, "path": os.path.join(WORKSPACE_ROOT, exp_name)}
             if matched_cand and os.path.isfile(matched_cand.get("path", "")):
-                with open(matched_cand["path"], "rb") as mf_h:
-                    mbytes = mf_h.read()
-                mime = mimetypes.guess_type(exp_name)[0] or "application/octet-stream"
-                token = _store_generated_file(mbytes, exp_name, mime)
-                final_deliverables = [{
-                    "filename": exp_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
-                    "size_bytes": len(mbytes), "lang": exp_name.rsplit(".", 1)[-1] if "." in exp_name else "txt"
-                }]
-                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": exp_name})
-                if user_email:
-                    _save_user_chat_file(user_email, conv_id, exp_name, mbytes)
+                v_res = verify_deliverable(matched_cand["path"])
+                if v_res.get("ok"):
+                    with open(matched_cand["path"], "rb") as mf_h:
+                        mbytes = mf_h.read()
+                    mime = mimetypes.guess_type(exp_name)[0] or "application/octet-stream"
+                    token = _store_generated_file(mbytes, exp_name, mime)
+                    final_deliverables = [{
+                        "filename": exp_name, "url": f"/download/{token}", "download_url": f"/download/{token}",
+                        "size_bytes": len(mbytes), "lang": exp_name.rsplit(".", 1)[-1] if "." in exp_name else "txt"
+                    }]
+                    yield _sse({"type": "verification_started", "filename": exp_name})
+                    yield _sse({
+                        "type": "verification_completed",
+                        "filename": exp_name,
+                        "ok": True,
+                        "details": v_res.get("details", f"Verified valid file ({len(mbytes)} bytes)")
+                    })
+                    yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": exp_name})
+                    if user_email:
+                        _save_user_chat_file(user_email, conv_id, exp_name, mbytes)
 
-        # Check for ANY file referenced in the response or prompt that exists on disk
-        referenced_files = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json|tar\.gz|7z))\b", assistant_response + "\n" + (outgoing_user_message or message), re.IGNORECASE)
+        # Check for ANY file referenced in the response that exists on disk
+        referenced_files = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json|tar\.gz|7z))\b", assistant_response, re.IGNORECASE)
         for r_fn in referenced_files:
             if _is_intermediate_helper_file(r_fn, outgoing_user_message or message):
                 continue
@@ -8084,7 +8157,10 @@ def chat_stream():
                 continue
             for s_dir in search_dirs:
                 f_path = os.path.join(s_dir, r_fn)
-                if os.path.isfile(f_path) and os.path.getsize(f_path) > 20:
+                if os.path.isfile(f_path) and os.path.getsize(f_path) > 50:
+                    v_res = verify_deliverable(f_path)
+                    if not v_res.get("ok"):
+                        continue
                     with open(f_path, "rb") as fh:
                         f_bytes = fh.read()
                     f_mime = mimetypes.guess_type(r_fn)[0] or "application/octet-stream"
@@ -8094,6 +8170,13 @@ def chat_stream():
                         "size_bytes": len(f_bytes), "lang": r_fn.rsplit(".", 1)[-1] if "." in r_fn else "bin"
                     }
                     final_deliverables.append(file_item)
+                    yield _sse({"type": "verification_started", "filename": r_fn})
+                    yield _sse({
+                        "type": "verification_completed",
+                        "filename": r_fn,
+                        "ok": True,
+                        "details": v_res.get("details", f"Verified deliverable ({len(f_bytes)} bytes)")
+                    })
                     yield _sse({"type": "file_ready", "url": f"/download/{f_token}", "filename": r_fn})
                     if user_email:
                         _save_user_chat_file(user_email, conv_id, r_fn, f_bytes)

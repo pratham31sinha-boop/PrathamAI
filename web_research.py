@@ -372,6 +372,19 @@ def verify_deliverable(file_path: str) -> dict:
                 status["details"] = f"Verified valid ZIP archive with {len(namelist)} packaged files ({size_kb} KB)"
         except Exception as e:
             status["details"] = f"Verified ZIP file on disk ({size_kb} KB)"
+    elif file_path.lower().endswith((".html", ".htm")):
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as hf:
+                hcontent = hf.read()
+            if len(hcontent) < 200:
+                return {"ok": False, "error": f"HTML file '{file_path}' is incomplete ({len(hcontent)} bytes)."}
+            hlow = hcontent.lower()
+            if ("<html" not in hlow and "<!doctype" not in hlow) or ("</html>" not in hlow and "</body>" not in hlow):
+                return {"ok": False, "error": f"HTML file '{file_path}' is missing closing tags (truncated)."}
+            status["line_count"] = hcontent.count("\n") + 1
+            status["details"] = f"Verified valid complete HTML application ({status['line_count']} lines, {size_kb} KB)"
+        except Exception as e:
+            status["details"] = f"Verified HTML file on disk ({size_kb} KB)"
     else:
         status["details"] = f"Verified deliverable on disk ({size_kb} KB)"
 

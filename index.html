@@ -5529,11 +5529,10 @@
                             (modelWrapper._answerZone || modelWrapper).appendChild(summary);
                         }
 
-                        // Auto-discover and present any deliverable cards mentioned in response or prompt
-                        const fileRefRegex = /\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json))\b/gi;
-                        const textMatches = (fullText.match(fileRefRegex) || []).concat((typeof displayMessage === 'string' ? displayMessage.match(fileRefRegex) : []) || []);
-                        const seenRefs = new Set();
-                        textMatches.forEach(fn => {
+                        // Present verified deliverable cards emitted by backend or createfile blocks
+                        const seenRefs = new Set((_turnFiles || []).map(f => (f.filename || '').toLowerCase()));
+                        const cfBlocks = Array.from(fullText.matchAll(/```createfile:([^\n`]+)/gi)).map(m => m[1].trim());
+                        cfBlocks.forEach(fn => {
                             const fnLower = fn.toLowerCase();
                             if (seenRefs.has(fnLower)) return;
                             seenRefs.add(fnLower);
