@@ -3717,10 +3717,13 @@ class _WarmAntigravitySession:
                                     if state_val == "DONE" and out:
                                         detail_txt += f"\n\nOutput:\n{str(out)[:2000]}"
                                     is_verif = any(k in cmd_clean.lower() for k in ["verify", "pypdf", "test", "check", "ls -l"])
+                                    is_search = any(k in cmd_clean.lower() for k in ["fetch_image", "search", "pokeapi", "download", "curl", "wget", "urllib"]) or any(k in summary.lower() for k in ["search", "fetch", "image", "download", "pokeapi"])
+                                    step_t = "verifying" if is_verif else ("searching" if is_search else "executing")
+                                    lbl = "Searching & downloading web images..." if (is_search and not is_verif and summary.startswith("Run bash")) else (f"Verifying: {cmd_short}" if is_verif and not summary.lower().startswith("verif") else summary)
                                     yield _sse({
                                         "type": "agent_step",
-                                        "step_type": "verifying" if is_verif else "executing",
-                                        "label": f"Verifying: {cmd_short}" if is_verif and not summary.lower().startswith("verif") else summary,
+                                        "step_type": step_t,
+                                        "label": lbl,
                                         "detail": detail_txt,
                                         "timestamp": time.time()
                                     })
@@ -7804,10 +7807,16 @@ def chat_stream():
                     first_line = (code.strip().split("\n")[0] if code.strip() else "").strip()
                     if len(first_line) > 55:
                         first_line = first_line[:52] + "..."
-                    run_label = f"Run {lang}: {first_line}" if first_line else f"Run {lang} script"
+                    is_img_search = any(k in code.lower() for k in ["fetch_image", "pokeapi", "wikimedia", "search_accurate_images", "fetch_web_image", "bing.com/images"])
+                    if is_img_search:
+                        step_t = "searching"
+                        run_label = "Searching & downloading images from web..."
+                    else:
+                        step_t = "executing"
+                        run_label = f"Run {lang}: {first_line}" if first_line else f"Run {lang} script"
                     yield _sse({
                         "type": "agent_step",
-                        "step_type": "executing",
+                        "step_type": step_t,
                         "label": run_label,
                         "detail": f"Command:\n$ {code.strip()}",
                         "timestamp": time.time()
