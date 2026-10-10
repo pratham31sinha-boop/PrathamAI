@@ -3060,8 +3060,12 @@ SYSTEM_PROMPT = (
     "  * NEVER STOP HALFWAY or conclude with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done'). Everything must be executed and finished in the SAME turn.\n"
     "- CLEAN DELIVERABLE PRESENTATION:\n"
     "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
-    "- Interactive HTML5 Apps, 3D Games & Standalone Code:\n"
-    "  * Deliver complete, rich, production-grade standalone code with no shortcuts or placeholders in ```createfile:<filename> or in-place ```editfile:<filename>. NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. snake_game.html, racing.html, app.html).\n"
+    "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
+    "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
+    "    - NEVER waste turns running `ls -la`, checking directories, or stalling on inspections!\n"
+    "    - Immediately write and deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in your first response!\n"
+    "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
+    "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files cleanly to the user."
 )
 _IMAGE_INTENT_RE = re.compile(
@@ -4277,10 +4281,15 @@ def _stream_antigravity_cli(messages, state=None):
     if not os.path.exists(agy_bin):
         raise RuntimeError("Antigravity CLI binary not installed in this environment")
 
-    user_msgs = [m.get("content", "") for m in (messages or []) if m.get("role") == "user"]
-    if not user_msgs:
+    real_user_msgs = [
+        m.get("content", "") for m in (messages or [])
+        if m.get("role") == "user" and not m.get("content", "").strip().startswith("[Terminal") and not m.get("content", "").strip().startswith("Continue immediately")
+    ]
+    if not real_user_msgs:
+        real_user_msgs = [m.get("content", "") for m in (messages or []) if m.get("role") == "user"]
+    if not real_user_msgs:
         return
-    last_user_prompt = user_msgs[-1].strip()
+    last_user_prompt = real_user_msgs[-1].strip()
 
     # Check for user email, conv_id & attachments
     user_email = getattr(_do_stream, '_current_user_email', None) or ""
@@ -4326,10 +4335,12 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Write a self-contained Python script using ReportLab or FPDF and execute it with run_command.\n"
         "  * Write the PDF directly to disk in the current workspace and verify it exists.\n"
         "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
-        "- Interactive HTML5 Apps, 3D Games & Code:\n"
-        "  * Write full, production-ready code with no shortcuts or placeholders.\n"
-        "  * CRITICAL WORKSPACE SAFETY: NEVER touch, edit, or overwrite index.html, app.py, or any existing system files in the workspace. Always create a new, distinct filename for apps and games (for example: snake_game.html, flappy_bird.html, racing.html, app.html).\n"
-        "  * Deliver the complete standalone file directly in ```createfile:<filename> or in-place ```editfile:<filename>.\n\n"
+        "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
+        "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
+        "    - NEVER waste turns running `ls -la`, checking directories, or stalling on inspections!\n"
+        "    - Immediately write and deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in your first response!\n"
+        "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always create a new, distinct filename (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
+        "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n\n"
         "FILE PRESENTATION & CLEAN DELIVERABLES:\n"
         "- When the user requests a ZIP archive or package, package all required deliverables into the archive directly and provide ONLY the ZIP deliverable card.\n"
         "- Whenever you create or modify code, scripts, games, or documents, present the final complete file to the user at the end of your response using ```createfile:<filename> or ```editfile:<filename>.\n"
@@ -7835,7 +7846,13 @@ def chat_stream():
             if is_last_allowed_iteration:
                 break                                                                    
             working_messages.append({"role": "assistant", "content": iteration_reply})
-            working_messages.append({"role": "user", "content": _format_terminal_results_for_model(results)})
+            continuation_content = (
+                f"{_format_terminal_results_for_model(results)}\n\n"
+                f"[CRITICAL REMINDER: The user's active goal is: \"{outgoing_user_message or message}\"]\n"
+                f"Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block "
+                f"(or run the build script) to deliver the user's request. Do NOT run inspection commands like `ls`."
+            )
+            working_messages.append({"role": "user", "content": continuation_content})
         if _tasks_emitted:
             final_reply_so_far = "".join(full_reply_parts)
             final_task_states = {tid: False for tid in _tasks_emitted}

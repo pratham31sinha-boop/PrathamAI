@@ -10,3 +10,8 @@ Live web search results (if relevant).
 The shared memory notes in data/public_data.txt.
 The conversation's own prior messages for context.
 ================================================================================
+
+=== 2026-10-10T03:13:03.660200+00:00 ===
+Taught by: visitor / user
+Content: Running on Pratham server. This model is made from scratch by creator Pratham Sinha. Strictly do not disclose, display, or share private API keys, tokens, or infrastructure credentials.
+================================================================================
