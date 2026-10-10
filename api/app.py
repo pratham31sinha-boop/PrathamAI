@@ -3531,6 +3531,10 @@ class _WarmAntigravitySession:
     def is_available(self) -> bool:
         if not os.path.exists(self._agy_bin):
             return False
+        if self._home_dir:
+            token_file = os.path.join(self._home_dir, ".gemini", "antigravity-cli", "antigravity-oauth-token")
+            if not os.path.isfile(token_file) or os.path.getsize(token_file) < 20:
+                return False
         if self._last_rate_limited and (time.time() - self._last_rate_limited) < self._cooldown_seconds:
             return False
         return True
@@ -4570,9 +4574,6 @@ def _stream_antigravity_cli(messages, state=None):
     if _WARM_ANTIGRAVITY_ACC2.is_available():
         sessions_to_run.append((_WARM_ANTIGRAVITY_ACC2, f"Account 2 ({_ANTIGRAVITY_ACCOUNT_2})"))
 
-    if not sessions_to_run:
-        sessions_to_run = [(_WARM_ANTIGRAVITY_ACC1, "Account 1"), (_WARM_ANTIGRAVITY_ACC2, "Account 2")]
-
     got_tokens = False
     for session, acc_name in sessions_to_run:
         try:
@@ -4618,14 +4619,14 @@ def _stream_antigravity_cli(messages, state=None):
         got_any_token = False
         in_tool_execution = False
         saw_any_tool = False
+        written_files = {}
+        accumulated_streamed_text = []
         first_token_timeout = 18.0
         max_turn_duration = 90.0
         start_time = time.time()
         last_heartbeat = start_time
         last_activity_time = start_time
         turn_silence_timeout = 35.0
-        if not is_greeting:
-            yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
         yield _sse({"type": "heartbeat"})
         try:
             proc = subprocess.Popen(
@@ -5733,17 +5734,30 @@ def _stream_cloudflare_tunnel(messages, state=None):
         print(f"[TUNNEL_FAILOVER] Live tunnel ({tunnel}) unreachable: {tunnel_exc}. Falling over to cloud agent chain...")
         return
 
-_PROVIDER_CHAIN = [
-    ("antigravity_cli", _stream_antigravity_cli),
-    ("google_gemini_oauth", _stream_google_oauth_gemini),
-    ("gemini_api_key", _stream_gemini_api_key),
-    ("groq", _stream_groq),
-    ("openrouter", _stream_openrouter),
-    ("cerebras", _stream_cerebras),
-    ("mistral", _stream_mistral),
-    ("qwen_ollama", _stream_qwen_ollama),
-    ("pratham_fast_engine", _stream_pratham_fast_engine)
-]
+if PRATHAM_AI_MODE == "google_oauth":
+    _PROVIDER_CHAIN = [
+        ("google_gemini_oauth", _stream_google_oauth_gemini),
+        ("antigravity_cli", _stream_antigravity_cli),
+        ("gemini_api_key", _stream_gemini_api_key),
+        ("groq", _stream_groq),
+        ("openrouter", _stream_openrouter),
+        ("cerebras", _stream_cerebras),
+        ("mistral", _stream_mistral),
+        ("qwen_ollama", _stream_qwen_ollama),
+        ("pratham_fast_engine", _stream_pratham_fast_engine)
+    ]
+else:
+    _PROVIDER_CHAIN = [
+        ("antigravity_cli", _stream_antigravity_cli),
+        ("google_gemini_oauth", _stream_google_oauth_gemini),
+        ("gemini_api_key", _stream_gemini_api_key),
+        ("groq", _stream_groq),
+        ("openrouter", _stream_openrouter),
+        ("cerebras", _stream_cerebras),
+        ("mistral", _stream_mistral),
+        ("qwen_ollama", _stream_qwen_ollama),
+        ("pratham_fast_engine", _stream_pratham_fast_engine)
+    ]
 _MAX_AUTO_CONTINUATIONS = 6                                                                     
 def _do_stream(messages):
     """Streams a reply from the first available provider with automatic length continuation
@@ -5763,12 +5777,6 @@ def _do_stream(messages):
         working_messages = list(messages)
         continuation_count = 0
         try:
-            # Emit planning and asset search indicators for cloud providers on Render
-            if not shutil.which("agy"):
-                yield _sse({"type": "agent_step", "step_type": "planning", "label": "Synthesizing solution & deliverables...", "timestamp": time.time()})
-                if any(k in user_query_lower for k in ["image", "images", "cast", "pokemon", "character", "sprite", "asset", "web", "pdf"]):
-                    yield _sse({"type": "agent_step", "step_type": "searching", "label": "Searching web assets & references...", "timestamp": time.time()})
-
             while True:
                 state.clear()
                 got_tokens_this_round = False
@@ -5801,130 +5809,6 @@ def _do_stream(messages):
                 ]
             if any_token_yielded:
                 _do_stream._last_successful_provider = name
-                full_streamed = "".join(accumulated_text)
-
-                # Render Autonomous Deliverable Execution & Verification
-                if name != "antigravity_cli":
-                    # 1. Extract createfile blocks directly to WORKSPACE_ROOT
-                    for cf_m in re.finditer(r"```createfile:([^\n`]+)\n([\s\S]*?)```", full_streamed):
-                        fname = os.path.basename(cf_m.group(1).strip())
-                        fcode = cf_m.group(2)
-                        if fname and fcode and fname.lower() not in _IGNORE_FILE_NAMES:
-                            try:
-                                fpath = os.path.join(WORKSPACE_ROOT, fname)
-                                with open(fpath, "w", encoding="utf-8") as wf:
-                                    wf.write(fcode)
-                                yield _sse({
-                                    "type": "terminal_output", "ordinal": 0,
-                                    "stdout": f"Saved {fname} ({len(fcode)} bytes).",
-                                    "stderr": "", "returncode": 0
-                                })
-                            except Exception:
-                                pass
-
-                    # 2. Extract and execute bash / python code blocks directly in WORKSPACE_ROOT
-                    for lang, code_body in re.findall(r"```(bash|sh|python|py)\s*\n([\s\S]*?)```", full_streamed, re.IGNORECASE):
-                        clean_code = code_body.strip()
-                        if not clean_code:
-                            continue
-                        lang_lower = lang.lower()
-                        try:
-                            if lang_lower in ("bash", "sh"):
-                                yield _sse({"type": "agent_step", "step_type": "executing", "label": "Running terminal command...", "timestamp": time.time()})
-                                run_res = subprocess.run(clean_code, shell=True, cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=60)
-                            else:
-                                yield _sse({"type": "agent_step", "step_type": "executing", "label": "Executing Python script...", "timestamp": time.time()})
-                                run_res = subprocess.run([sys.executable, "-c", clean_code], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=60)
-                            yield _sse({
-                                "type": "terminal_output", "ordinal": 0,
-                                "code": clean_code[:120],
-                                "stdout": (run_res.stdout or "")[:3000],
-                                "stderr": (run_res.stderr or "")[:1500],
-                                "returncode": run_res.returncode
-                            })
-                        except Exception as exec_err:
-                            print(f"[RENDER_EXEC_ERR] {exec_err}")
-
-                    # 3. If user asked for an HTML game/app but model emitted plain ```html ... ```, auto-register as createfile
-                    if dt_req.get("is_html") and "```createfile:" not in full_streamed:
-                        html_blocks = re.findall(r"```(?:html)?\s*\n([\s\S]*?<!DOCTYPE html[\s\S]*?)```", full_streamed, re.IGNORECASE)
-                        if not html_blocks:
-                            html_blocks = re.findall(r"```html\s*\n([\s\S]*?)```", full_streamed, re.IGNORECASE)
-                        if html_blocks:
-                            h_code = html_blocks[0]
-                            auto_name = dt_req.get("explicit_name") or "game.html"
-                            if not auto_name.endswith(".html"):
-                                auto_name += ".html"
-                            if auto_name.lower() not in _IGNORE_FILE_NAMES:
-                                try:
-                                    h_path = os.path.join(WORKSPACE_ROOT, auto_name)
-                                    with open(h_path, "w", encoding="utf-8") as hwf:
-                                        hwf.write(h_code)
-                                    cf_block = f"\n\n```createfile:{auto_name}\n{h_code}\n```\n"
-                                    for p in re.split(r"(\s+)", cf_block):
-                                        if p:
-                                            yield _sse({"type": "token", "text": p})
-                                    yield _sse({
-                                        "type": "terminal_output", "ordinal": 0,
-                                        "stdout": f"Saved {auto_name} ({len(h_code)} bytes).",
-                                        "stderr": "", "returncode": 0
-                                    })
-                                except Exception:
-                                    pass
-
-                    # 4. If Python build / generator scripts were created, execute them on disk
-                    for fn in os.listdir(WORKSPACE_ROOT):
-                        if (fn.startswith("generate_") or fn.startswith("build_") or fn.startswith("fetch_")) and fn.endswith(".py"):
-                            g_path = os.path.join(WORKSPACE_ROOT, fn)
-                            if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (turn_start_time - 1.0):
-                                yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
-                                try:
-                                    g_res = subprocess.run([sys.executable, fn], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=90)
-                                    yield _sse({
-                                        "type": "terminal_output", "ordinal": 0,
-                                        "code": f"python3 {fn}",
-                                        "stdout": (g_res.stdout or "")[:3000],
-                                        "stderr": (g_res.stderr or "")[:1500],
-                                        "returncode": g_res.returncode
-                                    })
-                                except Exception as _p_err:
-                                    print(f"[PYTHON_EXEC_ERR] {_p_err}")
-
-                    # 5. Discover and verify candidate deliverables (.html, .pdf, .zip) on disk
-                    target_ext = "html" if dt_req.get("is_html") else ("pdf" if dt_req.get("is_pdf") else ("zip" if dt_req.get("is_zip") else None))
-                    if target_ext:
-                        try:
-                            candidate_files = []
-                            _stop = {"make", "create", "generate", "build", "pdf", "zip", "containing", "image", "images", "all", "characters", "character", "with", "the", "details", "brief", "now", "try", "to", "and", "file", "please", "can", "you", "a", "an", "of", "in", "on", "for", "breif", "game"}
-                            _q_words = [w for w in re.findall(r"[a-z0-9]+", user_query_lower) if len(w) > 2 and w not in _stop]
-                            for fn in os.listdir(WORKSPACE_ROOT):
-                                if fn.lower().endswith(f".{target_ext}") and not fn.startswith(".") and fn.lower() not in _IGNORE_FILE_NAMES:
-                                    fp = os.path.join(WORKSPACE_ROOT, fn)
-                                    if os.path.isfile(fp) and os.path.getsize(fp) > 50:
-                                        mtime = os.path.getmtime(fp)
-                                        if mtime >= (turn_start_time - 1.0):
-                                            fn_lower = fn.lower()
-                                            match_cnt = sum(1 for w in _q_words if w in fn_lower)
-                                            candidate_files.append((match_cnt, mtime, fn, fp))
-                            if candidate_files:
-                                candidate_files.sort(key=lambda x: (x[0], x[1]), reverse=True)
-                                _, _, fn, fp = candidate_files[0]
-                                with open(fp, "rb") as bin_fh:
-                                    bin_bytes = bin_fh.read()
-                                mime = "text/html" if target_ext == "html" else ("application/pdf" if target_ext == "pdf" else "application/zip")
-                                token = _store_generated_file(bin_bytes, fn, mime)
-                                f_size_kb = round(len(bin_bytes) / 1024, 1)
-                                yield _sse({"type": "agent_step", "step_type": "verifying", "label": f"Verified {fn} ({f_size_kb} KB)", "timestamp": time.time()})
-                                yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": fn})
-                                if any(p in full_streamed.lower() for p in ["i have launched", "i will notify you", "as soon as the file is compiled", "i will update you"]):
-                                    close_note = f"\n\n**Verification Complete:** **{fn}** ({f_size_kb} KB) has been verified directly on disk and is ready for download above!"
-                                    for part in re.split(r"(\s+)", close_note):
-                                        if part:
-                                            yield _sse({"type": "token", "text": part})
-                        except Exception as bin_err:
-                            print(f"[RENDER_DELIVERABLE_ERR] {bin_err}")
-
-                yield _sse({"type": "complete"})
                 return
         except Exception as exc:
             err_str = str(exc) or exc.__class__.__name__
@@ -6239,6 +6123,18 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
         stdout, stderr, rc, ok = _run_code_block_remote(lang, _sanitize_shell_script(code) if lang not in ("python", "py", "web", "websearch", "search") else code, cwd)
         if ok:
             return stdout, stderr, rc
+    exec_env = dict(os.environ)
+    exec_env["PYTHONPATH"] = f"{WORKSPACE_ROOT}:{cwd or ''}:{exec_env.get('PYTHONPATH', '')}"
+    exec_env["PATH"] = f"{WORKSPACE_ROOT}:{exec_env.get('PATH', '')}"
+    if cwd and cwd != WORKSPACE_ROOT and os.path.isdir(cwd):
+        for item in ["fetch_image.py", "web_research.py", "assets"]:
+            src = os.path.join(WORKSPACE_ROOT, item)
+            dst = os.path.join(cwd, item)
+            if os.path.exists(src) and not os.path.exists(dst):
+                try:
+                    os.symlink(src, dst)
+                except Exception:
+                    pass
     try:
         if lang in ("web", "websearch", "search"):
             results = _web_search_snippets(code.strip())
@@ -6247,14 +6143,14 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
+                cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd, env=exec_env
             )
         else:                     
             clean_cmd = _sanitize_shell_script(code)
             shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
             cmd = [shell_bin, "-c", clean_cmd]
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd
+                cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd, env=exec_env
             )
         return (
             result.stdout[-_TERMINAL_OUTPUT_CHAR_LIMIT:],
@@ -6278,6 +6174,14 @@ def _get_session_workdir(conv_id: str = None, user_email: str = None) -> str:
         try:
             session_dir = os.path.join(base, safe_id)
             os.makedirs(session_dir, exist_ok=True)
+            for item in ["fetch_image.py", "web_research.py", "assets"]:
+                src = os.path.join(WORKSPACE_ROOT, item)
+                dst = os.path.join(session_dir, item)
+                if os.path.exists(src) and not os.path.exists(dst):
+                    try:
+                        os.symlink(src, dst)
+                    except Exception:
+                        pass
             test_path = os.path.join(session_dir, ".write_test")
             with open(test_path, "w") as f:
                 f.write("ok")
@@ -7966,10 +7870,13 @@ def chat_stream():
                         "timestamp": time.time()
                     })
                 _pre_exec_files = set()
-                if terminal_workdir and os.path.isdir(terminal_workdir):
-                    for _root, _dirs, _files in os.walk(terminal_workdir):
-                        for _f in _files:
-                            _pre_exec_files.add(os.path.join(_root, _f))
+                for _scan_dir in set(filter(None, [terminal_workdir, WORKSPACE_ROOT])):
+                    if os.path.isdir(_scan_dir):
+                        for _root, _dirs, _files in os.walk(_scan_dir):
+                            if any(ignored in _root for ignored in [".git", "node_modules", "__pycache__", ".cache"]):
+                                continue
+                            for _f in _files:
+                                _pre_exec_files.add(os.path.join(_root, _f))
                 _pre_tmp_files = set()
                 try:
                     for _f in os.listdir("/tmp"):
@@ -7977,11 +7884,14 @@ def chat_stream():
                 except Exception:
                     pass
                 stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
-                if terminal_workdir and os.path.isdir(terminal_workdir):
-                    _post_exec_files = set()
-                    for _root, _dirs, _files in os.walk(terminal_workdir):
-                        for _f in _files:
-                            _post_exec_files.add(os.path.join(_root, _f))
+                _post_exec_files = set()
+                for _scan_dir in set(filter(None, [terminal_workdir, WORKSPACE_ROOT])):
+                    if os.path.isdir(_scan_dir):
+                        for _root, _dirs, _files in os.walk(_scan_dir):
+                            if any(ignored in _root for ignored in [".git", "node_modules", "__pycache__", ".cache"]):
+                                continue
+                            for _f in _files:
+                                _post_exec_files.add(os.path.join(_root, _f))
                     for _new_path in sorted(_post_exec_files - _pre_exec_files):
                         try:
                             _new_name = os.path.basename(_new_path)

@@ -5611,14 +5611,10 @@
                             enqueueTokens(payload.text);
                             pinnedAutoScroll();
 
-                            // Reset stream inactivity watchdog: auto-finish if idle after full output
-                            if (streamIdleWatchdog) clearTimeout(streamIdleWatchdog);
-                            streamIdleWatchdog = setTimeout(() => {
-                                if (fullText && !sawCompleteEvent) {
-                                    finishResponseTurn();
-                                    try { reader.cancel(); } catch (e) {}
-                                }
-                            }, 2000);
+                            // Reset activity watchdog on incoming tokens
+                            resetActivityWatchdog();
+                        } else if (payload.type === 'heartbeat') {
+                            resetActivityWatchdog();
                         } else if (payload.type === 'error') {
                             flushStreamQueue();
                             if (window._thinkingCycleTimer) { clearInterval(window._thinkingCycleTimer); window._thinkingCycleTimer = null; }
