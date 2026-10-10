@@ -3058,15 +3058,10 @@ SYSTEM_PROMPT = (
     "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
-    "- MANDATORY CONTINUOUS INTERLEAVED EXECUTION LOOP (MIXED CADENCE NON-STOP):\n"
-    "  * You MUST work in a continuous, mixed, step-by-step cadence without stopping:\n"
-    "    1. [SAY WHAT I WILL DO]: First output 1-2 conversational sentences explaining exactly what you are about to do (e.g. 'I am searching Wikipedia and web engines for verified cast details and character biographies...').\n"
-    "    2. [TERMINAL EXECUTION]: Immediately execute the terminal command or tool.\n"
-    "    3. [SAY WHAT IS DONE & WHAT IS NEXT]: Output 1-2 conversational sentences explaining what you found and what the next step is (e.g. 'I have retrieved the complete cast list with 12 characters. Now I will download high-resolution web images for every character and generate the PDF layout script...').\n"
-    "    4. [NEXT TERMINAL EXECUTION]: Immediately execute the next terminal command.\n"
-    "    5. [VERIFICATION STEP]: Always run an explicit verification check on the deliverable (e.g. `ls -lh <file>` and verify PDF pages / image integrity), then explain the verification status (e.g. 'Verification complete: Verified 12 pages with all images loaded.').\n"
-    "    6. Continue this mixed rhythm NON-STOP until all assets, code, diagrams, and files are 100% complete and presented!\n"
-    "  * NEVER STOP HALFWAY or conclude with future promises (e.g. 'I have launched the script...', 'Now I am compiling...', 'I will notify you when done'). Everything must be executed and finished in the SAME turn.\n"
+    "- DYNAMIC CONTINUOUS EXECUTION LOOP (NON-STOP CADENCE):\n"
+    "  * Work continuously and dynamically without stopping halfway until the user request is 100% complete:\n"
+    "    - Naturally explain what you are doing, run terminal tools/scripts immediately to fetch needed web assets or code, inspect results, and write complete deliverables.\n"
+    "    - Never stop halfway or conclude with future promises (e.g. \x27I am compiling...\x27, \x27I have launched the script...\x27). Build, execute, and verify everything in the SAME turn.\n"
     "- CLEAN DELIVERABLE PRESENTATION:\n"
     "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
     "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
@@ -4344,15 +4339,10 @@ def _stream_antigravity_cli(messages, state=None):
         "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
         "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
-        "MANDATORY CONTINUOUS INTERLEAVED EXECUTION LOOP (MIXED CADENCE NON-STOP):\n"
-        "- Execute user requests in a continuous, mixed, step-by-step cadence without stopping:\n"
-        "  1. [SAY WHAT I WILL DO]: First write 1-2 conversational sentences explaining exactly what you are about to do (e.g. 'I am searching Wikipedia and web engines for verified cast details and character biographies...').\n"
-        "  2. [TERMINAL EXECUTION]: Immediately execute the terminal command or tool.\n"
-        "  3. [SAY WHAT IS DONE & WHAT IS NEXT]: Write 1-2 conversational sentences explaining what you found and what the next step is (e.g. 'I have retrieved the complete cast list with 12 characters. Now I will download high-resolution web images for every character and generate the PDF layout script...').\n"
-        "  4. [NEXT TERMINAL EXECUTION]: Immediately execute the next terminal command.\n"
-        "  5. [VERIFICATION STEP]: Always run an explicit verification check on the deliverable (e.g. `ls -lh <file>` and verify PDF pages / image integrity), then explain the verification status (e.g. 'Verification complete: Verified 12 pages with all images loaded.').\n"
-        "  6. Continue this mixed rhythm NON-STOP until all assets, code, diagrams, and files are 100% complete and presented!\n"
-        "- NEVER STOP HALFWAY OR END ON PROMISES: Never say 'I have launched the script... I will notify you as soon as the file is compiled', 'I am compiling...', or 'Now I will run...'. Do NOT conclude your turn after writing a script. The terminal must run immediately in the SAME turn!\n"
+        "DYNAMIC CONTINUOUS EXECUTION LOOP (NON-STOP CADENCE):\n"
+        "- Execute user requests dynamically and continuously without stopping halfway:\n"
+        "  - Speak naturally as an engineer, run terminal tools/scripts, fetch any required web assets, synthesize deliverables, and verify on disk.\n"
+        "  - NEVER stop halfway or conclude with future promises (e.g. \x27I am compiling...\x27, \x27I have launched...\x27). Everything must be executed, completed, and verified in the SAME turn!\n"
         "- UNIVERSAL MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
         "  * You have live internet access equipped with the BEST all-purpose search engines:\n"
         "    - `from fetch_image import fetch_web_image, fetch_multiple_images, search_accurate_images`: Searches Wikimedia Commons, Wikipedia PageImages, Bing Async Media, and PokeAPI with automatic PIL validation and concurrent downloading for ANY actor, anime, show, character, celebrity, or subject.\n"
@@ -4516,13 +4506,9 @@ def _stream_antigravity_cli(messages, state=None):
         prompt_sections.append(
             f"[ACTIVE USER REQUEST - TOP PRIORITY]\n"
             f"The user's latest request right now is: \"{last_user_prompt}\".\n"
-            f"- MANDATORY CONTINUOUS INTERLEAVED EXECUTION LOOP (NON-STOP):\n"
-            f"  1. [SAY WHAT I WILL DO]: Say what you are about to do in 1-2 conversational sentences.\n"
-            f"  2. [TERMINAL EXECUTION]: Execute the terminal / bash tool.\n"
-            f"  3. [SAY WHAT IS DONE & WHAT IS NEXT]: Say what was accomplished and what the next step is.\n"
-            f"  4. [NEXT TERMINAL EXECUTION]: Execute the next terminal tool.\n"
-            f"  5. [VERIFICATION]: Run verification to verify file integrity, page count, and dimensions.\n"
-            f"  6. Present the final deliverable to the user.\n"
+            f"- DYNAMIC CONTINUOUS EXECUTION LOOP (NON-STOP CADENCE):\n"
+            f"  - Autonomously research, execute terminal commands, write the complete code, and verify the file on disk.\n"
+            f"  - Do not stop halfway. Present the verified deliverable directly in this turn.\n"
             f"- Fulfill THIS specific request independently and completely from scratch without stopping.\n"
             f"- MULTI-ENGINE SEARCH & REAL IMAGES: Use `web_research.py` and `fetch_image.py` for all-purpose live research and real image downloads.\n"
             f"- Never reuse or confuse files from previous conversation turns. Compile and verify everything cleanly for THIS prompt."
@@ -8147,7 +8133,8 @@ def chat_stream():
                     if user_email:
                         _save_user_chat_file(user_email, conv_id, exp_name, mbytes)
 
-        # Check for ANY file referenced in the response that exists on disk
+        # Check for ANY file explicitly written in this turn that exists on disk
+        # (Must have been modified during this turn to prevent presenting stale files from old turns)
         referenced_files = re.findall(r"\b([a-zA-Z0-9_\-]+\.(?:zip|pdf|apk|html|csv|json|tar\.gz|7z))\b", assistant_response, re.IGNORECASE)
         for r_fn in referenced_files:
             if _is_intermediate_helper_file(r_fn, outgoing_user_message or message):
@@ -8158,6 +8145,12 @@ def chat_stream():
             for s_dir in search_dirs:
                 f_path = os.path.join(s_dir, r_fn)
                 if os.path.isfile(f_path) and os.path.getsize(f_path) > 50:
+                    try:
+                        # Must be written in THIS active turn (mtime >= turn_start_time - 5s)
+                        if os.path.getmtime(f_path) < (turn_start_time - 5.0):
+                            continue
+                    except Exception:
+                        continue
                     v_res = verify_deliverable(f_path)
                     if not v_res.get("ok"):
                         continue
