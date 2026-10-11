@@ -1,131 +1,324 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Neon Asteroids Survival</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body {
-      background: #0b0c10;
-      color: #66fcf1;
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      overflow: hidden;
-    }
-    #ui { margin-bottom: 10px; font-size: 18px; font-weight: bold; letter-spacing: 2px; }
-    canvas {
-      background: radial-gradient(circle at center, #1f2833 0%, #0b0c10 100%);
-      border: 2px solid #45a29e;
-      border-radius: 8px;
-      box-shadow: 0 0 25px rgba(102, 252, 241, 0.3);
-    }
-    #hint { margin-top: 8px; font-size: 13px; color: #c5c6c7; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pokémon 2D Battle & Catch Arena</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 600px;
+            background: #222;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 4px solid #ffcc00;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+            display: block;
+            width: 100%;
+            height: 450px;
+        }
+        #ui-panel {
+            flex: 1;
+            background: #2c3e50;
+            border-top: 4px solid #e74c3c;
+            display: flex;
+            flex-direction: column;
+            padding: 10px 15px;
+            justify-content: space-between;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+        button {
+            background: #f1c40f;
+            border: none;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #2c3e50;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px #d4ac0d;
+            transition: all 0.1s ease;
+        }
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px #d4ac0d;
+        }
+        button.btn-red {
+            background: #e74c3c;
+            color: white;
+            box-shadow: 0 4px #c0392b;
+        }
+        button.btn-red:active {
+            box-shadow: 0 2px #c0392b;
+        }
+        #message-box {
+            background: rgba(0,0,0,0.7);
+            border: 2px solid #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            grid-template-rows: repeat(2, 40px);
+            gap: 4px;
+        }
+        .dpad button {
+            padding: 0;
+            font-size: 16px;
+        }
+        .dpad .up { grid-column: 2; grid-row: 1; }
+        .dpad .left { grid-column: 1; grid-row: 2; }
+        .dpad .right { grid-column: 3; grid-row: 2; }
+        .dpad .down { grid-column: 2; grid-row: 2; }
+    </style>
 </head>
 <body>
-  <div id="ui">SCORE: <span id="score">0</span> | SHIELD: <span id="shield">100%</span></div>
-  <canvas id="canvas" width="640" height="480"></canvas>
-  <div id="hint">Controls: [Arrow Left/Right] Rotate | [Arrow Up] Thrust | [Spacebar] Fire Laser</div>
-  <script>
-    const canvas = document.getElementById('canvas');
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+    <div id="ui-panel">
+        <div class="status-bar">
+            <span id="score-display">Score: 0</span>
+            <span id="pokemon-display">Active: Pikachu</span>
+            <span id="health-display">HP: 100/100</span>
+        </div>
+        <div id="message-box">Welcome to Pokémon 2D Arena! Use Arrow keys or D-Pad to move, Space/Attack to battle wild Charmander!</div>
+        <div class="controls">
+            <div class="btn-group">
+                <button onclick="switchPokemon()">Switch Pokémon</button>
+                <button class="btn-red" onclick="playerAttack()">Thunder / Flame!</button>
+            </div>
+            <div class="dpad">
+                <button class="up" ontouchstart="setKey('ArrowUp', true)" ontouchend="setKey('ArrowUp', false)" onmousedown="setKey('ArrowUp', true)" onmouseup="setKey('ArrowUp', false)">⬆️</button>
+                <button class="left" ontouchstart="setKey('ArrowLeft', true)" ontouchend="setKey('ArrowLeft', false)" onmousedown="setKey('ArrowLeft', true)" onmouseup="setKey('ArrowLeft', false)">⬅️</button>
+                <button class="down" ontouchstart="setKey('ArrowDown', true)" ontouchend="setKey('ArrowDown', false)" onmousedown="setKey('ArrowDown', true)" onmouseup="setKey('ArrowDown', false)">⬇️</button>
+                <button class="right" ontouchstart="setKey('ArrowRight', true)" ontouchend="setKey('ArrowRight', false)" onmousedown="setKey('ArrowRight', true)" onmouseup="setKey('ArrowRight', false)">➡️</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    const shieldEl = document.getElementById('shield');
 
-    let score = 0, shield = 100, gameOver = false;
-    const keys = {};
-    window.addEventListener('keydown', e => keys[e.code] = true);
-    window.addEventListener('keyup', e => keys[e.code] = false);
+    // Load assets
+    const pikachuImg = new Image();
+    pikachuImg.src = 'assets/pikachu.png';
 
-    const ship = { x: 320, y: 240, r: 12, a: -Math.PI/2, rot: 0, thrust: { x: 0, y: 0 } };
-    let lasers = [], asteroids = [], particles = [];
+    const charmanderImg = new Image();
+    charmanderImg.src = 'assets/charmander.png';
 
-    function spawnAsteroid(x, y, r) {
-      asteroids.push({
-        x: x ?? (Math.random() < 0.5 ? 0 : 640),
-        y: y ?? Math.random() * 480,
-        r: r || 30,
-        vx: (Math.random() - 0.5) * 2,
-        vy: (Math.random() - 0.5) * 2
-      });
+    const pokeballImg = new Image();
+    pokeballImg.src = 'assets/Pok__Ball_Plus.jpg';
+
+    // Game state
+    let score = 0;
+    let activeMon = 'Pikachu'; // Pikachu or Charmander
+    let playerHP = 100;
+    let wildHP = 80;
+
+    let player = {
+        x: 100,
+        y: 280,
+        width: 80,
+        height: 80,
+        speed: 5
+    };
+
+    let wildPokemon = {
+        x: 600,
+        y: 280,
+        width: 80,
+        height: 80,
+        direction: -1
+    };
+
+    let particles = [];
+    let keys = {};
+
+    window.addEventListener('keydown', e => { keys[e.key] = true; if(e.key === ' ') playerAttack(); });
+    window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+    function setKey(key, isDown) {
+        keys[key] = isDown;
+        if(isDown && key === 'Space') playerAttack();
     }
-    for (let i = 0; i < 5; i++) spawnAsteroid();
 
-    function loop() {
-      if (gameOver) {
-        ctx.fillStyle = 'rgba(11, 12, 16, 0.85)';
-        ctx.fillRect(0, 0, 640, 480);
-        ctx.fillStyle = '#ff0055';
-        ctx.font = 'bold 36px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('GAME OVER', 320, 230);
-        ctx.fillStyle = '#66fcf1';
-        ctx.font = '18px sans-serif';
-        ctx.fillText('Press [Space] to Restart', 320, 270);
-        if (keys['Space']) { score = 0; shield = 100; gameOver = false; asteroids = []; for (let i = 0; i < 5; i++) spawnAsteroid(); }
-        requestAnimationFrame(loop);
-        return;
-      }
-
-      ctx.clearRect(0, 0, 640, 480);
-      if (keys['ArrowLeft']) ship.a -= 0.07;
-      if (keys['ArrowRight']) ship.a += 0.07;
-      if (keys['ArrowUp']) {
-        ship.thrust.x += Math.cos(ship.a) * 0.15;
-        ship.thrust.y += Math.sin(ship.a) * 0.15;
-      }
-      ship.thrust.x *= 0.985; ship.thrust.y *= 0.985;
-      ship.x = (ship.x + ship.thrust.x + 640) % 640;
-      ship.y = (ship.y + ship.thrust.y + 480) % 480;
-
-      // Ship
-      ctx.save();
-      ctx.translate(ship.x, ship.y); ctx.rotate(ship.a);
-      ctx.strokeStyle = '#66fcf1'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(-10, -8); ctx.lineTo(-5, 0); ctx.lineTo(-10, 8); ctx.closePath();
-      ctx.stroke(); ctx.restore();
-
-      // Lasers
-      if (keys['Space'] && lasers.length < 5) {
-        lasers.push({ x: ship.x + Math.cos(ship.a)*15, y: ship.y + Math.sin(ship.a)*15, vx: Math.cos(ship.a)*7, vy: Math.sin(ship.a)*7, life: 50 });
-        keys['Space'] = false;
-      }
-      for (let i = lasers.length - 1; i >= 0; i--) {
-        let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.life--;
-        ctx.fillStyle = '#ff007f'; ctx.fillRect(l.x - 2, l.y - 2, 4, 4);
-        if (l.life <= 0) lasers.splice(i, 1);
-      }
-
-      // Asteroids
-      for (let i = asteroids.length - 1; i >= 0; i--) {
-        let a = asteroids[i]; a.x = (a.x + a.vx + 640) % 640; a.y = (a.y + a.vy + 480) % 480;
-        ctx.strokeStyle = '#45a29e'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.stroke();
-        // Laser hit
-        for (let j = lasers.length - 1; j >= 0; j--) {
-          let l = lasers[j];
-          if (Math.hypot(l.x - a.x, l.y - a.y) < a.r) {
-            score += 100; scoreEl.textContent = score;
-            if (a.r > 15) { spawnAsteroid(a.x, a.y, a.r / 2); spawnAsteroid(a.x, a.y, a.r / 2); }
-            asteroids.splice(i, 1); lasers.splice(j, 1); break;
-          }
+    function switchPokemon() {
+        if(activeMon === 'Pikachu') {
+            activeMon = 'Charmander';
+            document.getElementById('pokemon-display').innerText = 'Active: Charmander';
+            setMessage("Switched to Charmander! Ready for fiery action!");
+        } else {
+            activeMon = 'Pikachu';
+            document.getElementById('pokemon-display').innerText = 'Active: Pikachu';
+            setMessage("Switched to Pikachu! Ready for electric shocks!");
         }
-        // Ship hit
-        if (Math.hypot(ship.x - a.x, ship.y - a.y) < ship.r + a.r) {
-          shield -= 25; shieldEl.textContent = Math.max(0, shield) + '%';
-          if (shield <= 0) gameOver = true;
-          asteroids.splice(i, 1); break;
-        }
-      }
-      if (asteroids.length < 4) spawnAsteroid();
-      requestAnimationFrame(loop);
     }
-    loop();
-  </script>
+
+    function setMessage(text) {
+        document.getElementById('message-box').innerText = text;
+    }
+
+    function playerAttack() {
+        // Create attack particle / projectile
+        particles.push({
+            x: player.x + player.width,
+            y: player.y + 30,
+            vx: 10,
+            radius: 12,
+            color: activeMon === 'Pikachu' ? '#ffcc00' : '#ff4500'
+        });
+
+        // Check hit
+        if(Math.abs(player.x - wildPokemon.x) < 200) {
+            wildHP -= 25;
+            setMessage(`${activeMon} attacked! Wild Pokémon HP: ${Math.max(0, wildHP)}`);
+            if(wildHP <= 0) {
+                score += 100;
+                wildHP = 80;
+                setMessage(`Wild Pokémon defeated! +100 Score! A new challenger appears!`);
+            }
+        } else {
+            setMessage(`${activeMon} attacked, but target is too far!`);
+        }
+        document.getElementById('score-display').innerText = `Score: ${score}`;
+    }
+
+    function update() {
+        // Player movement
+        if(keys['ArrowLeft'] || keys['a']) player.x = Math.max(20, player.x - player.speed);
+        if(keys['ArrowRight'] || keys['d']) player.x = Math.min(canvas.width / 2, player.x + player.speed);
+        if(keys['ArrowUp'] || keys['w']) player.y = Math.max(150, player.y - player.speed);
+        if(keys['ArrowDown'] || keys['s']) player.y = Math.min(350, player.y + player.speed);
+
+        // Wild pokemon patrol
+        wildPokemon.x += wildPokemon.direction * 1.5;
+        if(wildPokemon.x < 450 || wildPokemon.x > 700) {
+            wildPokemon.direction *= -1;
+        }
+
+        // Update particles
+        particles.forEach((p, index) => {
+            p.x += p.vx;
+            if(p.x > canvas.width) {
+                particles.splice(index, 1);
+            }
+        });
+    }
+
+    function drawScene() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw ground & background scenery
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(0, 360, canvas.width, 90);
+
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillRect(0, 350, canvas.width, 15);
+
+        // Draw Player Pokémon
+        if(activeMon === 'Pikachu' && pikachuImg.complete) {
+            ctx.drawImage(pikachuImg, player.x, player.y, player.width, player.height);
+        } else if(activeMon === 'Charmander' && charmanderImg.complete) {
+            ctx.drawImage(charmanderImg, player.x, player.y, player.width, player.height);
+        } else {
+            // Fallback shape
+            ctx.fillStyle = activeMon === 'Pikachu' ? '#f1c40f' : '#e67e22';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        // Draw Wild Pokémon (Charmander or Opponent)
+        if(charmanderImg.complete) {
+            ctx.drawImage(charmanderImg, wildPokemon.x, wildPokemon.y, wildPokemon.width, wildPokemon.height);
+        } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(wildPokemon.x, wildPokemon.y, wildPokemon.width, wildPokemon.height);
+        }
+
+        // Draw HP Bars
+        // Player HP
+        ctx.fillStyle = '#333';
+        ctx.fillRect(player.x, player.y - 15, 80, 8);
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillRect(player.x, player.y - 15, (playerHP / 100) * 80, 8);
+
+        // Wild HP
+        ctx.fillStyle = '#333';
+        ctx.fillRect(wildPokemon.x, wildPokemon.y - 15, 80, 8);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(wildPokemon.x, wildPokemon.y - 15, (wildHP / 80) * 80, 8);
+
+        // Draw Particles
+        particles.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function gameLoop() {
+        update();
+        drawScene();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Start loop when images loaded
+    window.onload = () => {
+        gameLoop();
+    };
+</script>
+
 </body>
 </html>
