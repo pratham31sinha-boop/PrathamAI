@@ -2510,142 +2510,85 @@ def _google_cse_snippets(query: str, max_results: int = 4):
         print(f"[WEB][GOOGLE CSE FAULT] {exc}")
         return []
 
-POKEMON_MAP = {
-    "bulbasaur": 1, "ivysaur": 2, "venusaur": 3, "charmander": 4, "charmeleon": 5, "charizard": 6,
-    "squirtle": 7, "wartortle": 8, "blastoise": 9, "caterpie": 10, "metapod": 11, "butterfree": 12,
-    "weedle": 13, "kakuna": 14, "beedrill": 15, "pidgey": 16, "pidgeotto": 17, "pidgeot": 18,
-    "rattata": 19, "raticate": 20, "spearow": 21, "fearow": 22, "ekans": 23, "arbok": 24,
-    "pikachu": 25, "raichu": 26, "sandshrew": 27, "sandslash": 28, "nidoran": 29, "nidorina": 30,
-    "nidoqueen": 31, "nidorino": 33, "nidoking": 34, "clefairy": 35, "clefable": 36, "vulpix": 37,
-    "ninetales": 38, "jigglypuff": 39, "wigglytuff": 40, "zubat": 41, "golbat": 42, "oddish": 43,
-    "gloom": 44, "vileplume": 45, "paras": 46, "parasect": 47, "venonat": 48, "venomoth": 49,
-    "diglett": 50, "dugtrio": 51, "meowth": 52, "persian": 53, "psyduck": 54, "golduck": 55,
-    "mankey": 56, "primeape": 57, "growlithe": 58, "arcanine": 59, "poliwag": 60, "poliwhirl": 61,
-    "poliwrath": 62, "abra": 63, "kadabra": 64, "alakazam": 65, "machop": 66, "machoke": 67,
-    "machamp": 68, "bellsprout": 69, "weepinbell": 70, "victreebel": 71, "tentacool": 72, "tentacruel": 73,
-    "geodude": 74, "graveler": 75, "golem": 76, "ponyta": 77, "rapidash": 78, "slowpoke": 79,
-    "slowbro": 80, "magnemite": 81, "magneton": 82, "farfetchd": 83, "doduo": 84, "dodrio": 85,
-    "seel": 86, "dewgong": 87, "grimer": 88, "muk": 89, "shellder": 90, "cloyster": 91,
-    "gastly": 92, "haunter": 93, "gengar": 94, "onix": 95, "drowzee": 96, "hypno": 97,
-    "krabby": 98, "kingler": 99, "voltorb": 100, "electrode": 101, "exeggcute": 102, "exeggutor": 103,
-    "cubone": 104, "marowak": 105, "hitmonlee": 106, "hitmonchan": 107, "lickitung": 108, "koffing": 109,
-    "weezing": 110, "rhyhorn": 111, "rhydon": 112, "chansey": 113, "tangela": 114, "kangaskhan": 115,
-    "horsea": 116, "seadra": 117, "goldeen": 118, "seaking": 119, "staryu": 120, "starmie": 121,
-    "mr-mime": 122, "scyther": 123, "jynx": 124, "electabuzz": 125, "magmar": 126, "pinsir": 127,
-    "tauros": 128, "magikarp": 129, "gyarados": 130, "lapras": 131, "ditto": 132, "eevee": 133,
-    "vaporeon": 134, "jolteon": 135, "flareon": 136, "porygon": 137, "omanyte": 138, "omastar": 139,
-    "kabuto": 140, "kabutops": 141, "aerodactyl": 142, "snorlax": 143, "articuno": 144, "zapdos": 145,
-    "moltres": 146, "dratini": 147, "dragonair": 148, "dragonite": 149, "mewtwo": 150, "mew": 151,
-    "chikorita": 152, "cyndaquil": 155, "totodile": 158, "espeon": 196, "umbreon": 197, "wobbuffet": 202,
-    "steelix": 208, "scizor": 212, "heracross": 214, "tyranitar": 248, "lugia": 249, "ho-oh": 250,
-    "celebi": 251, "treecko": 252, "torchic": 255, "mudkip": 258, "gardevoir": 282, "lucario": 448,
-    "greninja": 658, "rayquaza": 384, "groudon": 383, "kyogre": 382
-}
-
-def _fetch_pokemon_character_assets(names: list, target_dir: str) -> list:
-    """Downloads individual Pokémon character pictures and sprites 1 by 1 into assets/."""
-    if not target_dir:
+def _fetch_dynamic_character_sprite(name: str, target_dir: str) -> list:
+    """Dynamically resolves and downloads individual character sprites or artwork without static hardcoding."""
+    if not name or not target_dir:
         return []
+    n_clean = name.lower().strip()
     assets_dir = os.path.join(target_dir, "assets")
     os.makedirs(assets_dir, exist_ok=True)
     ws_assets_dir = os.path.join(WORKSPACE_ROOT, "assets")
     os.makedirs(ws_assets_dir, exist_ok=True)
-
+    
     results = []
-    for name in names:
-        n_clean = name.lower().strip()
-        num = POKEMON_MAP.get(n_clean)
-        if not num:
-            try:
-                p_req = urllib.request.Request(f"https://pokeapi.co/api/v2/pokemon/{n_clean}", headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(p_req, timeout=2.5) as pr:
-                    pd = json.loads(pr.read().decode())
-                    num = pd.get("id")
-            except Exception:
-                num = None
-        if not num:
-            continue
-
-        # 1. Official Artwork (transparent high-res PNG)
-        art_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{num}.png"
-        fn_art = f"{n_clean}.png"
-        path_art = os.path.join(assets_dir, fn_art)
-        try:
-            req = urllib.request.Request(art_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=3.5) as r:
-                data = r.read()
-            if len(data) >= 500:
-                with open(path_art, "wb") as f:
-                    f.write(data)
-                try:
-                    with open(os.path.join(ws_assets_dir, fn_art), "wb") as wf:
-                        wf.write(data)
-                    with open(os.path.join(target_dir, fn_art), "wb") as tf:
-                        tf.write(data)
-                except Exception:
-                    pass
-                results.append({
-                    "title": f"Pokemon {n_clean.title()} Official Artwork",
-                    "url": art_url,
-                    "filename": fn_art,
-                    "local_path": path_art,
-                    "source": "PokeAPI Official Artwork"
-                })
-        except Exception as _e_art:
-            print(f"[POKE_ART_ERR] {n_clean} -> {_e_art}")
-
-        # 2. Pixel sprite (transparent 2D game sprite PNG)
-        sprite_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{num}.png"
-        fn_sprite = f"{n_clean}_sprite.png"
-        path_sprite = os.path.join(assets_dir, fn_sprite)
-        try:
-            req_s = urllib.request.Request(sprite_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req_s, timeout=3.5) as rs:
-                data_s = rs.read()
-            if len(data_s) >= 200:
-                with open(path_sprite, "wb") as fs:
-                    fs.write(data_s)
-                try:
-                    with open(os.path.join(ws_assets_dir, fn_sprite), "wb") as wfs:
-                        wfs.write(data_s)
-                except Exception:
-                    pass
-                results.append({
-                    "title": f"Pokemon {n_clean.title()} Game Sprite",
-                    "url": sprite_url,
-                    "filename": fn_sprite,
-                    "local_path": path_sprite,
-                    "source": "PokeAPI Game Sprite"
-                })
-        except Exception as _e_spr:
-            print(f"[POKE_SPRITE_ERR] {n_clean} -> {_e_spr}")
-
-    # Also download Pokeball item sprite!
-    pball_url = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
-    pball_path = os.path.join(assets_dir, "pokeball.png")
+    # 1. Dynamic PokeAPI lookup (works dynamically for any of 1025+ Pokemon without hardcoded maps)
     try:
-        req_b = urllib.request.Request(pball_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req_b, timeout=3.5) as rb:
-            b_data = rb.read()
-        if len(b_data) >= 100:
-            with open(pball_path, "wb") as bf:
-                bf.write(b_data)
-            try:
-                with open(os.path.join(ws_assets_dir, "pokeball.png"), "wb") as wbf:
-                    wbf.write(b_data)
-                with open(os.path.join(target_dir, "pokeball.png"), "wb") as tbf:
-                    tbf.write(b_data)
-            except Exception:
-                pass
-            results.append({
-                "title": "Pokeball Item Sprite",
-                "url": pball_url,
-                "filename": "pokeball.png",
-                "local_path": pball_path,
-                "source": "PokeAPI Item Sprite"
-            })
-    except Exception as _e_pb:
+        p_req = urllib.request.Request(f"https://pokeapi.co/api/v2/pokemon/{urllib.parse.quote(n_clean)}", headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(p_req, timeout=2.5) as pr:
+            pd = json.loads(pr.read().decode())
+            num = pd.get("id")
+            if num:
+                art_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{num}.png"
+                fn_art = f"{n_clean}.png"
+                path_art = os.path.join(assets_dir, fn_art)
+                try:
+                    req_a = urllib.request.Request(art_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req_a, timeout=3.0) as ra:
+                        data_a = ra.read()
+                    if len(data_a) >= 400:
+                        with open(path_art, "wb") as fa:
+                            fa.write(data_a)
+                        try:
+                            with open(os.path.join(ws_assets_dir, fn_art), "wb") as wfa:
+                                wfa.write(data_a)
+                        except Exception:
+                            pass
+                        results.append({
+                            "title": f"{n_clean.title()} Official Artwork",
+                            "url": art_url,
+                            "filename": fn_art,
+                            "local_path": path_art,
+                            "source": "PokeAPI"
+                        })
+                except Exception:
+                    pass
+
+                sprite_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{num}.png"
+                fn_spr = f"{n_clean}_sprite.png"
+                path_spr = os.path.join(assets_dir, fn_spr)
+                try:
+                    req_s = urllib.request.Request(sprite_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req_s, timeout=3.0) as rs:
+                        data_s = rs.read()
+                    if len(data_s) >= 200:
+                        with open(path_spr, "wb") as fs:
+                            fs.write(data_s)
+                        try:
+                            with open(os.path.join(ws_assets_dir, fn_spr), "wb") as wfs:
+                                wfs.write(data_s)
+                        except Exception:
+                            pass
+                        results.append({
+                            "title": f"{n_clean.title()} Game Sprite",
+                            "url": sprite_url,
+                            "filename": fn_spr,
+                            "local_path": path_spr,
+                            "source": "PokeAPI Sprite"
+                        })
+                except Exception:
+                    pass
+    except Exception:
         pass
+
+    # 2. Universal Web Image search for any character (Mario, Sonic, anime, superhero, etc.)
+    if not results:
+        try:
+            web_imgs = _search_real_images(f"{n_clean} transparent character sprite", max_results=3, download_to_dir=target_dir)
+            for wi in web_imgs:
+                if wi.get("local_path"):
+                    results.append(wi)
+        except Exception:
+            pass
 
     return results
 
@@ -2721,13 +2664,11 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
         if not t_clean:
             continue
 
-        # 2. Specialized handling for Pokémon PokeAPI sprites & high-res artwork
+        # 2. Dynamic character / PokeAPI check (transparent sprites & artwork dynamically fetched if pokemon/name query)
         poke_match = re.search(r'\b(?:pokemon|pokémon)\s*(?:#?(\d+)|([a-zA-Z]+))\b|\b([a-zA-Z]+)\s*(?:pokemon|pokémon)\b', t_clean, re.IGNORECASE)
-        if poke_match or t_clean.lower() in POKEMON_MAP:
-            p_id_or_name = (poke_match.group(1) or poke_match.group(2) or poke_match.group(3) if poke_match else t_clean).lower()
-            num = POKEMON_MAP.get(p_id_or_name)
-            if not num and p_id_or_name.isdigit():
-                num = int(p_id_or_name)
+        if poke_match:
+            p_id_or_name = (poke_match.group(1) or poke_match.group(2) or poke_match.group(3)).lower()
+            num = int(p_id_or_name) if p_id_or_name.isdigit() else None
             if not num:
                 try:
                     pr = urllib.request.urlopen(urllib.request.Request(f"https://pokeapi.co/api/v2/pokemon/{p_id_or_name}", headers={"User-Agent": "Mozilla/5.0"}), timeout=2.5)
@@ -2805,10 +2746,10 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
             ws_asset_file = os.path.join(ws_assets_dir, raw_title)
             try:
                 d_req = urllib.request.Request(item["url"], headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "User-Agent": "PrathamAI/2.0 (contact@pratham.ai; https://pratham.ai)",
                     "Accept": "image/*"
                 })
-                with urllib.request.urlopen(d_req, timeout=4.5) as d_resp:
+                with urllib.request.urlopen(d_req, timeout=3.5) as d_resp:
                     img_bytes = d_resp.read()
                 if len(img_bytes) >= 300:
                     img = PILImage.open(io.BytesIO(img_bytes))
@@ -2840,7 +2781,8 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
 
 
 def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
-    """If the user requested a 2D game or PDF, extract subject keywords and pre-fetch real verified individual images 1 by 1 into assets/."""
+    """Dynamically analyzes user prompt for ANY game or PDF to detect required visual assets
+    (characters, backgrounds, items, cast portraits), and downloads verified individual images 1 by 1 into assets/."""
     if not user_prompt or not target_dir:
         return []
     q = user_prompt.lower()
@@ -2849,47 +2791,65 @@ def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
     if not (is_game or is_pdf):
         return []
 
-    # 1. Specialized Pokémon game & character handling: fetch individual character sprites 1 by 1
-    if bool(re.search(r"\b(?:pokemon|pokémon|pika|poke)\b", q)):
-        mentioned = []
-        for p_name in POKEMON_MAP.keys():
-            if re.search(r'\b' + re.escape(p_name) + r'\b', q):
-                mentioned.append(p_name)
-        if len(mentioned) < 4:
-            default_roster = ["pikachu", "charmander", "bulbasaur", "squirtle", "charizard", "gengar", "eevee", "mewtwo"]
-            for def_p in default_roster:
-                if def_p not in mentioned:
-                    mentioned.append(def_p)
-        poke_results = _fetch_pokemon_character_assets(mentioned[:8], target_dir)
-        if poke_results:
-            return poke_results
+    # Clean prompt to get the core topic/franchise dynamically
+    cleaned_topic = re.sub(
+        r'\b(?:make|create|generate|build|code|play|a|an|the|2d|3d|game|pdf|document|report|essay|'
+        r'with|and|images?|pictures?|assets?|sprites?|characters?|details?|please|containg|containing|'
+        r'all|brief|briefs|breif|breifs|authentic|real|tv|show|series)\b',
+        ' ', q
+    )
+    cleaned_topic = re.sub(r'\s+', ' ', cleaned_topic).strip()
 
-    subjects = []
-    # Clean whole prompt of filler actions to get the true topic
-    cleaned_all = re.sub(r'\b(?:make|create|generate|build|code|play|a|an|the|2d|3d|game|pdf|document|report|essay|with|and|images?|pictures?|assets?|sprites?|characters?|details?|please)\b', ' ', q)
-    cleaned_all = re.sub(r'\s+', ' ', cleaned_all).strip()
-    if len(cleaned_all) >= 3 and len(cleaned_all) <= 50:
-        subjects.append(cleaned_all)
+    fetched = []
+    seen_titles = set()
 
+    # 1. Dynamically extract individual character names or entities mentioned in user prompt
+    sub_entities = []
     for m in re.finditer(r'\b(?:about|with|featuring|of|for|based\s+on)\s+([a-zA-Z0-9_\s,and]+?)(?:\.|$|\band\s+make|\bplease|\bwith\b)', q):
         chunk = m.group(1).strip()
         parts = re.split(r'[,&]|\band\b', chunk)
         for p in parts:
-            p_clean = re.sub(r'\b(?:images?|pictures?|sprites?|assets?|details?|sound|music|controls?|characters?|plot|plots|main|cast|briefs?|breifs?|authentic|real|tv|show|series|document)\b', '', p).strip()
-            if len(p_clean) >= 3 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that", "plot", "main", "cast", "details", "brief", "breif") and p_clean not in subjects:
-                subjects.append(p_clean)
+            p_clean = re.sub(r'\b(?:images?|pictures?|sprites?|assets?|details?|sound|music|controls?|characters?|plot|plots|main|cast|briefs?|breifs?|authentic|real|tv|show|series|document|containg|containing|having|including|each|every|info|information)\b', '', p).strip()
+            if len(p_clean) >= 2 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that", "plot", "main", "cast", "details", "brief", "breif", "containg", "containing", "having", "including", "info") and p_clean not in sub_entities:
+                sub_entities.append(p_clean)
 
-    fetched = []
-    seen_titles = set()
-    for sub in subjects[:3]:
+    # If Pokémon game mentioned without explicit characters, dynamically resolve popular starter sprites via PokeAPI
+    if is_game and bool(re.search(r"\b(?:pokemon|pokémon)\b", q)) and not sub_entities:
+        sub_entities = ["pikachu", "charmander", "bulbasaur", "squirtle", "charizard", "gengar"]
+
+    # Download individual character sprites 1 by 1
+    for ent in sub_entities[:6]:
         try:
-            results = _search_real_images(sub, max_results=8, download_to_dir=target_dir)
-            for r in results:
+            ent_sprites = _fetch_dynamic_character_sprite(ent, target_dir)
+            for s in ent_sprites:
+                if s.get("local_path") and s.get("title") not in seen_titles:
+                    seen_titles.add(s.get("title"))
+                    fetched.append(s)
+        except Exception as e:
+            print(f"[ASSET_PREPARE_ENT_ERR] {ent} -> {e}")
+
+    # 2. Main subject / franchise search (runs Wikipedia cast extraction for TV/movies or high-res subject artwork)
+    if cleaned_topic:
+        try:
+            main_res = _search_real_images(cleaned_topic, max_results=10, download_to_dir=target_dir)
+            for r in main_res:
                 if r.get("local_path") and r.get("title") not in seen_titles:
                     seen_titles.add(r.get("title"))
                     fetched.append(r)
         except Exception as e:
-            print(f"[PREPARE_ASSETS_ERR] {sub} -> {e}")
+            print(f"[ASSET_PREPARE_MAIN_ERR] {cleaned_topic} -> {e}")
+
+    # 3. For games: fetch high-quality stage background
+    if is_game and cleaned_topic:
+        try:
+            bg_res = _search_real_images(f"{cleaned_topic} game stage background landscape", max_results=2, download_to_dir=target_dir)
+            for r in bg_res:
+                if r.get("local_path") and r.get("title") not in seen_titles:
+                    seen_titles.add(r.get("title"))
+                    fetched.append(r)
+        except Exception as e:
+            print(f"[ASSET_PREPARE_BG_ERR] {e}")
+
     return fetched
 
 def _search_and_download_web_pdfs(query: str, max_results: int = 4, download_to_dir: str = None) -> list:
@@ -8154,65 +8114,53 @@ def chat_stream():
         turn_flow = []
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
-        # Non-blocking asset pre-fetch: run in background thread so tokens stream immediately word-by-word
+        # Autonomous dynamic asset pre-fetch & instruction injection for ANY game or PDF
         q_user = (outgoing_user_message or message or "").lower()
         is_game_turn = bool(re.search(r"\b(?:game|2d|3d|arcade|platformer|racing|canvas)\b", q_user))
         is_pdf_turn = bool(re.search(r"\b(?:pdf|document|report|essay)\b", q_user))
-        is_pokemon = bool(re.search(r"\b(?:pokemon|pokémon|pika|poke)\b", q_user))
         bg_asset_holder = {"assets": []}
         if is_game_turn or is_pdf_turn:
             assets_dir = os.path.join(terminal_workdir, "assets")
             os.makedirs(assets_dir, exist_ok=True)
-            if is_pokemon and is_game_turn:
+            
+            # Start background asset prefetch thread immediately (non-blocking for real-time word-by-word streaming)
+            def _bg_fetch_assets():
                 try:
-                    poke_res = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
-                    if poke_res:
-                        bg_asset_holder["assets"] = poke_res
-                except Exception as _pke:
-                    print(f"[POKE PREFETCH FAULT] {_pke}")
+                    res = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
+                    if res:
+                        bg_asset_holder["assets"] = res
+                except Exception as _bge:
+                    print(f"[BG ASSET FETCH FAULT] {_bge}")
+            threading.Thread(target=_bg_fetch_assets, daemon=True, name="bg-asset-prefetch").start()
 
+            if is_game_turn:
                 working_messages.append({
                     "role": "system",
                     "content": (
-                        "[VERIFIED INDIVIDUAL CHARACTER ASSETS ON DISK]:\n"
-                        "The following individual transparent character pictures and sprites have been downloaded 1 by 1 into assets/ on disk:\n"
-                        "- assets/pikachu.png (Player character / Pikachu artwork)\n"
-                        "- assets/pikachu_sprite.png (Pikachu 2D pixel sprite)\n"
-                        "- assets/charmander.png (Enemy / Wild Pokémon, Charmander)\n"
-                        "- assets/charmander_sprite.png (Charmander 2D pixel sprite)\n"
-                        "- assets/bulbasaur.png (Enemy / Wild Pokémon, Bulbasaur)\n"
-                        "- assets/bulbasaur_sprite.png (Bulbasaur 2D pixel sprite)\n"
-                        "- assets/squirtle.png (Enemy / Wild Pokémon, Squirtle)\n"
-                        "- assets/squirtle_sprite.png (Squirtle 2D pixel sprite)\n"
-                        "- assets/charizard.png (Boss Pokémon, Charizard)\n"
-                        "- assets/gengar.png (Ghost Pokémon, Gengar)\n"
-                        "- assets/eevee.png (Partner Pokémon, Eevee)\n"
-                        "- assets/mewtwo.png (Legendary Boss, Mewtwo)\n"
-                        "- assets/pokeball.png (Pokeball item sprite)\n\n"
-                        "CRITICAL MANDATORY REQUIREMENT - YOU MUST USE THESE PICTURES IN YOUR GAME:\n"
-                        "The user explicitly requires you to USE these downloaded pictures in the game! Do NOT draw plain colored boxes, geometric shapes, or emojis for characters!\n"
-                        "In your HTML5 Canvas JavaScript:\n"
-                        "1. Load the images:\n"
-                        "   const pikachuImg = new Image(); pikachuImg.src = 'assets/pikachu.png';\n"
-                        "   const charmanderImg = new Image(); charmanderImg.src = 'assets/charmander.png';\n"
-                        "   const bulbasaurImg = new Image(); bulbasaurImg.src = 'assets/bulbasaur.png';\n"
-                        "   const squirtleImg = new Image(); squirtleImg.src = 'assets/squirtle.png';\n"
-                        "   const pokeballImg = new Image(); pokeballImg.src = 'assets/pokeball.png';\n"
-                        "2. Draw them on canvas in your animation/render loop:\n"
-                        "   ctx.drawImage(pikachuImg, player.x, player.y, player.width, player.height);\n"
-                        "   ctx.drawImage(enemyImg, enemy.x, enemy.y, enemy.width, enemy.height);\n"
-                        "3. Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, responsive mobile controls (D-Pad + buttons), battle/catch mechanics, and sound synthesizer directly inside ```createfile:pokemon_game.html!"
+                        "[AUTONOMOUS 2D GAME ENGINE REQUIREMENT]:\n"
+                        "You are building a rich, interactive standalone HTML5 Canvas game.\n"
+                        "1. VISUAL ASSETS: All required character sprites and game background images are automatically detected and saved into 'assets/' on disk "
+                        "(e.g. 'assets/<character_name>.png', 'assets/<character_name>_sprite.png', 'assets/background.png').\n"
+                        "   MANDATORY: Load each image via `const img = new Image(); img.src = 'assets/...';` and render them in the animation loop using `ctx.drawImage()`. "
+                        "   Include resilient fallback shape rendering while images load. Do NOT use plain emojis or colored squares as the only representation!\n"
+                        "2. CONTROLS: Include responsive on-screen mobile touch controls (D-Pad or analog stick + Action buttons) AND keyboard controls (Arrow keys / WASD + Space).\n"
+                        "3. AUDIO & FX: Add Web Audio API synthesized sound effects (jumps, hits, score, game over) and particle effects.\n"
+                        "4. OUTPUT: Provide the complete HTML file directly inside ```createfile:game.html (or appropriate topic filename)."
                     )
                 })
-            else:
-                def _bg_fetch_assets():
-                    try:
-                        res = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
-                        if res:
-                            bg_asset_holder["assets"] = res
-                    except Exception as _bge:
-                        print(f"[BG ASSET FETCH FAULT] {_bge}")
-                threading.Thread(target=_bg_fetch_assets, daemon=True, name="bg-asset-prefetch").start()
+            elif is_pdf_turn:
+                working_messages.append({
+                    "role": "system",
+                    "content": (
+                        "[AUTONOMOUS ILLUSTRATED PDF DELIVERABLE REQUIREMENT]:\n"
+                        "You are generating a complete, professional, illustrated multi-page PDF document.\n"
+                        "1. VISUAL ASSETS & CAST: Authentic high-resolution subject and cast portraits are dynamically downloaded into 'assets/' on disk "
+                        "(e.g. 'assets/<character_name>.png' or 'assets/<character_name>.jpg').\n"
+                        "   MANDATORY: For each character, cast member, or key entity, include their authentic portrait alongside their detailed bio, role, and characteristics using ReportLab Image flowables.\n"
+                        "2. DIRECT PDF COMPILATION: Deliver a standalone ReportLab Python script inside ```createfile:generate_pdf.py that automatically builds the PDF document. "
+                        "Ensure the final deliverable produces the complete .pdf file!"
+                    )
+                })
         search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
         pre_snap = _snapshot_workspace_files(search_dirs)
         total_blocks_seen = 0
