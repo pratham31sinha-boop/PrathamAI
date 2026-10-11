@@ -123,6 +123,7 @@ except ImportError:
     _supabase_sdk = False
 app = Flask(__name__)
 handler = app
+_STARTUP_TIMESTAMP = time.time()
 
 import traceback
 @app.errorhandler(Exception)
@@ -803,7 +804,7 @@ def _get_user_usage(identifier: str) -> dict:
     clean_id = (identifier or "guest").strip().lower()
     return quotas.get(clean_id, {"messages": 0, "images": 0})
 
-def _check_user_message_quota(identifier: str, tier: str) -> tuple[bool, str]:
+def _check_user_message_quota(identifier: str, tier: str):
     if tier == "exceptional":
         return True, ""
     limit = _USAGE_QUOTAS.get(tier, _USAGE_QUOTAS["normal"])["messages"]
@@ -815,7 +816,7 @@ def _check_user_message_quota(identifier: str, tier: str) -> tuple[bool, str]:
         return False, f"⚠️ You have reached your limit of {limit} messages for your {tier_label} plan. {hint}"
     return True, ""
 
-def _check_user_image_quota(identifier: str, tier: str) -> tuple[bool, str]:
+def _check_user_image_quota(identifier: str, tier: str):
     if tier == "exceptional":
         return True, ""
     limit = _USAGE_QUOTAS.get(tier, _USAGE_QUOTAS["normal"])["images"]
@@ -5414,7 +5415,7 @@ def _stream_google_oauth_gemini(messages, state=None):
         
         cc_req = urllib.request.Request(cc_url, data=json.dumps(cc_payload).encode(), method="POST", headers=cc_headers)
         cc_got_any = False
-        with urllib.request.urlopen(cc_req, timeout=40) as cc_resp:
+        with urllib.request.urlopen(cc_req, timeout=120) as cc_resp:
             for raw_line in cc_resp:
                 line = raw_line.decode("utf-8", errors="replace").strip()
                 if not line.startswith("data:"):
@@ -5753,7 +5754,7 @@ def _stream_openai_compatible(url, api_key, model, messages, state=None, tempera
         },
         method="POST"
     )
-    with urllib.request.urlopen(req, timeout=25) as resp:
+    with urllib.request.urlopen(req, timeout=300) as resp:
         for raw_line in resp:
             line = raw_line.decode("utf-8", errors="replace").strip()
             if not line.startswith("data: "):
@@ -8719,7 +8720,24 @@ def chat_stream():
                         _pre_tmp_files.add(_f)
                 except Exception:
                     pass
-                stdout, stderr, rc = _run_code_block(lang, code, cwd=terminal_workdir)
+                _block_result = None
+                _block_exception = None
+                def _exec_block_worker():
+                    nonlocal _block_result, _block_exception
+                    try:
+                        _block_result = _run_code_block(lang, code, cwd=terminal_workdir)
+                    except Exception as _b_exc:
+                        _block_exception = _b_exc
+
+                _t_exec = threading.Thread(target=_exec_block_worker, daemon=True)
+                _t_exec.start()
+                while _t_exec.is_alive():
+                    _t_exec.join(timeout=2.0)
+                    if _t_exec.is_alive():
+                        yield _sse({"type": "heartbeat"})
+                if _block_exception:
+                    raise _block_exception
+                stdout, stderr, rc = _block_result if _block_result is not None else ("", "Execution failed", -1)
                 _post_exec_files = set()
                 for _scan_dir in set(filter(None, [terminal_workdir, WORKSPACE_ROOT])):
                     if os.path.isdir(_scan_dir):
@@ -9844,6 +9862,78 @@ def _start_qwen_app_heartbeat() -> None:
             f"[QWEN HEARTBEAT] app-level keep-warm started "
             f"(interval={QWEN_APP_HEARTBEAT_INTERVAL_SECONDS}s)"
         )
+# ── RENDER 24/7 SELF-KEEPALIVE BOT ──
+# Free Render instances sleep after 15 minutes of inactivity.
+# This daemon thread automatically pings the service every 10-14 minutes
+# (or RENDER_KEEPALIVE_INTERVAL_SECONDS, default 600s)
+# keeping Render permanently awake 24/7 with zero human intervention.
+_render_keepalive_started = False
+_render_keepalive_lock = threading.Lock()
+
+@app.route("/api/keepalive", methods=["GET", "POST", "OPTIONS"])
+@app.route("/keepalive", methods=["GET", "POST", "OPTIONS"])
+def render_keepalive_endpoint():
+    return jsonify({
+        "status": "awake",
+        "service": "Pratham AI",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "uptime_seconds": round(time.time() - _STARTUP_TIMESTAMP, 2)
+    })
+
+def _render_keepalive_loop():
+    time.sleep(25)
+    print("[RENDER KEEPALIVE BOT] Active: Pinging Render every 10 minutes to prevent sleeping.")
+    while True:
+        try:
+            urls_to_ping = []
+            render_url = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+            if render_url:
+                urls_to_ping.append(f"{render_url}/api/keepalive")
+            for env_key in ["PRATHAM_APP_URL", "APP_URL", "RENDER_URL", "PUBLIC_URL"]:
+                val = os.environ.get(env_key, "").strip().rstrip("/")
+                if val and f"{val}/api/keepalive" not in urls_to_ping:
+                    urls_to_ping.append(f"{val}/api/keepalive")
+            port = os.environ.get("PORT", "5000")
+            local_target = f"http://127.0.0.1:{port}/api/keepalive"
+            if local_target not in urls_to_ping:
+                urls_to_ping.append(local_target)
+
+            for target in urls_to_ping:
+                try:
+                    req = urllib.request.Request(
+                        target,
+                        headers={"User-Agent": "PrathamAI-RenderKeepAliveBot/2.0"}
+                    )
+                    with urllib.request.urlopen(req, timeout=20) as r:
+                        print(f"[RENDER KEEPALIVE BOT] Pinged {target} -> HTTP {r.status} (Service kept awake)")
+                except Exception as ping_err:
+                    print(f"[RENDER KEEPALIVE BOT] Ping {target} note: {ping_err}")
+        except Exception as loop_err:
+            print(f"[RENDER KEEPALIVE BOT] Error: {loop_err}")
+
+        # Default 600s (10 minutes) keeps awake well inside the 15m idle limit
+        interval = int(os.environ.get("RENDER_KEEPALIVE_INTERVAL_SECONDS", "600"))
+        time.sleep(max(60, min(interval, 1800)))
+
+def _start_render_keepalive_bot():
+    global _render_keepalive_started
+    with _render_keepalive_lock:
+        if _render_keepalive_started:
+            return
+        _render_keepalive_started = True
+        t = threading.Thread(
+            target=_render_keepalive_loop,
+            name="render-self-keepalive-bot",
+            daemon=True
+        )
+        t.start()
+        print("[RENDER KEEPALIVE BOT] Background keepalive daemon started.")
+
+try:
+    _start_render_keepalive_bot()
+except Exception as _e_rk:
+    print(f"[RENDER KEEPALIVE BOT] Startup error: {_e_rk}")
+
 # =====================================================================
 # CLAUDE-STYLE WORKBENCH & UNIFIED WORKSPACE API ENDPOINTS
 # =====================================================================
