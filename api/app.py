@@ -762,6 +762,79 @@ def _lookup_vip(email: str):
     if not email:
         return None
     return _fetch_vip_directory().get(email.lower())
+
+# ── USER QUOTA SYSTEM (Normal: 100 msgs / 10 imgs; Pro: 500 msgs / 20 imgs; Exceptional: Unlimited) ──
+_USAGE_QUOTAS = {
+    "exceptional": {"messages": float("inf"), "images": float("inf")},
+    "pro": {"messages": 500, "images": 20},
+    "normal": {"messages": 100, "images": 10},
+}
+_usage_store_file = os.path.join(WORKSPACE_ROOT, "data", "usage_quotas.json")
+_usage_store_cache = {}
+
+def _load_usage_quotas() -> dict:
+    global _usage_store_cache
+    if not _usage_store_cache and os.path.isfile(_usage_store_file):
+        try:
+            with open(_usage_store_file, "r", encoding="utf-8") as f:
+                _usage_store_cache = json.load(f)
+        except Exception:
+            _usage_store_cache = {}
+    return _usage_store_cache
+
+def _save_usage_quotas():
+    try:
+        os.makedirs(os.path.dirname(_usage_store_file), exist_ok=True)
+        with open(_usage_store_file, "w", encoding="utf-8") as f:
+            json.dump(_usage_store_cache, f, indent=2)
+    except Exception as e:
+        print(f"[QUOTA_SAVE_ERR] {e}")
+
+def _get_user_tier(email: str = None) -> str:
+    clean_email = (email or "").strip().lower()
+    if clean_email in CREATOR_EMAILS or clean_email.startswith("pratham31sinha"):
+        return "exceptional"
+    if _lookup_vip(clean_email):
+        return "pro"
+    return "normal"
+
+def _get_user_usage(identifier: str) -> dict:
+    quotas = _load_usage_quotas()
+    clean_id = (identifier or "guest").strip().lower()
+    return quotas.get(clean_id, {"messages": 0, "images": 0})
+
+def _check_user_message_quota(identifier: str, tier: str) -> tuple[bool, str]:
+    if tier == "exceptional":
+        return True, ""
+    limit = _USAGE_QUOTAS.get(tier, _USAGE_QUOTAS["normal"])["messages"]
+    usage = _get_user_usage(identifier)
+    used = usage.get("messages", 0)
+    if used >= limit:
+        tier_label = "Pro" if tier == "pro" else "Normal"
+        hint = "You can upgrade to Pro for 500 messages." if tier == "normal" else "Please contact Pratham to extend your limit."
+        return False, f"⚠️ You have reached your limit of {limit} messages for your {tier_label} plan. {hint}"
+    return True, ""
+
+def _check_user_image_quota(identifier: str, tier: str) -> tuple[bool, str]:
+    if tier == "exceptional":
+        return True, ""
+    limit = _USAGE_QUOTAS.get(tier, _USAGE_QUOTAS["normal"])["images"]
+    usage = _get_user_usage(identifier)
+    used = usage.get("images", 0)
+    if used >= limit:
+        tier_label = "Pro" if tier == "pro" else "Normal"
+        hint = "You can upgrade to Pro for 20 images." if tier == "normal" else "Please contact Pratham to extend your limit."
+        return False, f"⚠️ You have reached your limit of {limit} images for your {tier_label} plan. {hint}"
+    return True, ""
+
+def _increment_user_usage(identifier: str, msg_count: int = 0, img_count: int = 0):
+    clean_id = (identifier or "guest").strip().lower()
+    quotas = _load_usage_quotas()
+    rec = quotas.setdefault(clean_id, {"messages": 0, "images": 0})
+    rec["messages"] = rec.get("messages", 0) + msg_count
+    rec["images"] = rec.get("images", 0) + img_count
+    _save_usage_quotas()
+
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600          
 _ZIP_INTENT_RE = re.compile(
@@ -3715,7 +3788,7 @@ def _gemini_generate_image(access_token,prompt_text,reference_image_data_url=Non
             poll_prompt = urllib.parse.quote(prompt_text[:200])
             poll_url = f"https://image.pollinations.ai/prompt/{poll_prompt}?width=1024&height=1024&nologo=true"
             poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "PrathamAI/1.0"})
-            with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+            with urllib.request.urlopen(poll_req, timeout=60) as p_resp:
                 img_bytes = p_resp.read()
                 if img_bytes:
                     return {
@@ -3733,7 +3806,7 @@ def _gemini_generate_image(access_token,prompt_text,reference_image_data_url=Non
             poll_prompt = urllib.parse.quote(prompt_text[:200])
             poll_url = f"https://image.pollinations.ai/prompt/{poll_prompt}?width=1024&height=1024&nologo=true"
             poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "PrathamAI/1.0"})
-            with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+            with urllib.request.urlopen(poll_req, timeout=60) as p_resp:
                 img_bytes = p_resp.read()
                 if img_bytes:
                     return {
@@ -3750,7 +3823,7 @@ def _gemini_generate_image(access_token,prompt_text,reference_image_data_url=Non
             poll_prompt = urllib.parse.quote(prompt_text[:200])
             poll_url = f"https://image.pollinations.ai/prompt/{poll_prompt}?width=1024&height=1024&nologo=true"
             poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "PrathamAI/1.0"})
-            with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+            with urllib.request.urlopen(poll_req, timeout=60) as p_resp:
                 img_bytes = p_resp.read()
                 if img_bytes:
                     return {
@@ -4139,9 +4212,9 @@ class _WarmAntigravitySession:
                 start_time = time.time()
                 last_heartbeat = start_time
                 last_activity_time = start_time
-                first_token_timeout = 18.0
-                max_turn_duration = 240.0
-                turn_silence_timeout = 45.0
+                first_token_timeout = 30.0
+                max_turn_duration = 600.0
+                turn_silence_timeout = 180.0
                 written_files = {}
                 accumulated_streamed_text = []
 
@@ -5110,12 +5183,12 @@ def _stream_antigravity_cli(messages, state=None):
         saw_any_tool = False
         written_files = {}
         accumulated_streamed_text = []
-        first_token_timeout = 18.0
-        max_turn_duration = 90.0
+        first_token_timeout = 30.0
+        max_turn_duration = 600.0
         start_time = time.time()
         last_heartbeat = start_time
         last_activity_time = start_time
-        turn_silence_timeout = 35.0
+        turn_silence_timeout = 180.0
         yield _sse({"type": "heartbeat"})
         try:
             proc = subprocess.Popen(
@@ -6331,7 +6404,7 @@ def _do_stream(messages):
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"}
 _CODE_BLOCK_RE = re.compile(r"```([^\n`]+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 8                                                                     
-_TERMINAL_BLOCK_TIMEOUT = 45                                                                            
+_TERMINAL_BLOCK_TIMEOUT = 180                                                                            
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000                                                                
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
 _MULTI_STEP_INTENT_RE = re.compile(
@@ -7626,6 +7699,27 @@ def register_vip_profile():
     if success:
         _vip_cache["t"] = 0                                                
     return jsonify({"ok": success, "status": "committed" if success else "local fallback"})
+
+@app.route("/user/quota", methods=["GET", "OPTIONS"])
+@app.route("/api/user/quota", methods=["GET", "OPTIONS"])
+@app.route("/api/app/user/quota", methods=["GET", "OPTIONS"])
+def user_quota_status():
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    email = _user_email() or request.remote_addr or "guest"
+    tier = _get_user_tier(email)
+    usage = _get_user_usage(email)
+    limits = _USAGE_QUOTAS.get(tier, _USAGE_QUOTAS["normal"])
+    return jsonify({
+        "tier": tier,
+        "is_exceptional": tier == "exceptional",
+        "is_pro": tier == "pro",
+        "messages_used": usage.get("messages", 0),
+        "messages_limit": "unlimited" if tier == "exceptional" else limits["messages"],
+        "images_used": usage.get("images", 0),
+        "images_limit": "unlimited" if tier == "exceptional" else limits["images"]
+    })
+
 @app.route("/chat", methods=["POST", "OPTIONS"])
 @app.route("/api/chat", methods=["POST", "OPTIONS"])
 @app.route("/api/app/chat", methods=["POST", "OPTIONS"])
@@ -7701,6 +7795,24 @@ def chat_stream():
         resp.headers["X-Accel-Buffering"] = "no"
         resp.headers["Access-Control-Allow-Credentials"] = "true"
         return resp
+
+    user_tier = _get_user_tier(user_email)
+    quota_ident = user_email or request.remote_addr or "guest"
+    msg_quota_ok, msg_quota_err = _check_user_message_quota(quota_ident, user_tier)
+    if not msg_quota_ok:
+        _append_message(conv_id, "user", message)
+        _append_message(conv_id, "assistant", msg_quota_err)
+        def generate_msg_quota_error():
+            yield _sse({"type": "metadata", "conversation_id": conv_id})
+            yield _sse({"type": "token", "text": msg_quota_err})
+            yield _sse({"type": "complete"})
+        resp = Response(stream_with_context(generate_msg_quota_error()), content_type="text/event-stream")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
+    _increment_user_usage(quota_ident, msg_count=1)
+
     if _is_flagged_message(message):
         _append_message(conv_id, "user", message)
         refusal_text = (
@@ -7838,6 +7950,20 @@ def chat_stream():
         _last_image_prompt = _m.group(1)                                     
     image_prompt = _detect_image_prompt(message, _last_image_prompt)
     if image_prompt and not _is_complex_multitask_message(message):
+        img_quota_ok, img_quota_err = _check_user_image_quota(quota_ident, user_tier)
+        if not img_quota_ok:
+            _append_message(conv_id, "user", message)
+            _append_message(conv_id, "assistant", img_quota_err)
+            def generate_img_quota_error():
+                yield _sse({"type": "metadata", "conversation_id": conv_id})
+                yield _sse({"type": "token", "text": img_quota_err})
+                yield _sse({"type": "complete"})
+            resp = Response(stream_with_context(generate_img_quota_error()), content_type="text/event-stream")
+            resp.headers["Cache-Control"] = "no-cache"
+            resp.headers["X-Accel-Buffering"] = "no"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            return resp
+
         _append_message(conv_id, "user", message)
         enriched_image_prompt = _enhance_image_prompt_via_llm(image_prompt)
         image_url = None
@@ -7863,7 +7989,7 @@ def chat_stream():
                 seed = random.randint(1000, 999999)
                 poll_url = f"https://image.pollinations.ai/prompt/{clean_poll_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
                 poll_req = urllib.request.Request(poll_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PrathamAI/2.0"})
-                with urllib.request.urlopen(poll_req, timeout=30) as p_resp:
+                with urllib.request.urlopen(poll_req, timeout=60) as p_resp:
                     p_data = p_resp.read()
                     if p_data and len(p_data) > 1000:
                         image_url = f"data:image/jpeg;base64,{base64.b64encode(p_data).decode('utf-8')}"
@@ -7877,6 +8003,7 @@ def chat_stream():
                 image_text = f'Generated with Pollinations AI for: "{image_prompt}"'
 
         if image_url:
+            _increment_user_usage(quota_ident, img_count=1)
             assistant_note = image_text or f'Generated image for: "{image_prompt}"'
             _append_message(conv_id, 'assistant', assistant_note + '\n[generated image delivered to browser]')
 
@@ -8285,7 +8412,7 @@ def chat_stream():
                                     "label": f"Compiling deliverable via {filename}...",
                                     "timestamp": time.time()
                                 })
-                                run_res = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=40)
+                                run_res = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=120)
                                 print(f"[INTERMEDIATE AUTO-RUN] {filename} -> returncode={run_res.returncode}")
                                 if run_res.returncode == 0:
                                     yield _sse({
@@ -8464,7 +8591,7 @@ def chat_stream():
                             if (_fn.startswith("generate_") or _fn.startswith("build_")) and _fn.endswith(".py"):
                                 _g_path = os.path.join(_scan_dir, _fn)
                                 if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 10.0):
-                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=40)
+                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=120)
                                     print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
