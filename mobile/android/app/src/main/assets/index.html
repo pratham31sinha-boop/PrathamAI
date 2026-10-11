@@ -1660,6 +1660,19 @@
                 }
             };
             setTimeout(window.prathamDismissSplash, 1200);
+            // Standalone failsafe: Ensure app-shell or login-overlay is NEVER left hidden
+            setTimeout(function() {
+                var app = document.getElementById('app-shell');
+                var login = document.getElementById('login-overlay');
+                var appVis = app && !app.classList.contains('hidden') && app.style.display !== 'none';
+                var logVis = login && !login.classList.contains('hidden') && login.style.display !== 'none';
+                if (!appVis && !logVis) {
+                    if (app) {
+                        app.classList.remove('hidden');
+                        app.style.display = 'flex';
+                    }
+                }
+            }, 1400);
         })();
     </script>
     <div id="login-overlay" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-50 hidden" style="background: radial-gradient(circle at top, var(--accent-soft), var(--bg) 65%);">
@@ -4895,7 +4908,7 @@
                     node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
                     renderMathIfAvailable(node);
                 } else if (['python', 'py', 'bash', 'sh', 'shell', 'web', 'websearch', 'search', 'imagesearch', 'imgsearch', 'image_search'].includes((seg.lang || '').toLowerCase()) ||
-                    (((seg.lang || '').toLowerCase().startsWith('createfile:') || (seg.lang || '').toLowerCase().startsWith('editfile:')) && isIntermediateHelperScript((seg.lang || '').slice((seg.lang || '').indexOf(':') + 1).trim())) {
+                    (((seg.lang || '').toLowerCase().startsWith('createfile:') || (seg.lang || '').toLowerCase().startsWith('editfile:')) && isIntermediateHelperScript((seg.lang || '').slice((seg.lang || '').indexOf(':') + 1).trim()))) {
                     if (!node) {
                         node = document.createElement('div');
                         node.style.display = 'none';
