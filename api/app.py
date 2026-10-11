@@ -2499,11 +2499,56 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
         r'all|characters?|details?|breif|brief|with|about|of|the|for|please)\b',
         '', query, flags=re.I
     ).strip()
+    clean_q = re.sub(r'\s+', ' ', clean_q).strip()
     if not clean_q:
         clean_q = query
 
     results = []
     seen = set()
+
+    # 1. Specialized Wikipedia Show/Movie/Franchise Cast portrait extractor
+    # When query mentions a show/movie (e.g. "Bahu Hamari Rajni Kant"), automatically extract authentic cast portraits
+    try:
+        s_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(clean_q)}&srlimit=3&format=json"
+        req_s = urllib.request.Request(s_url, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
+        with urllib.request.urlopen(req_s, timeout=3.5) as r_s:
+            d_s = json.loads(r_s.read().decode("utf-8", errors="ignore"))
+        items = d_s.get("query", {}).get("search", [])
+        top_title = items[0]["title"] if items else None
+        if top_title:
+            w_url = f"https://en.wikipedia.org/w/api.php?action=parse&page={urllib.parse.quote(top_title)}&prop=wikitext&format=json"
+            req_w = urllib.request.Request(w_url, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
+            with urllib.request.urlopen(req_w, timeout=3.5) as rw:
+                dw = json.loads(rw.read().decode("utf-8", errors="ignore"))
+            wt = dw.get("parse", {}).get("wikitext", {}).get("*", "")
+            cast_m = re.search(r'==\s*Cast\s*==([\s\S]+?)(?:\n==[^=]|\Z)', wt, re.I)
+            if cast_m:
+                raw_cast = re.findall(r'\[\[([^\]\|]+)', cast_m.group(1))
+                cast_articles = [c.strip() for c in raw_cast if not c.startswith(('File:', 'Category:', 'http'))][:15]
+                if cast_articles:
+                    order_map = {name.lower(): i for i, name in enumerate(cast_articles)}
+                    pi_url = f"https://en.wikipedia.org/w/api.php?action=query&titles={urllib.parse.quote('|'.join(cast_articles))}&redirects=1&prop=pageimages&pithumbsize=1024&format=json"
+                    req_pi = urllib.request.Request(pi_url, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
+                    with urllib.request.urlopen(req_pi, timeout=3.5) as rpi:
+                        dpi = json.loads(rpi.read().decode("utf-8", errors="ignore"))
+                    redirect_map = {}
+                    for red in dpi.get("query", {}).get("redirects", []):
+                        redirect_map[red["to"].lower()] = red["from"].lower()
+                    cast_found = []
+                    for p in dpi.get("query", {}).get("pages", {}).values():
+                        thumb = p.get("thumbnail", {}).get("source")
+                        p_title = p.get("title", "")
+                        if thumb:
+                            orig_key = redirect_map.get(p_title.lower(), p_title.lower())
+                            order_idx = order_map.get(orig_key, 999)
+                            cast_found.append((order_idx, p_title, thumb))
+                    cast_found.sort(key=lambda x: x[0])
+                    for _, c_title, c_url in cast_found:
+                        if c_url not in seen:
+                            seen.add(c_url)
+                            results.append({"title": f"{c_title}", "url": c_url, "source": "Wikipedia Cast"})
+    except Exception as exc_cast:
+        print(f"[SEARCH_IMAGE][CAST FAULT] {exc_cast}")
 
     sub_entities = [s.strip() for s in re.split(r'[,/&]|\band\b', clean_q) if len(s.strip()) >= 2]
     search_targets = sub_entities[:5] if len(sub_entities) > 1 else [clean_q]
@@ -2513,7 +2558,7 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
         if not t_clean:
             continue
 
-        # 1. Specialized handling for Pokémon PokeAPI sprites & high-res artwork
+        # 2. Specialized handling for Pokémon PokeAPI sprites & high-res artwork
         poke_match = re.search(r'\b(?:pokemon|pokémon)\s*(?:#?(\d+)|([a-zA-Z]+))\b|\b([a-zA-Z]+)\s*(?:pokemon|pokémon)\b', t_clean, re.IGNORECASE)
         if poke_match:
             p_id_or_name = (poke_match.group(1) or poke_match.group(2) or poke_match.group(3)).lower()
@@ -2524,7 +2569,7 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
                     seen.add(art_url)
                     results.append({"title": f"Pokemon {p_id_or_name.title()} Official Artwork", "url": art_url, "source": "PokeAPI"})
 
-        # 2. Wikipedia / Wikimedia Commons PageImages (High-res 1024px official portraits/stills)
+        # 3. Wikipedia / Wikimedia Commons PageImages (High-res 1024px official portraits/stills)
         for api_endpoint in [
             f"https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(t_clean)}&gsrlimit=10&prop=pageimages&pithumbsize=1024&format=json",
             f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(t_clean)}&gsrlimit=10&prop=pageimages&pithumbsize=1024&format=json"
@@ -2543,7 +2588,7 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
             except Exception as exc:
                 print(f"[SEARCH_IMAGE][WIKI FAULT] {exc}")
 
-        # 3. Bing Async Media Search (Real high-res production stills, anime, wallpapers, live photos)
+        # 4. Bing Async Media Search (Real high-res production stills, anime, wallpapers, live photos)
         try:
             b_url = f"https://www.bing.com/images/async?q={urllib.parse.quote(t_clean)}&first=0&count=30&mmasync=1"
             req2 = urllib.request.Request(b_url, headers={
@@ -2598,6 +2643,7 @@ def _search_real_images(query: str, max_results: int = 12, download_to_dir: str 
 
     return final_results
 
+
 def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
     """If the user requested a 2D game or PDF, extract subject keywords and pre-fetch real verified images into assets/."""
     if not user_prompt or not target_dir:
@@ -2609,24 +2655,25 @@ def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
         return []
 
     subjects = []
+    # Clean whole prompt of filler actions to get the true topic
+    cleaned_all = re.sub(r'\b(?:make|create|generate|build|code|play|a|an|the|2d|3d|game|pdf|document|report|essay|with|and|images?|pictures?|assets?|sprites?|characters?|details?|please)\b', ' ', q)
+    cleaned_all = re.sub(r'\s+', ' ', cleaned_all).strip()
+    if len(cleaned_all) >= 3 and len(cleaned_all) <= 50:
+        subjects.append(cleaned_all)
+
     for m in re.finditer(r'\b(?:about|with|featuring|of|for|based\s+on)\s+([a-zA-Z0-9_\s,and]+?)(?:\.|$|\band\s+make|\bplease|\bwith\b)', q):
         chunk = m.group(1).strip()
         parts = re.split(r'[,&]|\band\b', chunk)
         for p in parts:
             p_clean = re.sub(r'\b(?:images?|pictures?|sprites?|assets?|details?|sound|music|controls?|characters?)\b', '', p).strip()
-            if len(p_clean) >= 3 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that"):
+            if len(p_clean) >= 3 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that") and p_clean not in subjects:
                 subjects.append(p_clean)
-
-    if not subjects:
-        main_sub = re.sub(r'\b(?:make|create|generate|build|code|play|a|an|the|2d|3d|game|pdf|document|report|essay|with|images?|pictures?|assets?|sprites?|characters?|please)\b', '', q).strip()
-        if len(main_sub) >= 3 and len(main_sub) <= 40:
-            subjects.append(main_sub)
 
     fetched = []
     seen_titles = set()
-    for sub in subjects[:4]:
+    for sub in subjects[:3]:
         try:
-            results = _search_real_images(sub, max_results=6, download_to_dir=target_dir)
+            results = _search_real_images(sub, max_results=8, download_to_dir=target_dir)
             for r in results:
                 if r.get("local_path") and r.get("title") not in seen_titles:
                     seen_titles.add(r.get("title"))
@@ -6106,7 +6153,7 @@ def _do_stream(messages):
     yield _sse({"type":"complete"})
 
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"}
-_CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
+_CODE_BLOCK_RE = re.compile(r"```([^\n`]+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 8                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 45                                                                            
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000                                                                
@@ -6276,9 +6323,14 @@ def _extract_executable_blocks(text: str):
     tag is one we know how to actually execute."""
     out = []
     for m in _CODE_BLOCK_RE.finditer(text):
-        lang = (m.group(1) or "").lower()
+        raw_header = (m.group(1) or "").strip()
+        parts = raw_header.split(None, 1)
+        lang = parts[0].lower() if parts else ""
+        code = m.group(2)
+        if len(parts) > 1 and parts[1].strip():
+            code = (parts[1].strip() + "\n" + code).strip()
         if lang in _EXECUTABLE_LANGS:
-            out.append((lang, m.group(2)))
+            out.append((lang, code))
     return out
 def _compute_diff_stats(old_content: str, new_content: str) -> dict:
     """Real diff engine (stdlib difflib) for editfile operations. Returns
@@ -6419,9 +6471,12 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
                                 shutil.copy2(lp, os.path.join(assets_dir, os.path.basename(lp)))
                             except Exception:
                                 pass
+                saved_asset_names = [f"assets/{os.path.basename(it['local_path'])}" for it in img_results if it.get("local_path")]
                 lines = []
+                if saved_asset_names:
+                    lines.append(f"[NATIVE ASSET ENGINE: Verified authentic images downloaded to disk: {', '.join(saved_asset_names)}. Embed or load these exact local paths directly into your deliverable!]")
                 for idx, item in enumerate(img_results, 1):
-                    local_info = f" (Saved to: {os.path.basename(item['local_path'])})" if item.get('local_path') else ""
+                    local_info = f" (Saved to: assets/{os.path.basename(item['local_path'])})" if item.get('local_path') else ""
                     lines.append(f"{idx}. {item['title']}: {item['url']}{local_info} [Source: {item['source']}]")
                 out = "\n".join(lines)
             else:
@@ -7874,29 +7929,22 @@ def chat_stream():
         turn_flow = []
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
-        # Check if user requested a 2D game or PDF that needs image assets
+        # Non-blocking asset pre-fetch: run in background thread so tokens stream immediately word-by-word
         q_user = (outgoing_user_message or message or "").lower()
         is_game_turn = bool(re.search(r"\b(?:game|2d|3d|arcade|platformer|racing|canvas)\b", q_user))
         is_pdf_turn = bool(re.search(r"\b(?:pdf|document|report|essay)\b", q_user))
+        bg_asset_holder = {"assets": []}
         if is_game_turn or is_pdf_turn:
             assets_dir = os.path.join(terminal_workdir, "assets")
             os.makedirs(assets_dir, exist_ok=True)
-            try:
-                found_assets = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
-                if found_assets:
-                    asset_filenames = [os.path.basename(a["local_path"]) for a in found_assets if a.get("local_path")]
-                    if asset_filenames:
-                        working_messages.append({
-                            "role": "user",
-                            "content": (
-                                f"[NATIVE ASSET ENGINE NOTICE: Verified real image assets have already been downloaded to assets/ on disk: "
-                                f"{', '.join(f'assets/{fn}' for fn in asset_filenames)}. "
-                                f"Embed or load these assets directly into your HTML Canvas or PDF deliverable code! "
-                                f"If additional assets are needed, run native ```imagesearch <query>``` blocks directly without helper .py scripts.]"
-                            )
-                        })
-            except Exception as e_asset:
-                print(f"[ASSET PRE-FETCH FAULT] {e_asset}")
+            def _bg_fetch_assets():
+                try:
+                    res = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
+                    if res:
+                        bg_asset_holder["assets"] = res
+                except Exception as _bge:
+                    print(f"[BG ASSET FETCH FAULT] {_bge}")
+            threading.Thread(target=_bg_fetch_assets, daemon=True, name="bg-asset-prefetch").start()
         search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
         pre_snap = _snapshot_workspace_files(search_dirs)
         total_blocks_seen = 0
@@ -8115,9 +8163,17 @@ def chat_stream():
                         })
                 except Exception as exc:
                     print(f"[EDITFILE][FAULT] {exc}")
-            all_blocks_this_iteration = list(_CODE_BLOCK_RE.finditer(iteration_reply))
+            all_blocks_this_iteration = []
+            for m in _CODE_BLOCK_RE.finditer(iteration_reply):
+                raw_header = (m.group(1) or "").strip()
+                parts = raw_header.split(None, 1)
+                b_lang = parts[0].lower() if parts else ""
+                b_code = m.group(2)
+                if len(parts) > 1 and parts[1].strip():
+                    b_code = (parts[1].strip() + "\n" + b_code).strip()
+                all_blocks_this_iteration.append((b_lang, b_code))
             executable_present = any(
-                (m.group(1) or "").lower() in _EXECUTABLE_LANGS for m in all_blocks_this_iteration
+                b_lang in _EXECUTABLE_LANGS for b_lang, _ in all_blocks_this_iteration
             )
             # Auto-compile any generator scripts created in this turn if deliverable not yet compiled
             try:
@@ -8186,12 +8242,10 @@ def chat_stream():
                         continue
                 break                                                     
             results = []
-            for m in all_blocks_this_iteration:
+            for lang, code in all_blocks_this_iteration:
                 total_blocks_seen += 1
-                lang = (m.group(1) or "").lower()
                 if lang not in _EXECUTABLE_LANGS:
-                    continue                                                                    
-                code = m.group(2)
+                    continue
                 if lang in ("web", "websearch", "search"):
                     yield _sse({
                         "type": "agent_step",
@@ -8336,6 +8390,13 @@ def chat_stream():
                 f"Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block "
                 f"(or run the build script) to deliver the user's request. Do NOT run inspection commands like `ls`."
             )
+            if bg_asset_holder.get("assets"):
+                bg_fns = [os.path.basename(a["local_path"]) for a in bg_asset_holder["assets"] if a.get("local_path")]
+                if bg_fns:
+                    continuation_content += (
+                        f"\n\n[VERIFIED LOCAL ASSETS READY IN assets/ ON DISK: {', '.join(f'assets/{fn}' for fn in bg_fns)}. "
+                        f"Embed these exact local paths directly into your deliverable!]"
+                    )
             working_messages.append({"role": "user", "content": continuation_content})
         if _tasks_emitted:
             final_reply_so_far = "".join(full_reply_parts)

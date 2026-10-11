@@ -3207,8 +3207,9 @@
                 const explicitName = lang.slice(lang.indexOf(':') + 1).trim();
                 if (explicitName) return explicitName;
             }
-            const ext = LANG_EXT_MAP[(lang || '').toLowerCase()] || 'txt';
-            return ordinal === 1 ? `generated.${ext}` : `generated_${ordinal}.${ext}`;
+            const clean = (lang || '').toLowerCase();
+            if (clean === 'html' || clean === 'htm') return ordinal === 1 ? 'index.html' : `page_${ordinal}.html`;
+            return null;
         }
         function pushTerminalLog(message) {
             const stamp = new Date().toLocaleTimeString([], { hour12: false });
@@ -3239,18 +3240,22 @@
         }
         function parseAssistantSegments(text) {
             const segments = [];
-            const fenceOpenRe = /```((?:createfile|editfile):[^\n`]+|\w+)?\n/g;
+            const fenceOpenRe = /```([^\n`]+)?\n/g;
             let idx = 0;
             while (idx < text.length) {
                 fenceOpenRe.lastIndex = idx;
                 const m = fenceOpenRe.exec(text);
                 if (!m) {
                     const tail = text.slice(idx);
-                    const partialFence = tail.match(/```((?:createfile|editfile):[^\n`]+|\w+)?$/);
+                    const partialFence = tail.match(/```([^\n`]+)?$/);
                     if (partialFence) {
                         const before = tail.slice(0, partialFence.index);
                         if (before) segments.push({ type: 'text', content: before });
-                        const partialLang = (partialFence[1] || 'text').toLowerCase();
+                        const rawPartHeader = (partialFence[1] || 'text').trim();
+                        let partialLang = rawPartHeader.toLowerCase();
+                        if (!partialLang.startsWith('createfile:') && !partialLang.startsWith('editfile:')) {
+                            partialLang = (rawPartHeader.split(/\s+/)[0] || 'text').toLowerCase();
+                        }
                         segments.push({ type: 'code', lang: partialLang, content: '', closed: false });
                     } else {
                         segments.push({ type: 'text', content: tail });
@@ -3258,7 +3263,11 @@
                     break;
                 }
                 if (m.index > idx) segments.push({ type: 'text', content: text.slice(idx, m.index) });
-                const lang = (m[1] || 'text').toLowerCase();
+                const rawHeader = (m[1] || 'text').trim();
+                let lang = rawHeader.toLowerCase();
+                if (!lang.startsWith('createfile:') && !lang.startsWith('editfile:')) {
+                    lang = (rawHeader.split(/\s+/)[0] || 'text').toLowerCase();
+                }
                 const codeStart = m.index + m[0].length;
                 const closeIdx = text.indexOf('```', codeStart);
                 if (closeIdx === -1) {
@@ -4858,44 +4867,59 @@
                     }
                     node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
                     renderMathIfAvailable(node);
-                } else if (['python', 'py', 'bash', 'sh', 'shell'].includes((seg.lang || '').toLowerCase())) {
-                    execOrdinal += 1;
-                    if (!node || node.dataset.segType !== 'exec') {
-                        node = buildExecutionChainCard(seg.lang, seg.content, seg.closed, execOrdinal);
-                        node.dataset.segType = 'exec';
-                        (wrapper._answerZone || wrapper).appendChild(node);
+                } else if (['python', 'py', 'bash', 'sh', 'shell', 'web', 'websearch', 'search', 'imagesearch', 'imgsearch', 'image_search'].includes((seg.lang || '').toLowerCase())) {
+                    if (!node) {
+                        node = document.createElement('div');
+                        node.style.display = 'none';
+                        node.dataset.segType = 'suppressed-exec';
+                        (wrapper._processZone || wrapper).appendChild(node);
                         wrapper._segNodes[i] = node;
-                        setAgentActivity(`Running ${seg.lang}...`);
-                        pushTerminalLog(`Executing ${seg.lang}...`);
-                    } else {
-                        updateExecutionChainCard(node, seg.content, seg.closed);
-                        if (!seg.closed) setAgentActivity(`Running ${seg.lang}...`);
                     }
+                    const eLang = (seg.lang || '').toLowerCase();
+                    if (!seg.closed) {
+                        if (eLang.includes('image')) setAgentActivity('Searching images...');
+                        else if (eLang.includes('web') || eLang.includes('search')) setAgentActivity('Searching web...');
+                        else setAgentActivity(`Running ${seg.lang}...`);
+                    }
+                    pushTerminalLog(`Executing ${seg.lang}...`);
                 } else {
-                    if (!node || node.dataset.segType !== 'code') {
+                    const candidateFilename = guessFileName(seg.lang, fileOrdinal + 1);
+                    if (candidateFilename) {
                         fileOrdinal += 1;
-                        const candidateFilename = guessFileName(seg.lang, fileOrdinal);
-                        // Dedup: if this exact filename already has a card in this
-                        // message (e.g. a python script + a createfile block both
-                        // targeting the same output), update that card instead of
-                        // creating a visible duplicate — fixes files appearing twice.
-                        wrapper._fileCardsByName = wrapper._fileCardsByName || {};
-                        if (wrapper._fileCardsByName[candidateFilename]) {
-                            node = wrapper._fileCardsByName[candidateFilename];
-                            updateFileCreationCard(node, seg.content, seg.closed);
-                            wrapper._segNodes[i] = node;
+                        if (!node || node.dataset.segType !== 'code') {
+                            wrapper._fileCardsByName = wrapper._fileCardsByName || {};
+                            if (wrapper._fileCardsByName[candidateFilename]) {
+                                node = wrapper._fileCardsByName[candidateFilename];
+                                updateFileCreationCard(node, seg.content, seg.closed);
+                                wrapper._segNodes[i] = node;
+                            } else {
+                                node = buildFileCreationCard(seg.lang, seg.content, seg.closed, fileOrdinal);
+                                node.dataset.segType = 'code';
+                                wrapper._fileCardsByName[candidateFilename] = node;
+                                wrapper._segNodes[i] = node;
+                                appendToFileGroup(wrapper, node);
+                                setAgentActivity(`Writing ${node.dataset.filename}...`);
+                                pushTerminalLog(`Creating ${node.dataset.filename}...`);
+                            }
                         } else {
-                            node = buildFileCreationCard(seg.lang, seg.content, seg.closed, fileOrdinal);
-                            node.dataset.segType = 'code';
-                            wrapper._fileCardsByName[candidateFilename] = node;
-                            wrapper._segNodes[i] = node;
-                            appendToFileGroup(wrapper, node);
-                            setAgentActivity(`Writing ${node.dataset.filename}...`);
-                            pushTerminalLog(`Creating ${node.dataset.filename}...`);
+                            updateFileCreationCard(node, seg.content, seg.closed);
+                            if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
                         }
                     } else {
-                        updateFileCreationCard(node, seg.content, seg.closed);
-                        if (!seg.closed) setAgentActivity(`Writing ${node.dataset.filename}...`);
+                        // Standard non-deliverable code snippet (e.g. tutorial / explanation snippet in chat)
+                        if (!node || node.dataset.segType !== 'syntax-code') {
+                            node = document.createElement('div');
+                            node.dataset.segType = 'syntax-code';
+                            node.className = 'glass text-xs font-mono p-3 my-2 rounded-xl overflow-x-auto text-[var(--text)] border border-[var(--border)]';
+                            const pre = document.createElement('pre');
+                            const codeEl = document.createElement('code');
+                            pre.appendChild(codeEl);
+                            node.appendChild(pre);
+                            (wrapper._answerZone || wrapper).appendChild(node);
+                            wrapper._segNodes[i] = node;
+                        }
+                        const codeEl = node.querySelector('code');
+                        if (codeEl) codeEl.textContent = seg.content;
                     }
                 }
             });
