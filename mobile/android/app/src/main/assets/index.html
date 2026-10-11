@@ -5625,11 +5625,11 @@
                     if (lastActivityWatchdog) clearTimeout(lastActivityWatchdog);
                     lastActivityWatchdog = setTimeout(() => {
                         if (!sawCompleteEvent) {
-                            console.warn('[STREAM] Activity silence timeout (300s). Auto-finalizing response.');
+                            console.warn('[STREAM] Activity silence timeout (1800s). Auto-finalizing response.');
                             finishResponseTurn();
                             try { reader.cancel(); } catch (e) {}
                         }
-                    }, 300000);
+                    }, 1800000);
                 };
 
                 const finishResponseTurn = () => {
@@ -5704,11 +5704,11 @@
 
                 maxTurnWatchdog = setTimeout(() => {
                     if (!sawCompleteEvent) {
-                        console.warn('[STREAM] Maximum turn time guard reached (600s). Auto-finalizing response.');
+                        console.warn('[STREAM] Maximum turn time guard reached (3600s). Auto-finalizing response.');
                         finishResponseTurn();
                         try { reader.cancel(); } catch (e) {}
                     }
-                }, 600000);
+                }, 3600000);
                 resetActivityWatchdog();
 
                 while (true) {

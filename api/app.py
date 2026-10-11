@@ -3630,9 +3630,14 @@ SYSTEM_PROMPT = (
     "    - Comprehensive Image Extraction (```imagesearch <query>```): Real multi-engine image search (Wikipedia, Wikimedia Commons, Bing Media, PokeAPI). When extracting images of characters, persons, or subjects, extract ALL high-end, high-resolution images needed — do NOT stop after extracting only 1 image! All images are automatically downloaded into assets/ and verified with PIL.\n"
     "    - Direct Terminal Downloads: Use bash curl, wget, or python requests/urllib for any direct file or document downloads.\n"
     "    - STRICT PROHIBITION: DO NOT create or execute helper .py scripts (like fetch_image.py or search.py) to search or download web files! Always use native ```imagesearch <query>``` or ```websearch <query>``` blocks directly.\n"
-    "    - ASSETS FOR 2D GAMES & PDFs: When the user asks to generate ANY 2D game, HTML5 app, or PDF document with characters/topics/images (e.g. Pokémon, Mario, Sonic, anime, movies):\n"
-    "      * ALWAYS download the required character assets INDIVIDUALLY 1 BY 1! (e.g. For Pokémon: Pikachu, Charmander, Bulbasaur, Squirtle, Charizard, Gengar, Pokeball). NEVER download a merged wallpaper, collage, or group photo containing multiple characters merged together — individual character sprites are required!\n"
+    "    - ASSETS FOR 2D GAMES & PDFs: When the user asks to generate ANY 2D game, HTML5 app, or PDF document with characters/topics/images (e.g. Pokémon, Mario, Sonic, anime, movies, Bahu Hamari Rajni Kant, TV shows, history, animals):\n"
+    "      * ALWAYS download the required character assets INDIVIDUALLY 1 BY 1! (e.g. For Pokémon: Pikachu, Charmander, Bulbasaur, Squirtle, Charizard, Gengar, Pokeball; For TV shows: Rajni Kant / Ridhima Pandit, Shaan Kant / Karan Grover, Surili Kant, etc.). NEVER download a merged wallpaper, collage, or group photo containing multiple characters merged together — individual character sprites/portraits are required!\n"
     "      * MANDATORY GAME INTEGRATION - YOU MUST USE THE PICTURES: You MUST actually load and render those downloaded character pictures in the game! Load them in JavaScript with `const img = new Image(); img.src = 'assets/<name>.png';` and render them in the Canvas draw loop with `ctx.drawImage(img, x, y, width, height)`. NEVER render plain colored boxes, geometric shapes, or emojis when real character pictures are downloaded! Always use the real pictures!\n"
+    "      * MANDATORY PDF INTEGRATION - YOU MUST EMBED THE PICTURES IN THE PDF: When creating ANY PDF document that has characters, cast members, persons, or topics, YOU MUST VISIBLY EMBED ALL DOWNLOADED IMAGES FROM assets/ DIRECTLY INTO THE PDF REPORT! NEVER produce a text-only or table-only PDF without the real downloaded pictures! In ReportLab:\n"
+    "        - Import: `from reportlab.platypus import Image as RLImage, Table, TableStyle, Paragraph, Spacer`\n"
+    "        - For each character or entry, place their portrait picture right next to or above their brief and details: e.g. using a 2-column Table `[[RLImage(img_path, width=1.8*inch, height=2.2*inch), Paragraph(bio_and_details, style)]]` with `colWidths=[2.0*inch, 4.5*inch]` and neat padding, or place `RLImage(img_path, width=2.2*inch, height=2.6*inch)` directly in the story followed by their title and text.\n"
+    "        - Always check existing image files on disk in `assets/` (e.g. `assets/<character>.jpg` or `assets/<character>.png`), and ensure the image is included. Safely handle image paths: check `if os.path.isfile(img_path): story.append(RLImage(img_path, width=2.0*inch, height=2.4*inch))` so compilation is 100% robust.\n"
+    "        - Compile and verify the .pdf on disk using python in a ```python``` block so the compiled .pdf is generated with authentic embedded pictures!\n"
     "    - Whenever you need facts, biographies, news, or images, run a ```websearch <query>``` or ```imagesearch <query>``` block right away — never guess or hallucinate facts or images!\n"
     "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed real images directly into PDFs, HTML games, or web applications.\n"
@@ -4212,9 +4217,9 @@ class _WarmAntigravitySession:
                 start_time = time.time()
                 last_heartbeat = start_time
                 last_activity_time = start_time
-                first_token_timeout = 30.0
-                max_turn_duration = 600.0
-                turn_silence_timeout = 180.0
+                first_token_timeout = 90.0
+                max_turn_duration = 3600.0
+                turn_silence_timeout = 1800.0
                 written_files = {}
                 accumulated_streamed_text = []
 
@@ -5183,12 +5188,12 @@ def _stream_antigravity_cli(messages, state=None):
         saw_any_tool = False
         written_files = {}
         accumulated_streamed_text = []
-        first_token_timeout = 30.0
-        max_turn_duration = 600.0
+        first_token_timeout = 90.0
+        max_turn_duration = 3600.0
         start_time = time.time()
         last_heartbeat = start_time
         last_activity_time = start_time
-        turn_silence_timeout = 180.0
+        turn_silence_timeout = 1800.0
         yield _sse({"type": "heartbeat"})
         try:
             proc = subprocess.Popen(
@@ -6404,7 +6409,7 @@ def _do_stream(messages):
 _EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"}
 _CODE_BLOCK_RE = re.compile(r"```([^\n`]+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 8                                                                     
-_TERMINAL_BLOCK_TIMEOUT = 180                                                                            
+_TERMINAL_BLOCK_TIMEOUT = 1800                                                                            
 _TERMINAL_OUTPUT_CHAR_LIMIT = 200000                                                                
 _CREATEFILE_RE = re.compile(r"```createfile:([^\n`]+)\n([\s\S]*?)```")
 _MULTI_STEP_INTENT_RE = re.compile(
@@ -8277,16 +8282,29 @@ def chat_stream():
                     )
                 })
             elif is_pdf_turn:
+                # Discover what images exist in assets/ right now
+                assets_found = []
+                for root_dir in [terminal_workdir, WORKSPACE_ROOT]:
+                    a_dir = os.path.join(root_dir, "assets")
+                    if os.path.isdir(a_dir):
+                        for f in os.listdir(a_dir):
+                            if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                                assets_found.append(f"assets/{f}")
+                assets_hint = f"Verified images already on disk in assets/: {', '.join(sorted(set(assets_found))[:20])}.\n" if assets_found else ""
                 working_messages.append({
                     "role": "system",
                     "content": (
                         "[AUTONOMOUS ILLUSTRATED PDF DELIVERABLE REQUIREMENT]:\n"
                         "You are generating a complete, professional, illustrated multi-page PDF document.\n"
-                        "1. VISUAL ASSETS & CAST: Authentic high-resolution subject and cast portraits are dynamically downloaded into 'assets/' on disk "
+                        f"{assets_hint}"
+                        "1. VISUAL ASSETS & CAST: Authentic high-resolution subject and cast portraits are downloaded into 'assets/' on disk "
                         "(e.g. 'assets/<character_name>.png' or 'assets/<character_name>.jpg').\n"
-                        "   MANDATORY: For each character, cast member, or key entity, include their authentic portrait alongside their detailed bio, role, and characteristics using ReportLab Image flowables.\n"
-                        "2. DIRECT PDF COMPILATION: Deliver a standalone ReportLab Python script inside ```createfile:generate_pdf.py that automatically builds the PDF document. "
-                        "Ensure the final deliverable produces the complete .pdf file!"
+                        "   MANDATORY EMBEDDING: For EVERY character, cast member, entity, or topic, you MUST embed their authentic portrait picture directly into the PDF next to or above their profile! "
+                        "   Use ReportLab: `from reportlab.platypus import Image as RLImage, Table, TableStyle, Paragraph, Spacer`. "
+                        "   Set explicit safe dimensions (e.g. `RLImage(path, width=1.8*inch, height=2.2*inch)`). "
+                        "   Place each image alongside their detailed bio (e.g. a 2-column Table: `[[RLImage(path, width=1.8*inch, height=2.2*inch), Paragraph(bio_text, style)]]`, with `colWidths=[2.0*inch, 4.5*inch]`). "
+                        "   NEVER generate a plain text or table-only PDF without the real pictures!\n"
+                        "2. COMPILATION: Write and execute your ReportLab Python script directly in a ```python``` block to build and save the complete .pdf file to disk.\n"
                     )
                 })
         search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
@@ -8412,7 +8430,7 @@ def chat_stream():
                                     "label": f"Compiling deliverable via {filename}...",
                                     "timestamp": time.time()
                                 })
-                                run_res = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=120)
+                                run_res = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=600)
                                 print(f"[INTERMEDIATE AUTO-RUN] {filename} -> returncode={run_res.returncode}")
                                 if run_res.returncode == 0:
                                     yield _sse({
@@ -8591,7 +8609,7 @@ def chat_stream():
                             if (_fn.startswith("generate_") or _fn.startswith("build_")) and _fn.endswith(".py"):
                                 _g_path = os.path.join(_scan_dir, _fn)
                                 if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 10.0):
-                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=120)
+                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=600)
                                     print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
