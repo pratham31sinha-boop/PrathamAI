@@ -8190,53 +8190,8 @@ def chat_stream():
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
 
-        # 1. Resolve follow-up deliverable intent (e.g. "Give pdf", "give me the pdf", "where is the pdf", "download it")
-        is_short_followup = len((outgoing_user_message or message).strip().split()) <= 6 and bool(re.search(
-            r"\b(?:give|get|download|export|provide|send|where\s+is|show)\b.*\b(?:pdf|file|doc|game|zip|code)\b|"
-            r"^(?:give\s+(?:me\s+)?(?:the\s+)?pdf|pdf|download\s+pdf|export\s+pdf)$",
-            (outgoing_user_message or message).strip(), re.IGNORECASE
-        ))
-        effective_context_prompt = outgoing_user_message or message
-        if is_short_followup:
-            for prev_m in reversed(history):
-                if prev_m.get("role") == "user":
-                    p_txt = prev_m.get("content", "").strip()
-                    if len(p_txt.split()) > 3 and not re.search(r"^(?:give|get|download|export|send)\b", p_txt, re.I):
-                        effective_context_prompt = p_txt
-                        break
-
-            # If user asked "Give pdf", check if a PDF for this topic already exists on disk
-            followup_dt = _classify_requested_deliverable_types(effective_context_prompt)
-            if _is_export_intent(message, _PDF_INTENT_RE) or followup_dt.get("is_pdf"):
-                pdf_target_name = None
-                for s_dir in [terminal_workdir, WORKSPACE_ROOT, "/tmp", os.path.join(WORKSPACE_ROOT, "data", user_email or "visitor", "attachments")]:
-                    if s_dir and os.path.isdir(s_dir):
-                        for fn in os.listdir(s_dir):
-                            if fn.lower().endswith(".pdf") and not fn.startswith("."):
-                                stem = fn.lower()[:-4]
-                                req_words = [w for w in re.findall(r"[a-z]{4,}", effective_context_prompt.lower()) if w not in ("generate", "comprehensive", "professional", "multipage", "illustrated", "document", "show", "extract", "download", "authentic", "portraits", "characters", "reportlab", "python", "script", "deliver", "directly")]
-                                if any(rw in stem for rw in req_words):
-                                    fp = os.path.join(s_dir, fn)
-                                    if os.path.isfile(fp) and os.path.getsize(fp) > 500:
-                                        pdf_target_name = fp
-                                        break
-                    if pdf_target_name:
-                        break
-                if pdf_target_name and os.path.isfile(pdf_target_name):
-                    fn_base = os.path.basename(pdf_target_name)
-                    with open(pdf_target_name, "rb") as pf:
-                        p_bytes = pf.read()
-                    tok = _store_generated_file(p_bytes, fn_base, "application/pdf")
-                    final_reply = f"Here is the complete compiled PDF document for **{fn_base.replace('_', ' ').replace('.pdf', '')}** ready for download!"
-                    for tok_word in final_reply.split(" "):
-                        yield _sse({"type": "token", "text": tok_word + " "})
-                    yield _sse({"type": "file_ready", "url": f"/download/{tok}", "filename": fn_base})
-                    yield _sse({"type": "complete"})
-                    _append_message(conv_id, "assistant", final_reply, files=[{"filename": fn_base, "url": f"/download/{tok}", "download_url": f"/download/{tok}", "size_bytes": len(p_bytes), "lang": "pdf"}])
-                    return
-
         # Autonomous dynamic asset pre-fetch & instruction injection for ANY game or PDF
-        q_user = effective_context_prompt.lower()
+        q_user = (outgoing_user_message or message or "").lower()
         is_game_turn = bool(re.search(r"\b(?:game|2d|3d|arcade|platformer|racing|canvas)\b", q_user))
         is_pdf_turn = bool(re.search(r"\b(?:pdf|document|report|essay)\b", q_user))
         bg_asset_holder = {"assets": []}
@@ -8247,7 +8202,7 @@ def chat_stream():
             # Start background asset prefetch thread immediately (non-blocking for real-time word-by-word streaming)
             def _bg_fetch_assets():
                 try:
-                    res = _prepare_game_or_pdf_assets(effective_context_prompt, terminal_workdir)
+                    res = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
                     if res:
                         bg_asset_holder["assets"] = res
                 except Exception as _bge:
@@ -8259,7 +8214,7 @@ def chat_stream():
                     "role": "system",
                     "content": (
                         "[AUTONOMOUS 2D GAME ENGINE REQUIREMENT]:\n"
-                        f"The user wants a game for: \"{effective_context_prompt}\".\n"
+                        "You are building a rich, interactive standalone HTML5 Canvas game.\n"
                         "1. VISUAL ASSETS: All required character sprites and game background images are automatically detected and saved into 'assets/' on disk "
                         "(e.g. 'assets/<character_name>.png', 'assets/<character_name>_sprite.png', 'assets/background.png').\n"
                         "   MANDATORY: Load each image via `const img = new Image(); img.src = 'assets/...';` and render them in the animation loop using `ctx.drawImage()`. "
@@ -8274,11 +8229,12 @@ def chat_stream():
                     "role": "system",
                     "content": (
                         "[AUTONOMOUS ILLUSTRATED PDF DELIVERABLE REQUIREMENT]:\n"
-                        f"The user wants a PDF document for: \"{effective_context_prompt}\".\n"
+                        "You are generating a complete, professional, illustrated multi-page PDF document.\n"
                         "1. VISUAL ASSETS & CAST: Authentic high-resolution subject and cast portraits are dynamically downloaded into 'assets/' on disk "
                         "(e.g. 'assets/<character_name>.png' or 'assets/<character_name>.jpg').\n"
                         "   MANDATORY: For each character, cast member, or key entity, include their authentic portrait alongside their detailed bio, role, and characteristics using ReportLab Image flowables.\n"
-                        "2. DIRECT PDF COMPILATION: Deliver a standalone ReportLab Python script inside ```createfile:generate_pdf.py (or ```python) that builds the PDF document to disk."
+                        "2. DIRECT PDF COMPILATION: Deliver a standalone ReportLab Python script inside ```createfile:generate_pdf.py that automatically builds the PDF document. "
+                        "Ensure the final deliverable produces the complete .pdf file!"
                     )
                 })
         search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
@@ -8298,13 +8254,6 @@ def chat_stream():
                         if payload.get("type") == "token":
                             token_text = payload["text"]
                             iteration_text_parts.append(token_text)
-                            # Suppress prompt echo in multi-iteration turns
-                            if iteration > 0:
-                                current_accum = "".join(iteration_text_parts).strip().lower()
-                                prompt_lead = (effective_context_prompt or message).strip()[:35].lower()
-                                if prompt_lead and len(current_accum) <= len(prompt_lead) + 10:
-                                    if prompt_lead.startswith(current_accum) or current_accum.startswith(prompt_lead[:12]):
-                                        continue
                             full_reply_parts.append(token_text)
                             if turn_flow and turn_flow[-1].get("type") == "text":
                                 turn_flow[-1]["text"] += token_text
@@ -8634,26 +8583,16 @@ def chat_stream():
 
             if not executable_present:
                 if deliverable_requested and not deliverable_verified:
-                    if dt_active.get("is_pdf"):
-                        # If user asked for a PDF and the model provided complete document text without code,
-                        # auto-compile the PDF directly now instead of stalling or looping!
-                        try:
-                            _pdf_bytes, _, _ = _build_pdf_from_response(iteration_reply)
-                            if _pdf_bytes:
-                                _pdf_name = _derive_export_filename(export_intent_check_message, "pdf", iteration_reply)
-                                _pdf_path = os.path.join(terminal_workdir, _pdf_name)
-                                with open(_pdf_path, "wb") as _pf:
-                                    _pf.write(_pdf_bytes)
-                                deliverable_verified = True
-                                break
-                        except Exception as _pdf_err:
-                            print(f"[AUTO_PDF_COMPILATION_ERR] {_pdf_err}")
                     if iteration < (_TERMINAL_MAX_ITERATIONS - 1):
                         working_messages.append({"role": "assistant", "content": iteration_reply})
                         continuation_prompt = (
-                            "[MANDATORY CONTINUATION - EXECUTE DELIVERABLE NOW]\n"
-                            "STRICT REQUIREMENT: Do NOT repeat the prompt, plan, or commentary.\n"
-                            "IMMEDIATELY output the COMPLETE executable code inside a ```createfile:<filename> or ```python block now to finish the deliverable."
+                            f"[MANDATORY CONTINUATION - DELIVERABLE NOT YET VERIFIED ON DISK]\n"
+                            f"The user's goal is: \"{outgoing_user_message or message}\".\n"
+                            f"No complete, verified deliverable has been written to disk yet!\n"
+                            f"STRICT INSTRUCTION: DO NOT RUN `ls`, `grep`, `ps`, or inspect old files! "
+                            f"Do NOT stop or state what you will do next. You must stay in the loop!\n"
+                            f"IMMEDIATELY output the COMPLETE final standalone file inside a ```createfile:<filename> block (or use write_to_file) now. "
+                            f"Verify your deliverable before finishing."
                         )
                         working_messages.append({"role": "user", "content": continuation_prompt})
                         continue
@@ -8803,10 +8742,9 @@ def chat_stream():
             working_messages.append({"role": "assistant", "content": iteration_reply})
             continuation_content = (
                 f"{_format_terminal_results_for_model(results)}\n\n"
-                "[EXECUTION DIRECTIVE: Required visual assets are downloaded and verified in assets/ on disk.]\n"
-                "STRICT INSTRUCTION: Do NOT repeat the prompt, plan, or commentary.\n"
-                "Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block, "
-                "or write the ReportLab Python compilation script in ```createfile:generate_pdf.py (or ```python) to build the deliverable now!"
+                f"[CRITICAL REMINDER: The user's active goal is: \"{outgoing_user_message or message}\"]\n"
+                f"Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block "
+                f"(or run the build script) to deliver the user's request. Do NOT run inspection commands like `ls`."
             )
             if bg_asset_holder.get("assets"):
                 bg_fns = [os.path.basename(a["local_path"]) for a in bg_asset_holder["assets"] if a.get("local_path")]
