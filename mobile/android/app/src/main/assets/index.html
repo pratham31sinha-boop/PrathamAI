@@ -3564,7 +3564,15 @@
                 `;
                 const iframe = card.querySelector('.fcc-preview-frame');
                 if (iframe && content) {
-                    iframe.srcdoc = content;
+                    const hostUrl = (typeof SERVER_CONTEXT_HOST !== 'undefined' && SERVER_CONTEXT_HOST ? SERVER_CONTEXT_HOST : (window.location.origin || '')).replace(/\/$/, '');
+                    const baseTag = hostUrl ? `<base href="${hostUrl}/">` : '';
+                    let c = content;
+                    if (baseTag && c.includes('<head>')) {
+                        c = c.replace('<head>', '<head>' + baseTag);
+                    } else if (baseTag && !c.includes('<base')) {
+                        c = baseTag + c;
+                    }
+                    iframe.srcdoc = c;
                 }
             } else {
                 const nonHtmlSub = closed ? (extForBadge === 'zip' ? 'ZIP' : (extForBadge === 'py' ? 'Code · Python' : extForBadge.toUpperCase())) : inProgressLabel;
@@ -4202,7 +4210,9 @@
                         contentToRun = `<!DOCTYPE html><html><head><meta charset="utf-8"><script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"><\/script></head><body class="p-4 bg-white text-gray-900">${contentToRun}</body></html>`;
                     }
                 }
-                contentToRun = contentToRun.replace('<head>', '<head>' + consoleInterceptor);
+                const hostUrl = (typeof SERVER_CONTEXT_HOST !== 'undefined' && SERVER_CONTEXT_HOST ? SERVER_CONTEXT_HOST : (window.location.origin || '')).replace(/\/$/, '');
+                const baseTag = hostUrl ? `<base href="${hostUrl}/">` : '';
+                contentToRun = contentToRun.replace('<head>', '<head>' + baseTag + consoleInterceptor);
                 iframe.srcdoc = contentToRun;
             } catch (err) {
                 console.error('[PREVIEW_COMPILE_ERR]', err);
