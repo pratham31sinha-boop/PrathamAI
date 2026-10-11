@@ -82,7 +82,6 @@ import difflib
 import shlex
 import zlib
 import threading
-import queue
 from datetime import datetime, timezone
 from functools import wraps
 try:
@@ -5619,14 +5618,6 @@ def _is_complex_multitask_message(msg: str) -> bool:
         return True
     return False
 def _sse(payload: dict) -> str:
-    # Reverse proxies (Render Envoy, Cloudflare, Nginx) buffer small writes (< 1KB).
-    # Adding padding on heartbeats, steps, and status messages guarantees immediate TCP flush to the client,
-    # preventing reverse-proxy 30-second idle disconnects while the model or terminal is busy.
-    if payload.get("type") in ("heartbeat", "agent_step", "status"):
-        if "pad" not in payload and payload.get("type") == "heartbeat":
-            payload["pad"] = " " * 1024
-        dumped = json.dumps(payload)
-        return f": keepalive {' ' * 1024}\n\ndata: {dumped}\n\n"
     return f"data: {json.dumps(payload)}\n\n"
 def _extract_math_expressions(text: str) -> list:
     """Extract arithmetic expressions from LaTeX-delimited math in the text,
@@ -6397,38 +6388,7 @@ def _do_stream(messages):
             while True:
                 state.clear()
                 got_tokens_this_round = False
-                stream_q = queue.Queue()
-                _SENTINEL = object()
-                _EXC_SENTINEL = object()
-
-                def _stream_worker(msgs=working_messages, s=state, pfn=fn):
-                    try:
-                        for chunk in pfn(msgs, state=s):
-                            stream_q.put(chunk)
-                    except Exception as err:
-                        stream_q.put((_EXC_SENTINEL, err))
-                    finally:
-                        stream_q.put(_SENTINEL)
-
-                worker_t = threading.Thread(target=_stream_worker, daemon=True)
-                worker_t.start()
-
-                while True:
-                    try:
-                        item = stream_q.get(timeout=1.5)
-                    except queue.Empty:
-                        if not worker_t.is_alive() and stream_q.empty():
-                            break
-                        # No chunk received for 1.5s — pump heartbeat to keep TCP socket active on Render
-                        yield _sse({"type": "heartbeat"})
-                        continue
-
-                    if item is _SENTINEL:
-                        break
-                    if isinstance(item, tuple) and len(item) == 2 and item[0] is _EXC_SENTINEL:
-                        raise item[1]
-
-                    chunk = item
+                for chunk in fn(working_messages, state=state):
                     try:
                         payload = json.loads(chunk[6:]) if chunk.startswith("data: ") else None
                         if payload and payload.get("type") == "token":
@@ -8511,21 +8471,7 @@ def chat_stream():
                                     "label": f"Compiling deliverable via {filename}...",
                                     "timestamp": time.time()
                                 })
-                                _res_box = [None]
-                                def _sub_runner():
-                                    try:
-                                        _res_box[0] = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=600)
-                                    except Exception as _r_err:
-                                        _res_box[0] = _r_err
-                                _sub_t = threading.Thread(target=_sub_runner, daemon=True)
-                                _sub_t.start()
-                                while _sub_t.is_alive():
-                                    _sub_t.join(timeout=1.5)
-                                    if _sub_t.is_alive():
-                                        yield _sse({"type": "heartbeat"})
-                                run_res = _res_box[0]
-                                if isinstance(run_res, Exception):
-                                    raise run_res
+                                run_res = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=600)
                                 print(f"[INTERMEDIATE AUTO-RUN] {filename} -> returncode={run_res.returncode}")
                                 if run_res.returncode == 0:
                                     yield _sse({
@@ -8704,21 +8650,8 @@ def chat_stream():
                             if (_fn.startswith("generate_") or _fn.startswith("build_") or "pdf" in _fn.lower() or _fn.startswith("make_") or _fn.startswith("create_")) and _fn.endswith(".py"):
                                 _g_path = os.path.join(_scan_dir, _fn)
                                 if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 10.0):
-                                    _res_box2 = [None]
-                                    def _sub_runner2():
-                                        try:
-                                            _res_box2[0] = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=600)
-                                        except Exception as _r_err2:
-                                            _res_box2[0] = _r_err2
-                                    _sub_t2 = threading.Thread(target=_sub_runner2, daemon=True)
-                                    _sub_t2.start()
-                                    while _sub_t2.is_alive():
-                                        _sub_t2.join(timeout=1.5)
-                                        if _sub_t2.is_alive():
-                                            yield _sse({"type": "heartbeat"})
-                                    _cmd_run = _res_box2[0]
-                                    if not isinstance(_cmd_run, Exception):
-                                        print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
+                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=600)
+                                    print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
 
