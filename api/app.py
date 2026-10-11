@@ -765,13 +765,14 @@ def _lookup_vip(email: str):
 _generated_files_store: dict = {}
 _GENERATED_FILE_TTL = 3600          
 _ZIP_INTENT_RE = re.compile(
-    r"\b(?:export|download|save|convert|package|bundle|provide|give\s+me|add|put|place|pack|compress|insert)\b.*\b(?:zip|archive)\b|"
+    r"\b(?:export|download|save|convert|package|bundle|provide|give(?:\s+me)?|send(?:\s+me)?|add|put|place|pack|compress|insert)\b.*\b(?:zip|archive)\b|"
     r"\b(?:as\s+(?:a\s+)?zip|in\s+(?:a\s+)?zip|into\s+(?:a\s+)?zip|inside\s+(?:a\s+)?zip|make\s+(?:it\s+)?(?:a\s+)?zip|zip\s+it|zip\s+this|zip\s+that)\b",
     re.IGNORECASE
 )
 _PDF_INTENT_RE = re.compile(
-    r"\b(?:export|download|save|convert|provide|give\s+me|make|create|generate|write|build)\b.*\b(?:pdf|document)\b|"
-    r"\b(?:as\s+(?:a\s+)?pdf|in\s+(?:a\s+)?pdf|into\s+(?:a\s+)?pdf|make\s+(?:it\s+)?(?:a\s+)?pdf|pdf\s+format|\.pdf)\b",
+    r"\b(?:export|download|save|convert|provide|give(?:\s+me)?|send(?:\s+me)?|make|create|generate|write|build|where\s+is)\b.*\b(?:pdf|document)\b|"
+    r"\b(?:as\s+(?:a\s+)?pdf|in\s+(?:a\s+)?pdf|into\s+(?:a\s+)?pdf|make\s+(?:it\s+)?(?:a\s+)?pdf|pdf\s+format|\.pdf)\b|"
+    r"^(?:give\s+(?:me\s+)?(?:the\s+)?pdf|pdf|download\s+pdf|export\s+pdf)$",
     re.IGNORECASE
 )
 def _is_export_intent(message: str, regex: "re.Pattern") -> bool:
@@ -1580,12 +1581,28 @@ def _write_styled_pdf(text: str, image_path: str = None) -> bytes:
         body_style = ParagraphStyle('DocBody', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=colors.HexColor('#334155'), spaceAfter=8)
         byline_style = ParagraphStyle('DocByline', parent=styles['Italic'], fontSize=9.5, leading=13, textColor=colors.HexColor('#64748b'), spaceAfter=12)
 
+        # Collect all available asset images from workspace assets/ and session workdir assets/
+        available_assets = {}
+        for a_dir in [os.path.join(WORKSPACE_ROOT, "assets"), "assets"]:
+            if os.path.isdir(a_dir):
+                for f in os.listdir(a_dir):
+                    if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")) and not f.startswith("."):
+                        full_p = os.path.join(a_dir, f)
+                        if os.path.isfile(full_p) and os.path.getsize(full_p) > 500:
+                            slug = re.sub(r"[^a-z0-9]+", "", f.lower().rsplit(".", 1)[0])
+                            available_assets[slug] = full_p
+                            # Also map individual words (e.g. 'ridhima', 'pandit', 'rajni', 'karangrover')
+                            for part in re.findall(r"[a-z]{3,}", f.lower().rsplit(".", 1)[0]):
+                                if part not in ("transparent", "sprite", "image", "photo", "actor", "series", "kant"):
+                                    available_assets[part] = full_p
+
+        used_assets = set()
         story = []
 
-        # Find available image / logo
+        # Find available header banner / main portrait
         img_cand = image_path
         if not img_cand:
-            for cand in ["assests/logo.png", "/workspace/bold-curie/assests/logo.png", os.path.join(WORKSPACE_ROOT, "assests", "logo.png")]:
+            for cand in ["assets/logo.png", os.path.join(WORKSPACE_ROOT, "assets", "logo.png")]:
                 if os.path.exists(cand):
                     img_cand = cand
                     break
@@ -1595,21 +1612,13 @@ def _write_styled_pdf(text: str, image_path: str = None) -> bytes:
                 from PIL import Image as _PILImage
                 with _PILImage.open(img_cand) as pi:
                     orig_w, orig_h = pi.size
-                if "logo" in img_cand.lower():
-                    disp_w, disp_h = 70, 70
-                else:
-                    max_w, max_h = 280, 200
-                    ratio = min(max_w / max(1, orig_w), max_h / max(1, orig_h))
-                    disp_w = max(40, int(orig_w * ratio))
-                    disp_h = max(40, int(orig_h * ratio))
+                disp_w = 70 if "logo" in img_cand.lower() else min(260, orig_w)
+                disp_h = 70 if "logo" in img_cand.lower() else int(disp_w * (orig_h / max(1, orig_w)))
                 story.append(RLImage(img_cand, width=disp_w, height=disp_h))
                 story.append(Spacer(1, 10))
+                used_assets.add(img_cand)
             except Exception:
-                try:
-                    story.append(RLImage(img_cand, width=70, height=70))
-                    story.append(Spacer(1, 8))
-                except Exception:
-                    pass
+                pass
 
         for line in (text or "").strip().split('\n'):
             line = line.strip()
@@ -1623,13 +1632,78 @@ def _write_styled_pdf(text: str, image_path: str = None) -> bytes:
                 story.append(Paragraph(formatted[2:].strip(), title_style))
                 story.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#2563eb'), spaceAfter=10))
             elif line.startswith('## '):
-                story.append(Paragraph(formatted[3:].strip(), h2_style))
+                heading_text = formatted[3:].strip()
+                story.append(Paragraph(heading_text, h2_style))
+                # Check if this heading matches any available character portrait in assets/
+                head_slug = re.sub(r"[^a-z0-9]+", "", heading_text.lower())
+                matched_asset = None
+                for a_key, a_path in available_assets.items():
+                    if a_key in head_slug and a_path not in used_assets:
+                        matched_asset = a_path
+                        break
+                if matched_asset and os.path.exists(matched_asset):
+                    try:
+                        used_assets.add(matched_asset)
+                        story.append(Spacer(1, 4))
+                        story.append(RLImage(matched_asset, width=130, height=140))
+                        story.append(Spacer(1, 6))
+                    except Exception:
+                        pass
             elif line.startswith('### '):
-                story.append(Paragraph(formatted[4:].strip(), h3_style))
+                subhead_text = formatted[4:].strip()
+                story.append(Paragraph(subhead_text, h3_style))
+                sub_slug = re.sub(r"[^a-z0-9]+", "", subhead_text.lower())
+                matched_asset = None
+                for a_key, a_path in available_assets.items():
+                    if a_key in sub_slug and a_path not in used_assets:
+                        matched_asset = a_path
+                        break
+                if matched_asset and os.path.exists(matched_asset):
+                    try:
+                        used_assets.add(matched_asset)
+                        story.append(Spacer(1, 4))
+                        story.append(RLImage(matched_asset, width=120, height=130))
+                        story.append(Spacer(1, 6))
+                    except Exception:
+                        pass
             elif line.startswith(('**By ', '*By ')):
                 story.append(Paragraph(formatted, byline_style))
             else:
                 story.append(Paragraph(formatted, body_style))
+
+        # If any unused cast portraits exist in assets/, add a Cast Gallery section at the end
+        unused_portraits = [p for p in set(available_assets.values()) if p not in used_assets and os.path.exists(p)]
+        if unused_portraits:
+            story.append(Spacer(1, 10))
+            story.append(HRFlowable(width='100%', thickness=1.0, color=colors.HexColor('#cbd5e1'), spaceAfter=10))
+            story.append(Paragraph("<b>Cast & Character Visual Gallery</b>", h2_style))
+            story.append(Spacer(1, 6))
+            gallery_data = []
+            row = []
+            for u_img in unused_portraits[:8]:
+                try:
+                    c_name = os.path.basename(u_img).rsplit(".", 1)[0].replace("_", " ").title()
+                    cell_content = [
+                        RLImage(u_img, width=90, height=100),
+                        Paragraph(f"<b>{c_name}</b>", byline_style)
+                    ]
+                    row.append(cell_content)
+                    if len(row) == 3:
+                        gallery_data.append(row)
+                        row = []
+                except Exception:
+                    pass
+            if row:
+                gallery_data.append(row)
+            if gallery_data:
+                from reportlab.platypus import Table, TableStyle
+                gal_table = Table(gallery_data, colWidths=[150]*len(gallery_data[0]))
+                gal_table.setStyle(TableStyle([
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+                ]))
+                story.append(gal_table)
 
         doc.build(story)
         return buf.getvalue()
@@ -1937,6 +2011,7 @@ def _serve_download_candidate(identifier: str):
                                     break
                             # Check keyword overlap
                             req_words = set(re.findall(r"[a-z]{3,}", safe_name.lower()[:-4]))
+                            cand_words = set(re.findall(r"[a-z]{3,}", f.lower()[:-4]))
                             common = req_words & cand_words
                             if len(common) >= 2 or (len(common) >= 1 and any(len(w) >= 5 for w in common)):
                                 cand_path = os.path.join(check_dir, f)
@@ -3577,11 +3652,11 @@ SYSTEM_PROMPT = (
     "  * STRICT PROHIBITION FOR PDFs: When asked for a PDF document, DO NOT output helper scripts (e.g. generate_pdf.py, build_pdf.py, script.py) in ```createfile: blocks! Never present Python scripts to a user asking for a PDF! Write and execute your ReportLab / FPDF script in a ```python``` block to compile and save the .pdf directly to disk, so only the .pdf is presented!\n"
     "  * If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
     "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
-    "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
-    "    - Follow the dynamic cadence: state what you will do, fetch real individual sprites/images from the web/PokeAPI 1 by 1 into assets/, and synthesize the full game.\n"
-    "    - LOAD AND RENDER THE DOWNLOADED IMAGES IN THE GAME: Always load the downloaded character pictures (e.g. `assets/pikachu.png`, `assets/charmander.png`) via `new Image()` and draw them with `ctx.drawImage()`. Never substitute with plain colored squares or emoji!\n"
+    "  * When the user asks for ANY game (e.g. arcade, platformer, adventure, racing, canvas, RPG) or web application:\n"
+    "    - Follow the dynamic cadence: state what you will do, fetch real individual sprites/images from the web 1 by 1 into assets/, and synthesize the full game.\n"
+    "    - LOAD AND RENDER THE DOWNLOADED IMAGES IN THE GAME: Always load the downloaded character pictures (e.g. `assets/<character>.png`, `assets/<character>_sprite.png`, `assets/background.png`) via `new Image()` and draw them with `ctx.drawImage()`. Never substitute with plain colored squares or emoji!\n"
     "    - Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in this turn!\n"
-    "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. pokemon_adventure.html, pokemon_game.html, racing.html, app.html).\n"
+    "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always use distinct filenames (e.g. adventure.html, game.html, racing.html, app.html).\n"
     "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n"
     "- Execute the commands, inspect the output, verify the deliverables exist on disk, and present the final deliverable files cleanly to the user."
 )
@@ -4872,15 +4947,15 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Run any bash command, python script, compiler, archiver (zip, tar, 7z), curl, package installation, data processing, or algorithmic calculation.\n"
         "  * Build games, complex apps, backends, databases, APIs, utilities, scrapers, data pipelines, and CLI tools.\n"
         "  * Synthesize publication-grade PDFs, full responsive HTML5 applications, vector graphics, canvas simulations, or zip chains.\n"
-        "- PDF & Publication-Grade Document Generation:\n"
-        "  * Write a self-contained Python script using ReportLab or FPDF and execute it with run_command.\n"
-        "  * Write the PDF directly to disk in the current workspace and verify it exists.\n"
-        "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
+        "- PDF & Publication-Grade Illustrated Document Generation:\n"
+        "  * When asked to generate an illustrated PDF, provide the complete ReportLab Python script inside ```createfile:generate_pdf.py (or ```python).\n"
+        "  * The script MUST load the authentic character portraits/images from assets/ using `reportlab.platypus.Image` and compile the .pdf file directly to disk.\n"
+        "  * The backend automatically executes the script, compiles the PDF, and presents the downloadable PDF deliverable card directly to the user.\n"
         "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
-        "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
+        "  * When the user asks for ANY game (e.g. arcade, platformer, adventure, racing, canvas, RPG) or web application:\n"
         "    - Follow the dynamic cadence: state what you are doing, run native ```imagesearch <query>``` to fetch needed sprites/assets directly into assets/, and synthesize the full game.\n"
         "    - Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in this turn!\n"
-        "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always create a new, distinct filename (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
+        "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always create a new, distinct filename (e.g. adventure.html, game.html, racing.html, app.html).\n"
         "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n\n"
         "FILE PRESENTATION & CLEAN DELIVERABLES:\n"
         "- When the user requests a ZIP archive or package, package all required deliverables into the archive directly and provide ONLY the ZIP deliverable card.\n"
@@ -8114,8 +8189,54 @@ def chat_stream():
         turn_flow = []
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
+
+        # 1. Resolve follow-up deliverable intent (e.g. "Give pdf", "give me the pdf", "where is the pdf", "download it")
+        is_short_followup = len((outgoing_user_message or message).strip().split()) <= 6 and bool(re.search(
+            r"\b(?:give|get|download|export|provide|send|where\s+is|show)\b.*\b(?:pdf|file|doc|game|zip|code)\b|"
+            r"^(?:give\s+(?:me\s+)?(?:the\s+)?pdf|pdf|download\s+pdf|export\s+pdf)$",
+            (outgoing_user_message or message).strip(), re.IGNORECASE
+        ))
+        effective_context_prompt = outgoing_user_message or message
+        if is_short_followup:
+            for prev_m in reversed(history):
+                if prev_m.get("role") == "user":
+                    p_txt = prev_m.get("content", "").strip()
+                    if len(p_txt.split()) > 3 and not re.search(r"^(?:give|get|download|export|send)\b", p_txt, re.I):
+                        effective_context_prompt = p_txt
+                        break
+
+            # If user asked "Give pdf", check if a PDF for this topic already exists on disk
+            followup_dt = _classify_requested_deliverable_types(effective_context_prompt)
+            if _is_export_intent(message, _PDF_INTENT_RE) or followup_dt.get("is_pdf"):
+                pdf_target_name = None
+                for s_dir in [terminal_workdir, WORKSPACE_ROOT, "/tmp", os.path.join(WORKSPACE_ROOT, "data", user_email or "visitor", "attachments")]:
+                    if s_dir and os.path.isdir(s_dir):
+                        for fn in os.listdir(s_dir):
+                            if fn.lower().endswith(".pdf") and not fn.startswith("."):
+                                stem = fn.lower()[:-4]
+                                req_words = [w for w in re.findall(r"[a-z]{4,}", effective_context_prompt.lower()) if w not in ("generate", "comprehensive", "professional", "multipage", "illustrated", "document", "show", "extract", "download", "authentic", "portraits", "characters", "reportlab", "python", "script", "deliver", "directly")]
+                                if any(rw in stem for rw in req_words):
+                                    fp = os.path.join(s_dir, fn)
+                                    if os.path.isfile(fp) and os.path.getsize(fp) > 500:
+                                        pdf_target_name = fp
+                                        break
+                    if pdf_target_name:
+                        break
+                if pdf_target_name and os.path.isfile(pdf_target_name):
+                    fn_base = os.path.basename(pdf_target_name)
+                    with open(pdf_target_name, "rb") as pf:
+                        p_bytes = pf.read()
+                    tok = _store_generated_file(p_bytes, fn_base, "application/pdf")
+                    final_reply = f"Here is the complete compiled PDF document for **{fn_base.replace('_', ' ').replace('.pdf', '')}** ready for download!"
+                    for tok_word in final_reply.split(" "):
+                        yield _sse({"type": "token", "text": tok_word + " "})
+                    yield _sse({"type": "file_ready", "url": f"/download/{tok}", "filename": fn_base})
+                    yield _sse({"type": "complete"})
+                    _append_message(conv_id, "assistant", final_reply, files=[{"filename": fn_base, "url": f"/download/{tok}", "download_url": f"/download/{tok}", "size_bytes": len(p_bytes), "lang": "pdf"}])
+                    return
+
         # Autonomous dynamic asset pre-fetch & instruction injection for ANY game or PDF
-        q_user = (outgoing_user_message or message or "").lower()
+        q_user = effective_context_prompt.lower()
         is_game_turn = bool(re.search(r"\b(?:game|2d|3d|arcade|platformer|racing|canvas)\b", q_user))
         is_pdf_turn = bool(re.search(r"\b(?:pdf|document|report|essay)\b", q_user))
         bg_asset_holder = {"assets": []}
@@ -8126,7 +8247,7 @@ def chat_stream():
             # Start background asset prefetch thread immediately (non-blocking for real-time word-by-word streaming)
             def _bg_fetch_assets():
                 try:
-                    res = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
+                    res = _prepare_game_or_pdf_assets(effective_context_prompt, terminal_workdir)
                     if res:
                         bg_asset_holder["assets"] = res
                 except Exception as _bge:
@@ -8138,7 +8259,7 @@ def chat_stream():
                     "role": "system",
                     "content": (
                         "[AUTONOMOUS 2D GAME ENGINE REQUIREMENT]:\n"
-                        "You are building a rich, interactive standalone HTML5 Canvas game.\n"
+                        f"The user wants a game for: \"{effective_context_prompt}\".\n"
                         "1. VISUAL ASSETS: All required character sprites and game background images are automatically detected and saved into 'assets/' on disk "
                         "(e.g. 'assets/<character_name>.png', 'assets/<character_name>_sprite.png', 'assets/background.png').\n"
                         "   MANDATORY: Load each image via `const img = new Image(); img.src = 'assets/...';` and render them in the animation loop using `ctx.drawImage()`. "
@@ -8153,12 +8274,11 @@ def chat_stream():
                     "role": "system",
                     "content": (
                         "[AUTONOMOUS ILLUSTRATED PDF DELIVERABLE REQUIREMENT]:\n"
-                        "You are generating a complete, professional, illustrated multi-page PDF document.\n"
+                        f"The user wants a PDF document for: \"{effective_context_prompt}\".\n"
                         "1. VISUAL ASSETS & CAST: Authentic high-resolution subject and cast portraits are dynamically downloaded into 'assets/' on disk "
                         "(e.g. 'assets/<character_name>.png' or 'assets/<character_name>.jpg').\n"
                         "   MANDATORY: For each character, cast member, or key entity, include their authentic portrait alongside their detailed bio, role, and characteristics using ReportLab Image flowables.\n"
-                        "2. DIRECT PDF COMPILATION: Deliver a standalone ReportLab Python script inside ```createfile:generate_pdf.py that automatically builds the PDF document. "
-                        "Ensure the final deliverable produces the complete .pdf file!"
+                        "2. DIRECT PDF COMPILATION: Deliver a standalone ReportLab Python script inside ```createfile:generate_pdf.py (or ```python) that builds the PDF document to disk."
                     )
                 })
         search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
@@ -8178,6 +8298,13 @@ def chat_stream():
                         if payload.get("type") == "token":
                             token_text = payload["text"]
                             iteration_text_parts.append(token_text)
+                            # Suppress prompt echo in multi-iteration turns
+                            if iteration > 0:
+                                current_accum = "".join(iteration_text_parts).strip().lower()
+                                prompt_lead = (effective_context_prompt or message).strip()[:35].lower()
+                                if prompt_lead and len(current_accum) <= len(prompt_lead) + 10:
+                                    if prompt_lead.startswith(current_accum) or current_accum.startswith(prompt_lead[:12]):
+                                        continue
                             full_reply_parts.append(token_text)
                             if turn_flow and turn_flow[-1].get("type") == "text":
                                 turn_flow[-1]["text"] += token_text
@@ -8507,16 +8634,26 @@ def chat_stream():
 
             if not executable_present:
                 if deliverable_requested and not deliverable_verified:
+                    if dt_active.get("is_pdf"):
+                        # If user asked for a PDF and the model provided complete document text without code,
+                        # auto-compile the PDF directly now instead of stalling or looping!
+                        try:
+                            _pdf_bytes, _, _ = _build_pdf_from_response(iteration_reply)
+                            if _pdf_bytes:
+                                _pdf_name = _derive_export_filename(export_intent_check_message, "pdf", iteration_reply)
+                                _pdf_path = os.path.join(terminal_workdir, _pdf_name)
+                                with open(_pdf_path, "wb") as _pf:
+                                    _pf.write(_pdf_bytes)
+                                deliverable_verified = True
+                                break
+                        except Exception as _pdf_err:
+                            print(f"[AUTO_PDF_COMPILATION_ERR] {_pdf_err}")
                     if iteration < (_TERMINAL_MAX_ITERATIONS - 1):
                         working_messages.append({"role": "assistant", "content": iteration_reply})
                         continuation_prompt = (
-                            f"[MANDATORY CONTINUATION - DELIVERABLE NOT YET VERIFIED ON DISK]\n"
-                            f"The user's goal is: \"{outgoing_user_message or message}\".\n"
-                            f"No complete, verified deliverable has been written to disk yet!\n"
-                            f"STRICT INSTRUCTION: DO NOT RUN `ls`, `grep`, `ps`, or inspect old files! "
-                            f"Do NOT stop or state what you will do next. You must stay in the loop!\n"
-                            f"IMMEDIATELY output the COMPLETE final standalone file inside a ```createfile:<filename> block (or use write_to_file) now. "
-                            f"Verify your deliverable before finishing."
+                            "[MANDATORY CONTINUATION - EXECUTE DELIVERABLE NOW]\n"
+                            "STRICT REQUIREMENT: Do NOT repeat the prompt, plan, or commentary.\n"
+                            "IMMEDIATELY output the COMPLETE executable code inside a ```createfile:<filename> or ```python block now to finish the deliverable."
                         )
                         working_messages.append({"role": "user", "content": continuation_prompt})
                         continue
@@ -8666,9 +8803,10 @@ def chat_stream():
             working_messages.append({"role": "assistant", "content": iteration_reply})
             continuation_content = (
                 f"{_format_terminal_results_for_model(results)}\n\n"
-                f"[CRITICAL REMINDER: The user's active goal is: \"{outgoing_user_message or message}\"]\n"
-                f"Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block "
-                f"(or run the build script) to deliver the user's request. Do NOT run inspection commands like `ls`."
+                "[EXECUTION DIRECTIVE: Required visual assets are downloaded and verified in assets/ on disk.]\n"
+                "STRICT INSTRUCTION: Do NOT repeat the prompt, plan, or commentary.\n"
+                "Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block, "
+                "or write the ReportLab Python compilation script in ```createfile:generate_pdf.py (or ```python) to build the deliverable now!"
             )
             if bg_asset_holder.get("assets"):
                 bg_fns = [os.path.basename(a["local_path"]) for a in bg_asset_holder["assets"] if a.get("local_path")]
