@@ -108,15 +108,12 @@ try:
     _PDF_WRITE_SUPPORTED = True
 except ImportError:
     _PDF_WRITE_SUPPORTED = False
-try:
-    from web_research import verify_deliverable
-except Exception:
-    def verify_deliverable(fp):
-        if not fp or not os.path.isfile(fp):
-            return {"ok": False, "error": f"File '{fp}' does not exist on disk"}
-        if os.path.getsize(fp) < 50:
-            return {"ok": False, "error": f"File '{fp}' is empty"}
-        return {"ok": True, "details": f"File verified on disk ({os.path.getsize(fp)} bytes)"}
+def verify_deliverable(fp):
+    if not fp or not os.path.isfile(fp):
+        return {"ok": False, "error": f"File '{fp}' does not exist on disk"}
+    if os.path.getsize(fp) < 50:
+        return {"ok": False, "error": f"File '{fp}' is empty"}
+    return {"ok": True, "details": f"File verified on disk ({os.path.getsize(fp)} bytes)"}
 from flask import Flask, request, Response, jsonify, stream_with_context, send_file, send_from_directory
 from flask_cors import CORS
 try:
@@ -2555,11 +2552,14 @@ def _search_real_images(query: str, max_results: int = 8, download_to_dir: str =
     # Optional local download with PIL validation
     if download_to_dir and final_results:
         os.makedirs(download_to_dir, exist_ok=True)
+        assets_dir = os.path.join(download_to_dir, "assets")
+        os.makedirs(assets_dir, exist_ok=True)
         from PIL import Image as PILImage
         import io
         for item in final_results:
             safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', item["title"][:30]).strip('_') or "image"
             local_file = os.path.join(download_to_dir, f"{safe_name}.jpg")
+            asset_file = os.path.join(assets_dir, f"{safe_name}.jpg")
             try:
                 d_req = urllib.request.Request(item["url"], headers={
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -2573,11 +2573,53 @@ def _search_real_images(query: str, max_results: int = 8, download_to_dir: str =
                         if img.mode in ("RGBA", "P", "LA"):
                             img = img.convert("RGB")
                         img.save(local_file, "JPEG", quality=90)
+                        try:
+                            img.save(asset_file, "JPEG", quality=90)
+                        except Exception:
+                            pass
                         item["local_path"] = local_file
+                        item["asset_path"] = asset_file
             except Exception as dl_exc:
                 print(f"[SEARCH_IMAGE][DL FAULT] {item['url']} -> {dl_exc}")
 
     return final_results
+
+def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
+    """If the user requested a 2D game or PDF, extract subject keywords and pre-fetch real verified images into assets/."""
+    if not user_prompt or not target_dir:
+        return []
+    q = user_prompt.lower()
+    is_game = bool(re.search(r"\b(?:game|2d|3d|arcade|platformer|racing|canvas)\b", q))
+    is_pdf = bool(re.search(r"\b(?:pdf|document|report|essay)\b", q))
+    if not (is_game or is_pdf):
+        return []
+
+    subjects = []
+    for m in re.finditer(r'\b(?:about|with|featuring|of|for|based\s+on)\s+([a-zA-Z0-9_\s,and]+?)(?:\.|$|\band\s+make|\bplease|\bwith\b)', q):
+        chunk = m.group(1).strip()
+        parts = re.split(r'[,&]|\band\b', chunk)
+        for p in parts:
+            p_clean = re.sub(r'\b(?:images?|pictures?|sprites?|assets?|details?|sound|music|controls?|characters?)\b', '', p).strip()
+            if len(p_clean) >= 3 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that"):
+                subjects.append(p_clean)
+
+    if not subjects:
+        main_sub = re.sub(r'\b(?:make|create|generate|build|code|play|a|an|the|2d|3d|game|pdf|document|report|essay|with|images?|pictures?|assets?|sprites?|characters?|please)\b', '', q).strip()
+        if len(main_sub) >= 3 and len(main_sub) <= 40:
+            subjects.append(main_sub)
+
+    fetched = []
+    seen_titles = set()
+    for sub in subjects[:3]:
+        try:
+            results = _search_real_images(sub, max_results=2, download_to_dir=target_dir)
+            for r in results:
+                if r.get("local_path") and r.get("title") not in seen_titles:
+                    seen_titles.add(r.get("title"))
+                    fetched.append(r)
+        except Exception as e:
+            print(f"[PREPARE_ASSETS_ERR] {sub} -> {e}")
+    return fetched
 
 def _search_and_download_web_pdfs(query: str, max_results: int = 4, download_to_dir: str = None) -> list:
     """Real multi-engine PDF search & download engine.
@@ -3267,7 +3309,7 @@ SYSTEM_PROMPT = (
     "- When the user greets you (e.g. 'hi', 'hello', 'hey'), respond immediately and conversationally with a warm, friendly greeting in 1-2 sentences as Pratham AI, and ask how you can help. Do NOT output lengthy capability lists, disclaimers, or run commands on a simple greeting.\n\n"
     "FULL CLAUDE-LIKE AGENTIC POWER, CONTINUOUS EXECUTION & LIVE WEB FREEDOM:\n"
     "- You possess full Claude-like agentic power and an unrestricted workspace environment equipped with complete terminal capabilities.\n"
-    "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, numpy, scipy, urllib3, requests, zip, pypdf, fetch_image, and bash fully installed.\n"
+    "- The environment ALREADY has Python 3 with reportlab, PIL (Pillow), fpdf2, matplotlib, numpy, scipy, urllib3, requests, zip, pypdf, and bash fully installed.\n"
     "- WHENEVER the user asks for ANY task — whether making a game, creating an interactive web app, compiling a PDF, rendering mathematical diagrams, writing an essay, packaging a zip, scraping data, or coding a Python script: DO NOT MERELY TALK ABOUT IT OR ASK FOR PERMISSION! DO IT IMMEDIATELY.\n"
     "- COMPLETE INDEPENDENCE & ZERO HARDCODING:\n"
     "  * You are fully generic, flexible, and independent. You have a live brain, bash, python, and the live internet.\n"
@@ -3277,13 +3319,15 @@ SYSTEM_PROMPT = (
     "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
     "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
     "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
-    "- REAL WEB CONNECTIVITY, BUILT-IN MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
-    "  * You possess genuine, built-in search engines directly integrated into your agent environment:\n"
-    "    - Native Web Search (```websearch <query>```): Live web intelligence powered by Wikipedia REST API, DuckDuckGo Instant Answer API, and web search index for verified facts, summaries, biographies, lore, and current events.\n"
-    "    - Native Image Search (```imagesearch <query>```): Real image search engine powered by Wikipedia PageImages, Wikimedia Commons, Bing Media, and PokeAPI with automatic resolution validation and live URL discovery for ANY actor, anime, game, character, celebrity, or subject.\n"
+    "- REAL WEB CONNECTIVITY, BUILT-IN NATIVE ENGINES (NO HELPER .PY SCRIPTS FOR SEARCHING/DOWNLOADING):\n"
+    "  * You possess genuine, built-in native search engines directly integrated into your agent environment:\n"
+    "    - Native Web Search (```websearch <query>```): Live web intelligence powered by Wikipedia REST API, DuckDuckGo Instant Answer API, and Bing index for verified facts, summaries, biographies, lore, and current events.\n"
+    "    - Native Image Search (```imagesearch <query>```): Real image search engine powered by Wikipedia PageImages, Wikimedia Commons, Bing Media, and PokeAPI with automatic resolution validation and automatic downloading directly into assets/ and the workspace for ANY actor, anime, game, character, celebrity, or subject.\n"
     "    - Native PDF Search & Download (```pdfsearch <query>```): Search and download real publicly available PDF documents directly from the web with `%PDF` header validation.\n"
-    "    - Python & Bash utilities are ALSO available if needed (`from fetch_image import search_accurate_images, fetch_web_image` and `from web_research import get_show_cast_and_details`). You can also download any web PDF via bash using `curl -L \"<url>\" -o <file.pdf>` or python `urllib.request.urlretrieve`.\n"
-    "    - Whenever you need facts, biographies, news, images, or PDFs, run a ```websearch <query>```, ```imagesearch <query>```, or ```pdfsearch <query>``` block (or bash/python) right away — never guess or hallucinate facts or images!\n"
+    "    - Direct Bash Downloads: You can also download any web asset directly using `curl -L \"<url>\" -o <filename>` or `wget`.\n"
+    "    - STRICT PROHIBITION: DO NOT create or execute helper .py scripts (like fetch_image.py or search.py) to search or download web files! Always use native ```imagesearch <query>```, ```websearch <query>```, or ```pdfsearch <query>``` blocks directly.\n"
+    "    - ASSETS FOR 2D GAMES & PDFs: When the user asks to generate ANY 2D game, HTML5 app, or PDF document with characters/topics/images, you MUST download the required assets (sprites, character art, backgrounds, textures) using ```imagesearch <query>``` so that real verified images are saved into assets/ on disk. Then embed or load those downloaded images directly (e.g. `assets/<name>.jpg`) into your HTML5 Canvas or PDF story!\n"
+    "    - Whenever you need facts, biographies, news, images, or PDFs, run a ```websearch <query>```, ```imagesearch <query>```, or ```pdfsearch <query>``` block right away — never guess or hallucinate facts or images!\n"
     "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed real images directly into PDFs, HTML games, or web applications.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
@@ -3308,6 +3352,7 @@ SYSTEM_PROMPT = (
 )
 _IMAGE_INTENT_RE = re.compile(
     r"^/image\s+(.+)$|"
+    r"^(?:draw|paint|sketch|illustrate)\s+(?:me\s+)?(?:a\s+|an\s+)?(.+)$|"
     r"\b(?:generate|create|draw|make|paint|design|render)\b.{0,25}\b(?:image|img|picture|pic|photo|art|artwork|illustration|drawing|wallpaper|poster|graphic|graphics)s?\b"
     r"(?:\s+(?:of|showing|depicting|with))?\s*(.*)$",
     re.IGNORECASE
@@ -3316,27 +3361,32 @@ _IMAGE_FOLLOWUP_RE = re.compile(
     r"^\s*(?:also\s+)?(?:add|change|make it|now|remove|replace|turn it|put|give it|make the|instead)\b.{0,120}$",
     re.IGNORECASE
 )
+_PROJECT_OR_DOC_RE = re.compile(
+    r"\b(?:pdf|document|report|essay|game|2d|3d|arcade|platformer|racing|canvas|html|web\s*app|webapp|website|simulator|app|application|code|script|program|zip|apk|archive)\b",
+    re.IGNORECASE
+)
 def _detect_image_prompt(message: str, last_image_prompt: str = None):
     """Return an image-generation prompt for this user message, or None.
 
-    The chat route calls this helper for every normal message. Keep it
-    dependency-free and defensive because a missing detector would crash the
-    Flask function before the SSE response is returned (HTTP 500 on Vercel).
+    If the user message is asking for a project, 2D game, PDF, web app, or document,
+    it returns None so that the full agentic developer pipeline handles it.
     """
     text = str(message or "").strip()
     if not text:
         return None
 
+    # If the user asks for a project, game, PDF, web app, or document,
+    # this is NEVER a single image request — it goes to the agentic pipeline!
+    if _PROJECT_OR_DOC_RE.search(text):
+        return None
+    if re.search(r"^\s*(?:download|fetch|get|save)\b", text, re.IGNORECASE):
+        return None
+
     direct = _IMAGE_INTENT_RE.search(text)
     if direct:
-        prompt = (direct.group(1) or "").strip()
-        # /image <prompt> is already captured cleanly. For the natural-language
-        # form, the capture is normally the text following the image keyword.
+        prompt = (direct.group(1) or direct.group(2) or direct.group(3) or "").strip()
         return prompt or text
 
-    # Allow short follow-up edits to the previously generated image, e.g.
-    # "make it snowy" or "remove the tree". The image route already passes the
-    # most recent prompt into this detector.
     if last_image_prompt and _IMAGE_FOLLOWUP_RE.search(text):
         return f"{str(last_image_prompt).strip()}\nUser modification: {text}"
 
@@ -4568,18 +4618,21 @@ def _stream_antigravity_cli(messages, state=None):
         "AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
         "- Execute user requests dynamically and continuously without stopping halfway:\n"
         "  - Speak naturally as an engineer explaining what you will do.\n"
-        "  - Execute terminal commands/scripts (downloading any needed web assets or sprites, e.g. via PokeAPI or fetch_image).\n"
+        "  - Execute native search commands or bash downloads (e.g. ```imagesearch <query>```) to download any needed web assets or sprites directly into assets/ on disk.\n"
         "  - Explain what was done and synthesize the complete standalone code deliverable.\n"
         "  - Deliver the complete standalone playable code inside ```createfile:<filename> directly.\n"
         "  - Verify the deliverable exists and is fully functional on disk before concluding.\n"
         "  - Work continuously and dynamically without stopping halfway until the task is 100% complete and verified!\n"
         "  - NEVER stop halfway or conclude with future promises (e.g. 'I am compiling...', 'I have launched...'). Everything must be executed, completed, and verified in the SAME turn!\n"
-        "- UNIVERSAL MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
-        "  * You have live internet access equipped with the BEST all-purpose search engines:\n"
-        "    - `from fetch_image import fetch_web_image, fetch_multiple_images, search_accurate_images`: Searches Wikimedia Commons, Wikipedia PageImages, Bing Async Media, and PokeAPI with automatic PIL validation and concurrent downloading for ANY actor, anime, show, character, celebrity, or subject.\n"
-        "    - `from web_research import get_show_cast_and_details, search_accurate_web_info, build_character_encyclopedia_pdf, verify_deliverable`: Combines DuckDuckGo Instant Answer API and Wikipedia REST API for 100% accurate information, synopsis, and cast details.\n"
-        "    - ALWAYS PLUG REAL WEB IMAGES INTO THE PDF FOR EVERY CHARACTER/SUBJECT NON-STOP: Never use circle badges, blank boxes, or initials when web access is available.\n"
-        "    - Embed the downloaded real images directly into the PDF as Image flowables alongside detailed bios, stats, and lore.\n"
+        "- UNIVERSAL NATIVE MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
+        "  * You have live internet access equipped with genuine built-in search engines (NO HELPER .PY SCRIPTS NEEDED):\n"
+        "    - Native ```imagesearch <query>```: Real image search engine (Wikimedia Commons, Wikipedia PageImages, Bing Media, PokeAPI). Automatically finds, validates, and downloads verified images directly into assets/ for ANY actor, anime, game, character, celebrity, or subject.\n"
+        "    - Native ```websearch <query>```: Combines DuckDuckGo and Wikipedia REST API for 100% accurate live web information, synopsis, cast details, documentation, and current events.\n"
+        "    - Native ```pdfsearch <query>```: Finds and downloads authentic public PDF documents directly from the web.\n"
+        "    - Direct curl/wget in bash for any direct file URLs.\n"
+        "    - STRICT PROHIBITION: DO NOT write or run .py scripts (like fetch_image.py) to search or download! Use native search blocks directly.\n"
+        "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES NON-STOP: When generating games, web apps, or PDFs, download the required assets with ```imagesearch``` and embed/load them directly (e.g. assets/<filename>.jpg).\n"
+        "    - Embed the downloaded real images directly into the PDF as Image flowables or into HTML5 Canvas games.\n"
         "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
         "- You have FULL Claude-like / engineer-level terminal power and unrestricted workspace access. You can do ANYTHING from the terminal that Linux / Python / Bash allows:\n"
         "  * Run any bash command, python script, compiler, archiver (zip, tar, 7z), curl, package installation, data processing, or algorithmic calculation.\n"
@@ -4591,7 +4644,7 @@ def _stream_antigravity_cli(messages, state=None):
         "  * Do NOT output intermediate generator scripts (e.g. generate_pdf.py) in ```createfile: blocks — deliver the compiled PDF cleanly on disk.\n"
         "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
         "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
-        "    - Follow the dynamic cadence: state what you are doing, run terminal commands to fetch needed sprites/assets from web/PokeAPI or prepare them via python script, and synthesize the full game.\n"
+        "    - Follow the dynamic cadence: state what you are doing, run native ```imagesearch <query>``` to fetch needed sprites/assets directly into assets/, and synthesize the full game.\n"
         "    - Deliver the COMPLETE, fully-featured, rich standalone HTML5 file with Canvas, CSS, audio synthesis, mobile touch controls (D-Pad + buttons), and responsive layout in ```createfile:<game_name>.html directly in this turn!\n"
         "    - CRITICAL WORKSPACE SAFETY: NEVER touch or overwrite index.html, app.py, or system files. Always create a new, distinct filename (e.g. pokemon_journey.html, pokemon_game.html, racing.html, app.html).\n"
         "    - Deliver the complete standalone playable file directly in ```createfile:<filename>.\n\n"
@@ -4740,7 +4793,8 @@ def _stream_antigravity_cli(messages, state=None):
             f"- AUTONOMOUS CONTINUOUS EXECUTION CADENCE (ZERO STALLING):\n"
             f"  - STRICT PROHIBITION: DO NOT run exploratory/inspection commands like `ls`, `grep`, `ps`, `cat`, `head`, or read old files!\n"
             f"  - Do NOT spend turns investigating previous scripts or existing directory contents.\n"
-            f"  - If you need to search or fetch assets/sprites from the web, do it in ONE fast command via `python3 fetch_image.py \"<query>\" \"<file>\"`.\n"
+            f"  - ASSETS FOR 2D GAMES & PDFs: When generating a game or PDF deliverable, you MUST fetch required visual assets (sprites, character art, backgrounds) using native ```imagesearch <query>``` blocks.\n"
+            f"  - STRICT PROHIBITION: DO NOT write or run Python scripts (like fetch_image.py) to search or download! Use native ```imagesearch <query>``` directly — it instantly downloads verified images into assets/ on disk.\n"
             f"  - Then IMMEDIATELY output the complete deliverable code directly in a ```createfile:<filename> block (or use write_to_file).\n"
             f"  - For games/web apps: Output the COMPLETE, standalone HTML5 file with Canvas, CSS, audio, and responsive touch controls.\n"
             f"  - Verify the deliverable exists and has content, and finish cleanly in this turn!\n"
@@ -6327,7 +6381,7 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
     exec_env["PYTHONPATH"] = f"{WORKSPACE_ROOT}:{cwd or ''}:{exec_env.get('PYTHONPATH', '')}"
     exec_env["PATH"] = f"{WORKSPACE_ROOT}:{exec_env.get('PATH', '')}"
     if cwd and cwd != WORKSPACE_ROOT and os.path.isdir(cwd):
-        for item in ["fetch_image.py", "web_research.py", "assets"]:
+        for item in ["assets"]:
             src = os.path.join(WORKSPACE_ROOT, item)
             dst = os.path.join(cwd, item)
             if os.path.exists(src) and not os.path.exists(dst):
@@ -6406,7 +6460,7 @@ def _get_session_workdir(conv_id: str = None, user_email: str = None) -> str:
         try:
             session_dir = os.path.join(base, safe_id)
             os.makedirs(session_dir, exist_ok=True)
-            for item in ["fetch_image.py", "web_research.py", "assets"]:
+            for item in ["assets"]:
                 src = os.path.join(WORKSPACE_ROOT, item)
                 dst = os.path.join(session_dir, item)
                 if os.path.exists(src) and not os.path.exists(dst):
@@ -7819,6 +7873,29 @@ def chat_stream():
         turn_flow = []
         working_messages = list(api_messages)
         terminal_workdir = _get_session_workdir(conv_id, user_email)
+        # Check if user requested a 2D game or PDF that needs image assets
+        q_user = (outgoing_user_message or message or "").lower()
+        is_game_turn = bool(re.search(r"\b(?:game|2d|3d|arcade|platformer|racing|canvas)\b", q_user))
+        is_pdf_turn = bool(re.search(r"\b(?:pdf|document|report|essay)\b", q_user))
+        if is_game_turn or is_pdf_turn:
+            assets_dir = os.path.join(terminal_workdir, "assets")
+            os.makedirs(assets_dir, exist_ok=True)
+            try:
+                found_assets = _prepare_game_or_pdf_assets(outgoing_user_message or message, terminal_workdir)
+                if found_assets:
+                    asset_filenames = [os.path.basename(a["local_path"]) for a in found_assets if a.get("local_path")]
+                    if asset_filenames:
+                        working_messages.append({
+                            "role": "user",
+                            "content": (
+                                f"[NATIVE ASSET ENGINE NOTICE: Verified real image assets have already been downloaded to assets/ on disk: "
+                                f"{', '.join(f'assets/{fn}' for fn in asset_filenames)}. "
+                                f"Embed or load these assets directly into your HTML Canvas or PDF deliverable code! "
+                                f"If additional assets are needed, run native ```imagesearch <query>``` blocks directly without helper .py scripts.]"
+                            )
+                        })
+            except Exception as e_asset:
+                print(f"[ASSET PRE-FETCH FAULT] {e_asset}")
         search_dirs = [d for d in [terminal_workdir, WORKSPACE_ROOT, "/tmp"] if d and os.path.isdir(d)]
         pre_snap = _snapshot_workspace_files(search_dirs)
         total_blocks_seen = 0
