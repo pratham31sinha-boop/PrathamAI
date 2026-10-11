@@ -4223,6 +4223,7 @@ class _WarmAntigravitySession:
                 turn_silence_timeout = 1800.0
                 written_files = {}
                 accumulated_streamed_text = []
+                continuation_turn_count = 0
 
                 yield _sse({"type": "heartbeat"})
 
@@ -4389,6 +4390,45 @@ class _WarmAntigravitySession:
                                         if w:
                                             yield _sse({"type": "token", "text": w})
                         elif evt == "result":
+                            # Check if the user requested a deliverable (PDF, HTML game, etc.)
+                            user_matches = re.findall(r"User:\s*([^\n]+)", prompt or "")
+                            u_q = user_matches[-1].lower() if user_matches else (prompt or "").lower()
+                            dt_check = _classify_requested_deliverable_types(u_q)
+                            t_ext = "html" if dt_check.get("is_html") else ("pdf" if dt_check.get("is_pdf") else ("zip" if dt_check.get("is_zip") else None))
+                            deliv_found = False
+                            if t_ext:
+                                for s_fn in os.listdir(WORKSPACE_ROOT):
+                                    if s_fn.lower().endswith(f".{t_ext}") and s_fn.lower() not in _IGNORE_FILE_NAMES and not s_fn.startswith("."):
+                                        s_fp = os.path.join(WORKSPACE_ROOT, s_fn)
+                                        if os.path.isfile(s_fp) and os.path.getmtime(s_fp) >= (start_time - 1.0) and os.path.getsize(s_fp) > 50:
+                                            deliv_found = True
+                                            break
+                            # If deliverable was requested but NOT yet created, do NOT terminate!
+                            # Prompt the agent to continue and compile the deliverable immediately.
+                            if t_ext and not deliv_found and continuation_turn_count < 3 and proc.poll() is None:
+                                continuation_turn_count += 1
+                                disk_imgs = []
+                                a_path = os.path.join(WORKSPACE_ROOT, "assets")
+                                if os.path.isdir(a_path):
+                                    for af in os.listdir(a_path):
+                                        if af.lower().endswith((".jpg", ".png", ".jpeg", ".webp")) and not af.startswith("."):
+                                            disk_imgs.append(f"assets/{af}")
+                                disk_hint = f"Verified images downloaded in assets/: {', '.join(sorted(disk_imgs)[:30])}.\n" if disk_imgs else ""
+                                cont_text = (
+                                    f"[MANDATORY CONTINUATION - DELIVERABLE MISSING / NOT YET COMPILED]\n"
+                                    f"{disk_hint}"
+                                    f"The required {t_ext.upper()} deliverable has not been created on disk yet!\n"
+                                    f"Do NOT stop or wait for future turns. Now IMMEDIATELY compile and build the complete {t_ext.upper()} "
+                                    f"(e.g. write and run a Python ReportLab script embedding these exact assets into the PDF with explicit image dimensions, or output ```createfile:game.html) and verify it on disk!"
+                                )
+                                try:
+                                    cont_msg = {"event": "user", "message": {"content": cont_text}}
+                                    proc.stdin.write(json.dumps(cont_msg) + "\n")
+                                    proc.stdin.flush()
+                                    last_activity_time = time.time()
+                                    continue
+                                except Exception:
+                                    pass
                             break
                     except (AntigravityRateLimitError, RuntimeError):
                         raise
@@ -4430,13 +4470,13 @@ class _WarmAntigravitySession:
                     except Exception:
                         pass
 
-                # If a generator script was created (e.g. generate_*.py, build_*.py) but target deliverable not yet compiled, run it automatically
+                # If a generator script was created (e.g. generate_*.py, build_*.py, or any python script) but target deliverable not yet compiled, run it automatically
                 target_ext = "html" if dt.get("is_html") else ("pdf" if dt.get("is_pdf") else ("zip" if dt.get("is_zip") else None))
                 if target_ext:
                     try:
-                        # Auto-compile ANY newly written generator script (generate_*.py, build_*.py)
+                        # Auto-compile ANY newly written script on disk
                         for fn in os.listdir(WORKSPACE_ROOT):
-                            if (fn.startswith("generate_") or fn.startswith("build_")) and fn.endswith(".py"):
+                            if fn.endswith(".py") and fn not in _IGNORE_FILE_NAMES and not _is_intermediate_helper_file(fn, user_query):
                                 g_path = os.path.join(WORKSPACE_ROOT, fn)
                                 if os.path.isfile(g_path) and os.path.getmtime(g_path) >= (start_time - 1.0):
                                     yield _sse({"type": "agent_step", "step_type": "executing", "label": f"Executing {fn}...", "timestamp": time.time()})
@@ -7034,7 +7074,7 @@ def _analyze_code_error(lang: str, code: str, stderr: str, returncode: int) -> s
             if attr_match:
                 hints.append(f"HINT: Attribute '{attr_match.group(1)}' doesn\'t exist. Check the object type and its available methods.")
         elif "timeout" in stderr_lower:
-            hints.append("HINT: Execution timed out (30s limit). Your code may have an infinite loop or is waiting for input. Avoid input() calls and infinite loops.")
+            hints.append("HINT: Execution timed out. Your code may have an infinite loop or is waiting for input. Avoid input() calls and infinite loops.")
         elif "urlopen" in stderr_lower or "urlerror" in stderr_lower or "connection" in stderr_lower:
             hints.append("HINT: Network error. This sandbox may not have internet access. Avoid network calls — use local data or stdlib alternatives.")
     elif lang in ("bash", "sh", "shell"):
@@ -8607,7 +8647,7 @@ def chat_stream():
                 for _scan_dir in [terminal_workdir, WORKSPACE_ROOT]:
                     if _scan_dir and os.path.isdir(_scan_dir):
                         for _fn in os.listdir(_scan_dir):
-                            if (_fn.startswith("generate_") or _fn.startswith("build_")) and _fn.endswith(".py"):
+                            if (_fn.startswith("generate_") or _fn.startswith("build_") or "pdf" in _fn.lower() or _fn.startswith("make_") or _fn.startswith("create_")) and _fn.endswith(".py"):
                                 _g_path = os.path.join(_scan_dir, _fn)
                                 if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 10.0):
                                     _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=600)
@@ -8615,8 +8655,12 @@ def chat_stream():
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
 
-            # Verification check: Check if user requested a deliverable, and whether it has been verified on disk
-            dt_active = _classify_requested_deliverable_types(outgoing_user_message or message)
+            # Verification check: Check if user requested a deliverable across current and recent messages
+            combined_context_query = (outgoing_user_message or message)
+            for prev_m in (history or [])[-4:]:
+                if prev_m.get("role") == "user":
+                    combined_context_query += " " + str(prev_m.get("content", ""))
+            dt_active = _classify_requested_deliverable_types(combined_context_query)
             target_types_active = set()
             if dt_active.get("is_pdf"): target_types_active.add("pdf")
             if dt_active.get("is_zip"): target_types_active.update(["zip", "tar.gz", "7z"])
@@ -8828,19 +8872,59 @@ def chat_stream():
             if is_last_allowed_iteration:
                 break                                                                    
             working_messages.append({"role": "assistant", "content": iteration_reply})
-            continuation_content = (
-                f"{_format_terminal_results_for_model(results)}\n\n"
-                f"[CRITICAL REMINDER: The user's active goal is: \"{outgoing_user_message or message}\"]\n"
-                f"Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block "
-                f"(or run the build script) to deliver the user's request. Do NOT run inspection commands like `ls`."
-            )
-            if bg_asset_holder.get("assets"):
-                bg_fns = [os.path.basename(a["local_path"]) for a in bg_asset_holder["assets"] if a.get("local_path")]
-                if bg_fns:
-                    continuation_content += (
-                        f"\n\n[VERIFIED LOCAL ASSETS READY IN assets/ ON DISK: {', '.join(f'assets/{fn}' for fn in bg_fns)}. "
-                        f"Embed these exact local paths directly into your deliverable!]"
-                    )
+            # Discover verified images downloaded on disk
+            all_disk_imgs = []
+            for d in [os.path.join(terminal_workdir, "assets"), os.path.join(WORKSPACE_ROOT, "assets"), terminal_workdir, WORKSPACE_ROOT]:
+                if d and os.path.isdir(d):
+                    for fn in os.listdir(d):
+                        if fn.lower().endswith((".png", ".jpg", ".jpeg", ".webp")) and not fn.startswith("."):
+                            if not any(fn.startswith(p) for p in ["icon_", "favicon", "thumb_"]):
+                                all_disk_imgs.append(f"assets/{fn}")
+            all_disk_imgs = sorted(list(set(all_disk_imgs)))
+
+            if dt_active.get("is_pdf"):
+                continuation_content = (
+                    f"{_format_terminal_results_for_model(results)}\n\n"
+                    f"[MANDATORY MULTI-TURN CONTINUATION - COMPILE THE ILLUSTRATED PDF NOW]\n"
+                    f"Verified authentic images downloaded and saved on disk in `assets/`:\n"
+                    f"{', '.join(all_disk_imgs[:30]) if all_disk_imgs else 'assets/'}\n\n"
+                    f"You MUST NOW IMMEDIATELY write and execute the complete ReportLab Python script in a ```python block to compile the PDF!\n"
+                    f"MANDATORY REPORTLAB EMBEDDING REQUIREMENT:\n"
+                    f"1. For EVERY character, cast member, and key scene, you MUST embed their portrait image directly into the PDF beside or above their biography!\n"
+                    f"2. Safe image loader helper (avoids ReportLab LayoutError on high-res images):\n"
+                    f"   from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle, PageBreak\n"
+                    f"   from reportlab.lib.pagesizes import letter\n"
+                    f"   from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle\n"
+                    f"   from reportlab.lib.units import inch\n"
+                    f"   from PIL import Image as PILImage\n"
+                    f"   def safe_rl_image(img_path, target_w=1.8*inch, target_h=2.2*inch):\n"
+                    f"       if os.path.isfile(img_path) and os.path.getsize(img_path) > 300:\n"
+                    f"           try:\n"
+                    f"               with PILImage.open(img_path) as pi:\n"
+                    f"                   w, h = pi.size\n"
+                    f"               calc_h = min(target_h, target_w * (h / max(1, w)))\n"
+                    f"               return RLImage(img_path, width=target_w, height=calc_h)\n"
+                    f"           except Exception:\n"
+                    f"               pass\n"
+                    f"       return Paragraph('[Image]', styles['Normal'])\n"
+                    f"3. Run `doc.build(story)` to produce the .pdf file on disk.\n"
+                    f"Write and execute this Python script in a ```python block right now!"
+                )
+            elif dt_active.get("is_html"):
+                continuation_content = (
+                    f"{_format_terminal_results_for_model(results)}\n\n"
+                    f"[MANDATORY MULTI-TURN CONTINUATION - DELIVER THE COMPLETE HTML GAME NOW]\n"
+                    f"Verified assets ready in assets/: {', '.join(all_disk_imgs[:30]) if all_disk_imgs else 'assets/'}.\n"
+                    f"Now IMMEDIATELY output the COMPLETE standalone HTML game inside a ```createfile:game.html block "
+                    f"with responsive Canvas graphics, sound effects, and mobile touch controls!"
+                )
+            else:
+                continuation_content = (
+                    f"{_format_terminal_results_for_model(results)}\n\n"
+                    f"[CRITICAL REMINDER: The user's active goal is: \"{outgoing_user_message or message}\"]\n"
+                    f"Now IMMEDIATELY write and complete the full deliverable code inside a ```createfile:<filename> block "
+                    f"(or run the build script) to deliver the user's request. Do NOT run inspection commands like `ls`."
+                )
             working_messages.append({"role": "user", "content": continuation_content})
         if _tasks_emitted:
             final_reply_so_far = "".join(full_reply_parts)
