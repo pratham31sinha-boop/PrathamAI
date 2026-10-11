@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pokémon 2D Battle & Catch Arena</title>
+    <title>Pokémon: Ash's Kanto Journey</title>
     <style>
         * {
             box-sizing: border-box;
@@ -14,9 +14,9 @@
         body {
             margin: 0;
             padding: 0;
-            background: #111;
+            background: #090d16;
             color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Courier New', Courier, monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -24,125 +24,126 @@
             height: 100vh;
             overflow: hidden;
         }
-        #game-container {
-            position: relative;
-            width: 100%;
-            max-width: 800px;
-            height: 600px;
-            background: #222;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            border: 4px solid #ffcc00;
-            border-radius: 12px;
-            overflow: hidden;
+        #gameboy-shell {
+            background: #b30000;
+            padding: 16px;
+            border-radius: 16px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.9), inset 0 4px 6px rgba(255,255,255,0.3);
+            border: 4px solid #660000;
             display: flex;
             flex-direction: column;
+            align-items: center;
+            max-width: 540px;
+            width: 100%;
+        }
+        #hud-header {
+            font-size: 11px;
+            color: #ffcc00;
+            margin-bottom: 8px;
+            text-align: center;
+            font-weight: bold;
+            text-shadow: 1px 1px #000;
+            letter-spacing: 1px;
+        }
+        .screen-lens {
+            background: #8b956d;
+            padding: 10px;
+            border-radius: 8px;
+            border: 4px solid #222;
+            box-shadow: inset 0 4px 10px rgba(0,0,0,0.7);
+            margin-bottom: 12px;
         }
         canvas {
-            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+            background: #9bbc0f;
             display: block;
+            width: 480px;
+            height: 320px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 2px solid #0f380f;
+        }
+        #controls-panel {
             width: 100%;
-            height: 450px;
-        }
-        #ui-panel {
-            flex: 1;
-            background: #2c3e50;
-            border-top: 4px solid #e74c3c;
-            display: flex;
-            flex-direction: column;
-            padding: 10px 15px;
-            justify-content: space-between;
-        }
-        .status-bar {
-            display: flex;
-            justify-content: space-between;
-            font-size: 16px;
-            font-weight: bold;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
-        }
-        .controls {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 10px;
+            padding: 0 10px;
         }
-        .btn-group {
-            display: flex;
-            gap: 8px;
+        .dpad-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            background: #1a1a1a;
+            border-radius: 50%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.6);
         }
-        button {
-            background: #f1c40f;
-            border: none;
-            padding: 10px 16px;
-            font-size: 14px;
+        .dpad-btn {
+            position: absolute;
+            background: #2c2c2c;
+            border: 2px solid #111;
+            color: #fff;
+            font-size: 16px;
             font-weight: bold;
-            color: #2c3e50;
-            border-radius: 6px;
-            cursor: pointer;
-            box-shadow: 0 4px #d4ac0d;
-            transition: all 0.1s ease;
-        }
-        button:active {
-            transform: translateY(2px);
-            box-shadow: 0 2px #d4ac0d;
-        }
-        button.btn-red {
-            background: #e74c3c;
-            color: white;
-            box-shadow: 0 4px #c0392b;
-        }
-        button.btn-red:active {
-            box-shadow: 0 2px #c0392b;
-        }
-        #message-box {
-            background: rgba(0,0,0,0.7);
-            border: 2px solid #fff;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 14px;
-            min-height: 38px;
             display: flex;
             align-items: center;
             justify-content: center;
-            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 3px #111;
         }
-        .dpad {
-            display: grid;
-            grid-template-columns: repeat(3, 40px);
-            grid-template-rows: repeat(2, 40px);
-            gap: 4px;
+        .dpad-btn:active {
+            background: #444;
+            box-shadow: 0 1px #111;
+            transform: translateY(2px);
         }
-        .dpad button {
-            padding: 0;
-            font-size: 16px;
+        .dpad-up { top: 4px; left: 40px; width: 40px; height: 38px; border-radius: 4px 4px 0 0; }
+        .dpad-down { bottom: 4px; left: 40px; width: 40px; height: 38px; border-radius: 0 0 4px 4px; }
+        .dpad-left { top: 40px; left: 4px; width: 38px; height: 40px; border-radius: 4px 0 0 4px; }
+        .dpad-right { top: 40px; right: 4px; width: 38px; height: 40px; border-radius: 0 4px 4px 0; }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            transform: rotate(-25deg);
+            margin-right: 15px;
         }
-        .dpad .up { grid-column: 2; grid-row: 1; }
-        .dpad .left { grid-column: 1; grid-row: 2; }
-        .dpad .right { grid-column: 3; grid-row: 2; }
-        .dpad .down { grid-column: 2; grid-row: 2; }
+        .action-btn {
+            width: 52px;
+            height: 52px;
+            background: #e60000;
+            border: 3px solid #800000;
+            border-radius: 50%;
+            color: #ffcccc;
+            font-weight: bold;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 5px #500000;
+        }
+        .action-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px #500000;
+        }
     </style>
 </head>
 <body>
 
-<div id="game-container">
-    <canvas id="gameCanvas" width="800" height="450"></canvas>
-    <div id="ui-panel">
-        <div class="status-bar">
-            <span id="score-display">Score: 0</span>
-            <span id="pokemon-display">Active: Pikachu</span>
-            <span id="health-display">HP: 100/100</span>
+<div id="gameboy-shell">
+    <div id="hud-header">ASH KETCHUM'S JOURNEY: PALLET ➔ PEWTER ➔ CERULEAN</div>
+    <div class="screen-lens">
+        <canvas id="gameCanvas" width="480" height="320"></canvas>
+    </div>
+    <div id="controls-panel">
+        <div class="dpad-container">
+            <div class="dpad-btn dpad-up" ontouchstart="setKey('ArrowUp', true)" ontouchend="setKey('ArrowUp', false)" onmousedown="setKey('ArrowUp', true)" onmouseup="setKey('ArrowUp', false)">▲</div>
+            <div class="dpad-btn dpad-down" ontouchstart="setKey('ArrowDown', true)" ontouchend="setKey('ArrowDown', false)" onmousedown="setKey('ArrowDown', true)" onmouseup="setKey('ArrowDown', false)">▼</div>
+            <div class="dpad-btn dpad-left" ontouchstart="setKey('ArrowLeft', true)" ontouchend="setKey('ArrowLeft', false)" onmousedown="setKey('ArrowLeft', true)" onmouseup="setKey('ArrowLeft', false)">◀</div>
+            <div class="dpad-btn dpad-right" ontouchstart="setKey('ArrowRight', true)" ontouchend="setKey('ArrowRight', false)" onmousedown="setKey('ArrowRight', true)" onmouseup="setKey('ArrowRight', false)">▶</div>
         </div>
-        <div id="message-box">Welcome to Pokémon 2D Arena! Use Arrow keys or D-Pad to move, Space/Attack to battle wild Charmander!</div>
-        <div class="controls">
-            <div class="btn-group">
-                <button onclick="switchPokemon()">Switch Pokémon</button>
-                <button class="btn-red" onclick="playerAttack()">Thunder / Flame!</button>
-            </div>
-            <div class="dpad">
-                <button class="up" ontouchstart="setKey('ArrowUp', true)" ontouchend="setKey('ArrowUp', false)" onmousedown="setKey('ArrowUp', true)" onmouseup="setKey('ArrowUp', false)">⬆️</button>
-                <button class="left" ontouchstart="setKey('ArrowLeft', true)" ontouchend="setKey('ArrowLeft', false)" onmousedown="setKey('ArrowLeft', true)" onmouseup="setKey('ArrowLeft', false)">⬅️</button>
-                <button class="down" ontouchstart="setKey('ArrowDown', true)" ontouchend="setKey('ArrowDown', false)" onmousedown="setKey('ArrowDown', true)" onmouseup="setKey('ArrowDown', false)">⬇️</button>
-                <button class="right" ontouchstart="setKey('ArrowRight', true)" ontouchend="setKey('ArrowRight', false)" onmousedown="setKey('ArrowRight', true)" onmouseup="setKey('ArrowRight', false)">➡️</button>
-            </div>
+        <div class="action-buttons">
+            <div class="action-btn" ontouchstart="triggerAction('B')" onmousedown="triggerAction('B')">B</div>
+            <div class="action-btn" ontouchstart="triggerAction('A')" onmousedown="triggerAction('A')">A</div>
         </div>
     </div>
 </div>
@@ -150,171 +151,249 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
 
-    // Load assets
+    // Load verified workspace assets
     const pikachuImg = new Image();
     pikachuImg.src = 'assets/pikachu.png';
 
     const charmanderImg = new Image();
     charmanderImg.src = 'assets/charmander.png';
 
-    const pokeballImg = new Image();
-    pokeballImg.src = 'assets/Pok__Ball_Plus.jpg';
+    // Game States: 'MAP', 'BATTLE', 'VICTORY'
+    let gameState = 'MAP';
 
-    // Game state
-    let score = 0;
-    let activeMon = 'Pikachu'; // Pikachu or Charmander
-    let playerHP = 100;
-    let wildHP = 80;
-
-    let player = {
+    let ash = {
         x: 100,
-        y: 280,
-        width: 80,
-        height: 80,
-        speed: 5
+        y: 120,
+        speed: 2.5,
+        badges: 0,
+        score: 0
     };
 
-    let wildPokemon = {
-        x: 600,
-        y: 280,
-        width: 80,
-        height: 80,
-        direction: -1
+    let party = [
+        { name: 'Pikachu', lvl: 12, hp: 45, maxHp: 45, move: 'Thunder Shock', dmg: 22 },
+        { name: 'Charmander', lvl: 10, hp: 38, maxHp: 38, move: 'Ember', dmg: 20 }
+    ];
+    let activeMonIndex = 0;
+
+    let opponent = {
+        name: 'Wild Pidgey',
+        lvl: 5,
+        hp: 30,
+        maxHp: 30,
+        type: 'wild'
     };
 
-    let particles = [];
+    let dialogueText = "Press A to interact / [Enter] to select. Explore Route 1!";
     let keys = {};
 
-    window.addEventListener('keydown', e => { keys[e.key] = true; if(e.key === ' ') playerAttack(); });
+    window.addEventListener('keydown', e => {
+        keys[e.key] = true;
+        if(e.key === 'z' || e.key === 'Enter' || e.key === ' ') {
+            triggerAction('A');
+        }
+        if(e.key === 'x') {
+            triggerAction('B');
+        }
+    });
     window.addEventListener('keyup', e => { keys[e.key] = false; });
 
     function setKey(key, isDown) {
         keys[key] = isDown;
-        if(isDown && key === 'Space') playerAttack();
     }
 
-    function switchPokemon() {
-        if(activeMon === 'Pikachu') {
-            activeMon = 'Charmander';
-            document.getElementById('pokemon-display').innerText = 'Active: Charmander';
-            setMessage("Switched to Charmander! Ready for fiery action!");
-        } else {
-            activeMon = 'Pikachu';
-            document.getElementById('pokemon-display').innerText = 'Active: Pikachu';
-            setMessage("Switched to Pikachu! Ready for electric shocks!");
-        }
-    }
-
-    function setMessage(text) {
-        document.getElementById('message-box').innerText = text;
-    }
-
-    function playerAttack() {
-        // Create attack particle / projectile
-        particles.push({
-            x: player.x + player.width,
-            y: player.y + 30,
-            vx: 10,
-            radius: 12,
-            color: activeMon === 'Pikachu' ? '#ffcc00' : '#ff4500'
-        });
-
-        // Check hit
-        if(Math.abs(player.x - wildPokemon.x) < 200) {
-            wildHP -= 25;
-            setMessage(`${activeMon} attacked! Wild Pokémon HP: ${Math.max(0, wildHP)}`);
-            if(wildHP <= 0) {
-                score += 100;
-                wildHP = 80;
-                setMessage(`Wild Pokémon defeated! +100 Score! A new challenger appears!`);
+    function triggerAction(btn) {
+        if(gameState === 'MAP') {
+            // Check interaction with Pewter Gym (top)
+            if(Math.abs(ash.x - 220) < 35 && Math.abs(ash.y - 60) < 35) {
+                startBattle('Gym Leader Brock', 'Onix', 14, 65, 'gym');
+            } else {
+                dialogueText = "Ash: 'Pikachu, let's become Pokémon Masters!'";
             }
-        } else {
-            setMessage(`${activeMon} attacked, but target is too far!`);
+        } else if(gameState === 'BATTLE') {
+            if(btn === 'A') {
+                let active = party[activeMonIndex];
+                opponent.hp -= active.dmg;
+                if(opponent.hp <= 0) {
+                    opponent.hp = 0;
+                    dialogueText = `${opponent.name} fainted! You won!`;
+                    setTimeout(() => {
+                        gameState = 'MAP';
+                        ash.score += 200;
+                        if(opponent.type === 'gym') {
+                            ash.badges++;
+                            dialogueText = "Obtained Boulder Badge from Brock!";
+                        } else {
+                            dialogueText = "Victory! Ash gained experience!";
+                        }
+                    }, 1400);
+                } else {
+                    let counter = 10;
+                    active.hp -= counter;
+                    dialogueText = `${active.name} used ${active.move}! Opponent HP: ${opponent.hp}\n${opponent.name} hit back for ${counter} dmg!`;
+                    if(active.hp <= 0) {
+                        active.hp = 0;
+                        dialogueText = `${active.name} fainted! Switch Pokémon!`;
+                    }
+                }
+            } else if(btn === 'B') {
+                if(opponent.type === 'wild') {
+                    gameState = 'MAP';
+                    dialogueText = "Got away safely!";
+                } else {
+                    dialogueText = "Can't run from a Gym Leader!";
+                }
+            }
         }
-        document.getElementById('score-display').innerText = `Score: ${score}`;
+    }
+
+    function startBattle(name, pokeName, lvl, hp, type) {
+        gameState = 'BATTLE';
+        opponent = { name: name, pokeName: pokeName, lvl: lvl, hp: hp, maxHp: hp, type: type };
+        dialogueText = `Battle started vs ${name}!`;
     }
 
     function update() {
-        // Player movement
-        if(keys['ArrowLeft'] || keys['a']) player.x = Math.max(20, player.x - player.speed);
-        if(keys['ArrowRight'] || keys['d']) player.x = Math.min(canvas.width / 2, player.x + player.speed);
-        if(keys['ArrowUp'] || keys['w']) player.y = Math.max(150, player.y - player.speed);
-        if(keys['ArrowDown'] || keys['s']) player.y = Math.min(350, player.y + player.speed);
+        if(gameState === 'MAP') {
+            if(keys['ArrowUp'] || keys['w']) ash.y = Math.max(15, ash.y - ash.speed);
+            if(keys['ArrowDown'] || keys['s']) ash.y = Math.min(270, ash.y + ash.speed);
+            if(keys['ArrowLeft'] || keys['a']) ash.x = Math.max(15, ash.x - ash.speed);
+            if(keys['ArrowRight'] || keys['d']) ash.x = Math.min(450, ash.x + ash.speed);
 
-        // Wild pokemon patrol
-        wildPokemon.x += wildPokemon.direction * 1.5;
-        if(wildPokemon.x < 450 || wildPokemon.x > 700) {
-            wildPokemon.direction *= -1;
-        }
-
-        // Update particles
-        particles.forEach((p, index) => {
-            p.x += p.vx;
-            if(p.x > canvas.width) {
-                particles.splice(index, 1);
+            // Tall grass encounter check on right side
+            if(ash.x > 280 && ash.y > 150 && Math.random() < 0.02) {
+                let wildList = [
+                    {name: 'Wild Pidgey', lvl: 4, hp: 25},
+                    {name: 'Wild Rattata', lvl: 4, hp: 22},
+                    {name: 'Wild Caterpie', lvl: 3, hp: 20}
+                ];
+                let w = wildList[Math.floor(Math.random() * wildList.length)];
+                startBattle(w.name, w.name, w.lvl, w.hp, 'wild');
             }
-        });
+        }
     }
 
-    function drawScene() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    function drawMap() {
+        // Game Boy green palette background (#9bbc0f)
+        ctx.fillStyle = '#9bbc0f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw ground & background scenery
-        ctx.fillStyle = '#27ae60';
-        ctx.fillRect(0, 360, canvas.width, 90);
+        // Roads / Paths (#8bac0f)
+        ctx.fillStyle = '#8bac0f';
+        ctx.fillRect(0, 110, 480, 45);
+        ctx.fillRect(210, 0, 45, 320);
 
-        ctx.fillStyle = '#2ecc71';
-        ctx.fillRect(0, 350, canvas.width, 15);
-
-        // Draw Player Pokémon
-        if(activeMon === 'Pikachu' && pikachuImg.complete) {
-            ctx.drawImage(pikachuImg, player.x, player.y, player.width, player.height);
-        } else if(activeMon === 'Charmander' && charmanderImg.complete) {
-            ctx.drawImage(charmanderImg, player.x, player.y, player.width, player.height);
-        } else {
-            // Fallback shape
-            ctx.fillStyle = activeMon === 'Pikachu' ? '#f1c40f' : '#e67e22';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+        // Tall Grass (#306230)
+        ctx.fillStyle = '#306230';
+        for(let gx = 300; gx < 465; gx += 18) {
+            for(let gy = 175; gy < 300; gy += 18) {
+                ctx.fillRect(gx, gy, 12, 12);
+            }
         }
 
-        // Draw Wild Pokémon (Charmander or Opponent)
-        if(charmanderImg.complete) {
-            ctx.drawImage(charmanderImg, wildPokemon.x, wildPokemon.y, wildPokemon.width, wildPokemon.height);
+        // Pewter Gym Building
+        ctx.fillStyle = '#333';
+        ctx.fillRect(180, 30, 100, 55);
+        ctx.fillStyle = '#ffcc00';
+        ctx.font = '8px Courier New';
+        ctx.fillText('PEWTER GYM', 194, 60);
+
+        // Pallet Lab
+        ctx.fillStyle = '#cc3333';
+        ctx.fillRect(30, 30, 75, 55);
+        ctx.fillStyle = '#fff';
+        ctx.fillText("OAK'S LAB", 36, 60);
+
+        // Draw Ash (Player)
+        ctx.fillStyle = '#cc0000';
+        ctx.fillRect(ash.x, ash.y, 18, 24);
+        ctx.fillStyle = '#ffcc00'; // Hat brim
+        ctx.fillRect(ash.x - 2, ash.y, 22, 6);
+
+        // Draw Pikachu following Ash
+        if(pikachuImg.complete) {
+            ctx.drawImage(pikachuImg, ash.x - 18, ash.y + 4, 20, 20);
         } else {
-            ctx.fillStyle = '#e74c3c';
-            ctx.fillRect(wildPokemon.x, wildPokemon.y, wildPokemon.width, wildPokemon.height);
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillRect(ash.x - 16, ash.y + 4, 16, 16);
         }
 
-        // Draw HP Bars
-        // Player HP
-        ctx.fillStyle = '#333';
-        ctx.fillRect(player.x, player.y - 15, 80, 8);
-        ctx.fillStyle = '#2ecc71';
-        ctx.fillRect(player.x, player.y - 15, (playerHP / 100) * 80, 8);
+        // HUD / Dialogue Box
+        ctx.fillStyle = '#0f380f';
+        ctx.fillRect(0, 240, 480, 80);
+        ctx.strokeStyle = '#9bbc0f';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(4, 244, 472, 72);
 
-        // Wild HP
-        ctx.fillStyle = '#333';
-        ctx.fillRect(wildPokemon.x, wildPokemon.y - 15, 80, 8);
+        ctx.fillStyle = '#9bbc0f';
+        ctx.font = '10px Courier New';
+        ctx.fillText(`ASH | Badges: ${ash.badges}/8 | Score: ${ash.score}`, 12, 262);
+        ctx.fillText(dialogueText, 12, 286);
+        let active = party[activeMonIndex];
+        ctx.fillText(`Active: ${active.name} (HP: ${active.hp}/${active.maxHp})`, 12, 306);
+    }
+
+    function drawBattle() {
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Opponent Status Box
+        ctx.fillStyle = '#ddd';
+        ctx.fillRect(260, 20, 200, 50);
+        ctx.strokeStyle = '#333';
+        ctx.strokeRect(260, 20, 200, 50);
+        ctx.fillStyle = '#000';
+        ctx.font = '10px Courier New';
+        ctx.fillText(`${opponent.name} Lv${opponent.lvl}`, 275, 38);
+        ctx.fillStyle = '#228822';
+        ctx.fillRect(330, 46, Math.max(0, (opponent.hp / opponent.maxHp) * 110), 8);
+
+        // Player Status Box
+        ctx.fillStyle = '#ddd';
+        ctx.fillRect(20, 150, 200, 50);
+        ctx.strokeStyle = '#333';
+        ctx.strokeRect(20, 150, 200, 50);
+        ctx.fillStyle = '#000';
+        let active = party[activeMonIndex];
+        ctx.fillText(`${active.name} Lv${active.lvl}`, 35, 168);
+        ctx.fillStyle = '#228822';
+        ctx.fillRect(95, 176, Math.max(0, (active.hp / active.maxHp) * 110), 8);
+
+        // Draw Opponent Sprite
         ctx.fillStyle = '#e74c3c';
-        ctx.fillRect(wildPokemon.x, wildPokemon.y - 15, (wildHP / 80) * 80, 8);
+        ctx.fillRect(350, 80, 60, 60);
 
-        // Draw Particles
-        particles.forEach(p => {
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-            ctx.fill();
-        });
+        // Draw Pikachu in Battle
+        if(pikachuImg.complete) {
+            ctx.drawImage(pikachuImg, 80, 180, 55, 55);
+        } else {
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillRect(80, 180, 45, 45);
+        }
+
+        // Battle Dialogue Box
+        ctx.fillStyle = '#0f380f';
+        ctx.fillRect(0, 230, 480, 90);
+        ctx.strokeStyle = '#9bbc0f';
+        ctx.strokeRect(4, 234, 472, 82);
+
+        ctx.fillStyle = '#9bbc0f';
+        ctx.font = '11px Courier New';
+        ctx.fillText(dialogueText, 16, 260);
+        ctx.fillText(`[A] Use ${active.move}   [B] Run`, 16, 290);
     }
 
     function gameLoop() {
         update();
-        drawScene();
+        if(gameState === 'MAP') {
+            drawMap();
+        } else if(gameState === 'BATTLE') {
+            drawBattle();
+        }
         requestAnimationFrame(gameLoop);
     }
 
-    // Start loop when images loaded
     window.onload = () => {
         gameLoop();
     };
