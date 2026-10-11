@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Perman Flying Action Game - Elite Edition</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0f172a;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 960px;
+            max-height: 540px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            background: linear-gradient(to bottom, #1e3a8a, #3b82f6, #93c5fd);
+            overflow: hidden;
+            border: 4px solid #facc15;
+            border-radius: 12px;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* UI HUD Overlay */
+        .hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+        .hud-badge {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 2px solid #facc15;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        /* Start / Game Over Screen Overlay */
+        .screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.88);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            text-align: center;
+            padding: 20px;
+        }
+        .screen-overlay h1 {
+            font-size: 42px;
+            color: #facc15;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 0px #b45309;
+        }
+        .screen-overlay p {
+            font-size: 18px;
+            max-width: 600px;
+            margin-bottom: 25px;
+            line-height: 1.5;
+            color: #e2e8f0;
+        }
+        .btn {
+            background: linear-gradient(to bottom, #eab308, #ca8a04);
+            color: #1e293b;
+            border: none;
+            padding: 14px 36px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #854d0e, 0 10px 20px rgba(0,0,0,0.4);
+            transition: all 0.1s ease;
+        }
+        .btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #854d0e, 0 5px 10px rgba(0,0,0,0.4);
+        }
+        /* Touch Controls for Mobile / Landscape */
+        .controls {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 20;
+        }
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-template-rows: repeat(3, 50px);
+            gap: 4px;
+            pointer-events: auto;
+        }
+        .dpad-btn {
+            background: rgba(255, 255, 255, 0.25);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 8px;
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .dpad-btn:active {
+            background: rgba(250, 204, 21, 0.6);
+        }
+        .action-pad {
+            display: flex;
+            gap: 15px;
+            pointer-events: auto;
+        }
+        .action-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 35px;
+            border: 3px solid #ffffff;
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        #btn-kick {
+            background: linear-gradient(135deg, #ef4444, #991b1b);
+        }
+        #btn-kick:active {
+            background: linear-gradient(135deg, #f87171, #b91c1c);
+            transform: scale(0.95);
+        }
+        #btn-punch {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        }
+        #btn-punch:active {
+            background: linear-gradient(135deg, #60a5fa, #2563eb);
+            transform: scale(0.95);
+        }
+        @media (max-width: 768px) {
+            #game-container {
+                width: 100vw;
+                height: 100vh;
+                max-width: none;
+                max-height: none;
+                border: none;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- HUD -->
+    <div class="hud" id="hud" style="display: none;">
+        <div class="hud-badge">🦸‍♂️ Perman (Mitsuo) <span id="score-display">Score: 0</span></div>
+        <div class="hud-badge">❤️ HP: <span id="hp-display">100</span>% | 🍔 Badges: <span id="badge-display">0</span></div>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+    <!-- Touch Controls -->
+    <div class="controls" id="controls" style="display: none;">
+        <div class="dpad">
+            <div></div>
+            <div class="dpad-btn" id="ctrl-up">⬆️</div>
+            <div></div>
+            <div class="dpad-btn" id="ctrl-left">⬅️</div>
+            <div></div>
+            <div class="dpad-btn" id="ctrl-right">➡️</div>
+            <div></div>
+            <div class="dpad-btn" id="ctrl-down">⬇️</div>
+            <div></div>
+        </div>
+        <div class="action-pad">
+            <div class="action-btn" id="btn-punch">PUNCH</div>
+            <div class="action-btn" id="btn-kick">KICK</div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="screen-overlay">
+        <h1>PERMAN: SKY HIGH ADVENTURE</h1>
+        <p>Fly through the skies with Perman! Dodge villain drones, use powerful <b>Flying Kicks</b> and <b>Power Punches</b> to defeat enemy monsters, and collect Birdmen Badges!</p>
+        <p style="font-size: 14px; color: #cbd5e1;">Controls: Arrow Keys / D-Pad to Move | X or PUNCH for Punch | Z or KICK for High-Flying Kick</p>
+        <button class="btn" onclick="startGame()">START MISSION</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="screen-overlay" style="display: none;">
+        <h1 style="color: #ef4444;">MISSION FAILED</h1>
+        <p id="final-score">You saved the city with a score of 0!</p>
+        <button class="btn" onclick="startGame()">TRY AGAIN</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Audio Context for Chiptune Sound Effects
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playSound(freq, type, duration) {
+    if (!audioCtx) return;
+    try {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch(e) {}
+}
+
+// Game State
+let gameState = 'START'; // START, PLAYING, GAMEOVER
+let score = 0;
+let hp = 100;
+let badges = 0;
+let gameTime = 0;
+
+// Player Object (Perman)
+let player = {
+    x: 100,
+    y: 250,
+    vx: 0,
+    vy: 0,
+    speed: 5,
+    width: 60,
+    height: 60,
+    isFlyingKick: false,
+    kickTimer: 0,
+    isPunching: false,
+    punchTimer: 0,
+    facing: 1 // 1 right, -1 left
+};
+
+// Input State
+let keys = {};
+
+// Entities: Enemies & Collectibles
+let enemies = [];
+let collectibles = [];
+let particles = [];
+let backgroundBuildings = [];
+
+// Initialize City Background
+function initBackground() {
+    backgroundBuildings = [];
+    for (let i = 0; i < 15; i++) {
+        backgroundBuildings.push({
+            x: i * 120,
+            y: canvas.height - 250 - Math.random() * 150,
+            width: 100,
+            height: 400,
+            color: '#1e293b'
+        });
+    }
+}
+initBackground();
+
+// Keyboard Listeners
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    initAudio();
+    if (e.code === 'KeyZ' || e.code === 'Space') {
+        triggerKick();
+        e.preventDefault();
+    }
+    if (e.code === 'KeyX') {
+        triggerPunch();
+        e.preventDefault();
+    }
+});
+window.addEventListener('keyup', e => {
+    keys[e.code] = false;
+});
+
+// Touch / Button listeners
+function setupTouchButton(id, code) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[code] = true; initAudio(); });
+    el.addEventListener('touchend', (e) => { e.preventDefault(); keys[code] = false; });
+    el.addEventListener('mousedown', (e) => { keys[code] = true; initAudio(); });
+    el.addEventListener('mouseup', (e) => { keys[code] = false; });
+}
+
+setupTouchButton('ctrl-up', 'ArrowUp');
+setupTouchButton('ctrl-down', 'ArrowDown');
+setupTouchButton('ctrl-left', 'ArrowLeft');
+setupTouchButton('ctrl-right', 'ArrowRight');
+
+document.getElementById('btn-kick').addEventListener('click', () => { initAudio(); triggerKick(); });
+document.getElementById('btn-punch').addEventListener('click', () => { initAudio(); triggerPunch(); });
+
+function triggerKick() {
+    if (gameState !== 'PLAYING') return;
+    player.isFlyingKick = true;
+    player.kickTimer = 25;
+    playSound(400, 'square', 0.15);
+    playSound(600, 'sawtooth', 0.2);
+}
+
+function triggerPunch() {
+    if (gameState !== 'PLAYING') return;
+    player.isPunching = true;
+    player.punchTimer = 15;
+    playSound(300, 'triangle', 0.1);
+}
+
+function startGame() {
+    initAudio();
+    gameState = 'PLAYING';
+    score = 0;
+    hp = 100;
+    badges = 0;
+    gameTime = 0;
+    player.x = 100;
+    player.y = 250;
+    enemies = [];
+    collectibles = [];
+    particles = [];
+    
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('gameover-screen').style.display = 'none';
+    document.getElementById('hud').style.display = 'flex';
+    document.getElementById('controls').style.display = 'flex';
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('controls').style.display = 'none';
+    document.getElementById('final-score').innerText = `You saved Tokyo with a score of ${score} and collected ${badges} Birdmen Badges!`;
+    document.getElementById('gameover-screen').style.display = 'flex';
+    playSound(150, 'sawtooth', 0.5);
+}
+
+// Update Loop
+function update() {
+    if (gameState !== 'PLAYING') return;
+
+    gameTime++;
+
+    // Player movement
+    player.vx = 0;
+    player.vy = 0;
+
+    if (keys['ArrowUp'] || keys['KeyW']) player.vy = -player.speed;
+    if (keys['ArrowDown'] || keys['KeyS']) player.vy = player.speed;
+    if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -player.speed; player.facing = -1; }
+    if (keys['ArrowRight'] || keys['KeyD']) { player.vx = player.speed; player.facing = 1; }
+
+    // Flying Kick boost
+    if (player.isFlyingKick) {
+        player.vx += player.facing * 8;
+        player.kickTimer--;
+        if (player.kickTimer <= 0) player.isFlyingKick = false;
+    }
+
+    if (player.isPunching) {
+        player.punchTimer--;
+        if (player.punchTimer <= 0) player.isPunching = false;
+    }
+
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Boundaries
+    if (player.x < 20) player.x = 20;
+    if (player.x > canvas.width - 80) player.x = canvas.width - 80;
+    if (player.y < 50) player.y = 50;
+    if (player.y > canvas.height - 100) player.y = canvas.height - 100;
+
+    // Spawn Enemies (Villain Drones / Evil Robots)
+    if (Math.random() < 0.03 + (gameTime * 0.00005)) {
+        enemies.push({
+            x: canvas.width + 50,
+            y: 80 + Math.random() * (canvas.height - 200),
+            vx: -3 - Math.random() * 3,
+            width: 45,
+            height: 45,
+            hp: 2
+        });
+    }
+
+    // Spawn Collectibles (Birdmen Badges)
+    if (Math.random() < 0.015) {
+        collectibles.push({
+            x: canvas.width + 50,
+            y: 100 + Math.random() * 300,
+            vx: -2,
+            width: 30,
+            height: 30
+        });
+    }
+
+    // Update Enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        let en = enemies[i];
+        en.x += en.vx;
+
+        // Check collision with player
+        let hitBoxPlayer = { x: player.x, y: player.y, width: player.width, height: player.height };
+        if (player.isFlyingKick || player.isPunching) {
+            // Expanded attack hitbox
+            hitBoxPlayer.x -= 20;
+            hitBoxPlayer.width += 40;
+        }
+
+        if (en.x < -60) {
+            enemies.splice(i, 1);
+            continue;
+        }
+
+        // Collision check
+        if (
+            player.x < en.x + en.width &&
+            player.x + player.width > en.x &&
+            player.y < en.y + en.height &&
+            player.y + player.height > en.y
+        ) {
+            if (player.isFlyingKick || player.isPunching) {
+                // Enemy defeated!
+                enemies.splice(i, 1);
+                score += 150;
+                playSound(600, 'sine', 0.1);
+                // Add particle explosion
+                for(let p=0; p<8; p++) {
+                    particles.push({x: en.x, y: en.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 20, color: '#facc15'});
+                }
+            } else {
+                // Player takes damage
+                hp -= 10;
+                enemies.splice(i, 1);
+                playSound(120, 'sawtooth', 0.2);
+                if (hp <= 0) {
+                    gameOver();
+                }
+            }
+        }
+    }
+
+    // Update Collectibles
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+        let col = collectibles[i];
+        col.x += col.vx;
+
+        if (col.x < -40) {
+            collectibles.splice(i, 1);
+            continue;
+        }
+
+        if (
+            player.x < col.x + col.width &&
+            player.x + player.width > col.x &&
+            player.y < col.y + col.height &&
+            player.y + player.height > col.y
+        ) {
+            collectibles.splice(i, 1);
+            badges++;
+            score += 300;
+            playSound(800, 'sine', 0.15);
+        }
+    }
+
+    // Update Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let pt = particles[i];
+        pt.x += pt.vx;
+        pt.y += pt.vy;
+        pt.life--;
+        if (pt.life <= 0) particles.splice(i, 1);
+    }
+
+    // Update HUD
+    document.getElementById('score-display').innerText = score;
+    document.getElementById('hp-display').innerText = Math.max(0, hp);
+    document.getElementById('badge-display').innerText = badges;
+}
+
+// Render Loop
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Sky Gradient
+    let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    skyGrad.addColorStop(0, '#1e3a8a');
+    skyGrad.addColorStop(0.5, '#3b82f6');
+    skyGrad.addColorStop(1, '#93c5fd');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Background Scrolling Buildings
+    ctx.fillStyle = '#1e293b';
+    backgroundBuildings.forEach(b => {
+        b.x -= 1;
+        if (b.x < -120) b.x = canvas.width;
+        ctx.fillRect(b.x, b.y, b.width, b.height);
+        // Windows
+        ctx.fillStyle = '#334155';
+        for(let wx = b.x + 15; wx < b.x + b.width - 15; wx += 25) {
+            for(let wy = b.y + 20; wy < canvas.height; wy += 35) {
+                ctx.fillRect(wx, wy, 12, 18);
+            }
+        }
+        ctx.fillStyle = '#1e293b';
+    });
+
+    // Draw Collectibles (Birdmen Badges - Star Shape)
+    collectibles.forEach(col => {
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(col.x + col.width/2, col.y + col.height/2, col.width/2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('⭐', col.x + 6, col.y + 20);
+    });
+
+    // Draw Enemies (Villain Drones)
+    enemies.forEach(en => {
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(en.x, en.y, en.width, en.height);
+        // Evil glowing eye
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(en.x + 10, en.y + 12, 10, 10);
+        ctx.fillRect(en.x + 25, en.y + 12, 10, 10);
+    });
+
+    // Draw Player (Perman with Mask and Cape)
+    ctx.save();
+    ctx.translate(player.x + player.width/2, player.y + player.height/2);
+    if (player.facing === -1) ctx.scale(-1, 1);
+
+    // Cape
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(-15, 10);
+    ctx.lineTo(-35, 25 + Math.sin(gameTime*0.2)*5);
+    ctx.lineTo(-20, 30);
+    ctx.fill();
+
+    // Body (Blue Suit)
+    ctx.fillStyle = '#2563eb';
+    ctx.fillRect(-20, -10, 40, 40);
+
+    // Head / Mask (Helmet with Bird Ears)
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(0, -20, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mask visor (White)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-14, -25, 28, 12);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-6, -22, 4, 6);
+    ctx.fillRect(2, -22, 4, 6);
+
+    // Bird Emblem P on chest
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('P', -5, 15);
+
+    // Flying Kick Animation effect
+    if (player.isFlyingKick) {
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.8)';
+        ctx.beginPath();
+        ctx.moveTo(20, 10);
+        ctx.lineTo(55, 20);
+        ctx.lineTo(20, 30);
+        ctx.fill();
+    }
+
+    ctx.restore();
+
+    // Draw Particles
+    particles.forEach(pt => {
+        ctx.fillStyle = pt.color;
+        ctx.fillRect(pt.x, pt.y, 6, 6);
+    });
+}
+
+// Main Game Loop
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>
