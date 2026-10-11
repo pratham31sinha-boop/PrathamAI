@@ -2486,70 +2486,84 @@ def _google_cse_snippets(query: str, max_results: int = 4):
     except Exception as exc:
         print(f"[WEB][GOOGLE CSE FAULT] {exc}")
         return []
-def _search_real_images(query: str, max_results: int = 8, download_to_dir: str = None) -> list:
+def _search_real_images(query: str, max_results: int = 12, download_to_dir: str = None) -> list:
     """Real multi-engine image search engine.
-    Queries PokeAPI, Wikimedia Commons / Wikipedia PageImages, and Bing Media.
-    Optionally downloads verified images directly to download_to_dir.
-    Returns list of dicts: [{'title': ..., 'url': ..., 'source': ..., 'local_path': ...}].
+    Queries PokeAPI, Wikimedia Commons / Wikipedia PageImages (high-res), and Bing Media.
+    Extracts all high-end images for requested subjects/characters without stopping early.
+    Optionally downloads verified images directly to download_to_dir and assets/.
+    Returns list of dicts: [{'title': ..., 'url': ..., 'source': ..., 'local_path': ..., 'asset_path': ...}].
     """
-    clean_q = re.sub(r'\b(?:make|create|pdf|containing|images?|all|characters?|details?|breif|brief|with)\b', '', query, flags=re.I).strip()
+    clean_q = re.sub(
+        r'\b(?:extract|extracting|search|searching|find|finding|get|getting|download|downloading|fetch|fetching|'
+        r'make|create|pdf|containing|images?|pics?|pictures?|photos?|wallpapers?|high\s*end|high\s*res|hd|'
+        r'all|characters?|details?|breif|brief|with|about|of|the|for|please)\b',
+        '', query, flags=re.I
+    ).strip()
     if not clean_q:
         clean_q = query
 
     results = []
     seen = set()
 
-    # 1. Specialized handling for Pokémon PokeAPI sprites & artwork
-    poke_match = re.search(r'\b(?:pokemon|pokémon)\s*(?:#?(\d+)|([a-zA-Z]+))\b', query, re.IGNORECASE)
-    if poke_match:
-        p_id_or_name = (poke_match.group(1) or poke_match.group(2)).lower()
-        official_art = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{p_id_or_name}.png"
-        sprite_art = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{p_id_or_name}.png"
-        for art_url in [official_art, sprite_art]:
-            if art_url not in seen:
-                seen.add(art_url)
-                results.append({"title": f"Pokemon {p_id_or_name.title()} Official Artwork", "url": art_url, "source": "PokeAPI"})
+    sub_entities = [s.strip() for s in re.split(r'[,/&]|\band\b', clean_q) if len(s.strip()) >= 2]
+    search_targets = sub_entities[:5] if len(sub_entities) > 1 else [clean_q]
 
-    # 2. Wikipedia / Wikimedia Commons PageImages (High authority, official portraits/stills)
-    for api_endpoint in [
-        f"https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=5&prop=pageimages&pithumbsize=800&format=json",
-        f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=5&prop=pageimages&pithumbsize=800&format=json"
-    ]:
+    for target in search_targets:
+        t_clean = target.strip()
+        if not t_clean:
+            continue
+
+        # 1. Specialized handling for Pokémon PokeAPI sprites & high-res artwork
+        poke_match = re.search(r'\b(?:pokemon|pokémon)\s*(?:#?(\d+)|([a-zA-Z]+))\b|\b([a-zA-Z]+)\s*(?:pokemon|pokémon)\b', t_clean, re.IGNORECASE)
+        if poke_match:
+            p_id_or_name = (poke_match.group(1) or poke_match.group(2) or poke_match.group(3)).lower()
+            official_art = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{p_id_or_name}.png"
+            sprite_art = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{p_id_or_name}.png"
+            for art_url in [official_art, sprite_art]:
+                if art_url not in seen:
+                    seen.add(art_url)
+                    results.append({"title": f"Pokemon {p_id_or_name.title()} Official Artwork", "url": art_url, "source": "PokeAPI"})
+
+        # 2. Wikipedia / Wikimedia Commons PageImages (High-res 1024px official portraits/stills)
+        for api_endpoint in [
+            f"https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(t_clean)}&gsrlimit=10&prop=pageimages&pithumbsize=1024&format=json",
+            f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(t_clean)}&gsrlimit=10&prop=pageimages&pithumbsize=1024&format=json"
+        ]:
+            try:
+                req = urllib.request.Request(api_endpoint, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
+                with urllib.request.urlopen(req, timeout=3.5) as r:
+                    data = json.loads(r.read().decode("utf-8", errors="ignore"))
+                    pages = data.get("query", {}).get("pages", {})
+                    for p in pages.values():
+                        thumb = p.get("thumbnail", {}).get("source")
+                        title = p.get("title", t_clean)
+                        if thumb and thumb not in seen:
+                            seen.add(thumb)
+                            results.append({"title": title, "url": thumb, "source": "Wikipedia/Wikimedia"})
+            except Exception as exc:
+                print(f"[SEARCH_IMAGE][WIKI FAULT] {exc}")
+
+        # 3. Bing Async Media Search (Real high-res production stills, anime, wallpapers, live photos)
         try:
-            req = urllib.request.Request(api_endpoint, headers={"User-Agent": "PrathamAI/2.0 (contact@pratham.ai)"})
-            with urllib.request.urlopen(req, timeout=3.5) as r:
-                data = json.loads(r.read().decode("utf-8", errors="ignore"))
-                pages = data.get("query", {}).get("pages", {})
-                for p in pages.values():
-                    thumb = p.get("thumbnail", {}).get("source")
-                    title = p.get("title", clean_q)
-                    if thumb and thumb not in seen:
-                        seen.add(thumb)
-                        results.append({"title": title, "url": thumb, "source": "Wikipedia/Wikimedia"})
+            b_url = f"https://www.bing.com/images/async?q={urllib.parse.quote(t_clean)}&first=0&count=30&mmasync=1"
+            req2 = urllib.request.Request(b_url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            })
+            with urllib.request.urlopen(req2, timeout=4.0) as r2:
+                html = r2.read().decode("utf-8", errors="ignore")
+                murls = re.findall(r'murl&quot;:&quot;(https?://[^&]+)&quot;', html) or re.findall(r'\"murl\":\"(https?://[^\"]+)\"', html)
+                titles = re.findall(r't1&quot;:&quot;([^&]+)&quot;', html) or re.findall(r'\"t1\":\"([^\"]+)\"', html)
+                for i, m in enumerate(murls):
+                    if m not in seen:
+                        seen.add(m)
+                        t = titles[i] if i < len(titles) else t_clean
+                        results.append({"title": t, "url": m, "source": "Bing Media"})
         except Exception as exc:
-            print(f"[SEARCH_IMAGE][WIKI FAULT] {exc}")
-
-    # 3. Bing Async Media Search (Real production stills, anime, wallpapers, live photos)
-    try:
-        b_url = f"https://www.bing.com/images/async?q={urllib.parse.quote(clean_q)}&first=0&count=12&mmasync=1"
-        req2 = urllib.request.Request(b_url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
-        with urllib.request.urlopen(req2, timeout=4.0) as r2:
-            html = r2.read().decode("utf-8", errors="ignore")
-            murls = re.findall(r'murl&quot;:&quot;(https?://[^&]+)&quot;', html) or re.findall(r'\"murl\":\"(https?://[^\"]+)\"', html)
-            titles = re.findall(r't1&quot;:&quot;([^&]+)&quot;', html) or re.findall(r'\"t1\":\"([^\"]+)\"', html)
-            for i, m in enumerate(murls):
-                if m not in seen:
-                    seen.add(m)
-                    t = titles[i] if i < len(titles) else clean_q
-                    results.append({"title": t, "url": m, "source": "Bing Media"})
-    except Exception as exc:
-        print(f"[SEARCH_IMAGE][BING FAULT] {exc}")
+            print(f"[SEARCH_IMAGE][BING FAULT] {exc}")
 
     final_results = results[:max_results]
 
-    # Optional local download with PIL validation
+    # Local download with PIL validation and dual storage (root + assets/)
     if download_to_dir and final_results:
         os.makedirs(download_to_dir, exist_ok=True)
         assets_dir = os.path.join(download_to_dir, "assets")
@@ -2565,16 +2579,16 @@ def _search_real_images(query: str, max_results: int = 8, download_to_dir: str =
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                     "Accept": "image/*"
                 })
-                with urllib.request.urlopen(d_req, timeout=4.0) as d_resp:
+                with urllib.request.urlopen(d_req, timeout=4.5) as d_resp:
                     img_bytes = d_resp.read()
                 if len(img_bytes) >= 800:
                     img = PILImage.open(io.BytesIO(img_bytes))
                     if img.width >= 50 and img.height >= 50:
                         if img.mode in ("RGBA", "P", "LA"):
                             img = img.convert("RGB")
-                        img.save(local_file, "JPEG", quality=90)
+                        img.save(local_file, "JPEG", quality=92)
                         try:
-                            img.save(asset_file, "JPEG", quality=90)
+                            img.save(asset_file, "JPEG", quality=92)
                         except Exception:
                             pass
                         item["local_path"] = local_file
@@ -2610,9 +2624,9 @@ def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
 
     fetched = []
     seen_titles = set()
-    for sub in subjects[:3]:
+    for sub in subjects[:4]:
         try:
-            results = _search_real_images(sub, max_results=2, download_to_dir=target_dir)
+            results = _search_real_images(sub, max_results=6, download_to_dir=target_dir)
             for r in results:
                 if r.get("local_path") and r.get("title") not in seen_titles:
                     seen_titles.add(r.get("title"))
@@ -3319,15 +3333,14 @@ SYSTEM_PROMPT = (
     "    - Use `matplotlib.pyplot` and `numpy` to generate exact mathematical graphs, calculus curves with tangent lines, geometry figures (triangles with angle arcs, circles with chords/tangents, polygons), coordinate planes, statistical distributions (bell curves with shaded areas), vectors, or polar plots.\n"
     "    - Always use clean, modern styling: clear contrasting colors, labeled axes, gridlines, legends, and high resolution (`dpi=300`, `bbox_inches='tight'`).\n"
     "    - Save diagrams to disk as PNGs and embed them seamlessly into the ReportLab story using `from reportlab.platypus import Image as RLImage` with neat proportional sizing (e.g. `width=5.5*inch, height=3.2*inch`).\n"
-    "- REAL WEB CONNECTIVITY, BUILT-IN NATIVE ENGINES (NO HELPER .PY SCRIPTS FOR SEARCHING/DOWNLOADING):\n"
-    "  * You possess genuine, built-in native search engines directly integrated into your agent environment:\n"
-    "    - Native Web Search (```websearch <query>```): Live web intelligence powered by Wikipedia REST API, DuckDuckGo Instant Answer API, and Bing index for verified facts, summaries, biographies, lore, and current events.\n"
-    "    - Native Image Search (```imagesearch <query>```): Real image search engine powered by Wikipedia PageImages, Wikimedia Commons, Bing Media, and PokeAPI with automatic resolution validation and automatic downloading directly into assets/ and the workspace for ANY actor, anime, game, character, celebrity, or subject.\n"
-    "    - Native PDF Search & Download (```pdfsearch <query>```): Search and download real publicly available PDF documents directly from the web with `%PDF` header validation.\n"
-    "    - Direct Bash Downloads: You can also download any web asset directly using `curl -L \"<url>\" -o <filename>` or `wget`.\n"
-    "    - STRICT PROHIBITION: DO NOT create or execute helper .py scripts (like fetch_image.py or search.py) to search or download web files! Always use native ```imagesearch <query>```, ```websearch <query>```, or ```pdfsearch <query>``` blocks directly.\n"
+    "- REAL GOOGLE-LIKE WEB SEARCH & ACCURATE INFORMATION:\n"
+    "  * You possess genuine, built-in search intelligence directly integrated into your agent environment:\n"
+    "    - Google-Like Web Search (```websearch <query>``` or ```search <query>```): Live web intelligence powered by DuckDuckGo, Wikipedia REST API, and Bing index for accurate, authentic, real-time facts, biographies, news, politicians (e.g. Dharmendra Pradhan), lore, documentation, and current events. Never guess or hallucinate facts when web search is available!\n"
+    "    - Comprehensive Image Extraction (```imagesearch <query>```): Real multi-engine image search (Wikipedia, Wikimedia Commons, Bing Media, PokeAPI). When extracting images of characters, persons, or subjects, extract ALL high-end, high-resolution images needed — do NOT stop after extracting only 1 image! All images are automatically downloaded into assets/ and verified with PIL.\n"
+    "    - Direct Terminal Downloads: Use bash curl, wget, or python requests/urllib for any direct file or document downloads.\n"
+    "    - STRICT PROHIBITION: DO NOT create or execute helper .py scripts (like fetch_image.py or search.py) to search or download web files! Always use native ```imagesearch <query>``` or ```websearch <query>``` blocks directly.\n"
     "    - ASSETS FOR 2D GAMES & PDFs: When the user asks to generate ANY 2D game, HTML5 app, or PDF document with characters/topics/images, you MUST download the required assets (sprites, character art, backgrounds, textures) using ```imagesearch <query>``` so that real verified images are saved into assets/ on disk. Then embed or load those downloaded images directly (e.g. `assets/<name>.jpg`) into your HTML5 Canvas or PDF story!\n"
-    "    - Whenever you need facts, biographies, news, images, or PDFs, run a ```websearch <query>```, ```imagesearch <query>```, or ```pdfsearch <query>``` block right away — never guess or hallucinate facts or images!\n"
+    "    - Whenever you need facts, biographies, news, or images, run a ```websearch <query>``` or ```imagesearch <query>``` block right away — never guess or hallucinate facts or images!\n"
     "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES: Never use circle badges, blank boxes, or initials when web access is available.\n"
     "    - Embed real images directly into PDFs, HTML games, or web applications.\n"
     "    - NEVER deliver or reuse old files or previous topics from earlier conversation turns. Always generate fresh content for the user's active request.\n"
@@ -4624,12 +4637,11 @@ def _stream_antigravity_cli(messages, state=None):
         "  - Verify the deliverable exists and is fully functional on disk before concluding.\n"
         "  - Work continuously and dynamically without stopping halfway until the task is 100% complete and verified!\n"
         "  - NEVER stop halfway or conclude with future promises (e.g. 'I am compiling...', 'I have launched...'). Everything must be executed, completed, and verified in the SAME turn!\n"
-        "- UNIVERSAL NATIVE MULTI-ENGINE SEARCH & ACCURATE INFORMATION:\n"
-        "  * You have live internet access equipped with genuine built-in search engines (NO HELPER .PY SCRIPTS NEEDED):\n"
-        "    - Native ```imagesearch <query>```: Real image search engine (Wikimedia Commons, Wikipedia PageImages, Bing Media, PokeAPI). Automatically finds, validates, and downloads verified images directly into assets/ for ANY actor, anime, game, character, celebrity, or subject.\n"
-        "    - Native ```websearch <query>```: Combines DuckDuckGo and Wikipedia REST API for 100% accurate live web information, synopsis, cast details, documentation, and current events.\n"
-        "    - Native ```pdfsearch <query>```: Finds and downloads authentic public PDF documents directly from the web.\n"
-        "    - Direct curl/wget in bash for any direct file URLs.\n"
+        "- UNIVERSAL GOOGLE-LIKE LIVE SEARCH & ACCURATE INFORMATION:\n"
+        "  * You have live internet access equipped with genuine built-in search intelligence (NO HELPER .PY SCRIPTS NEEDED):\n"
+        "    - Native ```websearch <query>``` (or ```search <query>```): Combines DuckDuckGo and Wikipedia REST API for 100% accurate, up-to-date live web information, biographies, politicians (e.g. Dharmendra Pradhan), synopsis, cast details, documentation, and current events.\n"
+        "    - Native ```imagesearch <query>```: Real multi-engine image extraction (Wikimedia Commons, Wikipedia PageImages, Bing Media, PokeAPI). When extracting images of characters or subjects, extract ALL high-end images needed — do NOT stop after extracting only 1 image! All images are automatically downloaded into assets/ and verified.\n"
+        "    - Direct curl/wget in bash or python requests for direct file downloads.\n"
         "    - STRICT PROHIBITION: DO NOT write or run .py scripts (like fetch_image.py) to search or download! Use native search blocks directly.\n"
         "    - ALWAYS PLUG REAL WEB IMAGES INTO DELIVERABLES NON-STOP: When generating games, web apps, or PDFs, download the required assets with ```imagesearch``` and embed/load them directly (e.g. assets/<filename>.jpg).\n"
         "    - Embed the downloaded real images directly into the PDF as Image flowables or into HTML5 Canvas games.\n"
@@ -6093,7 +6105,7 @@ def _do_stream(messages):
     yield _sse({"type":"error","error":{"code":code,"message":friendly}})
     yield _sse({"type":"complete"})
 
-_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search", "pdfsearch", "pdf_search", "download_pdf"}
+_EXECUTABLE_LANGS = {"python", "py", "bash", "sh", "shell", "web", "websearch", "search", "imagesearch", "imgsearch", "image_search"}
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]*?)```")
 _TERMINAL_MAX_ITERATIONS = 8                                                                     
 _TERMINAL_BLOCK_TIMEOUT = 45                                                                            
@@ -6414,17 +6426,6 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
                 out = "\n".join(lines)
             else:
                 out = f"No images found for query: {code.strip()}"
-            return out, "", 0
-        if lang in ("pdfsearch", "pdf_search", "download_pdf"):
-            pdf_results = _search_and_download_web_pdfs(code.strip(), max_results=4, download_to_dir=cwd)
-            if pdf_results:
-                lines = []
-                for idx, item in enumerate(pdf_results, 1):
-                    local_info = f" (Downloaded to: {os.path.basename(item['local_path'])})" if item.get('local_path') else ""
-                    lines.append(f"{idx}. {item['title']}: {item['url']}{local_info}")
-                out = "\n".join(lines)
-            else:
-                out = f"No PDF documents found for query: {code.strip()}"
             return out, "", 0
         if lang in ("python", "py"):
             cmd = [sys.executable, "-u", "-c", code]
@@ -8205,13 +8206,7 @@ def chat_stream():
                         "label": f"Searching images: {code.strip()[:60]}...",
                         "timestamp": time.time()
                     })
-                elif lang in ("pdfsearch", "pdf_search", "download_pdf"):
-                    yield _sse({
-                        "type": "agent_step",
-                        "step_type": "searching",
-                        "label": f"Searching & downloading PDFs: {code.strip()[:60]}...",
-                        "timestamp": time.time()
-                    })
+
                 else:
                     first_line = (code.strip().split("\n")[0] if code.strip() else "").strip()
                     if len(first_line) > 55:
@@ -8570,7 +8565,10 @@ def chat_stream():
                     except Exception:
                         pass
             if not img_cands:
-                img_query = re.sub(r'\b(?:download|fetch|get|save|images?|pictures?|photos?|of|the|for|please|required|requested|by|user)\b', '', outgoing_user_message or message, flags=re.I).strip()
+                img_query = re.sub(
+                    r'\b(?:download|downloading|extract|extracting|fetch|fetching|get|getting|save|saving|search|searching|find|finding|images?|pictures?|photos?|pics?|high\s*end|high\s*res|hd|all|characters?|details?|of|the|for|please|required|requested|by|user)\b',
+                    '', outgoing_user_message or message, flags=re.I
+                ).strip()
                 if not img_query:
                     sub_match = re.search(r'(?:image|picture|photo)\s+of\s+([a-zA-Z0-9_\s]{2,30})', assistant_response, re.I)
                     if sub_match:
@@ -8578,7 +8576,7 @@ def chat_stream():
                     else:
                         img_query = outgoing_user_message or message
                 target_dl_dir = terminal_workdir or WORKSPACE_ROOT
-                downloaded_imgs = _search_real_images(img_query, max_results=4, download_to_dir=target_dl_dir)
+                downloaded_imgs = _search_real_images(img_query, max_results=12, download_to_dir=target_dl_dir)
                 for dl_item in downloaded_imgs:
                     lp = dl_item.get("local_path")
                     if lp and os.path.isfile(lp) and os.path.getsize(lp) > 400:
