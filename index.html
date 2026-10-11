@@ -3068,6 +3068,7 @@
             }).catch(() => {});
         }
         function renderUserPromptBubble(promptText) {
+            window._lastUserPrompt = promptText;
             const row = document.createElement('div');
             row.className = 'w-full flex flex-col items-end gap-1 msg-enter';
             row.innerHTML = `
@@ -3077,6 +3078,19 @@
             row.querySelector('.copy-msg-btn').onclick = (e) => copyPlainText(promptText, e.currentTarget);
             conversationViewportPanel.appendChild(row);
             pinnedAutoScroll();
+        }
+        function isIntermediateHelperScript(filename) {
+            if (!filename) return false;
+            const fn = filename.toLowerCase().trim();
+            const isScript = fn.endsWith('.py') || fn.endsWith('.sh') || fn.endsWith('.bash');
+            if (!isScript) return false;
+            const lastPrompt = (window._lastUserPrompt || '').toLowerCase();
+            const isDocOrDeliverableReq = /\b(pdf|document|report|essay|presentation|sheet|spreadsheet|zip|archive|apk|game|canvas)\b/.test(lastPrompt);
+            if (isDocOrDeliverableReq) return true;
+            if (fn.startsWith('generate_') || fn.startsWith('build_') || fn.startsWith('make_') || fn.startsWith('create_') || fn.startsWith('fetch_') || fn.startsWith('download_') || fn === 'script.py') {
+                return true;
+            }
+            return false;
         }
         const LANG_EXT_MAP = {
             html: 'html', htm: 'html', javascript: 'js', js: 'js', jsx: 'jsx',
@@ -3088,7 +3102,10 @@
         function guessFileName(lang, ordinal) {
             if (lang && (lang.toLowerCase().startsWith('createfile:') || lang.toLowerCase().startsWith('editfile:'))) {
                 const explicitName = lang.slice(lang.indexOf(':') + 1).trim();
-                if (explicitName) return explicitName;
+                if (explicitName) {
+                    if (isIntermediateHelperScript(explicitName)) return null;
+                    return explicitName;
+                }
             }
             const clean = (lang || '').toLowerCase();
             if (clean === 'html' || clean === 'htm') return ordinal === 1 ? 'index.html' : `page_${ordinal}.html`;
@@ -4740,7 +4757,8 @@
                     }
                     node.textContent = seg.content.trim().replace(/\[DIAGRAM:\s*[^\]\n]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
                     renderMathIfAvailable(node);
-                } else if (['python', 'py', 'bash', 'sh', 'shell', 'web', 'websearch', 'search', 'imagesearch', 'imgsearch', 'image_search'].includes((seg.lang || '').toLowerCase())) {
+                } else if (['python', 'py', 'bash', 'sh', 'shell', 'web', 'websearch', 'search', 'imagesearch', 'imgsearch', 'image_search'].includes((seg.lang || '').toLowerCase()) ||
+                    (((seg.lang || '').toLowerCase().startsWith('createfile:') || (seg.lang || '').toLowerCase().startsWith('editfile:')) && isIntermediateHelperScript((seg.lang || '').slice((seg.lang || '').indexOf(':') + 1).trim())) {
                     if (!node) {
                         node = document.createElement('div');
                         node.style.display = 'none';
@@ -4749,12 +4767,14 @@
                         wrapper._segNodes[i] = node;
                     }
                     const eLang = (seg.lang || '').toLowerCase();
+                    const rawName = eLang.includes(':') ? eLang.slice(eLang.indexOf(':') + 1).trim() : eLang;
                     if (!seg.closed) {
                         if (eLang.includes('image')) setAgentActivity('Searching images...');
                         else if (eLang.includes('web') || eLang.includes('search')) setAgentActivity('Searching web...');
+                        else if (eLang.startsWith('createfile:') || eLang.startsWith('editfile:')) setAgentActivity(`Compiling deliverable via ${rawName}...`);
                         else setAgentActivity(`Running ${seg.lang}...`);
                     }
-                    pushTerminalLog(`Executing ${seg.lang}...`);
+                    pushTerminalLog(eLang.startsWith('createfile:') || eLang.startsWith('editfile:') ? `Building deliverable with ${rawName}...` : `Executing ${seg.lang}...`);
                 } else {
                     const candidateFilename = guessFileName(seg.lang, fileOrdinal + 1);
                     if (candidateFilename) {

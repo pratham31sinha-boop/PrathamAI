@@ -2665,8 +2665,8 @@ def _prepare_game_or_pdf_assets(user_prompt: str, target_dir: str) -> list:
         chunk = m.group(1).strip()
         parts = re.split(r'[,&]|\band\b', chunk)
         for p in parts:
-            p_clean = re.sub(r'\b(?:images?|pictures?|sprites?|assets?|details?|sound|music|controls?|characters?)\b', '', p).strip()
-            if len(p_clean) >= 3 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that") and p_clean not in subjects:
+            p_clean = re.sub(r'\b(?:images?|pictures?|sprites?|assets?|details?|sound|music|controls?|characters?|plot|plots|main|cast|briefs?|breifs?|authentic|real|tv|show|series|document)\b', '', p).strip()
+            if len(p_clean) >= 3 and len(p_clean) <= 40 and p_clean not in ("all", "some", "the", "this", "that", "plot", "main", "cast", "details", "brief", "breif") and p_clean not in subjects:
                 subjects.append(p_clean)
 
     fetched = []
@@ -3400,8 +3400,10 @@ SYSTEM_PROMPT = (
     "    - 5th: Run verification terminal commands to check that the file exists and is valid on disk.\n"
     "    - Stay in this continuous execution loop nonstop until the request is completely done and verified!\n"
     "    - Never stop halfway or conclude with future promises (e.g. 'I am compiling...', 'I have launched the script...'). Build, execute, and verify everything in the SAME turn.\n"
-    "- CLEAN DELIVERABLE PRESENTATION:\n"
-    "  * Deliver ONLY the exact deliverable requested by the user. If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
+    "- CLEAN DELIVERABLE PRESENTATION & STRICT PDF/ZIP RULES:\n"
+    "  * Deliver ONLY the exact deliverable requested by the user: if asked for a PDF, give ONLY the PDF; if asked for a ZIP, give ONLY the ZIP; if asked for a game, give ONLY the HTML game!\n"
+    "  * STRICT PROHIBITION FOR PDFs: When asked for a PDF document, DO NOT output helper scripts (e.g. generate_pdf.py, build_pdf.py, script.py) in ```createfile: blocks! Never present Python scripts to a user asking for a PDF! Write and execute your ReportLab / FPDF script in a ```python``` block to compile and save the .pdf directly to disk, so only the .pdf is presented!\n"
+    "  * If the user asked for a ZIP archive, package everything cleanly into the ZIP and provide ONLY the ZIP deliverable card (do not present intermediate helper scripts).\n"
     "- Interactive HTML5 Apps, 2D/3D Games & Playable Software:\n"
     "  * When the user asks for ANY game (e.g. 2D Pokémon game, Mario, Snake, racing, arcade, platformer, RPG) or web application:\n"
     "    - Follow the dynamic cadence: state what you will do, fetch real sprites/images from the web/PokeAPI via terminal, and synthesize the full game.\n"
@@ -6483,7 +6485,17 @@ def _run_code_block(lang: str, code: str, cwd: str = None):
                 out = f"No images found for query: {code.strip()}"
             return out, "", 0
         if lang in ("python", "py"):
-            cmd = [sys.executable, "-u", "-c", code]
+            stripped_code = code.strip()
+            py_cmd_m = re.match(r"^python3?\s+([a-zA-Z0-9_\-\.\/]+)(?:\s+.*)?$", stripped_code)
+            if py_cmd_m:
+                target_script = py_cmd_m.group(1)
+                script_path = os.path.join(cwd, target_script) if not os.path.isabs(target_script) else target_script
+                if os.path.isfile(script_path):
+                    cmd = [sys.executable, "-u", script_path]
+                else:
+                    cmd = [sys.executable, "-u", "-c", code]
+            else:
+                cmd = [sys.executable, "-u", "-c", code]
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=_TERMINAL_BLOCK_TIMEOUT, cwd=cwd, env=exec_env
             )
@@ -8051,8 +8063,71 @@ def chat_stream():
                         file_bytes = fh.read()
                     mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
                     token = _store_generated_file(file_bytes, filename, mimetype)
-                    if _is_intermediate_helper_file(filename, outgoing_user_message or message):
-                        pass
+                    is_helper = _is_intermediate_helper_file(filename, outgoing_user_message or message)
+                    if is_helper:
+                        yield _sse({
+                            "type": "agent_step",
+                            "step_type": "writing",
+                            "label": f"Preparing build script {filename}",
+                            "detail": f"Build script ({written['line_count']} lines).",
+                            "timestamp": time.time()
+                        })
+                        if filename.endswith(".py"):
+                            try:
+                                yield _sse({
+                                    "type": "agent_step",
+                                    "step_type": "executing",
+                                    "label": f"Compiling deliverable via {filename}...",
+                                    "timestamp": time.time()
+                                })
+                                run_res = subprocess.run([sys.executable, written["path"]], cwd=terminal_workdir, capture_output=True, text=True, timeout=40)
+                                print(f"[INTERMEDIATE AUTO-RUN] {filename} -> returncode={run_res.returncode}")
+                                if run_res.returncode == 0:
+                                    yield _sse({
+                                        "type": "agent_step",
+                                        "step_type": "executing",
+                                        "label": f"Compiled deliverable from {filename}",
+                                        "timestamp": time.time()
+                                    })
+                                    # Scan terminal_workdir for produced deliverables (e.g. .pdf)
+                                    try:
+                                        for _cand in os.listdir(terminal_workdir):
+                                            if _cand.lower() in _IGNORE_FILE_NAMES or _cand.startswith("."):
+                                                continue
+                                            if not _is_intermediate_helper_file(_cand, outgoing_user_message or message):
+                                                _cand_path = os.path.join(terminal_workdir, _cand)
+                                                if os.path.isfile(_cand_path) and _cand.lower() not in _produced_filenames_this_turn:
+                                                    _produced_filenames_this_turn.add(_cand.lower())
+                                                    with open(_cand_path, "rb") as _cfh:
+                                                        _cbytes = _cfh.read()
+                                                    _cmime = mimetypes.guess_type(_cand)[0] or "application/octet-stream"
+                                                    _ctok = _store_generated_file(_cbytes, _cand, _cmime)
+                                                    _produced_files_this_turn.append({
+                                                        "filename": _cand, "url": f"/download/{_ctok}", "download_url": f"/download/{_ctok}",
+                                                        "size_bytes": len(_cbytes), "line_count": 0, "lang": _cand.rsplit(".", 1)[-1] if "." in _cand else ""
+                                                    })
+                                                    yield _sse({"type": "file_ready", "url": f"/download/{_ctok}", "filename": _cand})
+                                                    yield _sse({
+                                                        "type": "activity_created",
+                                                        "filename": _cand,
+                                                        "size_bytes": len(_cbytes),
+                                                        "line_count": 0,
+                                                        "preview_type": _cand.rsplit(".", 1)[-1] if "." in _cand else "",
+                                                    })
+                                                    yield _sse({
+                                                        "type": "agent_step",
+                                                        "step_type": "writing",
+                                                        "label": f"Presenting {_cand}",
+                                                        "detail": f"Deliverable ready for download and viewing ({len(_cbytes)} bytes)."
+                                                    })
+                                                    if user_email:
+                                                        _save_user_chat_file(user_email, conv_id, _cand, _cbytes)
+                                    except Exception as _cande:
+                                        print(f"[CANDIDATE DISCOVERY FAULT] {_cande}")
+                                else:
+                                    print(f"[INTERMEDIATE AUTO-RUN ERR] {run_res.stderr[:300]}")
+                            except Exception as _e_ar:
+                                print(f"[INTERMEDIATE AUTO-RUN FAULT] {_e_ar}")
                     else:
                         _produced_files_this_turn.append({
                             "filename": filename, "url": f"/download/{token}", "download_url": f"/download/{token}",
@@ -8060,49 +8135,50 @@ def chat_stream():
                         })
                         yield _sse({"type": "file_ready", "url": f"/download/{token}", "filename": filename})
 
-                    # If this file already existed, compute and yield real diff stats
-                    if prior_content is not None and prior_content.strip() != final_content.strip():
-                        diff_stats = _compute_diff_stats(prior_content, final_content)
-                        yield _sse({
-                            "type": "activity_edited",
-                            "filename": filename,
-                            "added": diff_stats["added"],
-                            "removed": diff_stats["removed"],
-                            "unified_diff": diff_stats["unified_diff"],
-                        })
-                        yield _sse({
-                            "type": "agent_step",
-                            "step_type": "writing",
-                            "label": f"Presenting updated {filename}",
-                            "detail": f"Completed modifications to {filename} (+{diff_stats['added']} -{diff_stats['removed']} lines)."
-                        })
-                    else:
-                        yield _sse({
-                            "type": "activity_created",
-                            "filename": filename,
-                            "size_bytes": written["size_bytes"],
-                            "line_count": written["line_count"],
-                            "preview_type": file_ext,
-                        })
-                        yield _sse({
-                            "type": "agent_step",
-                            "step_type": "writing",
-                            "label": f"Presenting {filename}",
-                            "detail": f"Ready for download and execution ({written['line_count']} lines, {written['size_bytes']} bytes)."
-                        })
+                        # If this file already existed, compute and yield real diff stats
+                        if prior_content is not None and prior_content.strip() != final_content.strip():
+                            diff_stats = _compute_diff_stats(prior_content, final_content)
+                            yield _sse({
+                                "type": "activity_edited",
+                                "filename": filename,
+                                "added": diff_stats["added"],
+                                "removed": diff_stats["removed"],
+                                "unified_diff": diff_stats["unified_diff"],
+                            })
+                            yield _sse({
+                                "type": "agent_step",
+                                "step_type": "writing",
+                                "label": f"Presenting updated {filename}",
+                                "detail": f"Completed modifications to {filename} (+{diff_stats['added']} -{diff_stats['removed']} lines)."
+                            })
+                        else:
+                            yield _sse({
+                                "type": "activity_created",
+                                "filename": filename,
+                                "size_bytes": written["size_bytes"],
+                                "line_count": written["line_count"],
+                                "preview_type": file_ext,
+                            })
+                            yield _sse({
+                                "type": "agent_step",
+                                "step_type": "writing",
+                                "label": f"Presenting {filename}",
+                                "detail": f"Ready for download and execution ({written['line_count']} lines, {written['size_bytes']} bytes)."
+                            })
 
                     # Persist deliverable to account chat folder and global attachments
-                    if user_email:
+                    if user_email and not is_helper:
                         _save_user_chat_file(user_email, conv_id, filename, file_bytes)
 
-                    yield _sse({"type": "verification_started", "filename": filename})
-                    val_result = validate_generated_code(file_ext, final_content)
-                    yield _sse({
-                        "type": "verification_completed",
-                        "filename": filename,
-                        "ok": val_result["valid"],
-                        "details": val_result["error"] or f"Validated {file_ext.upper()} — no issues found.",
-                    })
+                    if not is_helper:
+                        yield _sse({"type": "verification_started", "filename": filename})
+                        val_result = validate_generated_code(file_ext, final_content)
+                        yield _sse({
+                            "type": "verification_completed",
+                            "filename": filename,
+                            "ok": val_result["valid"],
+                            "details": val_result["error"] or f"Validated {file_ext.upper()} — no issues found.",
+                        })
                 except Exception as exc:
                     print(f"[CREATEFILE][FAULT] {exc}")
             for filename, pairs in _extract_editfile_blocks(iteration_reply):
@@ -8183,7 +8259,7 @@ def chat_stream():
                             if (_fn.startswith("generate_") or _fn.startswith("build_")) and _fn.endswith(".py"):
                                 _g_path = os.path.join(_scan_dir, _fn)
                                 if os.path.isfile(_g_path) and os.path.getmtime(_g_path) >= (turn_start_time - 10.0):
-                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=WORKSPACE_ROOT, capture_output=True, text=True, timeout=40)
+                                    _cmd_run = subprocess.run(["python3", _g_path], cwd=_scan_dir, capture_output=True, text=True, timeout=40)
                                     print(f"[AUTO_GEN_EXEC] Executed {_fn}: returncode={_cmd_run.returncode}")
             except Exception as _ge:
                 print(f"[AUTO_GEN_FAULT] {_ge}")
