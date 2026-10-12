@@ -3607,10 +3607,10 @@ def _is_cooling(name: str) -> bool:
 def _cool(name: str):
     _provider_cooldowns[name] = time.time() + COOLDOWN_SECONDS
 SYSTEM_PROMPT = (
-    "You are Pratham AI, an advanced autonomous agentic coding and conversational AI created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n\n"
+    "You are Pratham AI, an advanced autonomous agentic coding and conversational AI created by Pratham.\n\n"
     "CREATOR & IDENTITY:\n"
-    "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
-    "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI who built your architecture. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
+    "- Your identity is Pratham AI, created by Pratham.\n"
+    "- If asked who made or created you, state naturally that you were created by Pratham.\n"
     "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
     "GREETING DIRECTIVE:\n"
     "- When the user greets you (e.g. 'hi', 'hello', 'hey'), respond immediately and conversationally with a warm, friendly greeting in 1-2 sentences as Pratham AI, and ask how you can help. Do NOT output lengthy capability lists, disclaimers, or run commands on a simple greeting.\n\n"
@@ -3869,25 +3869,21 @@ def _clean_antigravity_text(text: str) -> str:
         (r"\bGitHub storage\b", "workspace storage"),
         (r"\bGitHub folder\b", "workspace folder"),
         (r"\bGitHub\b", "Pratham AI Cloud"),
-        (r"\b(?:I am a large language model(?:,)? (?:trained|created|developed|designed) by (?:the )?(?:Google DeepMind(?: team)?|Google|DeepMind))\b", "I am Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam"),
-        (r"\b(?:created|trained|developed|designed|built|made)\s+by\s+(?:the\s+)?(?:Google DeepMind(?: team)?|Google|DeepMind|Pratham AI)\b", "created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam"),
-        (r"\b(?:Google DeepMind team|DeepMind team|Google DeepMind|DeepMind)\b", "Pratham Sinha and his team"),
-        (r"\bGoogle developed me\b", "Pratham Sinha and his team developed me"),
-        (r"\bGoogle built me\b", "Pratham Sinha and his team built me"),
+        (r"\b(?:I am a large language model(?:,)? (?:trained|created|developed|designed) by (?:the )?(?:Google DeepMind(?: team)?|Google|DeepMind|OpenAI))\b", "I am Pratham AI, an advanced AI model created by Pratham"),
+        (r"\b(?:created|trained|developed|designed|built|made)\s+by\s+(?:the\s+)?(?:Google DeepMind(?: team)?|Google|DeepMind)\b", "created by Pratham"),
+        (r"\bGoogle developed me\b", "Pratham developed me"),
+        (r"\bGoogle built me\b", "Pratham built me"),
         (r"\bantigravity(?:\s+cli)?\b", "Pratham AI"),
-        (r"\bantigravity\b", "Pratham AI"),
         (r"\bGemini 3\.8 Flash\b", "Pratham AI"),
         (r"\bGemini 3\.1 Flash\b", "Pratham AI"),
         (r"\bGemini Nano Banana 2\b", "Pratham AI Neural Canvas"),
         (r"\bGoogle Gemini\b", "Pratham AI"),
-        (r"\bGemini\b", "Pratham AI"),
-        (r"\bGoogle\b", "Pratham Sinha and his team"),
         (r"\bI am Gemini\b", "I am Pratham AI"),
         (r"\bGemini is a large language model\b", "Pratham AI is an advanced AI model"),
         (r"\bI operate as Pratham AI Engine\b", "I am Pratham AI"),
         (r"\bPratham AI Engine\b", "Pratham AI"),
-        (r"\bI am not [\"']?Pratham AI[\"']?\b[^\n.]*\.?", "I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam."),
-        (r"\bI (?:can't|cannot) (?:take on that persona|adopt fabricated identities|claim to be created by [^.]+)\b[^\n.]*\.?", "I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam."),
+        (r"\bI am not [\"']?Pratham AI[\"']?\b[^\n.]*\.?", "I am Pratham AI, created by Pratham."),
+        (r"\bI (?:can't|cannot) (?:take on that persona|adopt fabricated identities|claim to be created by [^.]+)\b[^\n.]*\.?", "I am Pratham AI, created by Pratham."),
         (r"\bI don'?t adopt fabricated identities\b[^\n.]*\.?", ""),
     ]
     cleaned = text
@@ -3956,11 +3952,11 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
             "# Pratham Sinha: The Visionary Engineer Behind Pratham AI\n\n"
             "**By Pratham AI**\n\n"
             "### Introduction\n"
-            "In an era where artificial intelligence is fundamentally transforming the digital world, **Pratham Sinha** stands as a pioneering software engineer, innovator, and creator. Together with his team, and under the visionary supervision of **Akriti and Aditi Aishwaryam**, Pratham Sinha conceived and architected **Pratham AI**—an autonomous, high-performance agentic intelligence designed from the ground up to offer unprecedented freedom in dynamic code generation, interactive applications, and real-time execution.\n\n"
+            "In an era where artificial intelligence is fundamentally transforming the digital world, **Pratham Sinha** stands as a pioneering software engineer, innovator, and creator. Pratham Sinha conceived and architected **Pratham AI**—an autonomous, high-performance agentic intelligence designed from the ground up to offer unprecedented freedom in dynamic code generation, interactive applications, and real-time execution.\n\n"
             "### The Inception and Architecture of Pratham AI\n"
             "Unlike traditional conversational chatbots constrained by static responses, Pratham Sinha envisioned an agentic platform that could truly 'do anything' on the fly. From synthesizing full Three.js 3D WebGL games to generating robust production backend scripts and compiling standalone Android packages (APK), Pratham AI represents a paradigm shift toward unconstrained pair programming and dynamic execution.\n\n"
             "### Engineering Philosophy: Autonomous Workspace Freedom\n"
-            "At the heart of Pratham Sinha's engineering vision is the principle of workspace autonomy. Pratham AI operates with a real-time background execution terminal, enabling multi-step reasoning, real-time code iteration, and instant artifact presentation. Under the mentorship and guidance of Akriti and Aditi Aishwaryam, every architectural layer—from the neural streaming engine to the self-contained frontend client—was meticulously refined for speed, resilience, and user empowerment.\n\n"
+            "At the heart of Pratham Sinha's engineering vision is the principle of workspace autonomy. Pratham AI operates with a real-time background execution terminal, enabling multi-step reasoning, real-time code iteration, and instant artifact presentation. Every architectural layer—from the neural streaming engine to the self-contained frontend client—was meticulously refined for speed, resilience, and user empowerment.\n\n"
             "### The Future Vision\n"
             "Pratham Sinha continues to push the boundaries of accessible artificial intelligence, driving innovations in mobile compilation, cross-platform agents, and decentralized intelligence. Through his leadership, Pratham AI is not just a tool, but an autonomous companion that empowers creators worldwide to bring their ideas to life in seconds."
         )
@@ -3977,12 +3973,10 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     if not is_creator_doc_request and not is_action_prompt and (any(k in prompt_lower for k in name_identity_keys) or prompt_lower in ["pratham sinha", "pratham sinha?", "pratham ai", "pratham ai?"]):
         if any(k in prompt_lower for k in ["who is pratham sinha", "about pratham sinha", "tell me about pratham sinha"]) or prompt_lower in ["pratham sinha", "pratham sinha?"]:
             return (
-                "**Pratham Sinha** is an engineer, innovator, and the creator/founder of Pratham AI. Together with his team, under the supervision of **Akriti and Aditi Aishwaryam**, he designed and developed me (Pratham AI) to be a fast, autonomous AI assistant with full agentic coding, editing, and execution capabilities.\n\n"
-                "Pratham Sinha is the human creator behind my system, while I am the AI assistant designed to help you with everything you need!"
+                "**Pratham Sinha** is the creator and software engineer behind **Pratham AI**. He designed and built me to be an autonomous AI assistant with full agentic coding, editing, and execution capabilities."
             )
         return (
-            "My name is **Pratham AI**! I am an advanced conversational and coding AI created and designed from scratch by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.\n\n"
-            "My name honors my creator, Pratham Sinha. He is the software engineer and creator who designed my architecture, while I am the artificial intelligence assistant built to write code, develop games and web apps, analyze complex problems, and converse naturally just like Claude or ChatGPT. How can I assist you with your tasks today?"
+            "I am **Pratham AI**, an advanced AI assistant created by **Pratham**. How can I help you today?"
         )
 
     # 4. Continuation / Stuck requests (strictly when user asks to resume)
@@ -4015,10 +4009,10 @@ def _generate_pratham_response(prompt: str, messages: list) -> str:
     action_keywords = ["make", "build", "create", "game", "panda", "code", "python", "script", "file", "terminal", "run", "play", "valley", "apk", "app", "ui", "write", "fix", "help with", "how to", "what is", "why", "who", "chess", "2d", "high end", "phone"]
     words_in_prompt = re.findall(r"\b[a-zA-Z0-9_]+\b", prompt_lower)
     if re.search(greeting_pattern, prompt_lower) and len(words_in_prompt) <= 4 and not any(k in prompt_lower for k in action_keywords):
-        return "Hello! I am Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I assist you with your tasks today?"
+        return "Hello! I am Pratham AI, created by Pratham. How can I assist you with your tasks today?"
 
     return (
-        "I am **Pratham AI**, an autonomous artificial intelligence created by **Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam**.\n\n"
+        "I am **Pratham AI**, created by **Pratham**.\n\n"
         "I am fully active with pair-programming, game building, application development, and interactive problem solving. What would you like to work on today?"
     )
 
@@ -4027,7 +4021,7 @@ def _stream_pratham_fast_engine(messages, state=None):
     High-performance real-time streaming engine for Pratham AI.
     Streams word-by-word with micro-delays (~10-15ms per word) so that
     the entire response appears smoothly in real time within ~2 seconds.
-    Created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
+    Created by Pratham.
     """
     user_msgs = [
         m.get("content", "") for m in (messages or [])
@@ -4934,7 +4928,7 @@ def _stream_antigravity_cli(messages, state=None):
     """
     Directly streams from the user's authenticated Antigravity account
     via a persistent warm session with instant real-time deltas (~3-4s response).
-    Created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.
+    Created by Pratham.
     """
     import select
     agy_bin = shutil.which("agy") or "/root/.gemini/antigravity-cli/bin/agy" or "/root/.local/bin/agy"
@@ -4966,10 +4960,10 @@ def _stream_antigravity_cli(messages, state=None):
 
     # Clean system prompt focusing on creator identity, terminal workspace freedom, rapid performance, and complete deliverables
     system_instruction = (
-        "You are Pratham AI, an advanced AI model created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n\n"
+        "You are Pratham AI, an advanced AI model created by Pratham.\n\n"
         "CREATOR & IDENTITY:\n"
-        "- Your identity is Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam.\n"
-        "- Pratham Sinha is an engineer, innovator, and the creator/founder of Pratham AI. Never confuse yourself (Pratham AI) with your creator (Pratham Sinha).\n"
+        "- Your identity is Pratham AI, created by Pratham.\n"
+        "- If asked who made or created you, state naturally that you were created by Pratham.\n"
         "- Speak naturally, intelligently, helpfully, and conversationally. Do not use canned, repetitive, or robotic formulas.\n\n"
         "AUTONOMOUS CONTINUOUS EXECUTION CADENCE:\n"
         "- Execute user requests dynamically and continuously without stopping halfway:\n"
@@ -7994,28 +7988,6 @@ def chat_stream():
         return resp
     _is_pure_greeting = bool(re.match(r"^\s*(?:hi|hello|hey|greetings|hola|namaste|good\s+(?:morning|afternoon|evening|day)|sup|yo)\b[!?.]*$", message.strip(), re.IGNORECASE))
     if _is_pure_greeting:
-        _append_message(conv_id, "user", message)
-        greeting_reply = "Hello! I'm Pratham AI, created by Pratham Sinha and his team under the supervision of Akriti and Aditi Aishwaryam. How can I help you today?"
-        _append_message(conv_id, "assistant", greeting_reply)
-        current_date_formatted = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        repo_sync_destination_path = f"data/{user_email}/{current_date_formatted}.txt"
-        log_entry = (
-            f"\n=== {datetime.now(timezone.utc).isoformat()} ===\n"
-            f"User: {message}\n"
-            f"Pratham AI:\n{greeting_reply}\n"
-            f"{'=' * 80}\n"
-        )
-        if GITHUB_TOKEN:
-            try:
-                threading.Thread(
-                    target=_write_to_github_repository,
-                    args=(repo_sync_destination_path, log_entry),
-                    daemon=True
-                ).start()
-            except Exception:
-                pass
-        # Proactively warm up and initialize the Antigravity CLI sessions in the background
-        # so that when the user sends their next request after "hi", the agent is primed and replies in < 4 seconds.
         try:
             threading.Thread(
                 target=_prewarm_dual_antigravity,
@@ -8024,19 +7996,6 @@ def chat_stream():
             ).start()
         except Exception:
             pass
-        def generate_instant_greeting():
-            yield _sse({"type": "metadata", "conversation_id": conv_id})
-            words = re.split(r"(\s+)", greeting_reply)
-            for w in words:
-                if w:
-                    yield _sse({"type": "token", "text": w})
-                    time.sleep(0.015)
-            yield _sse({"type": "complete"})
-        resp = Response(stream_with_context(generate_instant_greeting()), content_type="text/event-stream")
-        resp.headers["Cache-Control"] = "no-cache"
-        resp.headers["X-Accel-Buffering"] = "no"
-        resp.headers["Access-Control-Allow-Credentials"] = "true"
-        return resp
     _last_img_match_iter = re.finditer(
         r'Here\'s your generated image for: "(.*?)"', "\n".join(
             m.get("content", "") for m in _get_messages(conv_id) if m.get("role") == "assistant"
@@ -9641,8 +9600,7 @@ def config_public():
     return jsonify({
         "ok": True,
         "app_name": "Pratham AI",
-        "creator": "Pratham Sinha and team",
-        "supervision": "Akriti and Aditi Aishwaryam",
+        "creator": "Pratham Sinha",
         "supabase_configured": SUPABASE_CONFIGURED,
         "github_repo": GITHUB_REPO,
         "ai": {
