@@ -83,8 +83,6 @@ import shlex
 import zlib
 import threading
 import queue
-import signal
-from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import wraps
 try:
@@ -139,7 +137,6 @@ PRATHAM_AGENT_SHARED_SECRET = os.environ.get("PRATHAM_AGENT_SHARED_SECRET", "").
 PRATHAM_AI_MODE = os.environ.get("PRATHAM_AI_MODE", "google_oauth").strip().lower()
 PRATHAM_AGENT_ONLY = PRATHAM_AI_MODE == "agent"
 PRATHAM_AGENT_STALE_CLAIM_SECONDS = int(os.environ.get("PRATHAM_AGENT_STALE_CLAIM_SECONDS", "300"))
-_STREAM_CONTEXT = ContextVar("pratham_stream_context", default=None)
 _PRATHAM_AGENT_JOBS = {}
 _PRATHAM_AGENT_LOCK = threading.RLock()
 def _agent_authorized():
@@ -374,12 +371,10 @@ def _handle_cors_headers(response):
         response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-Gemini-Access-Token, X-Gemini-Key, X-Groq-Key, ngrok-skip-browser-warning, X-Daytona-Skip-Preview-Warning, X-Daytona-Preview-Token"
-    if response.mimetype == "text/event-stream" or "text/event-stream" in response.headers.get("Content-Type", ""):
+    if "text/event-stream" in response.headers.get("Content-Type", ""):
         response.headers["Cache-Control"] = "no-cache, no-transform"
-        response.headers["Pragma"] = "no-cache"
         response.headers["X-Accel-Buffering"] = "no"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers.pop("Content-Length", None)
+        response.headers["Connection"] = "keep-alive"
     return response
 
 GEMINI_API_KEY       = os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip()
@@ -5404,10 +5399,7 @@ def _stream_antigravity_cli(messages, state=None):
     raise RuntimeError("Both Antigravity accounts (Primary & Secondary) produced no output")
 
 def _stream_google_oauth_gemini(messages, state=None):
-    stream_context = _STREAM_CONTEXT.get() or {}
-    access_token, err = _require_gemini_connection(
-        stream_context.get("gemini_access_token")
-    )
+    access_token, err = _require_gemini_connection()
     if err:
         raise RuntimeError('GEMINI_AUTH_REQUIRED')
     system_parts = []
@@ -5538,8 +5530,7 @@ def _stream_google_oauth_gemini(messages, state=None):
         raise last_exc
 
 def _stream_gemini_api_key(messages, state=None):
-    stream_context = _STREAM_CONTEXT.get() or {}
-    api_key = stream_context.get("gemini_key") or getattr(_do_stream, '_current_gemini_key', None) or GEMINI_API_KEY
+    api_key = getattr(_do_stream, '_current_gemini_key', None) or GEMINI_API_KEY
     if not api_key:
         raise RuntimeError("No Gemini API key available.")
     system_parts = []
@@ -5622,261 +5613,13 @@ def _is_complex_multitask_message(msg: str) -> bool:
         return True
     return False
 def _sse(payload: dict) -> str:
-    """Serialize exactly one SSE data event."""
-    return (
-        "data: "
-        + json.dumps(
-            payload,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        + "\n\n"
-    )
-
-def _sse_heartbeat() -> str:
-    """
-    Send an application heartbeat.
-    Set SSE_HEARTBEAT_PAD_BYTES=2048 only when testing
-    shows that small upstream chunks are being buffered.
-    """
-    try:
-        pad_bytes = max(
-            0,
-            min(int(os.getenv("SSE_HEARTBEAT_PAD_BYTES", "0")), 8192),
-        )
-    except ValueError:
-        pad_bytes = 0
-
-    # SSE comments are ignored by the browser's event parser.
-    padding = " " * pad_bytes
-    comment = f": keepalive{padding}\n\n"
-
-    # The actual data event resets the frontend watchdog.
-    return comment + _sse({
-        "type": "heartbeat",
-        "ts": time.time(),
-    })
-
-def _iter_with_heartbeats(
-    source_factory,
-    request_context,
-    interval=1.5,
-    max_queue=64,
-):
-    """
-    Consume a potentially blocking iterator in a producer thread.
-    The Flask response generator stays responsive and sends a
-    heartbeat when no provider event is ready.
-    The bounded queue provides backpressure and prevents the
-    producer from accumulating unlimited buffered output.
-    """
-    events = queue.Queue(maxsize=max_queue)
-    stop = threading.Event()
-
-    def enqueue(item):
-        while not stop.is_set():
-            try:
-                events.put(item, timeout=0.25)
-                return True
-            except queue.Full:
-                continue
-        return False
-
-    def producer():
-        token = _STREAM_CONTEXT.set(dict(request_context))
-        iterator = None
-        try:
-            iterator = iter(source_factory())
-            while not stop.is_set():
-                try:
-                    chunk = next(iterator)
-                except StopIteration:
-                    break
-
-                if not enqueue(("chunk", chunk)):
-                    break
-        except Exception as exc:
-            if not stop.is_set():
-                enqueue((
-                    "error",
-                    f"{type(exc).__name__}: {exc}",
-                ))
-        finally:
-            if iterator is not None:
-                try:
-                    close = getattr(iterator, "close", None)
-                    if close:
-                        close()
-                except Exception:
-                    pass
-            _STREAM_CONTEXT.reset(token)
-            enqueue(("end", None))
-
-    thread = threading.Thread(
-        target=producer,
-        name="pratham-provider-stream",
-        daemon=True,
-    )
-    thread.start()
-
-    try:
-        while True:
-            try:
-                kind, value = events.get(timeout=interval)
-            except queue.Empty:
-                yield _sse_heartbeat()
-                continue
-
-            if kind == "chunk":
-                yield value
-            elif kind == "error":
-                yield _sse({
-                    "type": "error",
-                    "error": {
-                        "code": "STREAM_WORKER_FAILED",
-                        "message": value,
-                    },
-                })
-                yield _sse({
-                    "type": "complete",
-                    "ok": False,
-                })
-            elif kind == "end":
-                break
-    finally:
-        stop.set()
-
-def _stream_subprocess_events(
-    command,
-    cwd,
-    env=None,
-    timeout=1800,
-    max_output_queue=256,
-):
-    """
-    Yield dictionaries with type stdout, stderr, heartbeat,
-    timeout, and exit.
-    Designed for Linux containers such as Render.
-    Output queue is bounded to limit memory use.
-    """
-    output_queue = queue.Queue(maxsize=max_output_queue)
-    cancelled = threading.Event()
-
-    proc = subprocess.Popen(
-        command,
-        cwd=cwd,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-        start_new_session=True,
-    )
-
-    def enqueue(item):
-        while not cancelled.is_set():
-            try:
-                output_queue.put(item, timeout=0.25)
-                return True
-            except queue.Full:
-                continue
-        return False
-
-    def drain(name, pipe):
-        try:
-            for line in iter(pipe.readline, ""):
-                if not enqueue((name, line)):
-                    return
-        finally:
-            enqueue(("eof", name))
-
-    readers = [
-        threading.Thread(
-            target=drain,
-            args=("stdout", proc.stdout),
-            daemon=True,
-        ),
-        threading.Thread(
-            target=drain,
-            args=("stderr", proc.stderr),
-            daemon=True,
-        ),
-    ]
-
-    for reader in readers:
-        reader.start()
-
-    deadline = time.monotonic() + timeout
-    closed_pipes = set()
-    timed_out = False
-
-    try:
-        while len(closed_pipes) < 2 or proc.poll() is None:
-            if (
-                not timed_out
-                and time.monotonic() >= deadline
-                and proc.poll() is None
-            ):
-                timed_out = True
-                try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                try:
-                    proc.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                yield {
-                    "type": "timeout",
-                    "message": f"Command timed out after {timeout}s.",
-                }
-
-            try:
-                kind, value = output_queue.get(timeout=1.0)
-            except queue.Empty:
-                yield {"type": "heartbeat"}
-                continue
-
-            if kind == "eof":
-                closed_pipes.add(value)
-            else:
-                yield {
-                    "type": kind,
-                    "text": value,
-                }
-
-        returncode = proc.wait()
-        yield {
-            "type": "exit",
-            "returncode": returncode,
-            "timed_out": timed_out,
-        }
-    finally:
-        cancelled.set()
-        if proc.poll() is None:
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-
-        for pipe in (proc.stdout, proc.stderr):
-            try:
-                pipe.close()
-            except Exception:
-                pass
-
+    # Reverse proxies (Render Envoy, Cloudflare, Nginx) buffer small writes (< 1KB).
+    # Adding padding on heartbeats guarantees immediate TCP flush to the client,
+    # preventing reverse-proxy 30-second idle disconnects while the model or terminal is busy.
+    if payload.get("type") == "heartbeat":
+        if "pad" not in payload:
+            payload["pad"] = " " * 1024
+    return f"data: {json.dumps(payload)}\n\n"
 def _extract_math_expressions(text: str) -> list:
     """Extract arithmetic expressions from LaTeX-delimited math in the text,
     and from plain-text 'X = Y' patterns, so we can verify them with Python."""
@@ -6185,8 +5928,7 @@ def _generate_ai_chat_title(message: str) -> str:
             continue
     return message[:60]
 def _stream_groq(messages, state=None):
-    stream_context = _STREAM_CONTEXT.get() or {}
-    user_key = stream_context.get("groq_key") or getattr(_do_stream, '_current_groq_key', None)
+    user_key = getattr(_do_stream, '_current_groq_key', None)
     keys = ([user_key] if user_key else []) or GROQ_API_KEYS or ([GROQ_API_KEY] if GROQ_API_KEY else [])
     if not keys:
         raise RuntimeError("Groq unavailable (no API keys configured).")
@@ -6638,7 +6380,7 @@ def _do_stream(messages):
     is_deliverable_req = bool(dt_req.get("is_html") or dt_req.get("is_pdf") or dt_req.get("is_zip") or dt_req.get("explicit_name"))
 
     for name, fn in _PROVIDER_CHAIN:
-        state = {"temperature": ((_STREAM_CONTEXT.get() or {}).get("temperature") or getattr(_do_stream, '_current_temperature', 0.4))}
+        state = {"temperature": getattr(_do_stream, '_current_temperature', 0.4)}
         accumulated_text = []
         any_token_yielded = False
         working_messages = list(messages)
@@ -7680,11 +7422,8 @@ def _refresh_google_oauth_token(refresh_token: str, client_id: str = None, clien
             pass
     return None
 
-def _require_gemini_connection(request_access_token=None):
-    if request_access_token is None:
-        token = _gemini_access_token_from_request()
-    else:
-        token = str(request_access_token).strip()
+def _require_gemini_connection():
+    token = _gemini_access_token_from_request()
     if token:
         return token, None
 
@@ -8527,20 +8266,10 @@ def chat_stream():
             )
     api_messages.append({"role": "user", "content": outgoing_user_message or message})
     _query_temperature = _classify_query_temperature(message)
-    stream_context = {
-        "gemini_key": user_gemini_key,
-        "groq_key": user_groq_key,
-        "gemini_access_token": (request.headers.get(GEMINI_ACCESS_TOKEN_HEADER) or "").strip() or _gemini_access_token_from_request(),
-        "temperature": _query_temperature,
-        "user_email": user_email,
-        "conv_id": conv_id,
-    }
-    _do_stream._current_gemini_key = user_gemini_key
-    _do_stream._current_groq_key = user_groq_key
     _do_stream._current_temperature = _query_temperature
     _do_stream._current_user_email = user_email
     _do_stream._current_conv_id = conv_id
-    _do_stream._current_gemini_token = stream_context["gemini_access_token"]
+    _do_stream._current_gemini_token = _gemini_access_token_from_request()
     print(f"[TEMP] Query classified with temperature={_query_temperature} for: {message[:80]}")
     _append_message(conv_id, "user", message)
     _maybe_capture_public_teaching(user_email, message)
@@ -8640,12 +8369,7 @@ def chat_stream():
         _promise_correction_attempted = False
         for iteration in range(_TERMINAL_MAX_ITERATIONS):
             iteration_text_parts = []
-            for chunk in _iter_with_heartbeats(
-                lambda: _do_stream(working_messages),
-                stream_context,
-                interval=1.5,
-                max_queue=64,
-            ):
+            for chunk in _do_stream(working_messages):
                 try:
                     if chunk.startswith("data: "):
                         payload = json.loads(chunk[6:])
@@ -9078,87 +8802,24 @@ def chat_stream():
                         _pre_tmp_files.add(_f)
                 except Exception:
                     pass
-                stdout = ""
-                stderr = ""
-                rc = 0
-                if lang in ("python", "py", "bash", "sh", "shell") and not EXECUTOR_CONFIGURED:
-                    exec_env = dict(os.environ)
-                    exec_env["PYTHONPATH"] = f"{WORKSPACE_ROOT}:{terminal_workdir or ''}:{exec_env.get('PYTHONPATH', '')}"
-                    exec_env["PATH"] = f"{WORKSPACE_ROOT}:{exec_env.get('PATH', '')}"
-                    if terminal_workdir and terminal_workdir != WORKSPACE_ROOT and os.path.isdir(terminal_workdir):
-                        for item in ["assets"]:
-                            src = os.path.join(WORKSPACE_ROOT, item)
-                            dst = os.path.join(terminal_workdir, item)
-                            if os.path.exists(src) and not os.path.exists(dst):
-                                try:
-                                    os.symlink(src, dst)
-                                except Exception:
-                                    pass
-                    if lang in ("python", "py"):
-                        stripped_code = code.strip()
-                        py_cmd_m = re.match(r"^python3?\s+([a-zA-Z0-9_\-\.\/]+)(?:\s+.*)?$", stripped_code)
-                        if py_cmd_m:
-                            target_script = py_cmd_m.group(1)
-                            script_path = os.path.join(terminal_workdir, target_script) if not os.path.isabs(target_script) else target_script
-                            if os.path.isfile(script_path):
-                                cmd = [sys.executable, "-u", script_path]
-                            else:
-                                cmd = [sys.executable, "-u", "-c", code]
-                        else:
-                            cmd = [sys.executable, "-u", "-c", code]
-                    else:
-                        clean_cmd = _sanitize_shell_script(code)
-                        shell_bin = shutil.which("bash") or shutil.which("sh") or "/bin/sh"
-                        cmd = [shell_bin, "-c", clean_cmd]
+                _block_result = None
+                _block_exception = None
+                def _exec_block_worker():
+                    nonlocal _block_result, _block_exception
+                    try:
+                        _block_result = _run_code_block(lang, code, cwd=terminal_workdir)
+                    except Exception as _b_exc:
+                        _block_exception = _b_exc
 
-                    stdout_parts = []
-                    stderr_parts = []
-                    for event in _stream_subprocess_events(cmd, cwd=terminal_workdir, env=exec_env, timeout=_TERMINAL_BLOCK_TIMEOUT):
-                        if event["type"] == "stdout":
-                            stdout_parts.append(event["text"])
-                            yield _sse({
-                                "type": "terminal_output_chunk",
-                                "stream": "stdout",
-                                "text": event["text"],
-                            })
-                        elif event["type"] == "stderr":
-                            stderr_parts.append(event["text"])
-                            yield _sse({
-                                "type": "terminal_output_chunk",
-                                "stream": "stderr",
-                                "text": event["text"],
-                            })
-                        elif event["type"] == "heartbeat":
-                            yield _sse_heartbeat()
-                        elif event["type"] == "timeout":
-                            stderr_parts.append(f"\n{event.get('message', 'Execution timed out.')}\n")
-                            yield _sse({
-                                "type": "terminal_timeout",
-                                "message": event.get("message", "Execution timed out."),
-                            })
-                        elif event["type"] == "exit":
-                            rc = event.get("returncode", 0)
-                    stdout = "".join(stdout_parts)[-_TERMINAL_OUTPUT_CHAR_LIMIT:]
-                    stderr = "".join(stderr_parts)[-_TERMINAL_OUTPUT_CHAR_LIMIT:]
-                else:
-                    _block_result = None
-                    _block_exception = None
-                    def _exec_block_worker():
-                        nonlocal _block_result, _block_exception
-                        try:
-                            _block_result = _run_code_block(lang, code, cwd=terminal_workdir)
-                        except Exception as _b_exc:
-                            _block_exception = _b_exc
-
-                    _t_exec = threading.Thread(target=_exec_block_worker, daemon=True)
-                    _t_exec.start()
-                    while _t_exec.is_alive():
-                        _t_exec.join(timeout=2.0)
-                        if _t_exec.is_alive():
-                            yield _sse({"type": "heartbeat"})
-                    if _block_exception:
-                        raise _block_exception
-                    stdout, stderr, rc = _block_result if _block_result is not None else ("", "Execution failed", -1)
+                _t_exec = threading.Thread(target=_exec_block_worker, daemon=True)
+                _t_exec.start()
+                while _t_exec.is_alive():
+                    _t_exec.join(timeout=2.0)
+                    if _t_exec.is_alive():
+                        yield _sse({"type": "heartbeat"})
+                if _block_exception:
+                    raise _block_exception
+                stdout, stderr, rc = _block_result if _block_result is not None else ("", "Execution failed", -1)
                 _post_exec_files = set()
                 for _scan_dir in set(filter(None, [terminal_workdir, WORKSPACE_ROOT])):
                     if os.path.isdir(_scan_dir):
@@ -9700,12 +9361,8 @@ def chat_stream():
             except Exception:
                 pass
         yield _sse({"type": "complete"})
-    resp = Response(
-        stream_with_context(generate()),
-        content_type="text/event-stream; charset=utf-8",
-    )
-    resp.headers["Cache-Control"] = "no-cache, no-transform"
-    resp.headers["Pragma"] = "no-cache"
+    resp = Response(stream_with_context(generate()), content_type="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
     resp.headers["X-Accel-Buffering"] = "no"
     resp.headers["Access-Control-Allow-Credentials"] = "true"
     return resp

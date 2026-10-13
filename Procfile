@@ -1,1 +1,1 @@
-web: gunicorn --bind 0.0.0.0:${PORT:-5000} --worker-class gthread --workers 1 --threads 8 --timeout 6100 --graceful-timeout 25 --keep-alive 5 --access-logfile - --error-logfile - "api.app:app"
+web: gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 8 --timeout 0 "api.app:app"
