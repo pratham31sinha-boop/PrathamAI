@@ -5574,13 +5574,30 @@
                 }, 3600000);
                 resetActivityWatchdog();
 
+                const parseSSEFrame = (frame) => {
+                    const dataLines = [];
+                    for (const rawLine of frame.split(/\r?\n/)) {
+                        const line = rawLine.trim();
+                        if (line.startsWith(':')) continue;
+                        if (line.startsWith('data:')) {
+                            dataLines.push(line.slice(5).replace(/^ /, ''));
+                        }
+                    }
+                    if (dataLines.length === 0) return null;
+                    try {
+                        return JSON.parse(dataLines.join('\n'));
+                    } catch {
+                        return null;
+                    }
+                };
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
-                        // Some proxies/workers may close the SSE stream without
-                        // delivering the final `complete` event. Treat a clean
-                        // stream EOF as completion so the UI can never remain
-                        // stuck in the generating state.
+                        // EOF without explicit protocol completion event is an interruption
+                        if (!sawCompleteEvent && !_activeChatStoppedByUser) {
+                            throw new Error("SSE connection ended before the server confirmed completion.");
+                        }
                         break;
                     }
                     if (_activeChatStoppedByUser) {
@@ -5588,13 +5605,11 @@
                         break;
                     }
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n');
-                    buffer = events.pop();
-                    for (const evt of events) {
-                        const line = evt.trim();
-                        if (!line.startsWith('data: ')) continue;
-                        let payload;
-                        try { payload = JSON.parse(line.slice(6)); } catch (e) { continue; }
+                    const frames = buffer.split(/\r?\n\r?\n/);
+                    buffer = frames.pop() || "";
+                    for (const frame of frames) {
+                        const payload = parseSSEFrame(frame);
+                        if (!payload) continue;
                         if (payload.type === 'metadata') {
                             resetActivityWatchdog();
                             currentConversationId = payload.conversation_id;
@@ -5714,6 +5729,11 @@
                             pushTerminalLog(`File ready in background terminal: ${payload.filename}`);
                             _turnFiles.push({ filename: payload.filename, url: payload.url, download_url: payload.url });
                             appendDownloadCard(modelWrapper, payload.url, payload.filename);
+                        } else if (payload.type === 'terminal_output_chunk') {
+                            resetActivityWatchdog();
+                            if (payload.text) {
+                                pushTerminalLog(`[${payload.stream || 'stdout'}] ${payload.text.trimEnd()}`);
+                            }
                         } else if (payload.type === 'terminal_output') {
                             resetActivityWatchdog();
                             const ok = payload.returncode === 0;
@@ -5863,7 +5883,11 @@
                     }
                     if (sawCompleteEvent) break;
                 }
-                finishResponseTurn();
+                if (sawCompleteEvent) {
+                    finishResponseTurn();
+                } else if (!_activeChatStoppedByUser) {
+                    throw new Error("Stream ended without a completion event; output may be partial.");
+                }
                 removeTypingIndicator();
                 clearAgentActivity();
                 activeChatTitleHeader.innerText = displayMessage.slice(0, 60);
@@ -5894,7 +5918,7 @@
             } catch (err) {
                 // Abort is an intentional user action — never turn it into a fake error.
                 // If useful output has already streamed, keep that answer visible and
-                // simply finalize the UI; a late proxy/socket close is not a new chat error.
+                // show a visible incomplete warning tag so the user knows it dropped.
                 const wasUserStopped = _activeChatStoppedByUser || (err && err.name === 'AbortError');
                 const alreadyHasAnswer = _streamReceivedOutput || !!fullText;
                 removeTypingIndicator();
@@ -5915,13 +5939,12 @@
                     wrapper.appendChild(cell);
                     console.error("[CHAT][STREAM ERROR]", err);
                 } else if (!wasUserStopped && alreadyHasAnswer) {
-                    console.warn("[CHAT][STREAM CLOSED AFTER OUTPUT]", err);
-                    try {
-                        const active = document.querySelector('.model-output-target-shell:last-child');
-                        if (active && fullText && !_streamReceivedOutput && !active._activeTextNode) {
-                            updateAssistantMessageDOM(active, fullText);
-                        }
-                    } catch (e) {}
+                    const warning = "\n\n⚠️ Connection interrupted before the server confirmed completion. This response may be incomplete.";
+                    fullText += warning;
+                    if (modelWrapper) {
+                        updateAssistantMessageDOM(modelWrapper, fullText, false);
+                    }
+                    console.warn("[CHAT][INCOMPLETE STREAM]", err);
                 }
             } finally {
                 isGenerating = false;
